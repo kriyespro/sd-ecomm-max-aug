@@ -63,9 +63,17 @@ def _set_user(email, password, name, *, platform_role=PlatformRole.NONE):
 class Command(BaseCommand):
     help = "Seed 3 demo stores with login-ready owner/manager accounts."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--domain-suffix", default="localhost",
+            help="Host suffix for the demo stores, e.g. mnxstore.com "
+                 "-> lumen.mnxstore.com. Default: localhost.",
+        )
+
     @transaction.atomic
     def handle(self, *args, **opts):
         actor = User.objects.filter(is_superuser=True).first()
+        suffix = opts["domain_suffix"].strip().lstrip(".").lower()
 
         pm = _set_user(*PLATFORM_MANAGER, platform_role=PlatformRole.MANAGER)
 
@@ -75,9 +83,12 @@ class Command(BaseCommand):
             plan = Plan.objects.get(code=spec["plan"])
             Project.objects.filter(name=spec["name"]).delete()  # reset
 
+            label = spec["domain"].split(".", 1)[0]
+            domain = f"{label}.{suffix}"
+
             owner_email, owner_pw, owner_name = spec["owner"]
             project, owner, _ = store_services.create_store(
-                name=spec["name"], primary_domain=spec["domain"],
+                name=spec["name"], primary_domain=domain,
                 owner_email=owner_email, owner_name=owner_name,
                 plan=plan, period=spec["period"], manager=pm, actor=actor,
             )
@@ -95,7 +106,7 @@ class Command(BaseCommand):
 
             self.stdout.write(self.style.SUCCESS(
                 f"  {spec['name']:22} {plan.name}/{spec['period']}  "
-                f"({spec['domain']})"
+                f"({domain})"
             ))
 
         w1 = max(len(r[0]) for r in rows)

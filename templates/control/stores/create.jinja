@@ -12,12 +12,6 @@
       gets a password-reset link if they're new, or uses their existing login.
     </p>
   </div>
-  {% set nfe = form.non_field_errors() %}
-  {% if nfe %}
-  <div class="rounded-lg bg-red-50 p-3 text-sm text-red-700">
-    {% for e in nfe %}<p>{{ e }}</p>{% endfor %}
-  </div>
-  {% endif %}
   {{ render_form(form) }}
   <div class="flex gap-2 pt-1">
     <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Create store</button>

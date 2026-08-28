@@ -184,18 +184,25 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--refresh", action="store_true",
                             help="Re-fetch images even for products that already have them.")
+        parser.add_argument("--domain", default="acme.localhost",
+                            help="Primary host for the store (e.g. acme.mnxstore.com).")
 
     @transaction.atomic
     def handle(self, *args, **options):
         self.refresh = options.get("refresh", False)
+        host = options["domain"].strip().lower()
         project = Project.objects.filter(name="Acme Store").first()
         if project is None:
             project = Project.objects.create(
                 name="Acme Store", currency="INR", country="IN", status="active",
-                primary_domain="acme.localhost",
+                primary_domain=host,
             )
-        Domain.objects.get_or_create(
-            project=project, host="acme.localhost",
+        elif project.primary_domain != host:
+            project.primary_domain = host
+            project.save(update_fields=["primary_domain"])
+        Domain.objects.filter(project=project).update(is_primary=False)
+        Domain.objects.update_or_create(
+            project=project, host=host,
             defaults={"is_primary": True, "is_verified": True},
         )
 
@@ -277,7 +284,7 @@ class Command(BaseCommand):
             f"Acme catalogue ready — {created} created, {updated} updated, "
             f"{images} images ({self._real} from Unsplash, {self._fallback} generated fallback)."
         ))
-        self.stdout.write("Open: http://acme.localhost:8000/app/")
+        self.stdout.write(f"Open: http://{host}/app/  (or your mapped port)")
 
     def _hero(self, project):
         banner, _ = Banner.objects.get_or_create(
