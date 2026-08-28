@@ -46,7 +46,10 @@ services:
   web:
     <<: *app
     volumes:
-      - media:/app/media
+      # MEDIA_DIR (host path) makes uploads readable by an nginx running on the
+      # host. Unset -> the named volume (self-contained, but only the container
+      # can read it, so nginx must proxy /media/ to the app).
+      - ${MEDIA_DIR:-media}:/app/media
     ports:
       - "${WEB_PORT:-8000}:8000"
 
@@ -57,7 +60,7 @@ services:
       <<: *app-env
       RUN_MIGRATIONS: "0"
     volumes:
-      - media:/app/media
+      - ${MEDIA_DIR:-media}:/app/media
 
   beat:
     <<: *app
