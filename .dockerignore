@@ -16,8 +16,8 @@ __pycache__
 instance/
 db.sqlite3
 *.sqlite3
-media/
-staticfiles/
+/media/
+/staticfiles/
 
 # scratch + design source that isn't shipped
 dev.txt

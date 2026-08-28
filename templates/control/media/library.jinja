@@ -1,0 +1,52 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Media{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <form method="post" action="{{ url('control:media_upload') }}" enctype="multipart/form-data"
+        class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
+  </form>
+
+  <form method="get" class="flex items-center gap-2">
+    <input type="search" name="q" value="{{ q }}" placeholder="Search filename…" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+    <select name="kind" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+      <option value="">All types</option>
+      {% for k in ["image", "video", "document", "other"] %}
+      <option value="{{ k }}" {{ 'selected' if kind == k }}>{{ k }}</option>
+      {% endfor %}
+    </select>
+    <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Filter</button>
+  </form>
+
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+    {% for a in assets %}
+    <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+      <div class="grid h-28 place-items-center bg-slate-50">
+        {% if a.kind == 'image' %}
+        <img src="{{ a.thumbnails.get('sm') or a.url }}" alt="{{ a.alt }}" class="h-full w-full object-cover">
+        {% else %}
+        <span class="text-3xl">📄</span>
+        {% endif %}
+      </div>
+      <div class="p-2 text-xs">
+        <p class="truncate font-medium text-slate-700" title="{{ a.original_name }}">{{ a.original_name }}</p>
+        <p class="text-slate-400">{{ (a.size / 1024) | round(1) }} KB{% if a.width %} · {{ a.width }}×{{ a.height }}{% endif %}</p>
+        <div class="mt-1 flex items-center justify-between">
+          <a href="{{ a.url }}" target="_blank" class="text-slate-500 hover:underline">open</a>
+          <form method="post" action="{{ url('control:media_delete', kwargs={'pk': a.pk}) }}">
+            {{ csrf_input }}
+            <button class="text-red-600 hover:underline">delete</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <p class="col-span-full py-6 text-center text-sm text-slate-400">No media yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
