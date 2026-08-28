@@ -6,9 +6,9 @@
 """
 
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
+from django.views.static import serve as _serve_media
 
 from apps.core import health
 
@@ -28,5 +28,14 @@ urlpatterns = [
     path("", include("apps.cms.urls", namespace="cms")),
 ]
 
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# Django serves /media/ only for local dev or when SERVE_MEDIA is set (direct
+# app access with no nginx/CDN in front). django.conf.urls.static.static() is
+# a no-op when DEBUG is off, so wire the route explicitly.
+if settings.DEBUG or settings.SERVE_MEDIA:
+    urlpatterns += [
+        re_path(
+            r"^%s(?P<path>.*)$" % settings.MEDIA_URL.lstrip("/"),
+            _serve_media,
+            {"document_root": settings.MEDIA_ROOT},
+        ),
+    ]

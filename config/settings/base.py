@@ -242,6 +242,11 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Let Django serve uploaded media itself. Off in real deploys (nginx / CDN owns
+# /media/), but handy when hitting the app directly with no proxy in front.
+# DEBUG implies it.
+SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", False)
+
 
 # --- DRF ---------------------------------------------------------------
 
