@@ -1,6 +1,7 @@
 # --- secrets / local config ---
 .env
 .env.*
+.env.prod
 !.env.example
 instance/
 *.secret_key
