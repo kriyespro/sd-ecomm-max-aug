@@ -1,0 +1,15 @@
+<ul class="divide-y divide-slate-100 text-sm">
+  {% for log in activity %}
+  <li class="flex items-center justify-between py-2">
+    <span class="text-slate-700">
+      <strong>{{ log.actor.get_username() if log.actor else "system" }}</strong>
+      {{ log.get_action_display() }}
+      {{ log.target_type }}{{ "#" ~ log.target_id if log.target_id else "" }}
+      {% if log.project %}<span class="text-slate-400">· {{ log.project.name }}</span>{% endif %}
+    </span>
+    <time class="text-xs text-slate-400">{{ log.created_at.strftime("%b %d %H:%M") }}</time>
+  </li>
+  {% else %}
+  <li class="py-4 text-center text-slate-400">No activity yet.</li>
+  {% endfor %}
+</ul>

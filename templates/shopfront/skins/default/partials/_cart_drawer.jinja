@@ -1,0 +1,52 @@
+{% set items = cart.items.all() | list %}
+{% if items %}
+{% if free_ship_over %}
+{% set remain = free_ship_over - cart.subtotal %}
+<div class="border-b border-line px-6 py-4">
+  {% if remain > 0 %}
+  <p class="text-xs text-mute">You're <span class="font-medium text-ink">{{ remain | money }}</span> away from free shipping</p>
+  {% else %}
+  <p class="text-xs font-medium text-emerald-700">✓ You've unlocked free shipping</p>
+  {% endif %}
+  <div class="mt-2 h-1 w-full bg-line">
+    <div class="h-1 bg-accent" style="width: {{ [ (cart.subtotal / free_ship_over * 100) | round | int, 100 ] | min }}%"></div>
+  </div>
+</div>
+{% endif %}
+<div class="divide-y divide-line px-6">
+  {% for i in items %}
+  <div class="flex gap-4 py-5">
+    {% set img = (i.product.images.all() | first) %}
+    <div class="h-20 w-16 flex-shrink-0 overflow-hidden bg-line/40">
+      {% if img %}<img src="{{ img.image.url }}" class="h-full w-full object-cover">{% endif %}
+    </div>
+    <div class="flex-1">
+      <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="text-sm font-medium hover:text-accent">{{ i.product.title }}</a>
+      {% if i.variant %}<p class="text-xs text-mute">{{ i.variant.name or i.variant.sku }}</p>{% endif %}
+      <p class="mt-1 text-xs text-mute">{{ i.unit_price | money }} × {{ i.quantity }}</p>
+      <form hx-post="{{ url('shopfront:cart_remove') }}" hx-target="#cart-drawer-body" hx-swap="innerHTML" class="mt-1">
+        <input type="hidden" name="item" value="{{ i.pk }}">
+        <input type="hidden" name="view" value="drawer">
+        <button class="text-[11px] text-mute underline underline-offset-2 hover:text-rose-600">Remove</button>
+      </form>
+    </div>
+    <p class="text-sm font-medium">{{ i.line_total | money }}</p>
+  </div>
+  {% endfor %}
+</div>
+<div class="border-t border-line px-6 py-5">
+  <div class="flex justify-between text-sm">
+    <span class="text-mute">Subtotal</span>
+    <span class="font-display text-lg">{{ cart.subtotal | money }}</span>
+  </div>
+  <p class="mt-1 text-xs text-mute">Shipping &amp; taxes calculated at checkout</p>
+  <a href="{{ url('shopfront:checkout') }}" class="mt-4 block bg-ink py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Checkout</a>
+  <a href="{{ url('shopfront:cart') }}" class="mt-2 block py-2 text-center text-[11px] font-medium uppercase tracking-luxe text-mute hover:text-ink">View bag</a>
+</div>
+{% else %}
+<div class="flex h-full flex-col items-center justify-center px-8 text-center">
+  <p class="font-display text-3xl text-line">◈</p>
+  <p class="mt-3 text-sm text-mute">Your bag is empty.</p>
+  <a href="{{ url('shopfront:shop') }}" class="mt-5 bg-ink px-6 py-3 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Start shopping</a>
+</div>
+{% endif %}

@@ -1,0 +1,42 @@
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# local data / secrets
+.env
+.env.*
+!.env.example
+instance/
+db.sqlite3
+*.sqlite3
+media/
+staticfiles/
+
+# scratch + design source that isn't shipped
+dev.txt
+dev_plan.txt
+plan.md
+project.md
+Rule.md
+scratch_*.py
+durga.py
+test_user.txt
+html-ornza/
+sd-ecomm-impact/
+sd-ecomm-impact 2/
+sd-jw-demo1/
+kapiva-clone/
+DEPLOY.md
+demo.md
+
+.DS_Store
+.idea
+.vscode
+.cursor

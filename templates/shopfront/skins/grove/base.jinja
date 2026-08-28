@@ -1,0 +1,206 @@
+{# Grove skin — Earthy and organic. Warm oat tones, sage accent, Spectral serif. #}
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ store.name }}{% endblock %}</title>
+  <meta name="description" content="{% block meta %}{{ store.name }} — shop online.{% endblock %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:wght@400;500;600&family=Karla:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: {
+        fontFamily: { display: ['Spectral', 'Georgia', 'serif'], sans: ['Karla', 'system-ui', 'sans-serif'] },
+        colors: {
+          paper: '#f6f4ee', panel: '#fffdf8', ink: '#2b2a24', mute: '#7a766a',
+          line: '#e2ddcf', accent: '{{ accent or "#5a7d5a" }}', 'accent-soft': '#eaf0e6',
+        },
+        letterSpacing: { luxe: '0.22em' },
+      }},
+    };
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <style>
+    :root { --accent: {{ accent or '#5a7d5a' }}; }
+    [x-cloak] { display: none !important; }
+    /* base identity — renders even if the Tailwind CDN is unavailable */
+    body { background:#f6f4ee; color:#2b2a24; font-family:Karla, system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
+    h1,h2,.font-display { font-family:Spectral, Georgia, serif; }
+    a { color:inherit; }
+    img { max-width:100%; height:auto; display:block; }
+    .card-img { transition: transform .6s cubic-bezier(.2,.6,.2,1); }
+    .group:hover .card-img { transform: scale(1.045); }
+    .htmx-request .htmx-hide { opacity: .4; pointer-events: none; }
+    #grid.htmx-request { opacity: .45; transition: opacity .2s; }
+    #suggest.htmx-request { opacity: .6; }
+  </style>
+</head>
+<body class="min-h-screen bg-paper font-sans text-ink antialiased"
+      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+      x-data="shop()" @keydown.escape="cartOpen=false; searchOpen=false; quickOpen=false"
+      @cart-open.window="cartOpen=true; quickOpen=false" @toast.window="pushToast($event.detail)"
+      @open-quick.window="quickOpen=true">
+
+  {% if announcement %}
+  <div class="bg-ink px-4 py-2 text-center text-[11px] font-medium uppercase tracking-luxe text-paper/90">
+    {{ announcement.heading }}
+    {% if announcement.cta_url %}<a href="{{ announcement.cta_url }}" class="ml-2 underline underline-offset-2">{{ announcement.cta_label or 'Shop' }}</a>{% endif %}
+  </div>
+  {% endif %}
+
+  {# ============ HEADER ============ #}
+  <header x-data="{ scrolled: false }" @scroll.window="scrolled = window.scrollY > 10"
+          :class="scrolled ? 'border-line bg-paper/85 backdrop-blur-md' : 'border-transparent bg-paper'"
+          class="sticky top-0 z-40 border-b transition-colors">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
+      <button class="lg:hidden" @click="menuOpen=true" aria-label="Menu">
+        <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+
+      <a href="{{ url('shopfront:home') }}" class="font-display text-2xl font-500 tracking-[0.14em] text-ink lg:text-[1.7rem]">
+        {{ store.name }}
+      </a>
+
+      <nav class="hidden items-center gap-8 text-[13px] font-medium lg:flex">
+        <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop All</a>
+        {% for c in categories[:5] %}
+        <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="hover:text-accent">{{ c.name }}</a>
+        {% endfor %}
+      </nav>
+
+      <div class="flex items-center gap-4">
+        <button @click="searchOpen = !searchOpen" aria-label="Search" class="hover:text-accent">
+          <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="m20 20-3.5-3.5"/></svg>
+        </button>
+        <a href="{{ url('shopfront:wishlist') }}" aria-label="Wishlist" class="hidden hover:text-accent sm:block">
+          <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 21s-7-4.5-9.5-9C1 8.5 3 5 6.5 5 9 5 12 7.5 12 7.5S15 5 17.5 5C21 5 23 8.5 21.5 12 19 16.5 12 21 12 21Z"/></svg>
+        </a>
+        <a href="{{ url('shopfront:account') }}" aria-label="Account" class="hover:text-accent">
+          <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path stroke-linecap="round" d="M4 20c0-4 3.6-6 8-6s8 2 8 6"/></svg>
+        </a>
+        <button @click="cartOpen=true" class="relative hover:text-accent" aria-label="Cart">
+          <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6 7h12l-1 13H7L6 7Z"/><path stroke-linecap="round" d="M9 7a3 3 0 0 1 6 0"/></svg>
+          <span id="cart-count" class="absolute -right-2.5 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-white {{ '' if cart_count else 'hidden' }}">{{ cart_count }}</span>
+        </button>
+      </div>
+    </div>
+
+    {# search bar + live suggestions #}
+    <div x-show="searchOpen" x-cloak x-transition @click.outside="searchOpen=false" class="border-t border-line bg-paper px-5 py-4 lg:px-8">
+      <div class="relative mx-auto max-w-2xl">
+        <form action="{{ url('shopfront:shop') }}" method="get" class="flex items-center gap-3">
+          <input name="q" autofocus placeholder="Search products…" autocomplete="off"
+                 hx-get="{{ url('shopfront:search_suggest') }}" hx-trigger="input changed delay:250ms" hx-target="#suggest"
+                 class="w-full border-b border-line bg-transparent pb-2 text-sm outline-none placeholder:text-mute focus:border-accent">
+          <button class="text-[12px] font-semibold uppercase tracking-luxe text-accent">Go</button>
+        </form>
+        <div id="suggest" class="absolute inset-x-0 top-full z-50"></div>
+      </div>
+    </div>
+  </header>
+
+  {# mobile menu #}
+  <div x-show="menuOpen" x-cloak class="fixed inset-0 z-50 lg:hidden">
+    <div class="absolute inset-0 bg-ink/30" @click="menuOpen=false"></div>
+    <nav class="absolute left-0 top-0 h-full w-72 bg-panel p-6" x-transition:enter-start="-translate-x-full" x-transition:enter="transition duration-300">
+      <button @click="menuOpen=false" class="mb-6 text-mute">✕</button>
+      <a href="{{ url('shopfront:shop') }}" class="block py-2 text-sm font-medium">Shop All</a>
+      {% for c in categories %}
+      <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="block py-2 text-sm">{{ c.name }}</a>
+      {% endfor %}
+      <a href="{{ url('shopfront:account') }}" class="mt-4 block border-t border-line py-3 text-sm">Account</a>
+    </nav>
+  </div>
+
+  {% if messages %}
+  <div class="mx-auto max-w-7xl px-5 pt-5 lg:px-8">
+    {% for m in messages %}
+    <div class="mb-2 rounded-md px-4 py-3 text-sm {{ 'bg-emerald-50 text-emerald-800' if 'success' in m.tags else 'bg-rose-50 text-rose-700' if 'error' in m.tags else 'bg-stone-100 text-stone-700' }}">{{ m }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <main>{% block content %}{% endblock %}</main>
+
+  {# ============ FOOTER ============ #}
+  <footer class="mt-24 border-t border-line bg-panel">
+    <div class="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+      <div>
+        <p class="font-display text-xl tracking-wide">{{ store.name }}</p>
+        <p class="mt-3 text-sm leading-relaxed text-mute">Considered pieces, made to be worn. Free shipping over ₹999 · Cash on delivery across India.</p>
+      </div>
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Shop</p>
+        <ul class="mt-4 space-y-2 text-sm">
+          {% for c in categories[:6] %}<li><a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="text-ink/80 hover:text-accent">{{ c.name }}</a></li>{% endfor %}
+        </ul>
+      </div>
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Help</p>
+        <ul class="mt-4 space-y-2 text-sm">
+          <li><a href="{{ url('shopfront:track') }}" class="text-ink/80 hover:text-accent">Track your order</a></li>
+          <li><a href="{{ url('shopfront:wishlist') }}" class="text-ink/80 hover:text-accent">Wishlist</a></li>
+          {% for p in footer_pages %}<li><a href="{{ url('shopfront:page', kwargs={'slug': p.slug}) }}" class="text-ink/80 hover:text-accent">{{ p.title }}</a></li>{% endfor %}
+        </ul>
+      </div>
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Newsletter</p>
+        <form class="mt-4 flex border-b border-line" @submit.prevent="pushToast({msg:'Subscribed', kind:'success'})">
+          <input placeholder="Email address" class="w-full bg-transparent py-2 text-sm outline-none placeholder:text-mute">
+          <button class="text-[12px] font-semibold uppercase tracking-luxe text-accent">Join</button>
+        </form>
+      </div>
+    </div>
+    <div class="border-t border-line py-6 text-center text-xs text-mute">© {{ store.name }} · built on a headless backend</div>
+  </footer>
+
+  {# ============ CART DRAWER ============ #}
+  <div x-show="cartOpen" x-cloak class="fixed inset-0 z-50">
+    <div class="absolute inset-0 bg-ink/40" x-transition.opacity @click="cartOpen=false"></div>
+    <aside class="absolute right-0 top-0 flex h-full w-full max-w-md flex-col bg-panel shadow-2xl"
+           x-transition:enter="transition duration-300" x-transition:enter-start="translate-x-full">
+      <div class="flex items-center justify-between border-b border-line px-6 py-5">
+        <p class="font-display text-lg">Your Bag</p>
+        <button @click="cartOpen=false" class="text-mute hover:text-ink">✕</button>
+      </div>
+      <div id="cart-drawer-body" hx-get="{{ url('shopfront:cart_drawer') }}" hx-trigger="load, cart-open from:body" class="flex-1 overflow-y-auto">
+        {% include "shopfront/partials/_cart_drawer.jinja" %}
+      </div>
+    </aside>
+  </div>
+
+  {# ============ QUICK VIEW ============ #}
+  <div x-show="quickOpen" x-cloak class="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-10">
+    <div class="fixed inset-0 bg-ink/45" x-transition.opacity @click="quickOpen=false"></div>
+    <div id="quickview-body" class="relative w-full max-w-3xl bg-panel shadow-2xl" x-transition></div>
+  </div>
+
+  {# ============ TOASTS ============ #}
+  <div class="pointer-events-none fixed bottom-6 right-6 z-[60] space-y-2">
+    <template x-for="t in toasts" :key="t.id">
+      <div x-transition class="pointer-events-auto min-w-[220px] rounded-md bg-ink px-4 py-3 text-sm text-paper shadow-xl"
+           :class="t.kind === 'error' && 'bg-rose-700'">
+        <span x-text="t.msg"></span>
+      </div>
+    </template>
+  </div>
+
+  <script>
+    function shop() {
+      return {
+        cartOpen: false, menuOpen: false, searchOpen: false, quickOpen: false, toasts: [],
+        pushToast(d) {
+          const id = Date.now() + Math.random();
+          this.toasts.push({ id, msg: d.msg || 'Done', kind: d.kind || 'info' });
+          setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 2600);
+        },
+      };
+    }
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

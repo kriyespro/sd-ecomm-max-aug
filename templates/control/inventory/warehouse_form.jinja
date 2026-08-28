@@ -1,0 +1,14 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}{{ "Edit warehouse" if object else "New warehouse" }}{% endblock %}
+
+{% block content %}
+<form method="post" class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <div class="grid gap-4 md:grid-cols-2">{{ render_form(form) }}</div>
+  <div class="flex gap-2 pt-2">
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+    <a href="{{ url('control:warehouse_list') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+  </div>
+</form>
+{% endblock %}

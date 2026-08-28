@@ -1,0 +1,66 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Commissions{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div class="flex flex-wrap gap-4 text-xs">
+    <a href="{{ url('control:billing') }}" class="font-medium text-slate-500 hover:text-slate-900">Overview</a>
+    <a href="{{ url('control:billing_plans') }}" class="font-medium text-slate-500 hover:text-slate-900">Plans</a>
+    <a href="{{ url('control:billing_subscriptions') }}" class="font-medium text-slate-500 hover:text-slate-900">Subscriptions</a>
+    <a href="{{ url('control:billing_commissions') }}" class="font-medium text-slate-900 underline">Commissions</a>
+  </div>
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Owed by manager</div>
+    <div class="flex flex-wrap gap-2 p-4">
+      {% for o in owed %}
+      <span class="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800 ring-1 ring-amber-200">
+        {{ o.manager__email or o.manager__username }} · ₹{{ '{:,.0f}'.format(o.total) }}
+      </span>
+      {% else %}<span class="text-xs text-slate-400">Nothing owed.</span>{% endfor %}
+    </div>
+  </div>
+
+  <div class="mb-1 flex gap-3 text-xs">
+    <a href="?" class="{{ 'font-semibold text-slate-900' if not request.GET.status }}">All</a>
+    <a href="?status=pending" class="{{ 'font-semibold text-slate-900' if request.GET.status == 'pending' }}">Pending</a>
+    <a href="?status=paid" class="{{ 'font-semibold text-slate-900' if request.GET.status == 'paid' }}">Paid</a>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">When</th><th class="px-4 py-2">Manager</th><th class="px-4 py-2">Store</th>
+          <th class="px-4 py-2">Invoice</th><th class="px-4 py-2">Base</th><th class="px-4 py-2">Rate</th>
+          <th class="px-4 py-2">Commission</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in rows %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.created_at.strftime('%d %b') }}</td>
+          <td class="px-4 py-2 text-xs">{{ r.manager.email }}</td>
+          <td class="px-4 py-2">{{ r.subscription.project.name }}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{ r.invoice.number }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.base_amount) }}</td>
+          <td class="px-4 py-2 text-xs">{{ r.rate_pct }}%</td>
+          <td class="px-4 py-2 font-medium">₹{{ '{:,.0f}'.format(r.amount) }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if r.status == 'paid' else 'bg-amber-100 text-amber-800' }}">{{ r.status }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            {% if r.status != 'paid' %}
+            <form method="post" action="{{ url('control:billing_commission_paid', kwargs={'pk': r.pk}) }}" class="flex gap-1">
+              {{ csrf_input }}
+              <input name="ref" placeholder="Payout ref" class="w-24 rounded border border-slate-200 px-2 py-1 text-xs">
+              <button class="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">Mark paid</button>
+            </form>
+            {% else %}<span class="text-xs text-slate-400">{{ r.payout_ref or '—' }}</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="9">No commissions.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

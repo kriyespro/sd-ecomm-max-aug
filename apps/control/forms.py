@@ -1,0 +1,529 @@
+"""ModelForms for the control panel (project.md: use ModelForms, no manual validation).
+
+Every form is bound to an ``active_project``; the ``project`` FK is never a form
+field and related querysets are scoped to that project.
+"""
+
+from django import forms
+
+from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
+from apps.categories.models import Category
+from apps.inventory.models import InventoryItem, Warehouse
+from apps.cms.models import (
+    Banner,
+    ContentBlock,
+    FAQ,
+    Menu,
+    MenuItem,
+    Page,
+    Skin,
+    ThemeSettings,
+)
+from apps.coupons.models import Coupon
+from apps.customers.models import Customer, CustomerGroup
+from apps.notifications.models import NotificationSettings, NotificationTemplate
+from apps.seo.models import Redirect, SeoMeta, SeoSettings
+from apps.payments.models import PaymentProviderConfig
+from apps.shipping.models import ShippingMethod, ShippingZone
+from apps.webhooks.models import WebhookEndpoint
+
+TEXT = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
+CHECK = "h-4 w-4 rounded border-slate-300"
+
+
+class ProjectScopedForm(forms.ModelForm):
+    def __init__(self, *args, project=None, **kwargs):
+        self.project = project
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs.setdefault("class", CHECK)
+            elif isinstance(widget, (forms.Select, forms.SelectMultiple)):
+                widget.attrs.setdefault("class", TEXT)
+            elif isinstance(widget, (forms.TextInput, forms.NumberInput, forms.Textarea, forms.EmailInput, forms.URLInput, forms.ClearableFileInput)):
+                widget.attrs.setdefault("class", TEXT)
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        if self.project is not None:
+            obj.project = self.project
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
+
+
+class CategoryForm(ProjectScopedForm):
+    class Meta:
+        model = Category
+        fields = [
+            "parent", "name", "slug", "description",
+            "image", "banner", "icon",
+            "is_active", "is_featured", "order",
+            "seo_title", "seo_description", "seo_keywords",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        qs = Category.objects.filter(project=self.project)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        self.fields["parent"].queryset = qs
+        self.fields["parent"].required = False
+
+
+class BrandForm(ProjectScopedForm):
+    class Meta:
+        model = Brand
+        fields = ["name", "slug", "logo", "description", "is_active"]
+
+
+class ProductTypeForm(ProjectScopedForm):
+    class Meta:
+        model = ProductType
+        fields = ["name", "kind"]
+        help_texts = {"kind": "How products of this type behave: simple, variable (has options), digital or service."}
+
+
+class TagForm(ProjectScopedForm):
+    class Meta:
+        model = Tag
+        fields = ["name"]
+
+
+class ProductForm(ProjectScopedForm):
+    class Meta:
+        model = Product
+        fields = [
+            "title", "slug", "kind", "status",
+            "type", "brand", "category",
+            "sku", "barcode", "hsn_sac", "tax_class",
+            "short_description", "description",
+            "price", "sale_price", "cost_price",
+            "weight", "length", "width", "height",
+            "is_featured", "is_new_arrival", "is_bestseller", "search_indexed",
+            "tags",
+            "seo_title", "seo_description", "seo_keywords",
+        ]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 4}),
+            "short_description": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["type"].queryset = ProductType.objects.filter(project=self.project)
+        self.fields["brand"].queryset = Brand.objects.filter(project=self.project)
+        self.fields["category"].queryset = Category.objects.filter(project=self.project)
+        self.fields["tags"].queryset = Tag.objects.filter(project=self.project)
+        for f in ("type", "brand", "category"):
+            self.fields[f].required = False
+
+
+class WarehouseForm(ProjectScopedForm):
+    class Meta:
+        model = Warehouse
+        fields = [
+            "name", "code", "is_active", "is_default",
+            "address_line1", "address_line2", "city", "state", "postal_code", "country",
+        ]
+
+
+class InventoryItemForm(ProjectScopedForm):
+    """Create a stock record for a product/variant at a warehouse."""
+
+    initial_quantity = forms.IntegerField(min_value=0, initial=0, required=False)
+
+    class Meta:
+        model = InventoryItem
+        fields = ["warehouse", "product", "variant", "low_stock_threshold"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["warehouse"].queryset = Warehouse.objects.filter(
+            project=self.project, is_active=True
+        )
+        self.fields["product"].queryset = Product.objects.filter(project=self.project)
+        self.fields["variant"].queryset = Variant.objects.filter(product__project=self.project)
+        self.fields["variant"].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        product = cleaned.get("product")
+        variant = cleaned.get("variant")
+        if variant and product and variant.product_id != product.id:
+            self.add_error("variant", "Variant does not belong to the chosen product.")
+
+        warehouse = cleaned.get("warehouse")
+        if warehouse and product:
+            dupe = InventoryItem.objects.filter(
+                warehouse=warehouse, product=product, variant=variant
+            )
+            if self.instance.pk:
+                dupe = dupe.exclude(pk=self.instance.pk)
+            if dupe.exists():
+                raise forms.ValidationError(
+                    "A stock record already exists for this product/variant at this warehouse."
+                )
+        return cleaned
+
+    def save(self, commit=True):
+        # InventoryItem is not TenantScoped (project reached via warehouse);
+        # skip ProjectScopedForm.save's project assignment.
+        obj = forms.ModelForm.save(self, commit=False)
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
+
+
+class PaymentProviderForm(ProjectScopedForm):
+    class Meta:
+        model = PaymentProviderConfig
+        fields = [
+            "provider", "display_name", "is_enabled", "is_test_mode",
+            "priority", "credentials", "config",
+        ]
+        widgets = {
+            "credentials": forms.Textarea(attrs={"rows": 4, "class": TEXT, "spellcheck": "false"}),
+            "config": forms.Textarea(attrs={"rows": 3, "class": TEXT, "spellcheck": "false"}),
+        }
+        help_texts = {
+            "credentials": 'JSON. Razorpay: {"key_id": "", "key_secret": "", "webhook_secret": ""}',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # provider is fixed once created (it's half of the unique key).
+        if self.instance.pk:
+            self.fields["provider"].disabled = True
+
+
+class ShippingZoneForm(ProjectScopedForm):
+    class Meta:
+        model = ShippingZone
+        fields = ["name", "is_active", "priority", "countries", "states", "postal_prefixes"]
+        widgets = {
+            "countries": forms.Textarea(attrs={"rows": 2, "class": TEXT}),
+            "states": forms.Textarea(attrs={"rows": 2, "class": TEXT}),
+            "postal_prefixes": forms.Textarea(attrs={"rows": 2, "class": TEXT}),
+        }
+        help_texts = {
+            "countries": 'JSON list, e.g. ["IN"]. Empty = any country.',
+            "postal_prefixes": 'JSON list of pincode prefixes, e.g. ["56", "4000"].',
+        }
+
+
+class ShippingMethodForm(ProjectScopedForm):
+    class Meta:
+        model = ShippingMethod
+        fields = [
+            "zone", "name", "carrier", "rate_type",
+            "base_rate", "per_kg_rate", "free_over",
+            "min_subtotal", "max_subtotal", "max_weight",
+            "cod_available", "cod_fee",
+            "min_days", "max_days", "is_active", "priority",
+        ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["zone"].queryset = ShippingZone.objects.filter(project=self.project)
+
+
+class CustomerGroupForm(ProjectScopedForm):
+    class Meta:
+        model = CustomerGroup
+        fields = ["name", "slug", "description", "discount_percent", "is_default"]
+
+
+class CustomerForm(ProjectScopedForm):
+    class Meta:
+        model = Customer
+        fields = [
+            "first_name", "last_name", "phone", "group",
+            "marketing_opt_in", "notes",
+        ]
+        widgets = {"notes": forms.Textarea(attrs={"rows": 3, "class": TEXT})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["group"].queryset = CustomerGroup.objects.filter(project=self.project)
+        self.fields["group"].required = False
+
+
+class CouponForm(ProjectScopedForm):
+    class Meta:
+        model = Coupon
+        fields = [
+            "code", "description",
+            "discount_type", "value", "max_discount", "min_order_amount",
+            "applies_to", "products", "categories", "customer_groups",
+            "first_order_only",
+            "usage_limit", "usage_limit_per_customer",
+            "starts_at", "expires_at", "is_active",
+        ]
+        widgets = {
+            "starts_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": TEXT}),
+            "expires_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": TEXT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["products"].queryset = Product.objects.filter(project=self.project)
+        self.fields["categories"].queryset = Category.objects.filter(project=self.project)
+        self.fields["customer_groups"].queryset = CustomerGroup.objects.filter(project=self.project)
+        for f in ("products", "categories", "customer_groups"):
+            self.fields[f].required = False
+
+
+class StockAdjustForm(forms.Form):
+    new_quantity = forms.IntegerField(min_value=0, widget=forms.NumberInput(attrs={"class": TEXT}))
+    low_stock_threshold = forms.IntegerField(
+        min_value=0, required=False, widget=forms.NumberInput(attrs={"class": TEXT})
+    )
+    note = forms.CharField(
+        max_length=255, required=False, widget=forms.TextInput(attrs={"class": TEXT})
+    )
+
+
+# --- CMS -----------------------------------------------------------
+
+class PageForm(ProjectScopedForm):
+    class Meta:
+        model = Page
+        fields = [
+            "kind", "title", "slug", "excerpt", "body",
+            "status", "published_at", "show_in_sitemap", "template_key",
+            "seo_title", "seo_description", "seo_keywords",
+        ]
+        widgets = {
+            "body": forms.Textarea(attrs={"rows": 12, "class": TEXT}),
+            "excerpt": forms.Textarea(attrs={"rows": 2, "class": TEXT}),
+            "published_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": TEXT}),
+        }
+
+
+class BannerForm(ProjectScopedForm):
+    class Meta:
+        model = Banner
+        fields = [
+            "name", "placement", "image", "mobile_image",
+            "heading", "subheading", "cta_label", "cta_url",
+            "category", "starts_at", "ends_at", "priority", "is_active",
+        ]
+        widgets = {
+            "starts_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": TEXT}),
+            "ends_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": TEXT}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["category"].queryset = Category.objects.filter(project=self.project)
+        self.fields["category"].required = False
+
+
+class FAQForm(ProjectScopedForm):
+    class Meta:
+        model = FAQ
+        fields = ["group", "question", "answer", "order", "is_active"]
+        widgets = {"answer": forms.Textarea(attrs={"rows": 4, "class": TEXT})}
+
+
+class ContentBlockForm(ProjectScopedForm):
+    class Meta:
+        model = ContentBlock
+        fields = ["key", "name", "block_type", "is_active"]
+
+
+class MenuForm(ProjectScopedForm):
+    class Meta:
+        model = Menu
+        fields = ["name", "location", "is_active"]
+
+
+class MenuItemForm(forms.ModelForm):
+    class Meta:
+        model = MenuItem
+        fields = [
+            "label", "link_type", "url", "page", "category",
+            "parent", "open_in_new_tab", "order", "is_active",
+        ]
+
+    def __init__(self, *args, menu=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.menu = menu
+        project = menu.project
+        self.fields["page"].queryset = Page.objects.filter(project=project)
+        self.fields["category"].queryset = Category.objects.filter(project=project)
+        self.fields["parent"].queryset = MenuItem.objects.filter(menu=menu, parent__isnull=True)
+        if self.instance.pk:
+            self.fields["parent"].queryset = self.fields["parent"].queryset.exclude(pk=self.instance.pk)
+        for f in ("page", "category", "parent"):
+            self.fields[f].required = False
+        for name, field in self.fields.items():
+            widget = field.widget
+            if isinstance(widget, forms.CheckboxInput):
+                widget.attrs.setdefault("class", CHECK)
+            else:
+                widget.attrs.setdefault("class", TEXT)
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.menu = self.menu
+        if commit:
+            obj.save()
+        return obj
+
+
+class ThemeSettingsForm(ProjectScopedForm):
+    class Meta:
+        model = ThemeSettings
+        fields = [
+            "skin",
+            "primary_color", "secondary_color", "accent_color",
+            "font_body", "font_heading",
+            "header_layout", "footer_layout", "button_style", "product_card_style",
+            "custom_css",
+        ]
+        widgets = {
+            "primary_color": forms.TextInput(attrs={"type": "color"}),
+            "secondary_color": forms.TextInput(attrs={"type": "color"}),
+            "accent_color": forms.TextInput(attrs={"type": "color"}),
+            "custom_css": forms.Textarea(attrs={"rows": 6, "class": TEXT, "spellcheck": "false"}),
+        }
+        help_texts = {
+            "skin": "The storefront template bundle. Ask an admin to unlock more.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.cms.skins import allowed_skins_for
+
+        field = self.fields["skin"]
+        if self.project is not None:
+            field.queryset = allowed_skins_for(self.project)
+        field.empty_label = "Default"
+
+
+class SkinUploadForm(forms.Form):
+    label = forms.CharField(
+        max_length=120, required=False,
+        widget=forms.TextInput(attrs={"class": TEXT, "placeholder": "e.g. Midnight"}),
+        help_text="Optional — defaults to the name in theme.json.",
+    )
+    bundle = forms.FileField(
+        help_text="A .zip of the converted skin folder (templates + assets/).",
+    )
+
+    def clean_bundle(self):
+        f = self.cleaned_data["bundle"]
+        if not f.name.lower().endswith(".zip"):
+            raise forms.ValidationError("Upload a .zip file.")
+        if f.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("Bundle is over 2 MB.")
+        return f
+
+
+class SkinForm(forms.ModelForm):
+    """Platform-level. Not project-scoped."""
+
+    class Meta:
+        model = Skin
+        fields = ["slug", "label", "description", "preview_image",
+                  "is_active", "capabilities"]
+        widgets = {
+            "description": forms.Textarea(attrs={"rows": 3, "class": TEXT}),
+            "capabilities": forms.Textarea(attrs={"rows": 3, "class": TEXT, "spellcheck": "false"}),
+        }
+        help_texts = {
+            "slug": "Folder name under templates/shopfront/skins/. Deploy the "
+                    "templates before a store can use it.",
+            "capabilities": "Optional JSON, e.g. {\"variants\": true}.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name, field in self.fields.items():
+            w = field.widget
+            if isinstance(w, forms.CheckboxInput):
+                w.attrs.setdefault("class", CHECK)
+            elif not w.attrs.get("class"):
+                w.attrs["class"] = TEXT
+        if self.instance.pk:
+            self.fields["slug"].disabled = True
+
+
+# --- SEO -----------------------------------------------------------
+
+class SeoSettingsForm(ProjectScopedForm):
+    class Meta:
+        model = SeoSettings
+        fields = [
+            "title_suffix", "default_description", "default_og_image", "default_robots",
+            "twitter_handle", "google_site_verification", "facebook_app_id", "sitemap_enabled",
+        ]
+        widgets = {"default_description": forms.Textarea(attrs={"rows": 2, "class": TEXT})}
+
+
+class SeoMetaForm(ProjectScopedForm):
+    class Meta:
+        model = SeoMeta
+        fields = [
+            "path", "title", "description", "canonical",
+            "og_title", "og_description", "og_image", "robots",
+        ]
+        widgets = {"description": forms.Textarea(attrs={"rows": 2, "class": TEXT})}
+
+
+class RedirectForm(ProjectScopedForm):
+    class Meta:
+        model = Redirect
+        fields = ["from_path", "to_path", "is_permanent", "is_active"]
+
+
+# --- Phase 11 ----------------------------------------------------
+
+class WebhookEndpointForm(ProjectScopedForm):
+    events_text = forms.CharField(
+        required=False, widget=forms.Textarea(attrs={"rows": 3, "class": TEXT}),
+        help_text="One event key per line (e.g. order.created). Blank = all events.",
+    )
+
+    class Meta:
+        model = WebhookEndpoint
+        fields = ["url", "description", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk:
+            self.fields["events_text"].initial = "\n".join(self.instance.events or [])
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        raw = self.cleaned_data.get("events_text", "")
+        obj.events = [line.strip() for line in raw.splitlines() if line.strip()]
+        if commit:
+            obj.save()
+        return obj
+
+
+class NotificationSettingsForm(ProjectScopedForm):
+    class Meta:
+        model = NotificationSettings
+        fields = ["from_email", "from_name", "reply_to",
+                  "email_provider", "sms_provider"]
+
+
+class NotificationTemplateForm(ProjectScopedForm):
+    class Meta:
+        model = NotificationTemplate
+        fields = ["event", "channel", "subject", "body", "is_active"]
+        widgets = {"body": forms.Textarea(attrs={"rows": 8, "class": TEXT})}
+
+
+class MediaUploadForm(forms.Form):
+    file = forms.FileField()
+    folder = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))
+    alt = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))
+    title = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))

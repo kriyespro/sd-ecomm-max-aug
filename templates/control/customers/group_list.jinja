@@ -1,0 +1,30 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Customer groups{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <a href="{{ url('control:customers') }}" class="text-sm text-slate-500 hover:underline">← Customers</a>
+    <a href="{{ url('control:customer_group_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add group</a>
+  </div>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Discount</th><th class="px-4 py-2">Default</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for g in groups %}
+        <tr>
+          <td class="px-4 py-2 font-medium text-slate-800">{{ g.name }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ g.discount_percent }}%</td>
+          <td class="px-4 py-2 text-slate-500">{{ "yes" if g.is_default else "—" }}</td>
+          <td class="px-4 py-2 text-right"><a href="{{ url('control:customer_group_edit', kwargs={'pk': g.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No groups.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

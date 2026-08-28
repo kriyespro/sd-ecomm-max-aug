@@ -1,0 +1,71 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}{{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div>
+      <a href="{{ url('control:stores') }}" class="text-xs text-slate-400 hover:underline">← Stores</a>
+      <h2 class="text-xl font-semibold text-slate-900">{{ store.name }}</h2>
+      <p class="text-xs text-slate-500">{{ store.primary_domain or 'no domain yet' }} · {{ store.currency }}</p>
+    </div>
+    <form method="post" action="{{ url('control:store_switch', kwargs={'pk': store.pk}) }}">
+      {{ csrf_input }}
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Work on this store</button>
+    </form>
+  </div>
+
+  {# plan #}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Subscription</p>
+    {% if subscription %}
+    <p class="mt-1 text-sm text-slate-800">
+      {{ subscription.plan.name }} · {{ subscription.period }} ·
+      <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+        {{ 'bg-emerald-100 text-emerald-700' if subscription.status in ('active','trialing') else 'bg-amber-100 text-amber-800' if subscription.status == 'past_due' else 'bg-red-100 text-red-700' }}">{{ subscription.status }}</span>
+    </p>
+    <p class="mt-0.5 text-xs text-slate-400">
+      {% if subscription.status == 'trialing' %}Trial ends {{ subscription.trial_end.strftime('%d %b %Y') }}{% else %}Renews {{ subscription.current_period_end.strftime('%d %b %Y') }}{% endif %}
+      {% if subscription.manager_id %} · manager {{ subscription.manager.email }}{% endif %}
+    </p>
+    {% else %}<p class="mt-1 text-sm text-slate-400">No subscription.</p>{% endif %}
+  </div>
+
+  {# members #}
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Team</div>
+    <table class="w-full text-left text-sm">
+      <tbody class="divide-y divide-slate-100">
+        {% for m in members %}
+        <tr>
+          <td class="px-4 py-2">
+            <span class="font-medium text-slate-800">{{ m.user.get_full_name() or m.user.get_username() }}</span>
+            <span class="block text-xs text-slate-400">{{ m.user.email }}</span>
+          </td>
+          <td class="px-4 py-2">
+            <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{{ m.get_role_display() }}</span>
+            {% if not m.user.has_usable_password() %}<span class="ml-1 text-[10px] text-amber-600">needs password</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <form method="post" action="{{ url('control:store_member_add', kwargs={'pk': store.pk}) }}"
+          class="flex flex-wrap items-end gap-2 border-t border-slate-200 p-4">
+      {{ csrf_input }}
+      <input name="email" type="email" required placeholder="person@email.com"
+             class="min-w-[14rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <input name="name" placeholder="Name (if new)" class="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <select name="role" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
+        {% for val, label in role_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+      </select>
+      <button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Add</button>
+    </form>
+  </div>
+
+  <p class="text-xs text-slate-400">
+    Catalog, orders, inventory and store settings live inside the store —
+    click <span class="font-medium">Work on this store</span> above.
+  </p>
+</div>
+{% endblock %}

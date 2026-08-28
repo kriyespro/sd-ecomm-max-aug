@@ -1,0 +1,43 @@
+{% extends "storefront/base.jinja" %}
+{% block title %}{{ store.name }} — shop{% endblock %}
+
+{% block content %}
+{% if active_category or query %}
+<p class="mb-4 text-sm text-slate-500">
+  {% if query %}Results for “{{ query }}”{% elif active_category %}Category: {{ active_category }}{% endif %}
+  · <a href="{{ url('storefront:home') }}" class="underline">clear</a>
+</p>
+{% endif %}
+
+<div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+  {% for p in products %}
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <a href="{{ url('storefront:product', kwargs={'slug': p.slug}) }}" class="block">
+      <div class="aspect-square bg-slate-100">
+        {% set img = p.images.all()|first %}
+        {% if img %}<img src="{{ img.image.url }}" alt="{{ img.alt or p.title }}" class="h-full w-full object-cover">{% endif %}
+      </div>
+      <div class="p-3">
+        <p class="line-clamp-1 text-sm font-medium">{{ p.title }}</p>
+        <p class="mt-1 text-sm">
+          {% if p.on_sale %}<span class="text-slate-400 line-through">{{ store.currency }} {{ p.price }}</span>
+            <span class="font-semibold">{{ store.currency }} {{ p.current_price }}</span>
+          {% else %}<span class="font-semibold">{{ store.currency }} {{ p.price }}</span>{% endif %}
+        </p>
+        {% if p.rating_count %}
+        <p class="mt-0.5 text-xs text-amber-500">{{ "★" * (p.rating_avg | round | int) }}<span class="text-slate-400"> ({{ p.rating_count }})</span></p>
+        {% endif %}
+      </div>
+    </a>
+    <form method="post" action="{{ url('storefront:cart_add') }}" class="px-3 pb-3">
+      {{ csrf_input }}
+      <input type="hidden" name="product" value="{{ p.slug }}">
+      <input type="hidden" name="next" value="{{ url('storefront:home') }}">
+      <button class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-xs hover:bg-slate-50">Add to cart</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="col-span-full py-16 text-center text-slate-400">No products found.</p>
+  {% endfor %}
+</div>
+{% endblock %}

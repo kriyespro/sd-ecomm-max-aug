@@ -1,0 +1,44 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}{{ menu.name }}{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <a href="{{ url('control:cms_menus') }}" class="text-sm text-slate-500 hover:underline">← Menus</a>
+  <h2 class="text-sm font-semibold text-slate-700">{{ menu.name }} <span class="text-slate-400">({{ menu.get_location_display() }})</span></h2>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Label</th><th class="px-4 py-2">Target</th><th class="px-4 py-2">Parent</th><th class="px-4 py-2">Order</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for it in items %}
+        <tr>
+          <td class="px-4 py-2 font-medium text-slate-800">{{ it.label }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ it.resolved_url() or "—" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ it.parent.label if it.parent else "—" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ it.order }}</td>
+          <td class="px-4 py-2 text-right">
+            <form method="post" action="{{ url('control:cms_menu_item_delete', kwargs={'pk': menu.pk, 'item_pk': it.pk}) }}" class="inline">
+              {{ csrf_input }}
+              <button class="text-red-600 hover:underline">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No items.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <form method="post" action="{{ url('control:cms_menu_item_add', kwargs={'pk': menu.pk}) }}"
+        class="max-w-lg space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h3 class="text-sm font-semibold text-slate-700">Add item</h3>
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add</button>
+  </form>
+</div>
+{% endblock %}

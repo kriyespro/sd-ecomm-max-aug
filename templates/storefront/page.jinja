@@ -1,0 +1,10 @@
+{% extends "storefront/base.jinja" %}
+{% block title %}{{ page.seo_title or page.title }} — {{ store.name }}{% endblock %}
+
+{% block content %}
+<article class="prose mx-auto max-w-3xl">
+  <h1 class="text-2xl font-semibold">{{ page.title }}</h1>
+  {% if page.excerpt %}<p class="mt-2 text-slate-500">{{ page.excerpt }}</p>{% endif %}
+  <div class="mt-4 space-y-3 text-sm leading-6 text-slate-700">{{ page.body | safe }}</div>
+</article>
+{% endblock %}

@@ -1,0 +1,19 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% set _vn = form.instance._meta.verbose_name | title %}
+{% block page_title %}{{ _vn }}{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data"
+      class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <h2 class="text-sm font-semibold text-slate-700">
+    {{ "Edit" if form.instance.pk else "New" }} {{ _vn }}
+  </h2>
+  {{ render_form(form) }}
+  <div class="flex gap-2 pt-2">
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+    <a href="{{ request.META.get('HTTP_REFERER', '/admin/') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+  </div>
+</form>
+{% endblock %}

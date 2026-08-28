@@ -1,0 +1,29 @@
+{% extends "control/base_control.jinja" %}
+
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <div id="stats"
+       hx-get="{{ url('control:stats_cards') }}"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+    {% include "control/partials/_stats_cards.jinja" %}
+  </div>
+
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700">Recent activity</h2>
+      <span class="text-xs text-slate-400">auto-refresh 15s</span>
+    </div>
+    <div id="activity"
+         hx-get="{{ url('control:activity_feed') }}"
+         hx-trigger="every 15s"
+         hx-swap="innerHTML">
+      {% include "control/partials/_activity_feed.jinja" %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

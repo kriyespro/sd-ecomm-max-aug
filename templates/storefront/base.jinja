@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ store.name }}{% endblock %}</title>
+  {% if meta %}<meta name="description" content="{{ meta.description }}">{% endif %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>:root{ --brand: {{ primary_color }}; } .btn-brand{ background: var(--brand); }</style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900">
+
+{% if announcement %}
+<div class="bg-slate-900 px-4 py-2 text-center text-sm text-white">
+  {{ announcement.heading }}
+  {% if announcement.cta_url %}<a href="{{ announcement.cta_url }}" class="ml-2 underline">{{ announcement.cta_label or "Shop" }}</a>{% endif %}
+</div>
+{% endif %}
+
+<header class="border-b border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4">
+    <a href="{{ url('storefront:home') }}" class="text-xl font-bold tracking-tight">{{ store.name }}</a>
+    <form method="get" action="{{ url('storefront:home') }}" class="order-3 w-full sm:order-2 sm:w-auto">
+      <input type="search" name="q" value="{{ query or '' }}" placeholder="Search products…"
+             class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm sm:w-64">
+    </form>
+    <a href="{{ url('storefront:cart') }}" class="order-2 rounded-lg btn-brand px-3 py-1.5 text-sm font-medium text-white sm:order-3">
+      Cart ({{ cart_count }})
+    </a>
+  </div>
+  {% if nav_categories %}
+  <nav class="mx-auto flex max-w-6xl gap-4 overflow-x-auto px-4 pb-3 text-sm text-slate-500">
+    <a href="{{ url('storefront:home') }}" class="whitespace-nowrap hover:text-slate-900">All</a>
+    {% for c in nav_categories %}
+    <a href="{{ url('storefront:home') }}?category={{ c.slug }}" class="whitespace-nowrap hover:text-slate-900">{{ c.name }}</a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+</header>
+
+{% if messages %}
+<div class="mx-auto max-w-6xl space-y-1 px-4 pt-4">
+  {% for m in messages %}
+  <div class="rounded-lg px-3 py-2 text-sm
+    {{ 'bg-emerald-50 text-emerald-800' if 'success' in m.tags else 'bg-red-50 text-red-700' if 'error' in m.tags else 'bg-slate-100 text-slate-700' }}">
+    {{ m }}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<main class="mx-auto max-w-6xl px-4 py-6">
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="mt-16 border-t border-slate-200 bg-white">
+  <div class="mx-auto flex max-w-6xl flex-wrap gap-6 px-4 py-8 text-sm text-slate-500">
+    <span>&copy; {{ store.name }}</span>
+    {% for p in footer_pages %}
+    <a href="{{ url('storefront:page', kwargs={'slug': p.slug}) }}" class="hover:text-slate-900">{{ p.title }}</a>
+    {% endfor %}
+  </div>
+</footer>
+
+</body>
+</html>

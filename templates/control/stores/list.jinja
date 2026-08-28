@@ -1,0 +1,47 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Stores{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Stores</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        {% if is_admin %}Every store on the platform.{% else %}Stores you signed up.{% endif %}
+        Click a store to manage its team, plan, or to start working in it.
+      </p>
+    </div>
+    <a href="{{ url('control:store_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New store</a>
+  </div>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Store</th><th class="px-4 py-2">Domain</th><th class="px-4 py-2">Plan</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for s in stores %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2"><a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ s.name }}</a></td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ s.primary_domain or '—' }}</td>
+          <td class="px-4 py-2 text-xs">{{ s.subscription.plan.name if s.subscription else '—' }}</td>
+          <td class="px-4 py-2">
+            {% set st = s.subscription.status if s.subscription else s.status %}
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if st in ('active','trialing') else 'bg-amber-100 text-amber-800' if st == 'past_due' else 'bg-red-100 text-red-700' if st == 'suspended' else 'bg-slate-100 text-slate-600' }}">{{ st }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            <form method="post" action="{{ url('control:store_switch', kwargs={'pk': s.pk}) }}" class="inline">
+              {{ csrf_input }}<button class="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline">Work on this →</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No stores yet. Create one to get started.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

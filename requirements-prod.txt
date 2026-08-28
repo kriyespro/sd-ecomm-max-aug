@@ -1,0 +1,7 @@
+# Production dependencies — installed on top of requirements.txt in the image.
+-r requirements.txt
+
+psycopg[binary]>=3.2,<4      # PostgreSQL driver
+redis>=5.0,<6                # cache backend + DRF throttle + Celery broker
+gunicorn>=23.0,<27           # WSGI server
+whitenoise[brotli]>=6.6,<7   # static file serving from the app process

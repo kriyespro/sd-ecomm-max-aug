@@ -1,0 +1,78 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Checkout · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl px-5 py-12 lg:px-8">
+  <h1 class="mb-10 font-display text-4xl">Checkout</h1>
+
+  <form method="post" action="{{ url('shopfront:checkout') }}" class="grid gap-12 lg:grid-cols-3">
+    {{ csrf_input }}
+
+    <div class="space-y-10 lg:col-span-2">
+      {# contact + address #}
+      <section id="addr-fields">
+        <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Contact &amp; delivery</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <input name="email" type="email" required placeholder="Email" value="{{ user.email if user.is_authenticated }}" class="sm:col-span-2 border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="name" required placeholder="Full name" class="sm:col-span-2 border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="line1" required placeholder="Address" class="sm:col-span-2 border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="line2" placeholder="Apartment, suite (optional)" class="sm:col-span-2 border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="city" required placeholder="City" class="border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent"
+                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields, [name=payment_method]:checked">
+          <input name="state" placeholder="State" class="border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="postal_code" required placeholder="PIN code" class="border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent"
+                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields, [name=payment_method]:checked">
+          <input name="country" required value="{{ store.country or 'IN' }}" class="border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="phone" placeholder="Phone" class="sm:col-span-2 border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        </div>
+      </section>
+
+      {# shipping #}
+      <section>
+        <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Shipping method</h2>
+        <div id="shipping-methods" class="space-y-2 text-sm text-mute">
+          Enter your city &amp; PIN code to see options.
+        </div>
+      </section>
+
+      {# payment #}
+      <section>
+        <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Payment</h2>
+        <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
+          <input type="radio" name="payment_method" value="cod" checked
+                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
+          Cash on delivery
+        </label>
+        <p class="mt-2 text-xs text-mute">Card / UPI via the gateway is handled by the API (see <code>/api/v1/checkout/</code>).</p>
+      </section>
+
+      <textarea name="customer_note" rows="2" placeholder="Order note (optional)" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent"></textarea>
+    </div>
+
+    {# summary #}
+    <aside class="h-fit border border-line bg-panel p-7">
+      <p class="font-display text-xl">Order summary</p>
+      <div class="mt-5 space-y-3 border-b border-line pb-5 text-sm">
+        {% for i in cart.items.all() %}
+        <div class="flex justify-between gap-3">
+          <span class="text-ink/80">{{ i.quantity }} × {{ i.product.title }}</span>
+          <span>{{ i.line_total | money }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <input name="coupon_code" placeholder="Coupon code" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+      </div>
+      <button type="button" class="mt-2 w-full border border-ink py-2 text-[11px] font-semibold uppercase tracking-luxe hover:bg-ink hover:text-paper"
+              hx-post="{{ url('shopfront:coupon_preview') }}" hx-target="#summary" hx-include="[name=coupon_code]">Apply coupon</button>
+
+      <div id="summary">
+        {% include "shopfront/partials/_checkout_summary.jinja" %}
+      </div>
+
+      <button class="mt-6 w-full bg-ink py-4 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Place order</button>
+    </aside>
+  </form>
+</div>
+{% endblock %}

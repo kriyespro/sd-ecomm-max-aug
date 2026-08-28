@@ -1,0 +1,22 @@
+{% extends "base.jinja" %}
+
+{% block title %}Impersonating{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen items-center justify-center px-4">
+  <div class="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm ring-1 ring-slate-200">
+    <p class="text-sm text-slate-500">You are impersonating</p>
+    <p class="mt-1 text-lg font-semibold">{{ request.user.get_username() }}</p>
+    <p class="mt-4 text-sm text-slate-500">
+      A storefront view for this user arrives in a later phase. For now, use this
+      session to exercise the user's data, then stop.
+    </p>
+    <form method="post" action="{{ url('control:impersonate_stop') }}" class="mt-6">
+      {{ csrf_input }}
+      <button class="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        Stop impersonating
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}

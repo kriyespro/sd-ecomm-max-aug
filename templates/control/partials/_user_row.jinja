@@ -1,0 +1,39 @@
+{% set banned = u.profile.is_banned %}
+<tr id="user-row-{{ u.pk }}" class="hover:bg-slate-50">
+  <td class="px-4 py-2">
+    <a href="{{ url('control:user_detail', kwargs={'pk': u.pk}) }}" class="font-medium text-slate-900 hover:underline">
+      {{ u.get_username() }}
+    </a>
+    {% if u.is_superuser %}<span class="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">super</span>
+    {% elif u.is_staff %}<span class="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">staff</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-slate-500">{{ u.email or "—" }}</td>
+  <td class="px-4 py-2 text-slate-500">{{ u.date_joined.strftime("%b %d, %Y") }}</td>
+  <td class="px-4 py-2">
+    {% if banned %}<span class="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">banned</span>
+    {% elif not u.is_active %}<span class="rounded bg-slate-200 px-2 py-0.5 text-xs">inactive</span>
+    {% else %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">active</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-right">
+    {% if not u.is_superuser %}
+    <div class="inline-flex gap-1">
+      <form method="post"
+            hx-post="{{ url('control:user_unban' if banned else 'control:user_ban', kwargs={'pk': u.pk}) }}"
+            action="{{ url('control:user_unban' if banned else 'control:user_ban', kwargs={'pk': u.pk}) }}"
+            hx-target="#user-row-{{ u.pk }}"
+            hx-swap="outerHTML">
+        {{ csrf_input }}
+        <button class="rounded px-2 py-1 text-xs {{ 'bg-emerald-600 text-white' if banned else 'bg-red-600 text-white' }}">
+          {{ "Unban" if banned else "Ban" }}
+        </button>
+      </form>
+      <form method="post" action="{{ url('control:user_impersonate', kwargs={'pk': u.pk}) }}">
+        {{ csrf_input }}
+        <button class="rounded bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300">Impersonate</button>
+      </form>
+    </div>
+    {% else %}
+    <span class="text-xs text-slate-300">—</span>
+    {% endif %}
+  </td>
+</tr>

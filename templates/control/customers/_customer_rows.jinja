@@ -1,0 +1,18 @@
+{% for cst in customers %}
+<tr class="hover:bg-slate-50">
+  <td class="px-4 py-2">
+    <a href="{{ url('control:customer_detail', kwargs={'pk': cst.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ cst.full_name or cst.email }}</a>
+    {% if cst.full_name %}<span class="block text-xs text-slate-400">{{ cst.email }}</span>{% endif %}
+  </td>
+  <td class="px-4 py-2"><span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-600">{{ cst.get_segment_display() }}</span></td>
+  <td class="px-4 py-2 text-slate-500">{{ cst.group.name if cst.group else "—" }}</td>
+  <td class="px-4 py-2 text-right">{{ cst.orders_count }}</td>
+  <td class="px-4 py-2 text-right font-medium">{{ cst.total_spent }}</td>
+  <td class="px-4 py-2">
+    {% if cst.is_blocked %}<span class="rounded bg-red-100 px-2 py-0.5 text-xs text-red-700">blocked</span>
+    {% else %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">active</span>{% endif %}
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No customers found.</td></tr>
+{% endfor %}

@@ -1,0 +1,47 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Notifications{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3">
+  <form method="post" class="lg:col-span-2 space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h2 class="text-sm font-semibold text-slate-700">Notification settings · {{ active_project.name }}</h2>
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+  </form>
+
+  <div class="space-y-4">
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700">Templates</h3>
+        <a href="{{ url('control:notification_template_create') }}" class="text-sm text-slate-600 hover:underline">Add</a>
+      </div>
+      <ul class="mt-2 space-y-1 text-sm">
+        {% for t in templates %}
+        <li class="flex items-center justify-between">
+          <span class="text-slate-600">{{ t.get_event_display() }} · {{ t.channel }}</span>
+          <a href="{{ url('control:notification_template_edit', kwargs={'pk': t.pk}) }}" class="text-slate-500 hover:underline">edit</a>
+        </li>
+        {% else %}
+        <li class="text-slate-400">Using built-in defaults for all events.</li>
+        {% endfor %}
+      </ul>
+    </div>
+
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <h3 class="text-sm font-semibold text-slate-700">Recent sends</h3>
+      <ul class="mt-2 space-y-1 text-xs">
+        {% for l in logs %}
+        <li class="flex items-center justify-between">
+          <span class="text-slate-500">{{ l.event }} → {{ l.to_address }}</span>
+          <span class="rounded px-1.5 py-0.5 {{ 'bg-emerald-100 text-emerald-700' if l.status == 'sent' else 'bg-red-100 text-red-700' if l.status == 'failed' else 'bg-slate-200 text-slate-600' }}">{{ l.status }}</span>
+        </li>
+        {% else %}
+        <li class="text-slate-400">Nothing sent yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

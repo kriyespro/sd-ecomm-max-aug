@@ -1,0 +1,41 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Order {{ order.number }} · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl px-5 py-16 text-center lg:px-8">
+  <p class="font-display text-5xl text-accent">✓</p>
+  <h1 class="mt-4 font-display text-3xl">Thank you</h1>
+  <p class="mt-2 text-sm text-mute">Order <span class="font-medium text-ink">{{ order.number }}</span> · {{ order.get_status_display() }} · {{ order.get_payment_status_display() }}</p>
+
+  <div class="mt-10 border-y border-line py-6 text-left">
+    <table class="w-full text-sm">
+      <tbody class="divide-y divide-line">
+        {% for i in order.items.all() %}
+        <tr>
+          <td class="py-3">{{ i.quantity }} × {{ i.product_title }}{% if i.variant_name %} · {{ i.variant_name }}{% endif %}</td>
+          <td class="py-3 text-right">{{ i.line_total | money }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr><td class="pt-4 text-mute">Subtotal</td><td class="pt-4 text-right">{{ order.subtotal | money }}</td></tr>
+        {% if order.discount_total and order.discount_total > 0 %}
+        <tr><td class="text-emerald-700">Discount{% if order.coupon_code %} · {{ order.coupon_code }}{% endif %}</td><td class="text-right text-emerald-700">− {{ order.discount_total | money }}</td></tr>
+        {% endif %}
+        <tr><td class="text-mute">Shipping</td><td class="text-right">{{ order.shipping_total | money }}</td></tr>
+        <tr><td class="text-mute">Tax</td><td class="text-right">{{ order.tax_total | money }}</td></tr>
+        <tr class="font-display text-lg"><td class="pt-3">Total</td><td class="pt-3 text-right">{{ order.grand_total | money }}</td></tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <div class="mt-8 text-left text-sm text-mute">
+    <p class="font-medium text-ink">Delivering to</p>
+    <p>{{ order.shipping_address.get('name') }}</p>
+    <p>{{ order.shipping_address.get('line1') }}{% if order.shipping_address.get('line2') %}, {{ order.shipping_address.get('line2') }}{% endif %}</p>
+    <p>{{ order.shipping_address.get('city') }}, {{ order.shipping_address.get('state') }} {{ order.shipping_address.get('postal_code') }} · {{ order.shipping_address.get('country') }}</p>
+  </div>
+
+  <a href="{{ url('shopfront:shop') }}" class="mt-10 inline-block bg-ink px-10 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Continue shopping</a>
+</div>
+{% endblock %}

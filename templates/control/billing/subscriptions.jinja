@@ -1,0 +1,37 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Subscriptions{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div class="flex flex-wrap gap-4 text-xs">
+    <a href="{{ url('control:billing') }}" class="font-medium text-slate-500 hover:text-slate-900">Overview</a>
+    <a href="{{ url('control:billing_plans') }}" class="font-medium text-slate-500 hover:text-slate-900">Plans</a>
+    <a href="{{ url('control:billing_subscriptions') }}" class="font-medium text-slate-900 underline">Subscriptions</a>
+    <a href="{{ url('control:billing_commissions') }}" class="font-medium text-slate-500 hover:text-slate-900">Commissions</a>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Store</th><th class="px-4 py-2">Plan</th><th class="px-4 py-2">Period</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2">Renews</th><th class="px-4 py-2">Manager</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for s in subs %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium text-slate-900">{{ s.project.name }}</td>
+          <td class="px-4 py-2">{{ s.plan.name }}</td>
+          <td class="px-4 py-2 text-xs">{{ s.period }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if s.status in ('active','trialing') else 'bg-amber-100 text-amber-800' if s.status == 'past_due' else 'bg-red-100 text-red-700' if s.status == 'suspended' else 'bg-slate-100 text-slate-600' }}">{{ s.status }}</span>
+          </td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ s.current_period_end.strftime('%d %b %Y') }}</td>
+          <td class="px-4 py-2 text-xs">{{ s.manager.email if s.manager_id else '—' }}</td>
+        </tr>
+        {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="6">No subscriptions.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

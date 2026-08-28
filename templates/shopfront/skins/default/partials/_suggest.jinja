@@ -1,0 +1,19 @@
+{% if suggestions %}
+<div class="border border-line bg-panel shadow-lg">
+  {% for p in suggestions %}
+  {% set img = (p.images.all() | first) %}
+  <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="flex items-center gap-3 border-b border-line px-4 py-3 last:border-0 hover:bg-paper">
+    <div class="h-12 w-10 flex-shrink-0 overflow-hidden bg-line/40">
+      {% if img %}<img src="{{ img.image.url }}" class="h-full w-full object-cover">{% endif %}
+    </div>
+    <div class="min-w-0 flex-1">
+      <p class="truncate text-sm font-medium">{{ p.title }}</p>
+      <p class="text-xs text-mute">{{ p.current_price | money }}</p>
+    </div>
+  </a>
+  {% endfor %}
+  <a href="{{ url('shopfront:shop') }}?q={{ query }}" class="block bg-paper px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-accent">See all results for “{{ query }}”</a>
+</div>
+{% elif query and query | length >= 2 %}
+<div class="border border-line bg-panel px-4 py-3 text-sm text-mute shadow-lg">No matches for “{{ query }}”.</div>
+{% endif %}

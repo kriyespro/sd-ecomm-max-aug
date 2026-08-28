@@ -1,0 +1,147 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Plan &amp; billing{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-5" x-data="planBilling()">
+  {# current plan #}
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Current plan</p>
+        <p class="mt-1 text-2xl font-semibold text-slate-900">{{ subscription.plan.name }}</p>
+        <p class="text-sm text-slate-500">
+          ₹{{ '{:,.0f}'.format(current_price) }} / {{ 'year' if subscription.period == 'yearly' else 'month' }}
+          ·
+          <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+            {{ 'bg-emerald-100 text-emerald-700' if subscription.status in ('active','trialing') else 'bg-amber-100 text-amber-800' if subscription.status == 'past_due' else 'bg-red-100 text-red-700' }}">{{ subscription.status }}</span>
+        </p>
+        <p class="mt-1 text-xs text-slate-400">
+          {% if subscription.status == 'trialing' %}Trial ends {{ subscription.trial_end.strftime('%d %b %Y') }}
+          {% else %}Renews {{ subscription.current_period_end.strftime('%d %b %Y') }}{% endif %}
+        </p>
+      </div>
+      {% if open_invoice %}
+      <div class="rounded-lg bg-amber-50 p-4 text-right ring-1 ring-amber-200">
+        <p class="text-xs font-medium text-amber-800">Invoice {{ open_invoice.number }} due</p>
+        <p class="text-lg font-semibold text-amber-900">₹{{ '{:,.0f}'.format(open_invoice.amount) }}</p>
+        <button @click="pay({{ open_invoice.pk }})" :disabled="busy"
+                class="mt-2 rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+          <span x-text="busy ? 'Processing…' : 'Pay now'"></span>
+        </button>
+      </div>
+      {% endif %}
+    </div>
+
+    {# usage #}
+    <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+      {% for key, label in [('products','Products'), ('staff','Team members'), ('custom_domains','Custom domains')] %}
+      {% set used = usage[key][0] %}{% set cap = usage[key][1] %}
+      <div class="rounded-lg bg-slate-50 p-3">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ label }}</p>
+        <p class="mt-0.5 text-sm text-slate-700">{{ used }}{% if cap is not none %} / {{ cap }}{% else %} <span class="text-slate-400">/ ∞</span>{% endif %}</p>
+        {% if cap %}<div class="mt-1 h-1 rounded bg-slate-200"><div class="h-1 rounded bg-slate-900" style="width: {{ [used * 100 // cap, 100] | min }}%"></div></div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# invoices #}
+  {% if invoices %}
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Invoices</div>
+    <table class="w-full text-left text-sm">
+      <tbody class="divide-y divide-slate-100">
+        {% for inv in invoices %}
+        <tr>
+          <td class="px-4 py-2 font-mono text-xs">{{ inv.number }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ inv.period_start.strftime('%d %b') }} – {{ inv.period_end.strftime('%d %b %Y') }}</td>
+          <td class="px-4 py-2">₹{{ '{:,.0f}'.format(inv.amount) }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if inv.status == 'paid' else 'bg-amber-100 text-amber-800' if inv.status == 'open' else 'bg-slate-100 text-slate-600' }}">{{ inv.status }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            {% if inv.status == 'open' %}<button @click="pay({{ inv.pk }})" :disabled="busy" class="text-xs font-medium text-slate-900 hover:underline">Pay</button>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {# plan picker #}
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <div class="flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700">Change plan</h2>
+      <div class="flex rounded-lg bg-slate-100 p-0.5 text-xs">
+        <button @click="period='monthly'" :class="period==='monthly' ? 'bg-white shadow' : ''" class="rounded-md px-3 py-1 font-medium">Monthly</button>
+        <button @click="period='yearly'" :class="period==='yearly' ? 'bg-white shadow' : ''" class="rounded-md px-3 py-1 font-medium">Yearly <span class="text-emerald-600">save</span></button>
+      </div>
+    </div>
+
+    <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+      {% for p in plans %}
+      <form method="post" action="{{ url('control:store_plan_change') }}"
+            class="flex flex-col rounded-xl border p-4 {{ 'border-slate-900 ring-1 ring-slate-900' if p.pk == subscription.plan_id else 'border-slate-200' }}">
+        {{ csrf_input }}
+        <input type="hidden" name="plan" value="{{ p.pk }}">
+        <input type="hidden" name="period" :value="period">
+        <p class="font-semibold text-slate-900">{{ p.name }}</p>
+        <p class="mt-0.5 text-xs text-slate-500">{{ p.tagline }}</p>
+        <p class="mt-3 text-xl font-semibold text-slate-900">
+          <span x-show="period==='monthly'">₹{{ '{:,.0f}'.format(p.price_monthly) }}<span class="text-sm font-normal text-slate-400">/mo</span></span>
+          <span x-show="period==='yearly'" x-cloak>₹{{ '{:,.0f}'.format(p.price_yearly) }}<span class="text-sm font-normal text-slate-400">/yr</span></span>
+        </p>
+        <ul class="mt-3 flex-1 space-y-1 text-xs text-slate-600">
+          {% for f in p.features %}<li>• {{ f }}</li>{% endfor %}
+        </ul>
+        <button class="mt-4 rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide
+          {{ 'bg-slate-100 text-slate-400' if p.pk == subscription.plan_id else 'bg-slate-900 text-white hover:bg-slate-800' }}"
+          {{ 'disabled' if p.pk == subscription.plan_id }}>
+          {{ 'Current plan' if p.pk == subscription.plan_id else 'Switch to this' }}
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+    <p class="mt-3 text-xs text-slate-400">Switching takes effect now; the new price applies to your next invoice.</p>
+  </div>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+function planBilling() {
+  return {
+    period: '{{ subscription.period }}',
+    busy: false,
+    async pay(invoiceId) {
+      this.busy = true;
+      try {
+        const start = await fetch(`/admin/plan/invoice/${invoiceId}/pay/`, {
+          method: 'POST', headers: {'X-CSRFToken': '{{ csrf_token }}'},
+        }).then(r => r.json());
+        if (start.error) { alert(start.error); this.busy = false; return; }
+        const confirm = (paymentId, signature) => {
+          const f = document.createElement('form');
+          f.method = 'POST';
+          f.action = `/admin/plan/invoice/${invoiceId}/confirm/`;
+          f.innerHTML = `<input name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+            <input name="razorpay_payment_id" value="${paymentId}">
+            <input name="razorpay_signature" value="${signature}">`;
+          document.body.appendChild(f); f.submit();
+        };
+        if (start.synthetic || !start.key_id) { confirm('pay_test', 'test'); return; }
+        const rzp = new Razorpay({
+          key: start.key_id, order_id: start.order_id,
+          amount: start.amount, currency: start.currency,
+          name: 'Subscription', description: start.invoice,
+          handler: (res) => confirm(res.razorpay_payment_id, res.razorpay_signature),
+          modal: { ondismiss: () => { this.busy = false; } },
+        });
+        rzp.open();
+      } catch (e) { this.busy = false; alert('Payment could not start.'); }
+    },
+  };
+}
+</script>
+{% endblock %}

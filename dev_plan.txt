@@ -1,0 +1,146 @@
+SD HEADLESS COMMERCE PLATFORM — PHASED EXECUTION PLAN
+See project.md for full spec. Update dev.txt after every completed task.
+NEVER run migrate automatically — show migration file, wait for confirmation.
+
+======================================================================
+PHASE 1 — FOUNDATION                                              [DONE]
+======================================================================
+- venv (Python 3.14 + Django 5.2 LTS), requirements.txt
+- config/ settings split: base / development / production
+- Jinja2 as primary template engine, {{ csrf_input }} helper
+- apps/core:     TimeStampedModel, TenantScopedModel, AuditLog,
+                 ProjectResolverMiddleware, ControlAccessMixin, record_audit()
+- apps/projects: Project (store/tenant), Domain (multi-domain routing)
+- apps/accounts: Profile, Membership, PlatformRole, StoreRole, profile signal
+- accounts login/logout views + Jinja templates, base.jinja
+- Django admin kept at /sd/
+- Migrations for core, projects, accounts (SHOW, await confirmation)
+
+======================================================================
+PHASE 2 — MISSION CONTROL SHELL                                   [DONE]
+======================================================================
+- apps/control: base_control.jinja (dark sidebar + topbar), DashboardView   [DONE]
+- Staff auth gate via ControlAccessMixin, mount at /admin/                   [DONE]
+- Stats cards (HTMX every 30s), activity feed (HTMX poll) from AuditLog      [DONE]
+- User manager: list + HTMX live search + ban/unban + impersonate           [DONE]
+- Platform vs Store admin context switch                          [DEFERRED -> Phase 3]
+
+======================================================================
+PHASE 3 — CATALOG CORE                                            [DONE]
+======================================================================
+- apps/categories: nested Category (adjacency list), SEO fields         [DONE]
+- apps/catalog: Product, ProductType, ProductImage, Attribute, Variant,
+                Brand, Tag, related/cross-sell/upsell                   [DONE]
+- Control CRUD screens (Jinja + HTMX), ProjectScopedForm                [DONE]
+- Store switcher (ActiveProjectMixin) + platform/store context         [DONE]
+- Migrations applied                                                    [DONE]
+- Deferred: product image/variant editor UI (use /sd/ meanwhile)
+
+======================================================================
+PHASE 4 — INVENTORY                                                     [DONE]
+======================================================================
+- apps/inventory: Warehouse, InventoryItem, StockMovement, InventoryTransfer  [DONE]
+- Append-only movement ledger, transactional services layer               [DONE]
+- Reserved vs available stock, low-stock alerts, adjustment history        [DONE]
+- Control screens: Warehouses CRUD, Inventory list+filters, Adjust modal,
+  Stock history; /sd/ admin                                               [DONE]
+- Migrations applied (inventory/0001)                                     [DONE]
+- Note: Variant.stock superseded by inventory app (field kept)
+
+======================================================================
+PHASE 5 — ORDERS + CART + CHECKOUT                                      [DONE]
+======================================================================
+- apps/cart, apps/checkout, apps/orders                                   [DONE]
+- Cart/CartItem (price snapshots), checkout validation + orchestration     [DONE]
+- Order, OrderItem, OrderStatusEvent; status machine (project.md sec 10)   [DONE]
+- Stock reserved on placement, released on cancel, consumed on fulfil      [DONE]
+- Payment status, fulfilment status, shipping/tracking, order/admin notes  [DONE]
+- Control: Orders list + filters, Order detail w/ actions + timeline       [DONE]
+- Migrations applied (cart/0001, orders/0001)                             [DONE]
+- Note: tax/shipping/discount totals = 0 (Phase 7/8 fill them); storefront
+  HTTP endpoints in Phase 10 (services transport-agnostic)
+
+======================================================================
+PHASE 6 — PAYMENTS (PLUGGABLE)                                          [DONE]
+======================================================================
+- apps/payments: PaymentProvider abstraction, COD + Manual + Razorpay      [DONE]
+- PaymentProviderConfig / Payment / Refund / PaymentEvent                  [DONE]
+- Initiation, HMAC verification, signed webhooks, refunds, reconciliation  [DONE]
+- Public /payments/webhook/<provider>/ + /payments/verify/ (csrf-exempt)   [DONE]
+- Control: provider config, reconcile, order-detail payments panel        [DONE]
+- checkout.complete_checkout -> (order, payment_context), payment_method   [DONE]
+- Migrations applied (payments/0001)                                      [DONE]
+- Note: credentials plaintext in JSONField — encrypt at rest for prod
+- Note: live Razorpay API calls need network + real keys (test mode stubs)
+
+======================================================================
+PHASE 7 — SHIPPING                                                      [DONE]
+======================================================================
+- apps/shipping: zones, methods, courier abstraction, tracking, COD        [DONE]
+- Zone match rules, method rate engine (flat/free/weight/price), estimates [DONE]
+- Shipment + ShipmentItem + ShipmentEvent timeline                        [DONE]
+- set_order_shipping re-costs order; shipment status advances order        [DONE]
+- Public /shipping/webhook/<courier>/ (signature-gated)                   [DONE]
+- Control: zones/methods CRUD + order-detail shipping panel               [DONE]
+- Migrations applied (orders/0002, shipping/0001)                         [DONE]
+- Note: real courier bookings/tracking are stubs (ManualCourier only)
+
+======================================================================
+PHASE 8 — CUSTOMERS + COUPONS + REVIEWS + WISHLIST                      [DONE]
+======================================================================
+- apps/customers: store-scoped records, groups, addresses, segmentation    [DONE]
+- Order.customer FK + signal-driven stats/segment resync                   [DONE]
+- apps/coupons: percent/fixed/free-shipping engine, scoping, usage limits, [DONE]
+  reserve-on-apply / release-on-cancel, redemption log                     [DONE]
+- apps/reviews: verified-purchase detection, moderation, cached rating     [DONE]
+- apps/wishlist: per-customer lists, move-to-cart                          [DONE]
+- checkout.complete_checkout takes coupon_code, attaches customer          [DONE]
+- Control: customers list/detail/groups, coupons CRUD+uses, review queue   [DONE]
+- Migrations applied (customers/coupons/reviews/wishlist 0001, catalog/0003,
+  orders/0003)
+- Note: no tax engine yet; BOGO/bundle discounts deferred
+
+======================================================================
+PHASE 9 — CMS + SEO + NAVIGATION + THEME                                [DONE]
+======================================================================
+- apps/cms: pages, content blocks, banners, FAQs, nested menu builder, theme [DONE]
+- apps/seo: settings, per-path meta, redirects; meta_for + structured data    [DONE]
+- Public: /store/config/, /store/navigation/, /store/pages/, sitemap, robots  [DONE]
+- Control: Pages/Banners/FAQs/Blocks CRUD, menu item editor, Theme, SEO       [DONE]
+- Migrations applied (cms/0001, seo/0001)
+- Note: page HTML not sanitized yet; redirect middleware not wired; store
+  endpoints move under /api/v1/ in Phase 10
+
+======================================================================
+PHASE 10 — REST API (DRF)                                               [DONE]
+======================================================================
+- apps/api + apps/api/v1: URLPathVersioning, TokenAuth, throttling, pagination [DONE]
+- Storefront API: store config, catalog, cms, cart (X-Cart-Token), checkout,    [DONE]
+  shipping quote, coupon validate, review submit
+- Account API: register/login/me (token), own orders, wishlist                 [DONE]
+- Admin API (read-only): orders, products, low-stock — IsStoreStaff            [DONE]
+- Uniform error envelope; OpenAPI 3 schema at /api/v1/schema/                  [DONE]
+- Deps added: inflection, uritemplate, PyYAML
+- Note: no browsable API/Swagger UI (CSP); no cart merge on login; admin
+  writes still via Mission Control
+
+======================================================================
+PHASE 11 — NOTIFICATIONS + WEBHOOKS + MEDIA + ANALYTICS + REPORTS        [DONE]
+======================================================================
+- apps/core/events.py: domain event bus (emit -> send_robust)             [DONE]
+- emit() wired at commit time across orders/payments/shipping/customers/
+  inventory/catalog (11 event keys from project.md sec 22)                [DONE]
+- apps/notifications: provider abstraction, per-event templates + defaults [DONE]
+- apps/webhooks: HMAC-signed outbound events, retry w/ backoff            [DONE]
+- apps/media: checksum dedupe, Pillow thumbnails, STORAGES backend        [DONE]
+- apps/analytics: daily roll-ups, dashboard summary, 9 reports + CSV      [DONE]
+- Control: Analytics, Reports, Media, Webhooks, Notifications             [DONE]
+- Migrations applied (analytics/media/notifications/webhooks 0001)
+- Note: delivery is inline/synchronous — move to Celery before real
+  traffic (retry_due() is the worker entrypoint); Excel/PDF export deferred
+
+======================================================================
+PHASE 12 — INFRA / DEPLOY
+======================================================================
+- Docker, Nginx, Postgres, Redis, Celery worker + beat, object storage
+- 2FA for admins, security hardening pass

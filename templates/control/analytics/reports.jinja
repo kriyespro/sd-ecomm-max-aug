@@ -1,0 +1,44 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Reports{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <form method="get" class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <label class="text-sm">
+      <span class="block text-xs text-slate-400">Report</span>
+      <select name="kind" class="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        {% for k in kinds %}
+        <option value="{{ k }}" {{ 'selected' if k == kind }}>{{ k | title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="block text-xs text-slate-400">From</span>
+      <input type="date" name="from" value="{{ date_from }}" class="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+    </label>
+    <label class="text-sm">
+      <span class="block text-xs text-slate-400">To</span>
+      <input type="date" name="to" value="{{ date_to }}" class="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+    </label>
+    <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Run</button>
+    <a href="{{ url('control:report_export') }}?kind={{ kind }}&from={{ date_from }}&to={{ date_to }}"
+       class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Download CSV</a>
+  </form>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>{% for c in columns %}<th class="px-3 py-2">{{ c }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in rows %}
+        <tr>{% for c in columns %}<td class="px-3 py-1.5 text-slate-600">{{ row[c] }}</td>{% endfor %}</tr>
+        {% else %}
+        <tr><td class="px-3 py-6 text-center text-slate-400" colspan="{{ columns|length or 1 }}">No data for this range.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-slate-400">{{ rows|length }} row(s). Excel / PDF export planned; CSV available now.</p>
+</div>
+{% endblock %}

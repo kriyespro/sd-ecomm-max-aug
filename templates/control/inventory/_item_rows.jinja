@@ -1,0 +1,5 @@
+{% for item in items %}
+  {% include "control/inventory/_item_row.jinja" %}
+{% else %}
+<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No stock records.</td></tr>
+{% endfor %}

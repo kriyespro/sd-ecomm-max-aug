@@ -1,0 +1,37 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Customers{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+    <h2 class="text-sm font-semibold text-slate-700">Customers · {{ active_project.name }}</h2>
+    <div class="flex items-center gap-2">
+      <input type="search" name="q" value="{{ q }}" placeholder="Email or name…"
+             hx-get="{{ url('control:customers') }}" hx-trigger="input changed delay:300ms, search"
+             hx-target="#cust-rows" hx-swap="innerHTML" hx-include="[name='segment']"
+             class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+      <select name="segment" hx-get="{{ url('control:customers') }}" hx-trigger="change"
+              hx-target="#cust-rows" hx-swap="innerHTML" hx-include="[name='q']"
+              class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        <option value="">All segments</option>
+        {% for value, label in segments %}
+        <option value="{{ value }}" {{ 'selected' if segment == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <a href="{{ url('control:customer_groups') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Groups</a>
+    </div>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Customer</th><th class="px-4 py-2">Segment</th>
+          <th class="px-4 py-2">Group</th><th class="px-4 py-2 text-right">Orders</th>
+          <th class="px-4 py-2 text-right">Spent</th><th class="px-4 py-2">Status</th></tr>
+      </thead>
+      <tbody id="cust-rows" class="divide-y divide-slate-100">
+        {% include "control/customers/_customer_rows.jinja" %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

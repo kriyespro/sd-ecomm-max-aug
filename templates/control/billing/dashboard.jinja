@@ -1,0 +1,75 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Billing{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-5">
+  <div class="flex flex-wrap gap-4 text-xs">
+    <a href="{{ url('control:billing') }}" class="font-medium text-slate-900 underline">Overview</a>
+    <a href="{{ url('control:billing_plans') }}" class="font-medium text-slate-500 hover:text-slate-900">Plans</a>
+    <a href="{{ url('control:billing_subscriptions') }}" class="font-medium text-slate-500 hover:text-slate-900">Subscriptions</a>
+    <a href="{{ url('control:billing_commissions') }}" class="font-medium text-slate-500 hover:text-slate-900">Commissions</a>
+    <a href="{{ url('control:billing_settings') }}" class="font-medium text-slate-500 hover:text-slate-900">Settings</a>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    {% for label, val in [
+        ('MRR', '₹' ~ '{:,.0f}'.format(summary.mrr)),
+        ('Active subs', summary.active_subs),
+        ('Revenue (mo)', '₹' ~ '{:,.0f}'.format(summary.revenue_month)),
+        ('Store GMV', '₹' ~ '{:,.0f}'.format(summary.gmv)),
+        ('Commissions owed', '₹' ~ '{:,.0f}'.format(summary.commissions_owed)),
+        ('Overdue invoices', summary.overdue_invoices),
+    ] %}
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ label }}</p>
+      <p class="mt-1 text-xl font-semibold text-slate-900">{{ val }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Active subscriptions by plan</div>
+    <div class="flex flex-wrap gap-2 p-4">
+      {% for row in summary.by_plan %}
+      <span class="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">{{ row.plan__name }} · {{ row.n }}</span>
+      {% else %}<span class="text-xs text-slate-400">None.</span>{% endfor %}
+    </div>
+  </div>
+
+  <div class="grid gap-5 lg:grid-cols-2">
+    <div class="rounded-xl bg-white ring-1 ring-slate-200">
+      <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Recent invoices</div>
+      <table class="w-full text-left text-sm">
+        <tbody class="divide-y divide-slate-100">
+          {% for inv in recent_invoices %}
+          <tr>
+            <td class="px-4 py-2 font-mono text-xs">{{ inv.number }}</td>
+            <td class="px-4 py-2">{{ inv.subscription.project.name }}</td>
+            <td class="px-4 py-2">₹{{ '{:,.0f}'.format(inv.amount) }}</td>
+            <td class="px-4 py-2">
+              <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+                {{ 'bg-emerald-100 text-emerald-700' if inv.status == 'paid' else 'bg-amber-100 text-amber-800' if inv.status == 'open' else 'bg-slate-100 text-slate-600' }}">{{ inv.status }}</span>
+            </td>
+          </tr>
+          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="4">No invoices yet.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rounded-xl bg-white ring-1 ring-slate-200">
+      <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Overdue</div>
+      <table class="w-full text-left text-sm">
+        <tbody class="divide-y divide-slate-100">
+          {% for inv in overdue %}
+          <tr>
+            <td class="px-4 py-2">{{ inv.subscription.project.name }}</td>
+            <td class="px-4 py-2 font-mono text-xs">{{ inv.number }}</td>
+            <td class="px-4 py-2 text-red-600">due {{ inv.due_at.strftime('%d %b') }}</td>
+          </tr>
+          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="3">Nothing overdue.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

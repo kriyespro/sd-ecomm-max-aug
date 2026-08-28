@@ -1,0 +1,97 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Team{% endblock %}
+
+{% set role_badge = {
+  'owner':   'bg-slate-900 text-white',
+  'manager': 'bg-indigo-100 text-indigo-800',
+  'staff':   'bg-slate-100 text-slate-700',
+} %}
+
+{% macro role_options(current, can_priv) %}
+  {% if can_priv %}
+  <option value="owner"   {{ 'selected' if current == 'owner' }}>Owner</option>
+  <option value="manager" {{ 'selected' if current == 'manager' }}>Manager</option>
+  {% endif %}
+  <option value="staff" {{ 'selected' if current == 'staff' }}>Staff</option>
+{% endmacro %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Team · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      People who can sign into Mission Control for this store. They must already
+      have an account on the storefront.
+      {% if not can_grant_privileged %}
+      As a manager you can add and manage <span class="font-medium">staff</span> only.
+      {% endif %}
+    </p>
+  </div>
+
+  <form method="post" action="{{ url('control:team_add') }}"
+        class="flex flex-wrap gap-2 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <input name="email" type="email" required placeholder="person@email.com"
+           class="min-w-[16rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <select name="role" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
+      {{ role_options('staff', can_grant_privileged) }}
+    </select>
+    <button class="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add to team</button>
+  </form>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Person</th>
+          <th class="px-4 py-2">Role</th>
+          <th class="px-4 py-2">Added</th>
+          <th class="px-4 py-2 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for m in members %}
+        {% set editable = can_grant_privileged or m.role == 'staff' %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-800">
+              {{ m.user.get_full_name() or m.user.get_username() }}
+              {% if m.user_id == me_id %}<span class="ml-1 text-xs text-slate-400">(you)</span>{% endif %}
+            </div>
+            <div class="text-xs text-slate-400">{{ m.user.email }}</div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide {{ role_badge.get(m.role, 'bg-slate-100 text-slate-700') }}">
+              {{ m.get_role_display() }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-xs text-slate-400">{{ m.created_at.strftime('%d %b %Y') }}</td>
+          <td class="px-4 py-3">
+            {% if editable %}
+            <div class="flex items-center justify-end gap-2">
+              <form method="post" action="{{ url('control:team_role', kwargs={'pk': m.pk}) }}">
+                {{ csrf_input }}
+                <select name="role" onchange="this.form.submit()"
+                        class="rounded-lg border border-slate-300 px-2 py-1 text-xs">
+                  {{ role_options(m.role, can_grant_privileged) }}
+                </select>
+              </form>
+              <form method="post" action="{{ url('control:team_remove', kwargs={'pk': m.pk}) }}"
+                    onsubmit="return confirm('Remove {{ m.user.email }} from the team?')">
+                {{ csrf_input }}
+                <button class="rounded-lg px-3 py-1 text-xs text-red-600 hover:bg-red-50">Remove</button>
+              </form>
+            </div>
+            {% else %}
+            <div class="text-right text-xs text-slate-300">—</div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No team members yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

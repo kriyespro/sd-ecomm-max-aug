@@ -1,0 +1,27 @@
+{% from "control/_forms.jinja" import render_field %}
+<div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+     x-data @keydown.escape.window="$el.remove()">
+  <div class="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+    <div class="flex items-start justify-between">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">Adjust stock</h3>
+        <p class="text-xs text-slate-400">{{ item.product.title }}{% if item.variant %} · {{ item.variant }}{% endif %} @ {{ item.warehouse.name }}</p>
+      </div>
+      <button type="button" @click="$root.remove()" class="text-slate-400 hover:text-slate-600">✕</button>
+    </div>
+
+    <form method="post"
+          hx-post="{{ url('control:inventory_adjust', kwargs={'pk': item.pk}) }}"
+          hx-target="#modal" hx-swap="innerHTML"
+          class="mt-4 space-y-3">
+      {{ csrf_input }}
+      {{ render_field(form['new_quantity']) }}
+      {{ render_field(form['low_stock_threshold']) }}
+      {{ render_field(form['note']) }}
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" @click="$root.remove()" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</button>
+        <button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Apply</button>
+      </div>
+    </form>
+  </div>
+</div>

@@ -1,0 +1,54 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Shipping{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">Shipping zones · {{ active_project.name }}</h2>
+    <div class="flex gap-2">
+      <a href="{{ url('control:shipping_method_create') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Add method</a>
+      <a href="{{ url('control:shipping_zone_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add zone</a>
+    </div>
+  </div>
+
+  {% for zone in zones %}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="flex items-center justify-between">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">{{ zone.name }}
+          <span class="ml-1 rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if zone.is_active else 'bg-slate-200 text-slate-600' }}">{{ 'active' if zone.is_active else 'off' }}</span>
+        </h3>
+        <p class="mt-1 text-xs text-slate-400">
+          {{ (zone.countries or ['any country']) | join(', ') }}
+          {% if zone.postal_prefixes %} · pincodes {{ zone.postal_prefixes | join(', ') }}{% endif %}
+        </p>
+      </div>
+      <a href="{{ url('control:shipping_zone_edit', kwargs={'pk': zone.pk}) }}" class="text-sm text-slate-600 hover:underline">Edit</a>
+    </div>
+
+    <table class="mt-3 w-full text-left text-sm">
+      <thead class="text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="py-1">Method</th><th class="py-1">Rate</th><th class="py-1">COD</th><th class="py-1">ETA</th><th class="py-1"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for m in zone.methods.all() %}
+        <tr>
+          <td class="py-1.5">{{ m.name }} <span class="text-xs text-slate-400">{{ m.get_rate_type_display() }}</span></td>
+          <td class="py-1.5 text-slate-600">{{ m.base_rate }}{% if m.rate_type == 'weight' %} + {{ m.per_kg_rate }}/kg{% endif %}{% if m.free_over %} · free ≥ {{ m.free_over }}{% endif %}</td>
+          <td class="py-1.5 text-slate-500">{{ (m.cod_fee ~ ' fee') if m.cod_available else '—' }}</td>
+          <td class="py-1.5 text-slate-500">{{ m.estimate_label() }}</td>
+          <td class="py-1.5 text-right"><a href="{{ url('control:shipping_method_edit', kwargs={'pk': m.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="py-2 text-slate-400">No methods.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+    No shipping zones. Add one to start quoting rates.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

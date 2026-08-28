@@ -1,0 +1,16 @@
+{% set cards = [
+  ("Total users", stats.total_users),
+  ("Signups today", stats.signups_today),
+  ("Active users (7d)", stats.active_users_7d),
+  ("Projects", stats.total_projects),
+  ("Active projects", stats.active_projects),
+  ("Revenue today", stats.revenue_today),
+] %}
+<div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+  {% for label, value in cards %}
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <p class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ label }}</p>
+    <p class="mt-1 text-2xl font-semibold text-slate-900">{{ value }}</p>
+  </div>
+  {% endfor %}
+</div>

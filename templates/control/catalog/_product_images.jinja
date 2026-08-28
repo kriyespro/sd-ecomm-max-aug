@@ -1,0 +1,54 @@
+<div id="product-images" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+     class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  <div class="flex items-center justify-between">
+    <h3 class="text-sm font-semibold text-slate-700">Images</h3>
+    <span class="text-xs text-slate-400">{{ object.images.count() }} image(s)</span>
+  </div>
+
+  {% set imgs = object.images.order_by('-is_primary', 'order', 'id') | list %}
+  {% if imgs %}
+  <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+    {% for im in imgs %}
+    <div class="overflow-hidden rounded-lg border {{ 'border-slate-900' if im.is_primary else 'border-slate-200' }}">
+      <div class="relative aspect-square bg-slate-50">
+        <img src="{{ im.image.url }}" alt="{{ im.alt }}" class="h-full w-full object-cover">
+        {% if im.is_primary %}<span class="absolute left-1.5 top-1.5 rounded bg-slate-900 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">Primary</span>{% endif %}
+      </div>
+      <div class="flex items-center justify-between gap-1 p-1.5 text-[11px]">
+        <div class="flex gap-1">
+          <button hx-post="{{ url('control:product_image_move', kwargs={'pk': object.pk, 'image_pk': im.pk, 'dir': 'up'}) }}"
+                  hx-target="#product-images" hx-swap="outerHTML" class="rounded border border-slate-200 px-1.5 hover:bg-slate-50" title="Move up">↑</button>
+          <button hx-post="{{ url('control:product_image_move', kwargs={'pk': object.pk, 'image_pk': im.pk, 'dir': 'down'}) }}"
+                  hx-target="#product-images" hx-swap="outerHTML" class="rounded border border-slate-200 px-1.5 hover:bg-slate-50" title="Move down">↓</button>
+        </div>
+        {% if not im.is_primary %}
+        <button hx-post="{{ url('control:product_image_primary', kwargs={'pk': object.pk, 'image_pk': im.pk}) }}"
+                hx-target="#product-images" hx-swap="outerHTML" class="text-slate-600 hover:underline">Set primary</button>
+        {% endif %}
+        <button hx-post="{{ url('control:product_image_delete', kwargs={'pk': object.pk, 'image_pk': im.pk}) }}"
+                hx-target="#product-images" hx-swap="outerHTML"
+                hx-confirm="Remove this image?" class="text-red-600 hover:underline">Delete</button>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="mt-4 text-sm text-slate-400">No images yet.</p>
+  {% endif %}
+
+  <form hx-post="{{ url('control:product_image_upload', kwargs={'pk': object.pk}) }}"
+        hx-target="#product-images" hx-swap="outerHTML" hx-encoding="multipart/form-data"
+        class="mt-5 flex flex-wrap items-end gap-3 border-t border-slate-200 pt-5">
+    <label class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload (multiple)</span>
+      <input type="file" name="images" accept="image/*" multiple required
+             class="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white">
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Alt text (optional)</span>
+      <input name="alt" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+    </label>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
+  </form>
+  <p class="mt-2 text-xs text-slate-400">JPG / PNG / WebP. First image becomes primary automatically. Variants: <a href="/sd/catalog/product/{{ object.pk }}/change/" class="underline">Django admin</a>.</p>
+</div>

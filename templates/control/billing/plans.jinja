@@ -1,0 +1,43 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Plans{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div class="flex flex-wrap gap-4 text-xs">
+    <a href="{{ url('control:billing') }}" class="font-medium text-slate-500 hover:text-slate-900">Overview</a>
+    <a href="{{ url('control:billing_plans') }}" class="font-medium text-slate-900 underline">Plans</a>
+    <a href="{{ url('control:billing_subscriptions') }}" class="font-medium text-slate-500 hover:text-slate-900">Subscriptions</a>
+    <a href="{{ url('control:billing_commissions') }}" class="font-medium text-slate-500 hover:text-slate-900">Commissions</a>
+  </div>
+  <p class="text-xs text-slate-500">Prices in INR. Managers earn the commission % on every paid invoice (monthly = recurring, yearly = per annual payment).</p>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Plan</th><th class="px-4 py-2">Monthly</th><th class="px-4 py-2">Yearly</th>
+          <th class="px-4 py-2">Comm. mo/yr</th><th class="px-4 py-2">Products</th><th class="px-4 py-2">Staff</th>
+          <th class="px-4 py-2">Skins</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in plans %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2"><span class="font-medium text-slate-900">{{ p.name }}</span><span class="ml-1 text-xs text-slate-400">{{ p.code }}</span></td>
+          <td class="px-4 py-2">₹{{ '{:,.0f}'.format(p.price_monthly) }}</td>
+          <td class="px-4 py-2">₹{{ '{:,.0f}'.format(p.price_yearly) }}</td>
+          <td class="px-4 py-2 text-xs">{{ p.commission_monthly_pct }}% / {{ p.commission_yearly_pct }}%</td>
+          <td class="px-4 py-2 text-xs">{{ p.max_products if p.max_products is not none else '∞' }}</td>
+          <td class="px-4 py-2 text-xs">{{ p.max_staff if p.max_staff is not none else '∞' }}</td>
+          <td class="px-4 py-2 text-xs">{{ 'yes' if p.allow_skin_upload else '—' }}</td>
+          <td class="px-4 py-2 text-xs">
+            {{ 'Public' if p.is_public and p.is_active else 'Hidden' if p.is_active else 'Off' }}
+          </td>
+          <td class="px-4 py-2 text-right"><a href="{{ url('control:billing_plan_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

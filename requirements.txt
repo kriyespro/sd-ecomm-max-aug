@@ -1,0 +1,23 @@
+# Core
+Django>=5.2,<5.3  # LTS
+djangorestframework==3.18.0
+Jinja2==3.1.6
+python-dotenv==1.2.3
+Pillow==12.3.0
+nh3==0.3.7  # HTML sanitiser (Ammonia bindings) for staff-authored rich text
+
+# DRF OpenAPI schema generation (/api/v1/schema/)
+inflection==0.5.1
+uritemplate==4.2.0
+PyYAML==6.0.3
+
+# Async tasks — email, webhook delivery, periodic jobs. In dev CELERY_TASK_ALWAYS_EAGER
+# runs tasks inline so no broker/worker is needed. Prod uses Redis (see requirements-prod.txt).
+celery>=5.4,<6
+
+# Prometheus metrics at /metrics (token-gated)
+django-prometheus>=2.3,<3
+
+# Production — installed in the Docker image (see Dockerfile / requirements-prod.txt)
+# psycopg[binary], redis, gunicorn, whitenoise
+# celery is not used yet (no async tasks defined)

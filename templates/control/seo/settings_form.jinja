@@ -1,0 +1,52 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}SEO{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3">
+  <form method="post" enctype="multipart/form-data"
+        class="lg:col-span-2 space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h2 class="text-sm font-semibold text-slate-700">SEO settings · {{ active_project.name }}</h2>
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+  </form>
+
+  <div class="space-y-4">
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700">Redirects</h3>
+        <a href="{{ url('control:seo_redirect_create') }}" class="text-sm text-slate-600 hover:underline">Add</a>
+      </div>
+      <ul class="mt-2 space-y-1 text-sm">
+        {% for r in redirects %}
+        <li class="flex items-center justify-between">
+          <span class="font-mono text-xs text-slate-500">{{ r.from_path }} → {{ r.to_path }} ({{ r.status_code }})</span>
+          <a href="{{ url('control:seo_redirect_edit', kwargs={'pk': r.pk}) }}" class="text-slate-500 hover:underline">edit</a>
+        </li>
+        {% else %}
+        <li class="text-slate-400">None.</li>
+        {% endfor %}
+      </ul>
+      <a href="{{ url('control:seo_redirects') }}" class="mt-2 block text-xs text-slate-400 hover:underline">Manage all →</a>
+    </div>
+
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700">Per-path meta</h3>
+        <a href="{{ url('control:seo_meta_create') }}" class="text-sm text-slate-600 hover:underline">Add</a>
+      </div>
+      <ul class="mt-2 space-y-1 text-sm">
+        {% for m in metas %}
+        <li class="flex items-center justify-between">
+          <span class="font-mono text-xs text-slate-500">{{ m.path }}</span>
+          <a href="{{ url('control:seo_meta_edit', kwargs={'pk': m.pk}) }}" class="text-slate-500 hover:underline">edit</a>
+        </li>
+        {% else %}
+        <li class="text-slate-400">None.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

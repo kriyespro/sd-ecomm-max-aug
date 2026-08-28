@@ -1,0 +1,45 @@
+{% extends "storefront/base.jinja" %}
+{% block title %}Cart — {{ store.name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-semibold">Your cart</h1>
+
+{% if cart.items.all() %}
+<div class="mt-4 divide-y divide-slate-100 rounded-xl bg-white ring-1 ring-slate-200">
+  {% for i in cart.items.all() %}
+  <div class="flex flex-wrap items-center gap-3 p-4">
+    <div class="flex-1">
+      <p class="text-sm font-medium">
+        <a href="{{ url('storefront:product', kwargs={'slug': i.product.slug}) }}" class="hover:underline">{{ i.product.title }}</a>
+        {% if i.variant %}<span class="text-slate-400">· {{ i.variant.name or i.variant.sku }}</span>{% endif %}
+      </p>
+      <p class="text-xs text-slate-400">{{ store.currency }} {{ i.unit_price }} each</p>
+    </div>
+    <form method="post" action="{{ url('storefront:cart_update') }}" class="flex items-center gap-1">
+      {{ csrf_input }}
+      <input type="hidden" name="item" value="{{ i.pk }}">
+      <input type="number" name="quantity" min="0" value="{{ i.quantity }}" class="w-16 rounded-lg border border-slate-300 px-2 py-1 text-sm">
+      <button class="rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">Update</button>
+    </form>
+    <p class="w-24 text-right text-sm font-medium">{{ store.currency }} {{ i.line_total }}</p>
+    <form method="post" action="{{ url('storefront:cart_remove') }}">
+      {{ csrf_input }}
+      <input type="hidden" name="item" value="{{ i.pk }}">
+      <button class="text-xs text-red-600 hover:underline">Remove</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="mt-4 flex items-center justify-between">
+  <a href="{{ url('storefront:home') }}" class="text-sm text-slate-500 hover:underline">Continue shopping</a>
+  <div class="text-right">
+    <p class="text-sm text-slate-500">Subtotal</p>
+    <p class="text-lg font-semibold">{{ store.currency }} {{ cart.subtotal }}</p>
+    <a href="{{ url('storefront:checkout') }}" class="mt-2 inline-block rounded-lg btn-brand px-5 py-2 text-sm font-medium text-white">Checkout</a>
+  </div>
+</div>
+{% else %}
+<p class="mt-6 text-slate-400">Your cart is empty. <a href="{{ url('storefront:home') }}" class="underline">Browse products</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,54 @@
+{% extends "storefront/base.jinja" %}
+{% block title %}Checkout — {{ store.name }}{% endblock %}
+
+{% block content %}
+<h1 class="text-xl font-semibold">Checkout</h1>
+
+<div class="mt-4 grid gap-6 md:grid-cols-3">
+  <form method="post" action="{{ url('storefront:checkout') }}" class="md:col-span-2 space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h2 class="text-sm font-semibold text-slate-700">Contact &amp; shipping</h2>
+    <input name="email" type="email" required placeholder="Email" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <input name="name" required placeholder="Full name" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <input name="line1" required placeholder="Address line 1" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <input name="line2" placeholder="Address line 2 (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    <div class="flex gap-2">
+      <input name="city" required placeholder="City" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <input name="state" placeholder="State" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    </div>
+    <div class="flex gap-2">
+      <input name="postal_code" required placeholder="Postal code" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <input name="country" required value="{{ store.country or 'IN' }}" class="w-24 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    </div>
+    <input name="phone" placeholder="Phone" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+
+    <h2 class="pt-2 text-sm font-semibold text-slate-700">Discount</h2>
+    <input name="coupon_code" placeholder="Coupon code (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+
+    <h2 class="pt-2 text-sm font-semibold text-slate-700">Payment</h2>
+    <label class="flex items-center gap-2 text-sm">
+      <input type="radio" name="payment_method" value="cod" checked> Cash on delivery
+    </label>
+    <p class="text-xs text-slate-400">Card / UPI (Razorpay) needs the gateway JS — use the API for that flow.</p>
+
+    <textarea name="customer_note" rows="2" placeholder="Order note (optional)" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+    <button class="w-full rounded-lg btn-brand px-4 py-2 text-sm font-medium text-white">Place order</button>
+  </form>
+
+  <aside class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-700">Order summary</h2>
+    <ul class="mt-3 space-y-2 text-sm">
+      {% for i in cart.items.all() %}
+      <li class="flex justify-between">
+        <span class="text-slate-600">{{ i.quantity }} × {{ i.product.title }}</span>
+        <span>{{ store.currency }} {{ i.line_total }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="mt-3 flex justify-between border-t border-slate-200 pt-3 font-semibold">
+      <span>Subtotal</span><span>{{ store.currency }} {{ cart.subtotal }}</span>
+    </div>
+    <p class="mt-1 text-xs text-slate-400">Shipping &amp; tax calculated on the order after placement.</p>
+  </aside>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}{{ coupon.code }} uses{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <a href="{{ url('control:coupon_list') }}" class="text-sm text-slate-500 hover:underline">← Coupons</a>
+  <h2 class="text-sm font-semibold text-slate-700">
+    <span class="font-mono">{{ coupon.code }}</span> · {{ coupon.used_count }} use(s)
+  </h2>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">When</th><th class="px-4 py-2">Customer</th><th class="px-4 py-2">Order</th><th class="px-4 py-2 text-right">Amount</th><th class="px-4 py-2">State</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in redemptions %}
+        <tr>
+          <td class="px-4 py-2 text-slate-500">{{ r.created_at.strftime("%b %d %H:%M") }}</td>
+          <td class="px-4 py-2 text-slate-600">{{ r.customer_email }}</td>
+          <td class="px-4 py-2">{% if r.order %}<a href="{{ url('control:order_detail', kwargs={'pk': r.order.pk}) }}" class="text-slate-900 hover:underline">{{ r.order.number }}</a>{% else %}—{% endif %}</td>
+          <td class="px-4 py-2 text-right font-medium">{{ r.amount }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ "released" if r.released else "active" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No redemptions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

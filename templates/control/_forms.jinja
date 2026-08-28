@@ -1,0 +1,27 @@
+{% macro render_field(field) %}
+<div class="space-y-1">
+  {% if field.widget_type != 'checkbox' %}
+  <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">
+    {{ field.label }}{% if field.field.required %}<span class="text-red-500">*</span>{% endif %}
+  </label>
+  {% endif %}
+  <div class="{{ 'flex items-center gap-2' if field.widget_type == 'checkbox' else '' }}">
+    {{ field }}
+    {% if field.widget_type == 'checkbox' %}
+    <label for="{{ field.id_for_label }}" class="text-sm text-slate-700">{{ field.label }}</label>
+    {% endif %}
+  </div>
+  {% if field.help_text %}<p class="text-xs text-slate-400">{{ field.help_text }}</p>{% endif %}
+  {% for error in field.errors %}<p class="text-xs text-red-600">{{ error }}</p>{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro render_form(form) %}
+  {% if form.non_field_errors() %}
+  <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
+  {% endif %}
+  {% for field in form.visible_fields() %}
+    {{ render_field(field) }}
+  {% endfor %}
+  {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
+{% endmacro %}

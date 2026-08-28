@@ -1,0 +1,14 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Delete{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-md rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  <h2 class="text-sm font-semibold text-slate-700">Delete “{{ object }}”?</h2>
+  <p class="mt-2 text-sm text-slate-500">This cannot be undone.</p>
+  <form method="post" class="mt-5 flex gap-2">
+    {{ csrf_input }}
+    <button class="rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700">Delete</button>
+    <a href="{{ request.META.get('HTTP_REFERER', '/admin/') }}" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+  </form>
+</div>
+{% endblock %}

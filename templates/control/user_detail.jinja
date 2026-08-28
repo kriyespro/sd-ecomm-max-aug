@@ -1,0 +1,34 @@
+{% extends "control/base_control.jinja" %}
+
+{% block page_title %}{{ target.get_username() }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl space-y-4">
+  <a href="{{ url('control:users') }}" class="text-sm text-slate-500 hover:underline">← Users</a>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h2 class="text-lg font-semibold">{{ target.get_full_name() or target.get_username() }}</h2>
+    <dl class="mt-4 grid grid-cols-3 gap-y-3 text-sm">
+      <dt class="text-slate-400">Username</dt><dd class="col-span-2">{{ target.get_username() }}</dd>
+      <dt class="text-slate-400">Email</dt><dd class="col-span-2">{{ target.email or "—" }}</dd>
+      <dt class="text-slate-400">Joined</dt><dd class="col-span-2">{{ target.date_joined.strftime("%b %d, %Y %H:%M") }}</dd>
+      <dt class="text-slate-400">Last login</dt><dd class="col-span-2">{{ target.last_login.strftime("%b %d, %Y %H:%M") if target.last_login else "never" }}</dd>
+      <dt class="text-slate-400">Phone</dt><dd class="col-span-2">{{ target.profile.phone or "—" }}</dd>
+      <dt class="text-slate-400">Platform role</dt><dd class="col-span-2">{{ target.profile.get_platform_role_display() }}</dd>
+      <dt class="text-slate-400">Staff / Super</dt><dd class="col-span-2">{{ target.is_staff }} / {{ target.is_superuser }}</dd>
+      <dt class="text-slate-400">Banned</dt><dd class="col-span-2">{{ target.profile.is_banned }}</dd>
+    </dl>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">Store memberships</h3>
+    <ul class="mt-2 space-y-1 text-sm">
+      {% for m in target.memberships.all() %}
+      <li>{{ m.project.name }} — {{ m.get_role_display() }}{{ " (inactive)" if not m.is_active }}</li>
+      {% else %}
+      <li class="text-slate-400">None</li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}

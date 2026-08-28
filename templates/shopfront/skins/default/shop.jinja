@@ -1,0 +1,51 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Shop · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
+  <header class="mb-10">
+    <h1 class="font-display text-4xl">
+      {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
+      {% elif query %}“{{ query }}”
+      {% else %}Shop all{% endif %}
+    </h1>
+    <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
+  </header>
+
+  <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
+        hx-trigger="change, input changed delay:450ms"
+        hx-indicator="#grid"
+        class="mb-10 grid gap-4 border-y border-line py-5 sm:grid-cols-2 lg:grid-cols-4">
+    <label class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Category</span>
+      <select name="category" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+        <option value="">All categories</option>
+        {% for c in all_categories %}<option value="{{ c.slug }}" {{ 'selected' if c.slug == active_category }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Sort</span>
+      <select name="sort" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+        {% for v, t in [('new','Newest'),('price_asc','Price: low to high'),('price_desc','Price: high to low'),('rating','Top rated'),('name','Name')] %}
+        <option value="{{ v }}" {{ 'selected' if v == sort }}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Search</span>
+      <input type="search" name="q" value="{{ query }}" placeholder="Search…" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+    </label>
+    <div class="text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Price</span>
+      <div class="flex items-center gap-2">
+        <input name="min" value="{{ price_min }}" inputmode="numeric" placeholder="Min" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+        <span class="text-mute">–</span>
+        <input name="max" value="{{ price_max }}" inputmode="numeric" placeholder="Max" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
+      </div>
+    </div>
+  </form>
+
+  <div id="grid">
+    {% include "shopfront/partials/_grid.jinja" %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Pages{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex items-center justify-between border-b border-slate-200 p-4">
+    <h2 class="text-sm font-semibold text-slate-700">Pages · {{ active_project.name }}</h2>
+    <div class="flex gap-2">
+      <a href="{{ url('control:cms_faqs') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">FAQs</a>
+      <a href="{{ url('control:cms_blocks') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Content blocks</a>
+      <a href="{{ url('control:cms_page_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New page</a>
+    </div>
+  </div>
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">Kind</th><th class="px-4 py-2">Slug</th><th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right">Actions</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in pages %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2"><a href="{{ url('control:cms_page_edit', kwargs={'pk': p.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ p.title }}</a></td>
+        <td class="px-4 py-2 text-slate-500">{{ p.get_kind_display() }}</td>
+        <td class="px-4 py-2 font-mono text-xs text-slate-400">/{{ p.slug }}/</td>
+        <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if p.is_live else 'bg-slate-200 text-slate-600' }}">{{ p.get_status_display() }}</span></td>
+        <td class="px-4 py-2 text-right">
+          <a href="{{ url('control:cms_page_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+          <a href="{{ url('control:cms_page_delete', kwargs={'pk': p.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No pages yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

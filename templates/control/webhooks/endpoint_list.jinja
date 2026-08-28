@@ -1,0 +1,38 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Webhooks{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">Webhook endpoints · {{ active_project.name }}</h2>
+    <div class="flex gap-2">
+      <a href="{{ url('control:webhook_deliveries') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Deliveries</a>
+      <a href="{{ url('control:webhook_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add endpoint</a>
+    </div>
+  </div>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">URL</th><th class="px-4 py-2">Events</th><th class="px-4 py-2">Secret</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for e in endpoints %}
+        <tr>
+          <td class="px-4 py-2 font-mono text-xs">{{ e.url }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ (e.events | join(', ')) or 'all' }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-400">{{ e.secret[:8] }}…</td>
+          <td class="px-4 py-2 text-slate-500">{{ "yes" if e.is_active else "no" }}</td>
+          <td class="px-4 py-2 text-right">
+            <a href="{{ url('control:webhook_edit', kwargs={'pk': e.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+            <a href="{{ url('control:webhook_delete', kwargs={'pk': e.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No endpoints. Add one to receive event callbacks.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="text-xs text-slate-400">Payloads are signed <code>X-Webhook-Signature: sha256=&lt;hmac&gt;</code> with the endpoint secret.</p>
+</div>
+{% endblock %}

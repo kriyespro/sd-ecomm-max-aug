@@ -1,0 +1,47 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Coupons{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex items-center justify-between border-b border-slate-200 p-4">
+    <h2 class="text-sm font-semibold text-slate-700">Coupons · {{ active_project.name }}</h2>
+    <a href="{{ url('control:coupon_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New coupon</a>
+  </div>
+  <div class="overflow-x-auto">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Code</th><th class="px-4 py-2">Discount</th>
+          <th class="px-4 py-2">Min order</th><th class="px-4 py-2">Used</th>
+          <th class="px-4 py-2">Window</th><th class="px-4 py-2">State</th><th class="px-4 py-2 text-right">Actions</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in coupons %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-mono font-medium text-slate-800">{{ c.code }}</td>
+          <td class="px-4 py-2 text-slate-600">
+            {% if c.discount_type == 'percent' %}{{ c.value }}%{% if c.max_discount %} (max {{ c.max_discount }}){% endif %}
+            {% elif c.discount_type == 'fixed' %}{{ c.value }} off
+            {% else %}Free shipping{% endif %}
+          </td>
+          <td class="px-4 py-2 text-slate-500">{{ c.min_order_amount }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ c.used_count }}{% if c.usage_limit %}/{{ c.usage_limit }}{% endif %}</td>
+          <td class="px-4 py-2 text-xs text-slate-400">
+            {{ c.starts_at.strftime("%b %d") if c.starts_at else "—" }} → {{ c.expires_at.strftime("%b %d") if c.expires_at else "—" }}
+          </td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if c.is_live else 'bg-slate-200 text-slate-600' }}">{{ 'live' if c.is_live else 'off' }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            <a href="{{ url('control:coupon_redemptions', kwargs={'pk': c.pk}) }}" class="text-slate-600 hover:underline">Uses</a>
+            <a href="{{ url('control:coupon_edit', kwargs={'pk': c.pk}) }}" class="ml-2 text-slate-600 hover:underline">Edit</a>
+            <a href="{{ url('control:coupon_delete', kwargs={'pk': c.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No coupons.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

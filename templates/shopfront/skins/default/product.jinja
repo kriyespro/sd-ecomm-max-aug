@@ -1,0 +1,237 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}{{ product.seo_title or product.title }} · {{ store.name }}{% endblock %}
+{% block meta %}{{ product.seo_description or product.short_description or product.title }}{% endblock %}
+
+{% block content %}
+{% set imgs = product.images.all() | list %}
+{% set saving = (product.price - product.current_price) if product.on_sale else 0 %}
+
+<div class="mx-auto max-w-7xl px-5 py-8 lg:px-8"
+     x-data="{
+       active: 0,
+       total: {{ imgs | length }},
+       urls: [{% for i in imgs %}'{{ i.image.url }}'{{ ',' if not loop.last }}{% endfor %}],
+       lb: false,
+       next() { this.active = (this.active + 1) % this.total },
+       prev() { this.active = (this.active - 1 + this.total) % this.total }
+     }"
+     @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
+
+  <nav class="mb-6 text-xs text-mute">
+    <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
+    <span class="mx-1">/</span>
+    <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop</a>
+    {% if product.category %}<span class="mx-1">/</span>
+    <a href="{{ url('shopfront:shop') }}?category={{ product.category.slug }}" class="hover:text-accent">{{ product.category.name }}</a>{% endif %}
+    <span class="mx-1">/</span><span class="text-ink">{{ product.title }}</span>
+  </nav>
+
+  <div class="grid gap-10 lg:grid-cols-[1fr_460px] lg:gap-16">
+    {# ---------- GALLERY ---------- #}
+    <div class="flex flex-col-reverse gap-4 lg:flex-row">
+      {% if imgs | length > 1 %}
+      <div class="flex gap-3 lg:flex-col">
+        {% for i in imgs %}
+        <button @click="active = {{ loop.index0 }}"
+                class="h-16 w-14 flex-shrink-0 overflow-hidden border transition-colors lg:h-24 lg:w-20"
+                :class="active === {{ loop.index0 }} ? 'border-ink' : 'border-line hover:border-mute'">
+          <img src="{{ i.image.url }}" alt="" class="h-full w-full object-cover">
+        </button>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      <div class="relative flex-1">
+        <div class="group relative aspect-[4/5] cursor-zoom-in overflow-hidden bg-line/40" @click="lb = true">
+          {% if imgs %}
+          {% for i in imgs %}
+          <img src="{{ i.image.url }}" alt="{{ product.title }}"
+               class="card-img absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+               :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
+          {% endfor %}
+          {% else %}
+          <div class="flex h-full items-center justify-center font-display text-7xl text-line">◈</div>
+          {% endif %}
+          <span class="absolute bottom-3 right-3 bg-paper/90 px-2 py-1 text-[10px] font-medium tracking-wide text-ink opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>
+        </div>
+        {% if imgs | length > 1 %}
+        <button @click.stop="prev()" class="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center bg-paper/90 text-ink hover:bg-ink hover:text-paper">‹</button>
+        <button @click.stop="next()" class="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center bg-paper/90 text-ink hover:bg-ink hover:text-paper">›</button>
+        <span class="absolute left-3 top-3 bg-paper/90 px-2 py-1 text-[10px] font-medium text-ink" x-text="(active+1) + ' / ' + total"></span>
+        {% endif %}
+      </div>
+    </div>
+
+    {# ---------- BUY COLUMN ---------- #}
+    <div class="lg:sticky lg:top-24 lg:h-fit lg:pt-2">
+      {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">{{ product.brand.name }}</p>{% endif %}
+      <h1 class="mt-2 font-display text-4xl leading-tight">{{ product.title }}</h1>
+
+      {% if product.rating_count %}
+      <a href="#reviews" class="mt-3 inline-flex items-center gap-2 text-sm">
+        <span class="text-accent">{{ '★' * (product.rating_avg | round | int) }}<span class="text-line">{{ '★' * (5 - (product.rating_avg | round | int)) }}</span></span>
+        <span class="text-mute">{{ product.rating_avg }} · {{ product.rating_count }} review{{ 's' if product.rating_count != 1 }}</span>
+      </a>
+      {% endif %}
+
+      <div class="mt-5 flex flex-wrap items-baseline gap-3">
+        <span class="font-display text-3xl {{ 'text-accent' if product.on_sale }}">{{ product.current_price | money }}</span>
+        {% if product.on_sale %}
+        <span class="text-mute line-through">{{ product.price | money }}</span>
+        <span class="bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
+          Save {{ saving | money }} ({{ (saving / product.price * 100) | round | int }}%)
+        </span>
+        {% endif %}
+      </div>
+      <p class="mt-1 text-xs text-mute">Inclusive of all taxes</p>
+
+      {% if available is not none %}
+        {% if available <= 0 %}
+        <p class="mt-4 inline-block bg-stone-100 px-3 py-1.5 text-xs font-medium text-mute">Out of stock</p>
+        {% elif available <= 5 %}
+        <div class="mt-4">
+          <p class="text-xs font-medium text-rose-600">Almost gone — only {{ available }} left</p>
+          <div class="mt-1.5 h-1 w-40 bg-line"><div class="h-1 bg-rose-500" style="width: {{ [available * 20, 100] | min }}%"></div></div>
+        </div>
+        {% else %}
+        <p class="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+          <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span> In stock, ready to ship
+        </p>
+        {% endif %}
+      {% endif %}
+
+      {% if product.short_description %}<p class="mt-5 text-[15px] leading-relaxed text-ink/75">{{ product.short_description }}</p>{% endif %}
+
+      <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-7 space-y-5" x-data="{ q: 1 }">
+        <input type="hidden" name="product" value="{{ product.slug }}">
+
+        {% if variants %}
+        <div>
+          <span class="mb-2 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Option</span>
+          {% if variants | length <= 6 %}
+          <div class="flex flex-wrap gap-2" x-data="{ v: '{{ variants[0].pk }}' }">
+            <input type="hidden" name="variant" :value="v">
+            {% for vr in variants %}
+            <button type="button" @click="v = '{{ vr.pk }}'"
+                    class="border px-4 py-2 text-sm transition-colors"
+                    :class="v === '{{ vr.pk }}' ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink'">
+              {{ vr.name or vr.sku }}
+            </button>
+            {% endfor %}
+          </div>
+          {% else %}
+          <select name="variant" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+            {% for vr in variants %}<option value="{{ vr.pk }}">{{ vr.name or vr.sku }} — {{ vr.effective_price | money }}</option>{% endfor %}
+          </select>
+          {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="flex items-stretch gap-3">
+          <div class="flex items-center border border-line">
+            <button type="button" @click="q = Math.max(1, q-1)" class="px-3.5 text-mute hover:text-ink">−</button>
+            <input name="quantity" x-model="q" inputmode="numeric" class="w-11 border-x border-line bg-transparent py-3 text-center text-sm outline-none">
+            <button type="button" @click="q++" class="px-3.5 text-mute hover:text-ink">+</button>
+          </div>
+          <button class="htmx-hide flex-1 bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-accent {{ 'pointer-events-none opacity-40' if (available is not none and available <= 0) }}">
+            {{ 'Notify me' if (available is not none and available <= 0) else 'Add to bag' }}
+          </button>
+        </div>
+      </form>
+
+      <div class="mt-3">{% include "shopfront/partials/_wishlist_btn.jinja" %}</div>
+
+      {% if delivery %}
+      <div class="mt-5 border border-line bg-panel px-4 py-3 text-sm">
+        <p class="flex items-center gap-2 font-medium">
+          <svg class="h-4 w-4 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 8h11v9H3zM14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17.5" cy="18" r="1.5"/></svg>
+          Arrives {{ delivery.min.strftime('%a, %d %b') }} – {{ delivery.max.strftime('%a, %d %b') }}
+        </p>
+        {% if delivery.free_over %}<p class="mt-1 text-xs text-mute">Free shipping on orders over {{ delivery.free_over | money }} · Cash on delivery available</p>{% endif %}
+      </div>
+      {% endif %}
+
+      {# trust strip #}
+      <div class="mt-5 grid grid-cols-2 gap-3 text-xs text-mute sm:grid-cols-4">
+        {% for t in ['Free returns','Secure checkout','COD available','Ethically made'] %}
+        <div class="flex items-center gap-1.5">
+          <svg class="h-3.5 w-3.5 text-accent" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>
+          {{ t }}
+        </div>
+        {% endfor %}
+      </div>
+
+      {# accordion #}
+      <div class="mt-8 border-t border-line" x-data="{ open: 'desc' }">
+        {% set sections = [
+          ('desc', 'Description', product.description or product.short_description or 'A considered everyday essential.'),
+          ('care', 'Materials & care', 'Made from responsibly sourced materials. Follow the label; gentle wash, dry flat, store away from direct sunlight.'),
+          ('ship', 'Shipping & returns', 'Dispatched within 24 hours. Free shipping over ₹999. 30-day returns on unworn items with tags. Cash on delivery available across India.')
+        ] %}
+        {% for key, label, body in sections %}
+        <div class="border-b border-line">
+          <button @click="open = (open === '{{ key }}') ? '' : '{{ key }}'"
+                  class="flex w-full items-center justify-between py-4 text-left text-[12px] font-semibold uppercase tracking-luxe">
+            {{ label }}
+            <span x-text="open === '{{ key }}' ? '−' : '+'" class="text-mute"></span>
+          </button>
+          <div x-show="open === '{{ key }}'" x-collapse>
+            <p class="whitespace-pre-line pb-5 text-sm leading-relaxed text-ink/75">{{ body }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {# ---------- REVIEWS ---------- #}
+  <div class="mt-24 scroll-mt-24" id="reviews">
+    {% include "shopfront/partials/_reviews.jinja" %}
+  </div>
+
+  {# ---------- RELATED ---------- #}
+  {% if related %}
+  <section class="mt-24">
+    <h2 class="mb-8 font-display text-2xl">You may also like</h2>
+    <div class="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-4">
+      {% for p in related %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- RECENTLY VIEWED ---------- #}
+  {% if recently_viewed %}
+  <section class="mt-20">
+    <h2 class="mb-8 font-display text-2xl">Recently viewed</h2>
+    <div class="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-4 lg:grid-cols-6">
+      {% for p in recently_viewed %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- LIGHTBOX ---------- #}
+  <div x-show="lb" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-ink/95" @click="lb=false">
+    <button class="absolute right-5 top-5 text-2xl text-paper/70 hover:text-paper" @click="lb=false">✕</button>
+    <button class="absolute left-4 text-3xl text-paper/60 hover:text-paper" @click.stop="prev()" x-show="total > 1">‹</button>
+    <img :src="urls[active]" class="max-h-[88vh] max-w-[92vw] object-contain" @click.stop>
+    <button class="absolute right-4 text-3xl text-paper/60 hover:text-paper" @click.stop="next()" x-show="total > 1">›</button>
+    <span class="absolute bottom-6 text-xs text-paper/60" x-text="(active+1) + ' / ' + total" x-show="total > 1"></span>
+  </div>
+
+  {# ---------- STICKY MOBILE BAR ---------- #}
+  <div class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line bg-panel/95 px-5 py-3 backdrop-blur lg:hidden">
+    <div class="text-sm">
+      <p class="font-medium">{{ product.title | truncate(22) }}</p>
+      <p class="text-accent">{{ product.current_price | money }}</p>
+    </div>
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none">
+      <input type="hidden" name="product" value="{{ product.slug }}">
+      <button class="bg-ink px-6 py-3 text-[11px] font-semibold uppercase tracking-luxe text-paper">Add to bag</button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
+{% endblock %}

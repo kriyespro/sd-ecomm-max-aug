@@ -1,0 +1,20 @@
+<tr id="item-row-{{ item.pk }}" class="hover:bg-slate-50"{% if oob %} hx-swap-oob="true"{% endif %}>
+  <td class="px-4 py-2">
+    <span class="font-medium text-slate-900">{{ item.product.title }}</span>
+    {% if item.variant %}<span class="text-xs text-slate-400">· {{ item.variant }}</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-slate-500">{{ item.warehouse.name }}</td>
+  <td class="px-4 py-2 text-right">{{ item.quantity }}</td>
+  <td class="px-4 py-2 text-right text-slate-500">{{ item.reserved }}</td>
+  <td class="px-4 py-2 text-right font-medium {{ 'text-red-600' if item.is_low else '' }}">
+    {{ item.available }}{% if item.is_low %} <span class="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[10px] text-red-700">low</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-slate-400">{{ item.low_stock_threshold or "—" }}</td>
+  <td class="px-4 py-2 text-right">
+    <button hx-get="{{ url('control:inventory_adjust', kwargs={'pk': item.pk}) }}"
+            hx-target="#modal" hx-swap="innerHTML"
+            class="rounded bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300">Adjust</button>
+    <a href="{{ url('control:inventory_movements', kwargs={'pk': item.pk}) }}"
+       class="ml-1 text-xs text-slate-500 hover:underline">History</a>
+  </td>
+</tr>

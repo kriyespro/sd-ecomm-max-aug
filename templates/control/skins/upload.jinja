@@ -1,0 +1,48 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Skin upload{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Upload a skin · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Upload a converted skin as a <code>.zip</code> (templates + <code>assets/</code>).
+      It runs sandboxed and goes live only after a platform admin approves it.
+      Conversion guide: <code>templates/shopfront/skins/THEME_GUIDE.md</code>.
+    </p>
+  </div>
+
+  <form method="post" enctype="multipart/form-data"
+        class="space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
+  </form>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">Your uploads</div>
+    <table class="w-full text-left text-sm">
+      <tbody class="divide-y divide-slate-100">
+        {% for s in my_skins %}
+        <tr>
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-800">{{ s.label }}</div>
+            <div class="font-mono text-xs text-slate-400">{{ s.slug }}</div>
+          </td>
+          <td class="px-4 py-3 text-xs">
+            {% if s.status == 'approved' %}<span class="text-emerald-700">Approved</span>
+            {% elif s.status == 'pending' %}<span class="text-amber-700">Pending review</span>
+            {% else %}<span class="text-red-700">Rejected</span>{% endif %}
+            {% if s.review_note %}<div class="text-slate-400">{{ s.review_note }}</div>{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right text-xs text-slate-400">{{ s.created_at.strftime('%d %b %Y') }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="px-4 py-6 text-center text-slate-400">Nothing uploaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

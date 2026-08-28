@@ -1,0 +1,27 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}New store{% endblock %}
+
+{% block content %}
+<form method="post" class="mx-auto max-w-2xl space-y-5 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Create a store</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Creates the store, its owner account, and a trial subscription. The owner
+      gets a password-reset link if they're new, or uses their existing login.
+    </p>
+  </div>
+  {% set nfe = form.non_field_errors() %}
+  {% if nfe %}
+  <div class="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+    {% for e in nfe %}<p>{{ e }}</p>{% endfor %}
+  </div>
+  {% endif %}
+  {{ render_form(form) }}
+  <div class="flex gap-2 pt-1">
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Create store</button>
+    <a href="{{ url('control:stores') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+  </div>
+</form>
+{% endblock %}

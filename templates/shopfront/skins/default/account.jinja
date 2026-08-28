@@ -1,0 +1,71 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Account · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl px-5 py-16 lg:px-8">
+{% if user.is_authenticated %}
+  <div class="flex items-center justify-between">
+    <div>
+      <h1 class="font-display text-4xl">Hello{{ ', ' ~ user.first_name if user.first_name }}</h1>
+      <p class="mt-1 text-sm text-mute">{{ user.email }}</p>
+    </div>
+    <form method="post" action="{{ url('shopfront:logout') }}">{{ csrf_input }}
+      <button class="text-[11px] font-semibold uppercase tracking-luxe text-mute hover:text-ink">Sign out</button>
+    </form>
+  </div>
+
+  <section class="mt-12">
+    <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Order history</h2>
+    <div class="divide-y divide-line border-y border-line">
+      {% for o in orders %}
+      <div class="flex flex-wrap items-center justify-between gap-2 py-4 text-sm">
+        <span class="font-medium">{{ o.number }}</span>
+        <span class="text-mute">{{ (o.placed_at or o.created_at).strftime('%d %b %Y') }}</span>
+        <span>{{ o.get_status_display() }} · {{ o.get_payment_status_display() }}</span>
+        <span class="font-medium">{{ o.grand_total | money }}</span>
+      </div>
+      {% else %}
+      <p class="py-6 text-sm text-mute">No orders yet.</p>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="mt-12">
+    <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Wishlist</h2>
+    {% if wishlist_items %}
+    <div class="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-4">
+      {% for p in wishlist_items %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-mute">Nothing saved yet.</p>
+    {% endif %}
+  </section>
+
+{% else %}
+  <div class="grid gap-14 md:grid-cols-2">
+    <div>
+      <h1 class="font-display text-3xl">Sign in</h1>
+      <form method="post" action="{{ url('shopfront:login') }}" class="mt-6 space-y-3">
+        {{ csrf_input }}
+        <input name="email" type="email" required placeholder="Email" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        <input name="password" type="password" required placeholder="Password" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        <button class="w-full bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Sign in</button>
+      </form>
+    </div>
+    <div class="md:border-l md:border-line md:pl-14">
+      <h1 class="font-display text-3xl">Create account</h1>
+      <form method="post" action="{{ url('shopfront:register') }}" class="mt-6 space-y-3">
+        {{ csrf_input }}
+        <div class="flex gap-3">
+          <input name="first_name" placeholder="First name" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <input name="last_name" placeholder="Last name" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        </div>
+        <input name="email" type="email" required placeholder="Email" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        <input name="password" type="password" required placeholder="Password (min 8 chars)" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        <button class="w-full border border-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe hover:bg-ink hover:text-paper">Create account</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+</div>
+{% endblock %}

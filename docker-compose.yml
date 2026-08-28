@@ -1,0 +1,94 @@
+name: sd-commerce
+
+x-app: &app
+  build: .
+  env_file: .env
+  environment: &app-env
+    DJANGO_SETTINGS_MODULE: config.settings.production
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    REDIS_URL: redis://redis:6379/1
+    CELERY_BROKER_URL: redis://redis:6379/0
+    DJANGO_TRUST_PROXY_HEADERS: "1"
+  depends_on:
+    db:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-sdcommerce}
+      POSTGRES_USER: ${POSTGRES_USER:-sdcommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sdcommerce}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "no", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    <<: *app
+    volumes:
+      - media:/app/media
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+
+  worker:
+    <<: *app
+    command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency", "${CELERY_CONCURRENCY:-4}"]
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "0"
+    volumes:
+      - media:/app/media
+
+  beat:
+    <<: *app
+    command: ["celery", "-A", "config", "beat", "-l", "info"]
+    environment:
+      <<: *app-env
+      RUN_MIGRATIONS: "0"
+
+  # Scheduled pg_dump with daily/weekly/monthly retention -> pgbackups volume.
+  # On-demand:  docker compose exec pgbackup /backup.sh
+  # Restore:    docker compose exec -T db psql -U <user> -d <db> < <(gunzip -c backup.sql.gz)
+  pgbackup:
+    image: prodrigestivill/postgres-backup-local:16-alpine
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: ${POSTGRES_DB:-sdcommerce}
+      POSTGRES_USER: ${POSTGRES_USER:-sdcommerce}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-7}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - pgbackups:/backups
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:
+  pgbackups:

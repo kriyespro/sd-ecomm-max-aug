@@ -1,0 +1,43 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Webhook deliveries{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <a href="{{ url('control:webhooks') }}" class="text-sm text-slate-500 hover:underline">← Endpoints</a>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">When</th><th class="px-4 py-2">Event</th><th class="px-4 py-2">Endpoint</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2">Attempts</th><th class="px-4 py-2">HTTP</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for d in deliveries %}
+        <tr>
+          <td class="px-4 py-2 text-slate-500">{{ d.created_at.strftime("%b %d %H:%M") }}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{ d.event }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-400">{{ d.endpoint.url[:40] }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs
+              {{ 'bg-emerald-100 text-emerald-700' if d.status == 'success'
+                 else 'bg-red-100 text-red-700' if d.status in ['failed','exhausted']
+                 else 'bg-slate-200 text-slate-600' }}">{{ d.get_status_display() }}</span>
+          </td>
+          <td class="px-4 py-2 text-slate-500">{{ d.attempts }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ d.response_status or "—" }}{% if d.error %} <span class="text-red-500">{{ d.error[:40] }}</span>{% endif %}</td>
+          <td class="px-4 py-2 text-right">
+            {% if d.status in ['failed', 'exhausted'] %}
+            <form method="post" action="{{ url('control:webhook_retry', kwargs={'pk': d.pk}) }}" class="inline">
+              {{ csrf_input }}
+              <button class="text-slate-600 hover:underline">Retry</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No deliveries yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

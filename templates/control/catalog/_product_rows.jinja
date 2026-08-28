@@ -1,0 +1,26 @@
+{% for p in products %}
+<tr class="hover:bg-slate-50">
+  <td class="px-4 py-2">
+    <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ p.title }}</a>
+    {% if p.brand %}<span class="text-xs text-slate-400">· {{ p.brand.name }}</span>{% endif %}
+  </td>
+  <td class="px-4 py-2 text-slate-500">{{ p.sku or "—" }}</td>
+  <td class="px-4 py-2">
+    {% if p.on_sale %}<span class="text-slate-400 line-through">{{ p.price }}</span> <span class="font-medium">{{ p.sale_price }}</span>
+    {% else %}{{ p.price }}{% endif %}
+  </td>
+  <td class="px-4 py-2">
+    <span class="rounded px-2 py-0.5 text-xs
+      {{ 'bg-emerald-100 text-emerald-700' if p.status == 'active'
+         else 'bg-slate-200 text-slate-600' if p.status == 'draft'
+         else 'bg-amber-100 text-amber-700' }}">{{ p.get_status_display() }}</span>
+  </td>
+  <td class="px-4 py-2 text-slate-500">{{ p.category.name if p.category else "—" }}</td>
+  <td class="px-4 py-2 text-right">
+    <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+    <a href="{{ url('control:product_delete', kwargs={'pk': p.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+  </td>
+</tr>
+{% else %}
+<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No products found.</td></tr>
+{% endfor %}

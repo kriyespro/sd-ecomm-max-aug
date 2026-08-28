@@ -1,0 +1,34 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Product types{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex items-center justify-between border-b border-slate-200 p-4">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Product types · {{ active_project.name }}</h2>
+      <p class="mt-0.5 text-xs text-slate-400">A type groups products that share behaviour (simple / variable / digital / service). Optional on a product.</p>
+    </div>
+    <a href="{{ url('control:product_type_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New type</a>
+  </div>
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Kind</th><th class="px-4 py-2">Slug</th><th class="px-4 py-2 text-right">Actions</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for t in types %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2"><a href="{{ url('control:product_type_edit', kwargs={'pk': t.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ t.name }}</a></td>
+        <td class="px-4 py-2 text-slate-500">{{ t.get_kind_display() }}</td>
+        <td class="px-4 py-2 font-mono text-xs text-slate-400">{{ t.slug }}</td>
+        <td class="px-4 py-2 text-right">
+          <a href="{{ url('control:product_type_edit', kwargs={'pk': t.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+          <a href="{{ url('control:product_type_delete', kwargs={'pk': t.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No product types yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

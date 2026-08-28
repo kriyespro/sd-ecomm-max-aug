@@ -1,0 +1,13 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Theme{% endblock %}
+
+{% block content %}
+<form method="post" class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <h2 class="text-sm font-semibold text-slate-700">Theme · {{ active_project.name }}</h2>
+  <p class="text-xs text-slate-400">Consumed by the storefront at <code>/store/config/</code>.</p>
+  {{ render_form(form) }}
+  <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save theme</button>
+</form>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Track order · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-xl px-5 py-16 lg:px-8">
+  <h1 class="font-display text-4xl">Track your order</h1>
+  <p class="mt-2 text-sm text-mute">Enter your order number and the email you checked out with.</p>
+
+  <form method="post" action="{{ url('shopfront:track') }}" class="mt-8 space-y-3">
+    {{ csrf_input }}
+    <input name="number" required value="{{ track_number or '' }}" placeholder="Order number (e.g. {{ store.name[:5] | upper }}-1234567)"
+           class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+    <input name="email" type="email" required value="{{ track_email or '' }}" placeholder="Email"
+           class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+    <button class="w-full bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Track order</button>
+  </form>
+
+  {% if tracked %}
+    {% if order %}
+    <div class="mt-10 border border-line p-7">
+      <div class="flex items-center justify-between">
+        <p class="font-display text-xl">{{ order.number }}</p>
+        <span class="rounded bg-accent-soft px-2 py-1 text-xs font-medium">{{ order.get_status_display() }}</span>
+      </div>
+      <p class="mt-1 text-sm text-mute">Placed {{ (order.placed_at or order.created_at).strftime('%d %b %Y') }} · {{ order.get_payment_status_display() }}</p>
+      {% if order.tracking_number %}<p class="mt-2 text-sm">Tracking: <span class="font-medium">{{ order.tracking_number }}</span>{% if order.courier %} ({{ order.courier }}){% endif %}</p>{% endif %}
+
+      <ol class="mt-6 space-y-3 border-l border-line pl-5 text-sm">
+        {% for e in order.events.all() %}
+        <li class="relative">
+          <span class="absolute -left-[23px] top-1 h-2 w-2 rounded-full bg-accent"></span>
+          <span class="text-mute">{{ e.created_at.strftime('%d %b, %H:%M') }}</span> —
+          {{ e.get_kind_display() }}{% if e.to_value %}: {{ e.to_value }}{% endif %}{% if e.note %} · {{ e.note }}{% endif %}
+        </li>
+        {% else %}
+        <li class="text-mute">No updates yet.</li>
+        {% endfor %}
+      </ol>
+
+      <div class="mt-6 border-t border-line pt-4 text-sm">
+        {% for i in order.items.all() %}
+        <div class="flex justify-between py-1"><span>{{ i.quantity }} × {{ i.product_title }}</span><span>{{ i.line_total | money }}</span></div>
+        {% endfor %}
+        <div class="mt-2 flex justify-between border-t border-line pt-2 font-medium"><span>Total</span><span>{{ order.grand_total | money }}</span></div>
+      </div>
+    </div>
+    {% else %}
+    <p class="mt-8 rounded bg-rose-50 px-4 py-3 text-sm text-rose-700">No order found for that number and email.</p>
+    {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

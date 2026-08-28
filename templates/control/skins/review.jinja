@@ -1,0 +1,50 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Review skin{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">{{ skin.label }}</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        <span class="font-mono">{{ skin.slug }}</span> ·
+        uploaded by {{ skin.uploaded_by.email if skin.uploaded_by_id else "—" }}
+        for {{ skin.project.name if skin.project_id else "shared" }} ·
+        status <strong>{{ skin.get_status_display() }}</strong>
+        {% if skin.author %} · author {{ skin.author }}{% endif %}
+        {% if skin.version %} · v{{ skin.version }}{% endif %}
+      </p>
+    </div>
+    {% if preview_project and preview_project.primary_domain %}
+    <a target="_blank" rel="noopener"
+       href="//{{ preview_project.primary_domain }}/app/?preview_skin={{ skin.pk }}"
+       class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Open preview ↗</a>
+    {% endif %}
+  </div>
+
+  <form method="post" class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <label class="flex-1 text-sm">
+      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Review note (shown to the uploader)</span>
+      <input name="note" value="{{ skin.review_note }}" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+    </label>
+    <button name="action" value="approve" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Approve</button>
+    <button name="action" value="reject" class="rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50">Reject</button>
+  </form>
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700">
+      {{ files|length }} templates · {{ assets|length }} assets
+    </div>
+    {% for f in files %}
+    <details class="border-b border-slate-100">
+      <summary class="cursor-pointer px-4 py-2 font-mono text-xs text-slate-600 hover:bg-slate-50">{{ f.path }}</summary>
+      <pre class="overflow-x-auto bg-slate-900 p-4 text-xs leading-relaxed text-slate-100"><code>{{ f.content }}</code></pre>
+    </details>
+    {% endfor %}
+    {% for a in assets %}
+    <div class="border-b border-slate-100 px-4 py-2 font-mono text-xs text-slate-400">{{ a.path }} <span class="text-slate-300">({{ a.content_type or 'asset' }})</span></div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

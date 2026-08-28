@@ -1,0 +1,44 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Products{% endblock %}
+
+{% block content %}
+<div class="mb-3 flex flex-wrap gap-4 text-xs">
+  {% for label, view in [('Products','control:product_list'), ('Types','control:product_type_list'),
+                         ('Tags','control:tag_list'), ('Brands','control:brand_list'),
+                         ('Categories','control:category_list')] %}
+  <a href="{{ url(view) }}" class="font-medium {{ 'text-slate-900 underline' if view == 'control:product_list' else 'text-slate-500 hover:text-slate-900' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
+    <h2 class="text-sm font-semibold text-slate-700">Products · {{ active_project.name }}</h2>
+    <div class="flex items-center gap-2">
+      <input type="search" name="q" value="{{ q }}" placeholder="Search title…"
+             hx-get="{{ url('control:product_list') }}"
+             hx-trigger="input changed delay:300ms, search"
+             hx-target="#product-rows" hx-swap="innerHTML"
+             hx-include="[name='status']"
+             class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+      <select name="status"
+              hx-get="{{ url('control:product_list') }}"
+              hx-trigger="change" hx-target="#product-rows" hx-swap="innerHTML"
+              hx-include="[name='q']"
+              class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        <option value="">All status</option>
+        <option value="draft" {{ 'selected' if status == 'draft' }}>Draft</option>
+        <option value="active" {{ 'selected' if status == 'active' }}>Active</option>
+        <option value="archived" {{ 'selected' if status == 'archived' }}>Archived</option>
+      </select>
+      <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
+    </div>
+  </div>
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">SKU</th><th class="px-4 py-2">Price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Category</th><th class="px-4 py-2 text-right">Actions</th></tr>
+    </thead>
+    <tbody id="product-rows" class="divide-y divide-slate-100">
+      {% include "control/catalog/_product_rows.jinja" %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

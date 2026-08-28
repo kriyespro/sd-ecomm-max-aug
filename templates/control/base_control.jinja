@@ -1,0 +1,169 @@
+{% extends "base.jinja" %}
+
+{% block title %}{% block page_title %}Mission Control{% endblock %} · Mission Control{% endblock %}
+
+{% block body %}
+<div x-data="{ sidebar: true }" class="flex min-h-screen bg-slate-100">
+
+  {# --- Sidebar --- #}
+  <aside :class="sidebar ? 'w-60' : 'w-16'"
+         class="flex flex-col bg-slate-900 text-slate-300 transition-all duration-200">
+    <div class="flex h-14 items-center gap-2 px-4 font-semibold text-white">
+      <span class="text-lg">⌘</span>
+      <span x-show="sidebar" x-cloak>Mission Control</span>
+    </div>
+    <nav class="flex-1 overflow-y-auto px-2 py-2 text-sm">
+      {% macro navlink(name, label, icon) %}
+        <a href="{{ url(name) }}"
+           class="flex items-center gap-3 rounded-lg px-3 py-1.5 hover:bg-slate-800 hover:text-white
+                  {{ 'bg-slate-800 text-white' if request.resolver_match and request.resolver_match.view_name == name else '' }}">
+          <span class="w-4 text-center">{{ icon }}</span>
+          <span x-show="sidebar" x-cloak>{{ label }}</span>
+        </a>
+      {% endmacro %}
+      {% macro section(title) %}
+        <p x-show="sidebar" x-cloak class="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ title }}</p>
+      {% endmacro %}
+
+      {# ============ PLATFORM ============ #}
+      {% if control_is_platform_staff %}
+        {{ section("Platform") }}
+        {{ navlink("control:stores", "Stores", "🏢") }}
+        {% if control_is_platform_admin %}
+          {{ navlink("control:billing", "Billing", "💰") }}
+          {{ navlink("control:skin_list", "Skins", "🎭") }}
+          {{ navlink("control:users", "Users", "👤") }}
+        {% endif %}
+      {% endif %}
+
+      {# ============ ACTIVE STORE ============ #}
+      {% if control_active_project %}
+        {{ section(control_active_project.name) }}
+        {{ navlink("control:dashboard", "Dashboard", "▦") }}
+        {{ navlink("control:order_list", "Orders", "🧾") }}
+        {{ navlink("control:customers", "Customers", "🧑") }}
+
+        {{ section("Catalog") }}
+        {{ navlink("control:product_list", "Products", "📦") }}
+        {{ navlink("control:category_list", "Categories", "🗂") }}
+        {{ navlink("control:brand_list", "Brands", "🏷") }}
+        {{ navlink("control:inventory_list", "Inventory", "📊") }}
+        {{ navlink("control:warehouse_list", "Warehouses", "🏬") }}
+
+        {{ section("Marketing") }}
+        {{ navlink("control:coupon_list", "Coupons", "🎟") }}
+        {{ navlink("control:review_list", "Reviews", "★") }}
+        {{ navlink("control:notification_settings", "Notifications", "🔔") }}
+
+        {{ section("Storefront") }}
+        {{ navlink("control:cms_pages", "Pages", "📄") }}
+        {{ navlink("control:cms_banners", "Banners", "🖼") }}
+        {{ navlink("control:cms_menus", "Menus", "🧭") }}
+        {{ navlink("control:cms_theme", "Theme", "🎨") }}
+        {{ navlink("control:seo_settings", "SEO", "🔍") }}
+        {{ navlink("control:media", "Media", "🗄") }}
+        {% if control_can_upload_skin %}{{ navlink("control:skin_upload", "Skin upload", "⬆️") }}{% endif %}
+
+        {{ section("Insights") }}
+        {{ navlink("control:analytics", "Analytics", "📈") }}
+        {{ navlink("control:reports", "Reports", "📑") }}
+
+        {{ section("Settings") }}
+        {{ navlink("control:shipping_zones", "Shipping", "🚚") }}
+        {{ navlink("control:webhooks", "Webhooks", "🔗") }}
+        {% if control_can_manage_store %}
+          {{ navlink("control:payment_providers", "Payments", "💳") }}
+          {{ navlink("control:domains", "Domains", "🌐") }}
+          {{ navlink("control:team", "Team", "👥") }}
+          {{ navlink("control:store_plan", "Plan & billing", "💠") }}
+        {% endif %}
+      {% elif control_is_platform_staff %}
+        <div x-show="sidebar" x-cloak class="mt-4 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-400">
+          Pick a store from <a href="{{ url('control:stores') }}" class="text-slate-200 underline">Stores</a>
+          to manage its catalog, orders and settings.
+        </div>
+      {% endif %}
+    </nav>
+    <a href="/sd/" class="border-t border-slate-800 px-4 py-3 text-xs hover:text-white">
+      <span x-show="sidebar" x-cloak>Django admin /sd/</span>
+      <span x-show="!sidebar" x-cloak>⚙</span>
+    </a>
+  </aside>
+
+  {# --- Main --- #}
+  <div class="flex flex-1 flex-col">
+    <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
+      <button @click="sidebar = !sidebar" class="rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
+      <h1 class="text-sm font-semibold text-slate-700">{% block header_title %}{{ self.page_title() }}{% endblock %}</h1>
+
+      <div class="flex items-center gap-3">
+        {# Store switcher — a dropdown for a handful of stores, a link once there are many #}
+        {% if control_active_project %}
+          {% if control_available_count and control_available_count <= 12 %}
+          <form method="post" action="{{ url('control:set_project') }}" class="hidden sm:block">
+            {{ csrf_input }}
+            <input type="hidden" name="next" value="{{ request.get_full_path() }}">
+            <select name="project" onchange="this.form.submit()"
+                    class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+              {% for p in control_available_projects %}
+              <option value="{{ p.pk }}" {{ 'selected' if p.pk == control_active_project.pk }}>{{ p.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+          {% else %}
+          <a href="{{ url('control:stores') }}" class="hidden rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 sm:block">
+            {{ control_active_project.name }} · switch
+          </a>
+          {% endif %}
+        {% elif control_is_platform_staff %}
+          <a href="{{ url('control:stores') }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">Choose a store</a>
+        {% endif %}
+
+        <div x-data="{ open: false }" class="relative">
+          <button @click="open = !open" class="flex items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-100">
+            <span class="grid h-7 w-7 place-items-center rounded-full bg-slate-900 text-xs text-white">
+              {{ (request.user.get_username()[0] | upper) if request.user.is_authenticated else "?" }}
+            </span>
+            <span class="hidden sm:inline">{{ request.user.get_username() }}</span>
+          </button>
+          <div x-show="open" x-cloak @click.outside="open = false"
+               class="absolute right-0 mt-2 w-40 rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg">
+            <form method="post" action="{{ url('accounts:logout') }}">
+              {{ csrf_input }}
+              <button type="submit" class="block w-full px-3 py-2 text-left hover:bg-slate-50">Sign out</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    {% if request.session.get('impersonate_original_user_id') %}
+    <div class="flex items-center justify-between bg-amber-100 px-4 py-2 text-sm text-amber-900">
+      <span>Impersonating <strong>{{ request.user.get_username() }}</strong></span>
+      <form method="post" action="{{ url('control:impersonate_stop') }}">
+        {{ csrf_input }}
+        <button class="rounded bg-amber-900 px-2 py-1 text-xs font-medium text-white">Stop</button>
+      </form>
+    </div>
+    {% endif %}
+
+    {% if messages %}
+    <div class="space-y-1 px-6 pt-4">
+      {% for message in messages %}
+      <div class="rounded-lg px-3 py-2 text-sm
+                  {{ 'bg-emerald-50 text-emerald-800' if 'success' in message.tags
+                     else 'bg-red-50 text-red-700' if 'error' in message.tags
+                     else 'bg-slate-100 text-slate-700' }}">
+        {{ message }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <main class="flex-1 p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<style>[x-cloak]{display:none!important}</style>
+{% endblock %}

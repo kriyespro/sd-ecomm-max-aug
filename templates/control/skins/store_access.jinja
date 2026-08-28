@@ -1,0 +1,49 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Skin access{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Skin access · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Tick the skins this store's owner may choose from on the Theme screen.
+      Tick nothing to allow every active skin.
+    </p>
+  </div>
+
+  <form method="post" action="{{ url('control:store_skin_access') }}"
+        class="space-y-3 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    {% for s in all_skins %}
+    <label class="flex items-start gap-3 text-sm">
+      <input type="checkbox" name="skins" value="{{ s.id }}"
+             {{ 'checked' if s.id in allowed_ids }}
+             class="mt-0.5 h-4 w-4 rounded border-slate-300">
+      <span>
+        <span class="font-medium text-slate-800">{{ s.label }}</span>
+        {% if s.is_default %}<span class="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Default</span>{% endif %}
+        <span class="block font-mono text-xs text-slate-400">{{ s.slug }}</span>
+      </span>
+    </label>
+    {% else %}
+    <p class="text-sm text-slate-400">No shared skins yet. Register one under Skins.</p>
+    {% endfor %}
+
+    <label class="mt-2 flex items-start gap-3 border-t border-slate-200 pt-4 text-sm">
+      <input type="checkbox" name="skin_upload" {{ 'checked' if upload_enabled }}
+             class="mt-0.5 h-4 w-4 rounded border-slate-300">
+      <span>
+        <span class="font-medium text-slate-800">Allow this store to upload its own skins</span>
+        <span class="block text-xs text-slate-400">Owner/manager can upload sandboxed skins; each still needs your review.</span>
+      </span>
+    </label>
+
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save access</button>
+  </form>
+
+  <p class="text-xs text-slate-400">
+    Currently choosable by the owner:
+    {% for s in effective %}<span class="font-mono">{{ s.slug }}</span>{% if not loop.last %}, {% endif %}{% else %}none{% endfor %}.
+  </p>
+</div>
+{% endblock %}

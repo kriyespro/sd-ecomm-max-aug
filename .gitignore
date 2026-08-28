@@ -1,0 +1,45 @@
+# --- secrets / local config ---
+.env
+.env.*
+!.env.example
+instance/
+*.secret_key
+
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- django ---
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+*.log
+
+# --- editors / OS ---
+.DS_Store
+.idea/
+.vscode/
+.cursor/
+*.swp
+
+# --- reference source, not part of the deployable app ---
+html-ornza/
+kapiva-clone/
+sd-jw-demo1/
+sd-ecomm-impact/
+sd-ecomm-impact 2/
+
+# --- scratch ---
+plans/
+dev.txt
+scratch_*.py
+scratch_phase*.py
+durga.py
+test_user.txt

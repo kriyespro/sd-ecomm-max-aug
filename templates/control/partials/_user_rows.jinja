@@ -1,0 +1,5 @@
+{% for u in users %}
+  {% include "control/partials/_user_row.jinja" %}
+{% else %}
+<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No users found.</td></tr>
+{% endfor %}

@@ -1,0 +1,15 @@
+{% set disc = coupon_discount or 0 %}
+{% if coupon_msg %}
+<p class="mt-2 text-xs {{ 'text-emerald-700' if coupon_ok else 'text-rose-600' }}">{{ coupon_msg }}</p>
+{% endif %}
+<div class="mt-4 space-y-2 border-t border-line pt-4 text-sm">
+  <div class="flex justify-between"><span class="text-mute">Subtotal</span><span>{{ cart.subtotal | money }}</span></div>
+  {% if disc and disc > 0 %}
+  <div class="flex justify-between text-emerald-700"><span>Discount{% if coupon_code %} · {{ coupon_code }}{% endif %}</span><span>− {{ disc | money }}</span></div>
+  {% endif %}
+  <div class="flex justify-between"><span class="text-mute">Shipping</span><span class="text-mute">Calculated on order</span></div>
+</div>
+<div class="mt-3 flex justify-between border-t border-line pt-3 font-display text-lg">
+  <span>Estimated total</span>
+  <span>{{ (cart.subtotal - disc) | money }}</span>
+</div>
