@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---- fast checks: sqlite, dev settings, no services ----------------------
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13", "3.14"]
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DJANGO_SECRET_KEY: ci-insecure-not-a-real-key
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "*"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - run: pip install -r requirements.txt ruff
+
+      # syntax errors + undefined names only — not style
+      - name: Lint (ruff, error-only)
+        run: ruff check --select E9,F63,F7,F82 .
+
+      - name: Missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: System check
+        run: python manage.py check
+
+      - name: Migrate
+        run: python manage.py migrate --noinput
+
+      - name: Tests
+        run: python manage.py test --verbosity 2
+
+      - name: collectstatic
+        run: python manage.py collectstatic --noinput
+
+  # ---- production wiring: postgres + redis + prod settings ----------------
+  prod-check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sdcommerce
+          POSTGRES_USER: sdcommerce
+          POSTGRES_PASSWORD: ci-pg-pw
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sdcommerce"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.production
+      DJANGO_SECRET_KEY: ci-prod-check-8NbwcJ0bUdtGR7fcUni4oWiuy-KPMLSm8kcMB-9OlesCJ1aueD
+      DJANGO_DEBUG: "false"
+      DJANGO_ALLOWED_HOSTS: "*"
+      POSTGRES_DB: sdcommerce
+      POSTGRES_USER: sdcommerce
+      POSTGRES_PASSWORD: ci-pg-pw
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: "5432"
+      REDIS_URL: redis://localhost:6379/1
+      CELERY_BROKER_URL: redis://localhost:6379/0
+      DJANGO_METRICS_TOKEN: ci-metrics
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-prod.txt
+
+      - name: Deploy check
+        run: python manage.py check --deploy
+
+      - name: Migrate on Postgres
+        run: python manage.py migrate --noinput
+
+      - name: collectstatic (ManifestStaticFilesStorage)
+        run: python manage.py collectstatic --noinput
+
+      - name: Celery app + tasks load
+        run: |
+          python - <<'PY'
+          from config.celery import app
+          app.loader.import_default_modules()
+          tasks = sorted(t for t in app.tasks if t.startswith("apps."))
+          assert tasks, "no tasks discovered"
+          print("\n".join(tasks))
+          PY
+
+  # ---- the deployable image actually builds ------------------------------
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: sd-commerce:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Container boots and answers /healthz
+        run: |
+          docker run -d --name sdc -p 8000:8000 \
+            -e DJANGO_SETTINGS_MODULE=config.settings.development \
+            -e DJANGO_SECRET_KEY=ci -e DJANGO_ALLOWED_HOSTS=* \
+            --entrypoint sh sd-commerce:ci -c \
+            "python manage.py migrate --noinput && gunicorn config.wsgi:application -c gunicorn.conf.py"
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8000/healthz/ && break || sleep 2
+          done
+          curl -fsS http://localhost:8000/healthz/
+          docker logs sdc
+          docker rm -f sdc

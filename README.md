@@ -1,5 +1,7 @@
 # SD Commerce — headless multi-store backend
 
+[![CI](https://github.com/kriyespro/sd-ecomm-max-aug/actions/workflows/ci.yml/badge.svg)](https://github.com/kriyespro/sd-ecomm-max-aug/actions/workflows/ci.yml)
+
 Django 5.2 · DRF · Jinja2 storefronts · Celery · Postgres · Redis.
 One install serves many stores; each store resolves from the request host.
 
