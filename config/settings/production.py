@@ -62,14 +62,20 @@ MEDIA_URL = env("DJANGO_MEDIA_URL", "/media/")
 WHITENOISE_MAX_AGE = 60 * 60 * 24 * 365
 
 # --- Security hardening ------------------------------------------
-SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
+# One switch for the whole HTTPS posture. Set DJANGO_HTTPS=false ONLY for a
+# short bring-up over plain HTTP on the raw IP — flip it back to true the moment
+# a cert is in place (cookies won't cross plain HTTP while it's true, so admin
+# login 403s with a CSRF error).
+HTTPS = env_bool("DJANGO_HTTPS", True)
+
+SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", HTTPS)
+SECURE_HSTS_SECONDS = 31536000 if HTTPS else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS
+SECURE_HSTS_PRELOAD = HTTPS
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_CONTENT_TYPE_NOSNIFF = True
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = HTTPS
+CSRF_COOKIE_SECURE = HTTPS
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", [])
 
 # --- Email --------------------------------------------------------
