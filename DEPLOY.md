@@ -23,7 +23,44 @@ docker compose up -d --build
 docker compose exec web python manage.py createsuperuser
 ```
 
-App on `http://localhost:8000`. `/healthz/` (liveness), `/readyz/` (db + cache).
+App on `http://localhost:8000` (or `WEB_PORT`). `/healthz/` (liveness),
+`/readyz/` (db + cache).
+
+## nginx — mnxstore.com on 159.195.57.98
+
+`.env.prod` sets `WEB_PORT=8888`, so the `web` container publishes on
+`:8888` (reachable directly at `http://159.195.57.98:8888` while testing) and
+nginx reverse-proxies the real hostnames to it.
+
+```sh
+# on the server, after `docker compose up -d`
+apt install -y nginx
+cp deploy/nginx/mnxstore.conf /etc/nginx/sites-available/mnxstore.conf
+ln -sf /etc/nginx/sites-available/mnxstore.conf /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl reload nginx
+```
+
+`server_name` covers `mnxstore.com`, `www`, `*.mnxstore.com` (store
+subdomains) and the bare IP; every other Host gets `444`. `client_max_body_size
+32m` clears the 30 MB skin-zip cap. `/media/` is served straight off the
+`sd-commerce_media` volume — confirm the path with
+`docker volume inspect sd-commerce_media`.
+
+DNS: `A mnxstore.com 159.195.57.98`, `A *.mnxstore.com 159.195.57.98` (or
+`CNAME www mnxstore.com`).
+
+### TLS (once DNS resolves)
+
+```sh
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d mnxstore.com -d www.mnxstore.com
+# wildcard *.mnxstore.com needs DNS-01:
+#   certbot certonly --manual --preferred-challenges dns -d '*.mnxstore.com' -d mnxstore.com
+```
+
+Then flip `.env`: `DJANGO_SECURE_SSL_REDIRECT=true`, drop the `http://IP` lines
+from `DJANGO_CSRF_TRUSTED_ORIGINS`, and `docker compose up -d web worker beat`.
 
 ## Redis
 
