@@ -6,12 +6,15 @@ Exposes the helpers templates expect: ``static``, ``url`` (Django's
 by :func:`csrf` below, wired as a context processor in settings.
 """
 
+import os
+import tempfile
 from decimal import Decimal, InvalidOperation
 
 from django.middleware.csrf import get_token
 from django.templatetags.static import static
 from django.urls import reverse
 from jinja2 import Environment
+from jinja2.bccache import FileSystemBytecodeCache
 from jinja2.exceptions import TemplateNotFound
 from jinja2.loaders import BaseLoader
 from markupsafe import Markup
@@ -78,8 +81,24 @@ def _money(value, symbol="₹"):
         return f"{symbol}{value}"
 
 
+def _bytecode_cache():
+    """Compiled-template cache on disk, shared by every gunicorn worker. Workers
+    recycle on max_requests, so without this each fresh worker recompiles all
+    skin templates on its first hits."""
+    path = os.environ.get(
+        "JINJA_BYTECODE_CACHE_DIR", os.path.join(tempfile.gettempdir(), "sd-jinja-bc")
+    )
+    try:
+        os.makedirs(path, exist_ok=True)
+        return FileSystemBytecodeCache(path)
+    except OSError:
+        return None
+
+
 def environment(**options):
     options.setdefault("autoescape", True)
+    options.setdefault("auto_reload", False)
+    options.setdefault("bytecode_cache", _bytecode_cache())
     inner_loader = options.get("loader")
     if inner_loader is not None and not isinstance(inner_loader, _SkinLoader):
         options["loader"] = _SkinLoader(inner_loader)
