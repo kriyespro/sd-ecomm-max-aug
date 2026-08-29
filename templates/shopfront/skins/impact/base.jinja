@@ -64,7 +64,7 @@
       </button>
 
       <a href="{{ url('shopfront:home') }}" class="font-display text-2xl font-500 tracking-[0.14em] text-ink lg:text-[1.7rem]">
-        {{ store.name }}
+        {% include "shopfront/partials/_brand.jinja" %}
       </a>
 
       <nav class="hidden items-center gap-8 text-[13px] font-medium lg:flex">
@@ -133,7 +133,7 @@
     <div class="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
       <div>
         <p class="font-display text-xl tracking-wide">{{ store.name }}</p>
-        <p class="mt-3 text-sm leading-relaxed text-mute">Considered pieces, made to be worn. Free shipping over ₹999 · Cash on delivery across India.</p>
+        {% include "shopfront/partials/_footer_contact.jinja" %}
       </div>
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Shop</p>
@@ -157,7 +157,7 @@
         </form>
       </div>
     </div>
-    <div class="border-t border-line py-6 text-center text-xs text-mute">© {{ store.name }} · built on a headless backend</div>
+    <div class="border-t border-line py-6 text-center text-xs text-mute">{{ store_profile.copyright_text if store_profile and store_profile.copyright_text else '© ' ~ store.name }}{% if store_profile and store_profile.gstin %} · GSTIN {{ store_profile.gstin }}{% endif %}</div>
   </footer>
 
   {# ============ CART DRAWER ============ #}

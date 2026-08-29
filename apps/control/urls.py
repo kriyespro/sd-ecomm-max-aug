@@ -214,6 +214,7 @@ urlpatterns = [
     path("cms/menus/<int:pk>/items/<int:item_pk>/delete/", cmsv.MenuItemDeleteView.as_view(), name="cms_menu_item_delete"),
     # CMS — theme
     path("cms/theme/", cmsv.ThemeSettingsView.as_view(), name="cms_theme"),
+    path("cms/store-profile/", cmsv.StoreProfileView.as_view(), name="cms_store_profile"),
 
     # Domains
     # Store plan & billing (owner / manager)

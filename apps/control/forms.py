@@ -8,22 +8,23 @@ from django import forms
 
 from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
 from apps.categories.models import Category
-from apps.inventory.models import InventoryItem, Warehouse
 from apps.cms.models import (
+    FAQ,
     Banner,
     ContentBlock,
-    FAQ,
     Menu,
     MenuItem,
     Page,
     Skin,
+    StoreProfile,
     ThemeSettings,
 )
 from apps.coupons.models import Coupon
 from apps.customers.models import Customer, CustomerGroup
+from apps.inventory.models import InventoryItem, Warehouse
 from apps.notifications.models import NotificationSettings, NotificationTemplate
-from apps.seo.models import Redirect, SeoMeta, SeoSettings
 from apps.payments.models import PaymentProviderConfig
+from apps.seo.models import Redirect, SeoMeta, SeoSettings
 from apps.shipping.models import ShippingMethod, ShippingZone
 from apps.webhooks.models import WebhookEndpoint
 
@@ -421,6 +422,26 @@ class ThemeSettingsForm(ProjectScopedForm):
         if self.project is not None:
             field.queryset = allowed_skins_for(self.project)
         field.empty_label = "Default"
+
+
+class StoreProfileForm(ProjectScopedForm):
+    class Meta:
+        model = StoreProfile
+        fields = [
+            "logo", "tagline",
+            "support_email", "support_phone", "whatsapp",
+            "address", "gstin",
+            "instagram_url", "facebook_url", "youtube_url", "x_url",
+            "copyright_text", "show_payment_icons",
+        ]
+        widgets = {
+            "address": forms.Textarea(attrs={"rows": 3, "class": TEXT}),
+            "tagline": forms.TextInput(attrs={"class": TEXT}),
+        }
+        help_texts = {
+            "logo": "PNG or SVG with a transparent background works best. "
+                    "Shown in the storefront header; falls back to the store name.",
+        }
 
 
 class SkinUploadForm(forms.Form):

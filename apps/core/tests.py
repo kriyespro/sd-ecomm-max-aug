@@ -152,10 +152,19 @@ class StoreResolverCacheTests(TestCase):
 
     def test_chrome_cached_then_busted_on_category_change(self):
         from apps.categories.models import Category
-
         from apps.core.store_resolver import store_chrome
 
         self.assertEqual(store_chrome(self.project)["categories"], [])
         Category.objects.create(project=self.project, name="Hats", is_active=True)
         names = [c.name for c in store_chrome(self.project)["categories"]]
         self.assertEqual(names, ["Hats"])
+
+    def test_chrome_exposes_store_profile_and_busts_on_save(self):
+        from apps.cms.models import StoreProfile
+        from apps.core.store_resolver import store_chrome
+
+        self.assertIsNone(store_chrome(self.project)["profile"])
+        StoreProfile.objects.create(project=self.project, tagline="Made well")
+        chrome = store_chrome(self.project)
+        self.assertEqual(chrome["profile"].tagline, "Made well")
+        self.assertEqual(chrome["store_logo"], "")

@@ -113,7 +113,7 @@ def _build_chrome(project):
     from django.db.models import Min
 
     from apps.categories.models import Category
-    from apps.cms.models import Page, ThemeSettings
+    from apps.cms.models import Page, StoreProfile, ThemeSettings
     from apps.shipping.models import ShippingMethod
 
     theme = (
@@ -121,6 +121,7 @@ def _build_chrome(project):
         .only("primary_color", "project_id")
         .first()
     )
+    profile = StoreProfile.objects.filter(project=project).first()
     banners = {}
     for b in project.banners.filter(
         placement__in=("announcement", "hero")
@@ -129,6 +130,8 @@ def _build_chrome(project):
             banners[b.placement] = b
     return {
         "accent": theme.primary_color if theme else "#b08d57",
+        "profile": profile,
+        "store_logo": profile.logo.url if (profile and profile.logo) else "",
         "categories": list(
             Category.objects.filter(project=project, is_active=True)[:10]
         ),

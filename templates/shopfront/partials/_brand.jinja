@@ -1,0 +1,7 @@
+{#- Storefront wordmark: the uploaded logo, or the store name as a fallback.
+    Rendered inside the skin's existing <a>/<span> so it inherits type styles. -#}
+{%- if store_logo -%}
+<img src="{{ store_logo }}" alt="{{ store.name }}" class="inline-block h-8 w-auto object-contain align-middle lg:h-9">
+{%- else -%}
+{{ store.name }}
+{%- endif -%}

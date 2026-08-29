@@ -46,6 +46,8 @@ def base_context(request, project, **extra):
         "skin_slug": getattr(request, "skin_slug", "default"),
         "currency": project.currency,
         "accent": chrome["accent"],
+        "store_profile": chrome["profile"],
+        "store_logo": chrome["store_logo"],
         "categories": chrome["categories"],
         "footer_pages": chrome["footer_pages"],
         "cart": cart,

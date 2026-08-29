@@ -390,3 +390,68 @@ class ThemeSettings(TenantScopedModel):
             "homepage_sections": self.homepage_sections or [],
             "tokens": self.tokens or {},
         }
+
+
+class StoreProfile(TenantScopedModel):
+    """Store owner's public identity — logo + the contact / legal details a
+    storefront footer shows. One row per project.
+    """
+
+    logo = models.ImageField(upload_to="stores/logos/", blank=True)
+    tagline = models.CharField(
+        max_length=200, blank=True,
+        help_text="Short line under the logo in the footer.",
+    )
+
+    support_email = models.EmailField(blank=True)
+    support_phone = models.CharField(max_length=32, blank=True)
+    whatsapp = models.CharField(
+        max_length=32, blank=True, help_text="Number in international format, e.g. +9198…",
+    )
+    address = models.TextField(
+        blank=True, help_text="Full postal address, shown in the footer.",
+    )
+    gstin = models.CharField(max_length=20, blank=True, verbose_name="GSTIN")
+
+    instagram_url = models.URLField(blank=True)
+    facebook_url = models.URLField(blank=True)
+    youtube_url = models.URLField(blank=True)
+    x_url = models.URLField(blank=True, verbose_name="X / Twitter URL")
+
+    copyright_text = models.CharField(
+        max_length=200, blank=True,
+        help_text="Footer copyright line. Defaults to “© <year> <store name>”.",
+    )
+    show_payment_icons = models.BooleanField(
+        default=True, help_text="Show accepted-payment icons in the footer.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["project"], name="uniq_storeprofile_per_project"),
+        ]
+        verbose_name = "store profile"
+        verbose_name_plural = "store profiles"
+
+    def __str__(self):
+        return f"StoreProfile<{self.project_id}>"
+
+    @property
+    def whatsapp_link(self):
+        if not self.whatsapp:
+            return ""
+        digits = "".join(c for c in self.whatsapp if c.isdigit())
+        return f"https://wa.me/{digits}" if digits else ""
+
+    @property
+    def social_links(self):
+        return [
+            (label, url)
+            for label, url in (
+                ("Instagram", self.instagram_url),
+                ("Facebook", self.facebook_url),
+                ("YouTube", self.youtube_url),
+                ("X", self.x_url),
+            )
+            if url
+        ]

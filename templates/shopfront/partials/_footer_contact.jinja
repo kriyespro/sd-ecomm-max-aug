@@ -1,0 +1,36 @@
+{#- Footer identity block: tagline, postal address, contact channels, socials.
+    Drops in where a skin's footer used to hardcode its blurb. All fields are
+    optional — the store owner fills them on Control → Store profile. -#}
+{%- set p = store_profile -%}
+
+{% if p and p.tagline %}
+<p class="mt-3 text-sm leading-relaxed text-mute">{{ p.tagline }}</p>
+{% endif %}
+
+{% if p and p.address %}
+<p class="mt-3 whitespace-pre-line text-sm leading-relaxed text-mute">{{ p.address }}</p>
+{% endif %}
+
+{% if p and (p.support_phone or p.support_email or p.whatsapp_link) %}
+<div class="mt-3 space-y-1 text-sm text-mute">
+  {% if p.support_phone %}<p><a href="tel:{{ p.support_phone }}" class="hover:text-accent">{{ p.support_phone }}</a></p>{% endif %}
+  {% if p.support_email %}<p><a href="mailto:{{ p.support_email }}" class="hover:text-accent">{{ p.support_email }}</a></p>{% endif %}
+  {% if p.whatsapp_link %}<p><a href="{{ p.whatsapp_link }}" target="_blank" rel="noopener" class="hover:text-accent">WhatsApp us</a></p>{% endif %}
+</div>
+{% endif %}
+
+{% if p and p.social_links %}
+<div class="mt-4 flex items-center gap-4">
+  {% for label, href in p.social_links %}
+  <a href="{{ href }}" target="_blank" rel="noopener" aria-label="{{ label }}" title="{{ label }}" class="text-mute transition hover:text-accent">
+    <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      {% if label == 'Instagram' %}<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/>
+      {% elif label == 'Facebook' %}<path d="M14 8h2V5h-2a4 4 0 0 0-4 4v2H8v3h2v6h3v-6h2.5l.5-3H13V9a1 1 0 0 1 1-1z"/>
+      {% elif label == 'YouTube' %}<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>
+      {% else %}<path d="M4 4l16 16M20 4 4 20"/>
+      {% endif %}
+    </svg>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}

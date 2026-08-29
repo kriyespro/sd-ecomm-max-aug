@@ -1,0 +1,29 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Store profile{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data"
+      class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Store profile · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-400">
+      Logo, contact details and the address shown in your storefront footer.
+    </p>
+  </div>
+
+  {% if form.instance.logo %}
+  <div class="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
+    <img src="{{ form.instance.logo.url }}" alt="Current logo" class="h-10 w-auto object-contain">
+    <span class="text-xs text-slate-500">Current logo</span>
+  </div>
+  {% endif %}
+
+  {{ render_form(form) }}
+
+  <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
+    Save store profile
+  </button>
+</form>
+{% endblock %}

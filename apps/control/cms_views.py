@@ -8,9 +8,25 @@ from django.contrib import messages
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView, View
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    ListView,
+    TemplateView,
+    UpdateView,
+    View,
+)
 
-from apps.cms.models import Banner, ContentBlock, FAQ, Menu, MenuItem, Page, ThemeSettings
+from apps.cms.models import (
+    FAQ,
+    Banner,
+    ContentBlock,
+    Menu,
+    MenuItem,
+    Page,
+    StoreProfile,
+    ThemeSettings,
+)
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
@@ -21,6 +37,7 @@ from .forms import (
     MenuForm,
     MenuItemForm,
     PageForm,
+    StoreProfileForm,
     ThemeSettingsForm,
 )
 from .mixins import ActiveProjectMixin
@@ -277,4 +294,26 @@ class ThemeSettingsView(ActiveProjectMixin, UpdateView):
         record_audit(actor=self.request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=self.object, request=self.request)
         messages.success(self.request, "Theme saved.")
+        return response
+
+
+class StoreProfileView(ActiveProjectMixin, UpdateView):
+    form_class = StoreProfileForm
+    template_name = "control/cms/store_profile_form.jinja"
+    success_url = reverse_lazy("control:cms_store_profile")
+
+    def get_object(self, queryset=None):
+        obj, _ = StoreProfile.objects.get_or_create(project=self.active_project)
+        return obj
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["project"] = self.active_project
+        return kwargs
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        record_audit(actor=self.request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=self.object, request=self.request)
+        messages.success(self.request, "Store profile saved.")
         return response
