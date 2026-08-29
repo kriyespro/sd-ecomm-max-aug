@@ -16,10 +16,9 @@ from apps.billing.models import (
     Plan,
     Subscription,
 )
+from apps.core.mixins import PlatformAdminRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
-
-from apps.core.mixins import PlatformAdminRequiredMixin
 
 
 class PlanForm(forms.ModelForm):

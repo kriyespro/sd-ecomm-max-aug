@@ -12,13 +12,12 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
 
+from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.orders.models import Order
 from apps.payments import services as pay
 from apps.payments.models import Payment, PaymentProviderConfig
-
-from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 
 from .forms import PaymentProviderForm
 from .mixins import ActiveProjectMixin

@@ -21,6 +21,14 @@
   </div>
 
   <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">Security</h3>
+    <a href="{{ url('control:user_set_password', kwargs={'pk': target.pk}) }}"
+       class="mt-2 inline-block rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+      Reset password
+    </a>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
     <h3 class="text-sm font-semibold text-slate-700">Store memberships</h3>
     <ul class="mt-2 space-y-1 text-sm">
       {% for m in target.memberships.all() %}

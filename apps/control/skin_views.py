@@ -14,16 +14,20 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, ListView, TemplateView, UpdateView, View
 
-from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin, is_platform_admin
+from apps.accounts.permissions import (
+    OWNER_MANAGER,
+    StoreRoleRequiredMixin,
+    is_platform_admin,
+)
 from apps.cms.models import Skin, SkinSource, SkinStatus
 from apps.cms.skin_upload import create_skin_from_upload
 from apps.cms.skins import allowed_skins_for
+from apps.core.mixins import PlatformAdminRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
 from .forms import SkinForm, SkinUploadForm
 from .mixins import ActiveProjectMixin
-from apps.core.mixins import PlatformAdminRequiredMixin
 
 
 class SkinListView(PlatformAdminRequiredMixin, ListView):

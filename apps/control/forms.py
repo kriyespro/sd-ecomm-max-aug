@@ -5,6 +5,7 @@ field and related querysets are scoped to that project.
 """
 
 from django import forms
+from django.contrib.auth.forms import SetPasswordForm
 
 from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
 from apps.categories.models import Category
@@ -422,6 +423,16 @@ class ThemeSettingsForm(ProjectScopedForm):
         if self.project is not None:
             field.queryset = allowed_skins_for(self.project)
         field.empty_label = "Default"
+
+
+class AdminSetPasswordForm(SetPasswordForm):
+    """Platform admin sets a new password for another user. Django's
+    SetPasswordForm runs the configured password validators."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            field.widget.attrs.setdefault("class", TEXT)
 
 
 class StoreProfileForm(ProjectScopedForm):

@@ -10,10 +10,10 @@ from . import inventory_views as invv
 from . import order_views as ordv
 from . import payment_views as payv
 from . import phase11_views as p11
+from . import plan_views as planv
 from . import review_views as revv
 from . import seo_views as seov
 from . import shipping_views as shipv
-from . import plan_views as planv
 from . import skin_views as skinv
 from . import store_views as storev
 from . import team_views as teamv
@@ -50,6 +50,7 @@ urlpatterns = [
     # Users (platform-wide directory)
     path("users/", views.UserListView.as_view(), name="users"),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user_detail"),
+    path("users/<int:pk>/set-password/", views.UserSetPasswordView.as_view(), name="user_set_password"),
     path("users/<int:pk>/ban/", views.UserBanView.as_view(), name="user_ban"),
     path("users/<int:pk>/unban/", views.UserUnbanView.as_view(), name="user_unban"),
     path("users/<int:pk>/impersonate/", views.ImpersonateView.as_view(), name="user_impersonate"),

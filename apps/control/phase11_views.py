@@ -4,14 +4,25 @@ from django.contrib import messages
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView, View
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    ListView,
+    TemplateView,
+    UpdateView,
+    View,
+)
 
 from apps.analytics import services as analytics
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.media import services as media_svc
 from apps.media.models import MediaAsset
-from apps.notifications.models import NotificationLog, NotificationSettings, NotificationTemplate
+from apps.notifications.models import (
+    NotificationLog,
+    NotificationSettings,
+    NotificationTemplate,
+)
 from apps.webhooks import services as webhooks_svc
 from apps.webhooks.models import WebhookDelivery, WebhookEndpoint
 
@@ -22,7 +33,6 @@ from .forms import (
     WebhookEndpointForm,
 )
 from .mixins import ActiveProjectMixin
-
 
 # --- Analytics / reports -------------------------------------
 

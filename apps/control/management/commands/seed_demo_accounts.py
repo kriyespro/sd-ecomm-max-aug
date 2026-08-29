@@ -13,8 +13,8 @@ from django.db import transaction
 
 from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.billing.models import BillingPeriod, Plan
-from apps.projects.models import Project
 from apps.control import store_services
+from apps.projects.models import Project
 
 User = get_user_model()
 

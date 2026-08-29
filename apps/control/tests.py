@@ -97,3 +97,57 @@ class DashboardRoutingTests(TestCase):
         self.client.force_login(su)
         resp = self.client.get("/admin/", HTTP_HOST="mnxstore.test")
         self.assertEqual(resp.status_code, 200)
+
+
+class UserSetPasswordTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.victim = User.objects.create_user(
+            username="vic", email="vic@t.test", password="oldpass12345"
+        )
+        self.client.force_login(self.admin)
+
+    def test_admin_sets_new_password(self):
+        resp = self.client.post(
+            f"/admin/users/{self.victim.pk}/set-password/",
+            {"new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.victim.refresh_from_db()
+        self.assertTrue(self.victim.check_password("Zx9!kLmq7Ww"))
+
+    def test_weak_password_rejected(self):
+        resp = self.client.post(
+            f"/admin/users/{self.victim.pk}/set-password/",
+            {"new_password1": "123", "new_password2": "123"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.victim.refresh_from_db()
+        self.assertTrue(self.victim.check_password("oldpass12345"))
+
+    def test_non_platform_admin_forbidden(self):
+        owner = get_user_model().objects.create_user(
+            username="ow", email="ow@t.test", password="pw", is_staff=True
+        )
+        self.client.force_login(owner)
+        resp = self.client.get(f"/admin/users/{self.victim.pk}/set-password/")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_platform_owner_cannot_reset_superuser(self):
+        from apps.accounts.models import PlatformRole, Profile
+
+        po = get_user_model().objects.create_user(
+            username="po", email="po@t.test", password="pw", is_staff=True
+        )
+        Profile.objects.update_or_create(
+            user=po, defaults={"platform_role": PlatformRole.OWNER}
+        )
+        self.client.force_login(po)
+        resp = self.client.post(
+            f"/admin/users/{self.admin.pk}/set-password/",
+            {"new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww"},
+        )
+        self.assertEqual(resp.status_code, 403)

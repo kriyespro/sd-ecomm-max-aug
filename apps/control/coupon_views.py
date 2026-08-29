@@ -2,7 +2,13 @@
 
 from django.contrib import messages
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, DeleteView, DetailView, ListView, UpdateView
+from django.views.generic import (
+    CreateView,
+    DeleteView,
+    DetailView,
+    ListView,
+    UpdateView,
+)
 
 from apps.core.models import AuditLog
 from apps.core.services import record_audit

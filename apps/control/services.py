@@ -63,6 +63,25 @@ def _is_platform_admin(user):
     return bool(user.is_superuser or (profile and profile.is_platform_admin))
 
 
+def set_user_password(*, actor, target, raw_password, request=None):
+    """Platform-admin password reset for another account. Strength validation
+    happens in the form; this enforces authority and writes the audit row."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can reset passwords.")
+    if target.is_superuser and not actor.is_superuser:
+        raise PermissionDenied("Only a superuser can reset a superuser's password.")
+    target.set_password(raw_password)
+    target.save(update_fields=["password"])
+    record_audit(
+        actor=actor,
+        action=AuditLog.Action.UPDATE,
+        target=target,
+        changes={"password": "reset"},
+        request=request,
+    )
+    return target
+
+
 def set_user_banned(*, actor, target, banned, request=None):
     if not _is_platform_admin(actor):
         raise PermissionDenied("Only a platform admin can ban users.")

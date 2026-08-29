@@ -5,8 +5,8 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.accounts.models import Membership, Profile, StoreRole
 from apps.accounts import team as team_svc
+from apps.accounts.models import Membership, Profile, StoreRole
 from apps.billing.models import BillingPeriod
 from apps.core.models import AuditLog
 from apps.core.services import record_audit

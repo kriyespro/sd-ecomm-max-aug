@@ -19,7 +19,6 @@ from apps.inventory.models import InventoryItem, StockMovement, Warehouse
 from .forms import InventoryItemForm, StockAdjustForm, WarehouseForm
 from .mixins import ActiveProjectMixin
 
-
 # --- Warehouses ----------------------------------------------------
 
 class WarehouseListView(ActiveProjectMixin, ListView):

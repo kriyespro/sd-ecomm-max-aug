@@ -17,6 +17,7 @@ from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
 from . import services
+from .forms import AdminSetPasswordForm
 from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 
 User = get_user_model()
@@ -109,6 +110,29 @@ class UserDetailView(PlatformAdminRequiredMixin, DetailView):
     template_name = "control/user_detail.jinja"
     context_object_name = "target"
     queryset = User.objects.select_related("profile")
+
+
+class UserSetPasswordView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
+    template_name = "control/user_set_password.jinja"
+
+    def _target(self, pk):
+        return get_object_or_404(User.objects.select_related("profile"), pk=pk)
+
+    def get(self, request, pk, *args, **kwargs):
+        target = self._target(pk)
+        return self.render_to_response({"target": target, "form": AdminSetPasswordForm(target)})
+
+    def post(self, request, pk, *args, **kwargs):
+        target = self._target(pk)
+        form = AdminSetPasswordForm(target, request.POST)
+        if form.is_valid():
+            services.set_user_password(
+                actor=request.user, target=target,
+                raw_password=form.cleaned_data["new_password1"], request=request,
+            )
+            messages.success(request, f"Password updated for {target.get_username()}.")
+            return redirect("control:user_detail", pk=target.pk)
+        return self.render_to_response({"target": target, "form": form})
 
 
 class _UserRowActionView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
