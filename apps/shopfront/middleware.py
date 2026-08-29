@@ -65,14 +65,27 @@ class StorefrontSkinMiddleware:
         project = getattr(request, "project", None)
         if project is not None:
             try:
-                from apps.cms.skins import skin_for_project
-
-                skin_obj = _preview_skin(request) or skin_for_project(project)
-                if skin_obj is not None:
-                    slug = skin_obj.slug
+                preview = _preview_skin(request)
+                if preview is not None:
+                    slug, skin_obj = preview.slug, preview
+                else:
+                    slug, skin_obj = _resolve_skin(project)
             except Exception:  # noqa: BLE001 — never break rendering over a skin lookup
                 slug, skin_obj = "default", None
         request.skin_slug = slug
         request.skin_obj = skin_obj
         with use_skin(slug):
             return self.get_response(request)
+
+
+def _resolve_skin(project):
+    """(slug, skin_obj) from the cached skin binding. ``skin_obj`` is loaded only
+    for a sandboxed upload (the one case ``render.py`` needs the instance)."""
+    from apps.core.store_resolver import skin_binding_for_project
+
+    slug, skin_id, sandboxed = skin_binding_for_project(project)
+    if sandboxed and skin_id:
+        from apps.cms.models import Skin
+
+        return slug, Skin.objects.filter(pk=skin_id).first()
+    return slug, None

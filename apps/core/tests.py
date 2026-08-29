@@ -126,3 +126,36 @@ class StorefrontUrlconfTests(TestCase):
 
     def test_default_urlconf_still_serves_app_prefix(self):
         self.assertEqual(reverse("shopfront:home"), "/app/")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class StoreResolverCacheTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.project = Project.objects.create(name="Acme")
+
+    def test_binding_cached_then_busted_on_verify(self):
+        from apps.core.store_resolver import binding_for_host
+
+        d = Domain.objects.create(
+            project=self.project, host="cache.acme.test", is_verified=False
+        )
+        self.assertEqual(binding_for_host("cache.acme.test"), (None, False))
+        # verifying the domain must invalidate the negative cache entry
+        d.is_verified = True
+        d.save(update_fields=["is_verified", "updated_at"])
+        self.assertEqual(
+            binding_for_host("cache.acme.test"), (self.project.pk, True)
+        )
+
+    def test_chrome_cached_then_busted_on_category_change(self):
+        from apps.categories.models import Category
+
+        from apps.core.store_resolver import store_chrome
+
+        self.assertEqual(store_chrome(self.project)["categories"], [])
+        Category.objects.create(project=self.project, name="Hats", is_active=True)
+        names = [c.name for c in store_chrome(self.project)["categories"]]
+        self.assertEqual(names, ["Hats"])

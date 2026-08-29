@@ -203,7 +203,8 @@ class ProductView(View):
         ctx = base_context(
             request, project,
             product=product,
-            variants=list(product.variants.filter(is_active=True)),
+            # reuse the prefetched variants instead of re-querying
+            variants=[v for v in product.variants.all() if v.is_active],
             reviews=reviews_qs,
             rating_breakdown=breakdown,
             review_total=review_total,

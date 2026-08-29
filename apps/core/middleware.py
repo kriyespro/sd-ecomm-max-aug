@@ -44,7 +44,9 @@ def normalize_host(raw: str) -> str:
 
 
 def _resolve_project(request):
-    from apps.projects.models import Domain, Project
+    from apps.projects.models import Project
+
+    from .store_resolver import binding_for_host
 
     host = normalize_host(request.get_host())
     if not host:
@@ -54,17 +56,14 @@ def _resolve_project(request):
     if host in getattr(settings, "PLATFORM_HOSTS", ()):
         return None
 
-    domain = (
-        Domain.objects.select_related("project")
-        .filter(host=host, is_verified=True)
-        .first()
-    )
-    if domain is not None:
-        return domain.project
-
-    project = Project.objects.filter(primary_domain=host).first()
-    if project is not None:
-        return project
+    project_id, _ = binding_for_host(host)
+    if project_id:
+        # subscription is read by SubscriptionGateMiddleware on every storefront hit
+        return (
+            Project.objects.filter(pk=project_id)
+            .select_related("subscription")
+            .first()
+        )
 
     user = getattr(request, "user", None)
     if user is not None and user.is_authenticated:
@@ -84,19 +83,6 @@ class ProjectResolverMiddleware:
         return self.get_response(request)
 
 
-def _is_store_host(host):
-    """``host`` is a store's own dedicated domain — a verified custom Domain or a
-    project's staff-set primary_domain (not the single-membership dev fallback)."""
-    from apps.projects.models import Domain, Project
-
-    if not host:
-        return False
-    return (
-        Domain.objects.filter(host=host, is_verified=True).exists()
-        or Project.objects.filter(primary_domain=host).exists()
-    )
-
-
 class StorefrontHostMiddleware:
     """When the Host is a store's own domain, serve the storefront at ``/`` so
     the merchant gets clean URLs on their domain instead of the ``/app/`` prefix.
@@ -112,10 +98,14 @@ class StorefrontHostMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        from .store_resolver import binding_for_host
+
         request.storefront_host = False
         host = normalize_host(request.get_host())
         platform = getattr(settings, "PLATFORM_HOSTS", ())
-        if host and host not in platform and _is_store_host(host):
-            request.storefront_host = True
-            request.urlconf = "config.storefront_urls"
+        if host and host not in platform:
+            _, dedicated = binding_for_host(host)
+            if dedicated:
+                request.storefront_host = True
+                request.urlconf = "config.storefront_urls"
         return self.get_response(request)
