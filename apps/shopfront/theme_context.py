@@ -60,9 +60,15 @@ def _wrap(value):
 
 def _image(i):
     try:
-        return {"url": i.image.url, "alt": i.alt or ""}
+        return {
+            "url": i.image.url,
+            "alt": i.alt or "",
+            "srcset": getattr(i, "srcset", "") or "",
+            "width": getattr(i, "width", None),
+            "height": getattr(i, "height", None),
+        }
     except Exception:  # noqa: BLE001
-        return {"url": None, "alt": ""}
+        return {"url": None, "alt": "", "srcset": "", "width": None, "height": None}
 
 
 def _product(p, *, in_stock=None, available_qty=None, with_variants=False):

@@ -33,10 +33,14 @@ class CategorySerializer(serializers.ModelSerializer):
 
 class ProductImageSerializer(serializers.ModelSerializer):
     image = serializers.ImageField(use_url=True)
+    srcset = serializers.CharField(read_only=True)
 
     class Meta:
         model = ProductImage
-        fields = ["image", "alt", "is_primary", "order"]
+        fields = [
+            "image", "alt", "is_primary", "order",
+            "width", "height", "srcset", "renditions",
+        ]
 
 
 class VariantSerializer(serializers.ModelSerializer):

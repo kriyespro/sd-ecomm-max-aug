@@ -8,12 +8,12 @@
   <div>
     {% set img = product.images.all()|first %}
     <div class="aspect-square overflow-hidden rounded-xl bg-slate-100">
-      {% if img %}<img src="{{ img.image.url }}" alt="{{ img.alt or product.title }}" class="h-full w-full object-cover">{% endif %}
+      {% if img %}<img src="{{ img.image.url }}" {% if img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width: 768px) 50vw, 100vw"{% endif %} alt="{{ img.alt or product.title }}" loading="eager" class="h-full w-full object-cover">{% endif %}
     </div>
     {% if product.images.all()|length > 1 %}
     <div class="mt-2 flex gap-2">
       {% for i in product.images.all() %}
-      <img src="{{ i.image.url }}" class="h-16 w-16 rounded-lg object-cover ring-1 ring-slate-200">
+      <img src="{{ i.image.url }}" {% if i.srcset %}srcset="{{ i.srcset }}" sizes="64px"{% endif %} loading="lazy" class="h-16 w-16 rounded-lg object-cover ring-1 ring-slate-200">
       {% endfor %}
     </div>
     {% endif %}

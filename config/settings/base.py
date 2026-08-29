@@ -247,6 +247,13 @@ MEDIA_ROOT = BASE_DIR / "media"
 # DEBUG implies it.
 SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", False)
 
+# Product image optimisation (apps.media.optimize + apps.catalog.tasks).
+# Uploads are re-encoded to WebP in the background, squeezed under the target
+# size, with responsive renditions generated alongside.
+PRODUCT_IMAGE_TARGET_KB = int(env("PRODUCT_IMAGE_TARGET_KB", "200"))
+PRODUCT_IMAGE_MAX_EDGE = int(env("PRODUCT_IMAGE_MAX_EDGE", "2048"))
+PRODUCT_IMAGE_OPTIMIZE = env_bool("PRODUCT_IMAGE_OPTIMIZE", True)
+
 
 # --- DRF ---------------------------------------------------------------
 

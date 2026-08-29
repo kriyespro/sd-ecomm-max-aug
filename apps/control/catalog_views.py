@@ -5,7 +5,7 @@ kwarg; mutations recorded to the audit log.
 """
 
 from django.contrib import messages
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -260,6 +260,14 @@ class _ProductImageBase(ActiveProjectMixin, View):
                       {"object": product, "active_project": self.active_project})
 
 
+class ProductImagePanelView(_ProductImageBase):
+    """GET the images panel — used by the uploader to refresh after uploads and
+    to poll optimisation status."""
+
+    def get(self, request, *args, **kwargs):
+        return self._render_panel(self.get_product())
+
+
 class ProductImageUploadView(_ProductImageBase):
     def post(self, request, *args, **kwargs):
         product = self.get_product()
@@ -275,6 +283,15 @@ class ProductImageUploadView(_ProductImageBase):
             record_audit(actor=request.user, project=self.active_project,
                          action=AuditLog.Action.UPDATE, target=product,
                          changes={"images_added": len(files)}, request=request)
+
+        # AJAX uploader (one request per file): reply small JSON, it refreshes
+        # the panel itself once every file is in.
+        if request.headers.get("x-requested-with") == "XMLHttpRequest":
+            if not files:
+                return JsonResponse({"ok": False, "error": "No file received."}, status=400)
+            return JsonResponse({"ok": True, "added": len(files)})
+
+        if files:
             messages.success(request, f"Added {len(files)} image(s).")
         else:
             messages.error(request, "Choose at least one image file.")

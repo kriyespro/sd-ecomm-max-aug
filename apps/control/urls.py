@@ -85,6 +85,7 @@ urlpatterns = [
     path("products/new/", cat.ProductCreateView.as_view(), name="product_create"),
     path("products/<int:pk>/", cat.ProductUpdateView.as_view(), name="product_edit"),
     path("products/<int:pk>/delete/", cat.ProductDeleteView.as_view(), name="product_delete"),
+    path("products/<int:pk>/images/", cat.ProductImagePanelView.as_view(), name="product_images"),
     path("products/<int:pk>/images/upload/", cat.ProductImageUploadView.as_view(), name="product_image_upload"),
     path("products/<int:pk>/images/<int:image_pk>/primary/", cat.ProductImagePrimaryView.as_view(), name="product_image_primary"),
     path("products/<int:pk>/images/<int:image_pk>/delete/", cat.ProductImageDeleteView.as_view(), name="product_image_delete"),

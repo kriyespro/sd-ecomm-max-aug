@@ -63,9 +63,12 @@ class CategoryForm(ProjectScopedForm):
             "is_active", "is_featured", "order",
             "seo_title", "seo_description", "seo_keywords",
         ]
+        help_texts = {"slug": "Leave blank to auto-generate from the name."}
+        widgets = {"slug": forms.TextInput(attrs={"placeholder": "auto from name"})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["slug"].required = False
         qs = Category.objects.filter(project=self.project)
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
@@ -77,6 +80,12 @@ class BrandForm(ProjectScopedForm):
     class Meta:
         model = Brand
         fields = ["name", "slug", "logo", "description", "is_active"]
+        help_texts = {"slug": "Leave blank to auto-generate from the name."}
+        widgets = {"slug": forms.TextInput(attrs={"placeholder": "auto from name"})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["slug"].required = False
 
 
 class ProductTypeForm(ProjectScopedForm):
@@ -109,10 +118,18 @@ class ProductForm(ProjectScopedForm):
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "short_description": forms.Textarea(attrs={"rows": 2}),
+            "slug": forms.TextInput(attrs={"placeholder": "auto from title"}),
+            "sku": forms.TextInput(attrs={"placeholder": "auto"}),
+        }
+        help_texts = {
+            "slug": "Leave blank to auto-generate from the title.",
+            "sku": "Leave blank to auto-generate.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["slug"].required = False
+        self.fields["sku"].required = False
         self.fields["type"].queryset = ProductType.objects.filter(project=self.project)
         self.fields["brand"].queryset = Brand.objects.filter(project=self.project)
         self.fields["category"].queryset = Category.objects.filter(project=self.project)

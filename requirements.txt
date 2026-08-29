@@ -20,4 +20,3 @@ django-prometheus>=2.3,<3
 
 # Production — installed in the Docker image (see Dockerfile / requirements-prod.txt)
 # psycopg[binary], redis, gunicorn, whitenoise
-# celery is not used yet (no async tasks defined)

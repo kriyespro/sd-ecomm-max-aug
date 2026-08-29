@@ -4,6 +4,8 @@ All top-level entities are project-scoped (project.md section 7). Child rows
 (images, variants, attribute values) reach the project through their parent.
 """
 
+import re
+import secrets
 from decimal import Decimal
 
 from django.core.validators import MinValueValidator
@@ -40,6 +42,19 @@ def _unique_slug(model, project, value, *, instance_pk=None, field="slug"):
         slug = f"{base}-{i}"
         i += 1
     return slug
+
+
+def _unique_sku(scope_qs, seed, *, instance_pk=None):
+    """Auto SKU: initials of the seed text + a short random tail, unique within
+    ``scope_qs`` (project- or product-scoped)."""
+    words = [w for w in re.split(r"[-\s]+", slugify(seed)) if w]
+    prefix = ("".join(w[0] for w in words)[:5] or "SKU").upper()
+    qs = scope_qs.exclude(pk=instance_pk) if instance_pk else scope_qs
+    for _ in range(25):
+        candidate = f"{prefix}-{secrets.token_hex(3).upper()}"
+        if not qs.filter(sku=candidate).exists():
+            return candidate
+    return f"{prefix}-{secrets.token_hex(6).upper()}"
 
 
 class Brand(TenantScopedModel):
@@ -211,6 +226,10 @@ class Product(TenantScopedModel, SeoFieldsModel):
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = _unique_slug(Product, self.project, self.title, instance_pk=self.pk)
+        if not self.sku:
+            self.sku = _unique_sku(
+                Product.objects.filter(project=self.project), self.title, instance_pk=self.pk
+            )
         self.description = sanitize_html(self.description)
         super().save(*args, **kwargs)
 
@@ -227,16 +246,45 @@ class Product(TenantScopedModel, SeoFieldsModel):
 
 class ProductImage(TimeStampedModel):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name="images")
+    # ``image`` is the served file. On upload it holds the raw original; a
+    # background task (apps.catalog.tasks) rewrites it to an optimised WebP,
+    # keeps the untouched upload in ``original`` and fills the fields below.
     image = models.ImageField(upload_to="products/")
+    original = models.ImageField(upload_to="products/originals/", blank=True)
     alt = models.CharField(max_length=200, blank=True)
     order = models.PositiveIntegerField(default=0)
     is_primary = models.BooleanField(default=False)
+
+    width = models.PositiveIntegerField(null=True, blank=True)
+    height = models.PositiveIntegerField(null=True, blank=True)
+    bytes = models.PositiveIntegerField(default=0)
+    # {"512": "/media/products/r/foo_512.webp", "1024": ...} — responsive set.
+    renditions = models.JSONField(default=dict, blank=True)
+    optimized_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-is_primary", "order", "id"]
 
     def __str__(self):
         return f"Image<{self.product_id}>"
+
+    @property
+    def is_optimized(self):
+        return self.optimized_at is not None
+
+    @property
+    def srcset(self):
+        """``srcset`` attribute value built from ``renditions`` plus the full
+        image. Empty string when nothing has been generated yet."""
+        if not self.renditions or not self.image:
+            return ""
+        parts = [
+            f"{url} {w}w"
+            for w, url in sorted(self.renditions.items(), key=lambda kv: int(kv[0]))
+        ]
+        if self.width:
+            parts.append(f"{self.image.url} {self.width}w")
+        return ", ".join(parts)
 
 
 class Variant(TimeStampedModel):
@@ -257,6 +305,20 @@ class Variant(TimeStampedModel):
 
     def __str__(self):
         return self.name or f"Variant<{self.product_id}>"
+
+    def save(self, *args, **kwargs):
+        if not self.sku and self.product_id:
+            parent = self.product.sku or _unique_sku(
+                Product.objects.filter(project=self.product.project), self.product.title
+            )
+            n = (
+                Variant.objects.filter(product_id=self.product_id)
+                .exclude(pk=self.pk)
+                .count()
+                + 1
+            )
+            self.sku = f"{parent}-{n}"
+        super().save(*args, **kwargs)
 
     @property
     def effective_price(self):

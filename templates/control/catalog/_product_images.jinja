@@ -1,18 +1,35 @@
+{% set imgs = object.images.order_by('-is_primary', 'order', 'id') | list %}
+{% set pending = imgs | rejectattr('is_optimized') | list %}
 <div id="product-images" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
+     data-upload-url="{{ url('control:product_image_upload', kwargs={'pk': object.pk}) }}"
+     data-panel-url="{{ url('control:product_images', kwargs={'pk': object.pk}) }}"
+     data-csrf="{{ csrf_token }}"
+     {% if pending %}data-optimizing="{{ pending | length }}"{% endif %}
      class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
   <div class="flex items-center justify-between">
     <h3 class="text-sm font-semibold text-slate-700">Images</h3>
-    <span class="text-xs text-slate-400">{{ object.images.count() }} image(s)</span>
+    <span class="text-xs text-slate-400">
+      {{ imgs | length }} image(s){% if pending %} · <span class="text-amber-600">optimizing {{ pending | length }}…</span>{% endif %}
+    </span>
   </div>
 
-  {% set imgs = object.images.order_by('-is_primary', 'order', 'id') | list %}
   {% if imgs %}
   <div class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
     {% for im in imgs %}
     <div class="overflow-hidden rounded-lg border {{ 'border-slate-900' if im.is_primary else 'border-slate-200' }}">
       <div class="relative aspect-square bg-slate-50">
-        <img src="{{ im.image.url }}" alt="{{ im.alt }}" class="h-full w-full object-cover">
+        <img src="{{ im.image.url }}" srcset="{{ im.srcset }}" sizes="200px" alt="{{ im.alt }}"
+             loading="lazy" class="h-full w-full object-cover">
         {% if im.is_primary %}<span class="absolute left-1.5 top-1.5 rounded bg-slate-900 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">Primary</span>{% endif %}
+        {% if im.is_optimized %}
+        <span class="absolute right-1.5 top-1.5 rounded bg-emerald-600 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white"
+              title="{{ (im.bytes / 1024) | round | int }} KB WebP{% if im.width %} · {{ im.width }}×{{ im.height }}{% endif %}">WebP</span>
+        {% else %}
+        <span class="absolute inset-x-0 bottom-0 flex items-center gap-1 bg-amber-500/90 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-white">
+          <svg class="h-2.5 w-2.5 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".3"/><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3"/></svg>
+          Optimizing
+        </span>
+        {% endif %}
       </div>
       <div class="flex items-center justify-between gap-1 p-1.5 text-[11px]">
         <div class="flex gap-1">
@@ -36,19 +53,121 @@
   <p class="mt-4 text-sm text-slate-400">No images yet.</p>
   {% endif %}
 
-  <form hx-post="{{ url('control:product_image_upload', kwargs={'pk': object.pk}) }}"
-        hx-target="#product-images" hx-swap="outerHTML" hx-encoding="multipart/form-data"
-        class="mt-5 flex flex-wrap items-end gap-3 border-t border-slate-200 pt-5">
-    <label class="text-sm">
-      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Upload (multiple)</span>
-      <input type="file" name="images" accept="image/*" multiple required
-             class="text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white">
+  <div class="mt-5 border-t border-slate-200 pt-5">
+    <label id="pi-drop"
+           class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 px-4 py-6 text-center transition hover:border-slate-400">
+      <span class="text-sm font-medium text-slate-700">Drop images here or click to browse</span>
+      <span class="mt-1 text-xs text-slate-400">Multiple files · JPG / PNG / WebP / HEIC / AVIF · converted to optimised WebP + responsive sizes in the background</span>
+      <input type="file" id="pi-input" accept="image/*,.heic,.heif,.avif" multiple class="sr-only">
     </label>
-    <label class="text-sm">
-      <span class="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-400">Alt text (optional)</span>
-      <input name="alt" class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-    </label>
-    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
-  </form>
-  <p class="mt-2 text-xs text-slate-400">JPG / PNG / WebP. First image becomes primary automatically. Variants: <a href="/sd/catalog/product/{{ object.pk }}/change/" class="underline">Django admin</a>.</p>
+    <div id="pi-queue" class="mt-3 space-y-2"></div>
+
+    <noscript>
+      <form method="post" action="{{ url('control:product_image_upload', kwargs={'pk': object.pk}) }}"
+            enctype="multipart/form-data" class="mt-3 flex flex-wrap items-end gap-3">
+        {{ csrf_input }}
+        <input type="file" name="images" accept="image/*" multiple required class="text-sm">
+        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white">Upload</button>
+      </form>
+    </noscript>
+  </div>
+
+  <script>
+  (function () {
+    var root = document.getElementById('product-images');
+    if (!root || root.dataset.piBound) return;
+    root.dataset.piBound = '1';
+
+    var uploadUrl = root.dataset.uploadUrl;
+    var panelUrl = root.dataset.panelUrl;
+    var csrf = root.dataset.csrf;
+    var input = root.querySelector('#pi-input');
+    var drop = root.querySelector('#pi-drop');
+    var queue = root.querySelector('#pi-queue');
+    var inflight = 0;
+
+    function esc(s) { return String(s).replace(/[<>&"]/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
+
+    function refreshPanel() {
+      if (window.htmx) {
+        window.htmx.ajax('GET', panelUrl, { target: '#product-images', swap: 'outerHTML' });
+      } else {
+        setTimeout(function () { window.location.reload(); }, 500);
+      }
+    }
+
+    function addRow(name) {
+      var el = document.createElement('div');
+      el.className = 'rounded-lg border border-slate-200 p-2 text-xs';
+      el.innerHTML =
+        '<div class="flex justify-between gap-2"><span class="truncate text-slate-600">' + esc(name) +
+        '</span><span class="pi-pct shrink-0 text-slate-400">0%</span></div>' +
+        '<div class="mt-1 h-1.5 overflow-hidden rounded bg-slate-100">' +
+        '<div class="pi-bar h-full rounded bg-slate-900 transition-all" style="width:0%"></div></div>';
+      queue.appendChild(el);
+      return el;
+    }
+
+    function upload(file) {
+      var r = addRow(file.name);
+      var bar = r.querySelector('.pi-bar');
+      var pct = r.querySelector('.pi-pct');
+      var fd = new FormData();
+      fd.append('images', file);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.setRequestHeader('X-CSRFToken', csrf);
+      inflight++;
+      xhr.upload.onprogress = function (e) {
+        if (!e.lengthComputable) return;
+        var p = Math.round((e.loaded / e.total) * 100);
+        bar.style.width = p + '%';
+        pct.textContent = p + '%';
+      };
+      xhr.onload = function () {
+        inflight--;
+        if (xhr.status === 200) {
+          bar.style.width = '100%';
+          pct.textContent = 'uploaded';
+        } else {
+          pct.textContent = 'failed';
+          r.classList.add('border-red-300', 'text-red-600');
+        }
+        if (inflight === 0) { window.__piPolls = 0; setTimeout(function () { queue.innerHTML = ''; refreshPanel(); }, 400); }
+      };
+      xhr.onerror = function () {
+        inflight--;
+        pct.textContent = 'failed';
+        r.classList.add('border-red-300', 'text-red-600');
+        if (inflight === 0) refreshPanel();
+      };
+      xhr.send(fd);
+    }
+
+    function handle(files) {
+      Array.prototype.slice.call(files).filter(function (f) {
+        return (f.type && f.type.indexOf('image/') === 0) || /\.(heic|heif|avif)$/i.test(f.name);
+      }).forEach(upload);
+    }
+
+    input.addEventListener('change', function () { handle(input.files); input.value = ''; });
+    ['dragover', 'dragenter'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add('border-slate-900', 'bg-slate-50'); });
+    });
+    ['dragleave', 'drop'].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove('border-slate-900', 'bg-slate-50'); });
+    });
+    drop.addEventListener('drop', function (e) { if (e.dataTransfer) handle(e.dataTransfer.files); });
+
+    // Live optimisation status: re-render the panel while images are still
+    // processing. Capped so a stalled worker can't poll forever.
+    if (root.hasAttribute('data-optimizing') && inflight === 0) {
+      window.__piPolls = (window.__piPolls || 0) + 1;
+      if (window.__piPolls <= 40) setTimeout(refreshPanel, 2500);
+    } else if (!root.hasAttribute('data-optimizing')) {
+      window.__piPolls = 0;
+    }
+  })();
+  </script>
 </div>
