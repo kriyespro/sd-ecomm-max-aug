@@ -51,6 +51,21 @@ class VerifyDomainTests(TestCase):
         self.assertTrue(self.domain.last_check_error)
 
 
+class LookupIpsFallbackTests(TestCase):
+    def test_falls_back_to_getaddrinfo_when_dig_missing(self):
+        info = [(2, 1, 6, "", ("104.16.5.5", 0))]
+        with mock.patch(_PATCH + "_dig", return_value=[]), \
+             mock.patch(_PATCH + "socket.getaddrinfo", return_value=info) as gai:
+            self.assertEqual(domain_svc._lookup_ips("shop.acme.test"), ["104.16.5.5"])
+            gai.assert_called_once()
+
+    def test_prefers_dig_result(self):
+        with mock.patch(_PATCH + "_dig", return_value=["203.0.113.9"]), \
+             mock.patch(_PATCH + "socket.getaddrinfo") as gai:
+            self.assertEqual(domain_svc._lookup_ips("shop.acme.test"), ["203.0.113.9"])
+            gai.assert_not_called()
+
+
 @override_settings(ALLOWED_HOSTS=["*"])
 class DomainCheckEndpointTests(TestCase):
     def setUp(self):

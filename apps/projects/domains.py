@@ -22,6 +22,7 @@ Security notes:
 
 import ipaddress
 import re
+import socket
 import subprocess
 import urllib.error
 import urllib.request
@@ -125,7 +126,17 @@ def _lookup_ips(host):
             except ValueError:
                 continue
             ips.append(line)
-    return ips
+    if not ips and _SAFE_HOST.match(host):
+        # Fallback when ``dig`` is unavailable: the stdlib resolver still gives
+        # us A/AAAA (enough for the A-record and Cloudflare-proxy checks; only
+        # the TXT method truly needs dig).
+        try:
+            infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError):
+            infos = []
+        ips = [addr[0] for *_, addr in infos]
+    seen = set()
+    return [ip for ip in ips if not (ip in seen or seen.add(ip))]
 
 
 def _is_cloudflare_ip(ip):

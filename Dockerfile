@@ -7,8 +7,9 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     DJANGO_SETTINGS_MODULE=config.settings.production
 
-# curl for the container HEALTHCHECK; everything else ships as wheels.
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# curl for the container HEALTHCHECK; dig (bind9-dnsutils) for custom-domain
+# DNS verification (apps.projects.domains). Everything else ships as wheels.
+RUN apt-get update && apt-get install -y --no-install-recommends curl bind9-dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
