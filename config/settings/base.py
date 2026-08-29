@@ -253,6 +253,17 @@ SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", False)
 # domains are verified via the /.well-known/sd-domain-check token instead.
 PLATFORM_PUBLIC_IP = env("PLATFORM_PUBLIC_IP", "")
 
+# Hosts that belong to the platform itself, not to any store. The root URL
+# serves the marketing landing page on these, and ProjectResolverMiddleware
+# never resolves them to a project even if a Domain row or primary_domain
+# points at them. "www." is stripped before matching. Comma-separated.
+def _bare_host(raw):
+    h = (raw or "").strip().lower().split(":")[0].rstrip(".")
+    return h[4:] if h.startswith("www.") else h
+
+
+PLATFORM_HOSTS = [h for h in (_bare_host(x) for x in env_list("DJANGO_PLATFORM_HOSTS", [])) if h]
+
 # Product image optimisation (apps.media.optimize + apps.catalog.tasks).
 # Uploads are re-encoded to WebP in the background, squeezed under the target
 # size, with responsive renditions generated alongside.

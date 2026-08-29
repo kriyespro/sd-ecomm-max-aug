@@ -50,6 +50,10 @@ def _resolve_project(request):
     if not host:
         return None
 
+    # Platform's own hostnames are never a store, even if stale data points here.
+    if host in getattr(settings, "PLATFORM_HOSTS", ()):
+        return None
+
     domain = (
         Domain.objects.select_related("project")
         .filter(host=host, is_verified=True)
