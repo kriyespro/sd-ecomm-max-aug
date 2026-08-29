@@ -273,6 +273,15 @@ class ProductImage(TimeStampedModel):
         return self.optimized_at is not None
 
     @property
+    def image_is_webp(self):
+        return bool(self.image) and self.image.name.lower().endswith(".webp")
+
+    @property
+    def kept_original(self):
+        """Optimised pass ran but left the file alone — it was already small."""
+        return self.is_optimized and not self.image_is_webp
+
+    @property
     def srcset(self):
         """``srcset`` attribute value built from ``renditions`` plus the full
         image. Empty string when nothing has been generated yet."""

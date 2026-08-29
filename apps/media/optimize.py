@@ -1,10 +1,15 @@
 """Shopify-style image optimisation.
 
-Re-encode any uploaded image to a compact WebP, targeting a byte budget while
+Re-encode an uploaded image to a compact WebP, targeting a byte budget while
 keeping perceived quality high, and produce a set of responsive renditions.
 
 Pure functions — no Django model imports — so Celery tasks, management commands
 and services can all reuse this. Input and output are raw ``bytes``.
+
+``process()`` is the one-decode entry point: it may report ``skipped`` when the
+upload is already small and web-friendly, so we neither burn CPU nor grow the
+file. ``optimize()`` / ``renditions()`` are thin wrappers kept for callers that
+want just one piece and never skip.
 """
 
 import io
@@ -17,10 +22,12 @@ DEFAULT_TARGET_BYTES = 200 * 1024
 MAX_EDGE = 2048                       # phone cameras shoot 4000px+; clamp it
 VARIANT_WIDTHS = (512, 1024, 2048)
 
-_START_QUALITY = 88
-_MIN_QUALITY = 46
-_QUALITY_STEP = 6
+# method=6 is ~2x the CPU of method=4 for a few % smaller output — not worth it
+# on a shared box. A short quality probe beats a fine-grained ladder for cost.
+_ENCODE_METHOD = 4
+_QUALITY_PROBES = (82, 68, 56, 46)
 _SMALL_PIXELS = 160_000              # below this, lossless often wins
+_WEB_FORMATS = {"JPEG", "WEBP"}
 
 
 def _register_extra_formats():
@@ -35,6 +42,17 @@ def _register_extra_formats():
 
 
 _register_extra_formats()
+
+
+def _probe(raw):
+    """(FORMAT, (w, h)) from the header only — no full decode."""
+    from PIL import Image
+
+    try:
+        with Image.open(io.BytesIO(raw)) as im:
+            return (im.format or "").upper(), im.size
+    except Exception:  # noqa: BLE001
+        return "", (0, 0)
 
 
 def _load(raw):
@@ -59,16 +77,16 @@ def _enhance(im):
 
 def _encode(im, quality, lossless=False):
     buf = io.BytesIO()
-    im.save(buf, format="WEBP", quality=quality, method=6, lossless=lossless)
+    im.save(buf, format="WEBP", quality=quality, method=_ENCODE_METHOD, lossless=lossless)
     return buf.getvalue()
 
 
 def _fit_budget(im, target_bytes):
-    """Encode WebP, stepping quality down until under budget. Returns (bytes,
-    quality). Tries lossless when the image is small or lossy stays over."""
+    """Probe a few quality levels, keep the smallest that clears the budget (or
+    the smallest overall). Returns (bytes, quality)."""
     small = im.width * im.height <= _SMALL_PIXELS
     best = None
-    for q in range(_START_QUALITY, _MIN_QUALITY - 1, -_QUALITY_STEP):
+    for q in _QUALITY_PROBES:
         data = _encode(im, q)
         if best is None or len(data) < len(best[0]):
             best = (data, q)
@@ -82,43 +100,68 @@ def _fit_budget(im, target_bytes):
     return best
 
 
-def optimize(raw, *, target_bytes=DEFAULT_TARGET_BYTES, max_edge=MAX_EDGE, enhance=True):
-    """Main rendition: clamped to ``max_edge``, squeezed under ``target_bytes``.
+def process(raw, *, target_bytes=DEFAULT_TARGET_BYTES, max_edge=MAX_EDGE,
+            skip_under_bytes=None, widths=VARIANT_WIDTHS, enhance=True):
+    """Single decode → everything.
 
-    Returns ``{"data", "width", "height", "bytes", "quality", "format"}``.
+    Returns a dict. ``skipped=True`` means the upload is already small enough and
+    in a web format: the caller should keep the original file untouched. Otherwise
+    ``main`` holds the optimised WebP bytes and ``renditions`` maps width → bytes.
     """
-    im, _ = _load(raw)
+    if skip_under_bytes is None:
+        skip_under_bytes = target_bytes
+
+    fmt, _size = _probe(raw)
+    im, has_alpha = _load(raw)
+
+    if (
+        len(raw) <= skip_under_bytes
+        and max(im.width, im.height) <= max_edge
+        and fmt in _WEB_FORMATS
+        and not has_alpha
+    ):
+        return {
+            "skipped": True,
+            "width": im.width, "height": im.height, "bytes": len(raw),
+            "main": None, "renditions": {},
+        }
+
     if max(im.size) > max_edge:
         im.thumbnail((max_edge, max_edge))
     if enhance:
         im = _enhance(im)
 
-    data, quality = _fit_budget(im, target_bytes)
+    main, quality = _fit_budget(im, target_bytes)
+
+    rends = {}
+    for width in widths:
+        if width >= im.width:
+            continue
+        copy = im.copy()
+        copy.thumbnail((width, width * 10))
+        budget = max(24 * 1024, int(target_bytes * (width / im.width) ** 2))
+        rends[width] = _fit_budget(copy, budget)[0]
+
     return {
-        "data": data,
-        "width": im.width,
-        "height": im.height,
-        "bytes": len(data),
-        "quality": quality,
-        "format": "webp",
+        "skipped": False,
+        "width": im.width, "height": im.height,
+        "bytes": len(main), "quality": quality, "format": "webp",
+        "main": main, "renditions": rends,
+    }
+
+
+def optimize(raw, *, target_bytes=DEFAULT_TARGET_BYTES, max_edge=MAX_EDGE, enhance=True):
+    """Main rendition only, never skipped. ``{"data", "width", "height", "bytes",
+    "quality", "format"}``."""
+    r = process(raw, target_bytes=target_bytes, max_edge=max_edge,
+                skip_under_bytes=0, widths=(), enhance=enhance)
+    return {
+        "data": r["main"], "width": r["width"], "height": r["height"],
+        "bytes": r["bytes"], "quality": r["quality"], "format": "webp",
     }
 
 
 def renditions(raw, *, widths=VARIANT_WIDTHS, target_bytes=DEFAULT_TARGET_BYTES, enhance=True):
-    """Responsive set. Returns ``{width_int: webp_bytes}`` for every width not
-    larger than the source. Byte budget scales with width so small renditions
-    stay small."""
-    im, _ = _load(raw)
-    if enhance:
-        im = _enhance(im)
-
-    out = {}
-    for w in widths:
-        if w >= im.width:
-            continue
-        copy = im.copy()
-        copy.thumbnail((w, w * 10))
-        budget = max(24 * 1024, int(target_bytes * (w / im.width) ** 2))
-        data, _q = _fit_budget(copy, budget)
-        out[w] = data
-    return out
+    """Responsive set only, never skipped. ``{width_int: webp_bytes}``."""
+    return process(raw, target_bytes=target_bytes, skip_under_bytes=0,
+                   widths=widths, enhance=enhance)["renditions"]

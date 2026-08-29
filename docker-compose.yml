@@ -55,7 +55,14 @@ services:
 
   worker:
     <<: *app
-    command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency", "${CELERY_CONCURRENCY:-4}"]
+    # `nice` yields CPU to the web process under load. One worker drains both the
+    # default queue and the low-priority `images` queue (image tasks are
+    # rate-limited in settings, so they stay a background trickle).
+    command: ["nice", "-n", "12", "celery", "-A", "config", "worker", "-l", "info",
+              "-Q", "celery,images",
+              "--concurrency", "${CELERY_CONCURRENCY:-2}",
+              "--prefetch-multiplier", "1",
+              "--max-tasks-per-child", "40"]
     environment:
       <<: *app-env
       RUN_MIGRATIONS: "0"

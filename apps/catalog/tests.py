@@ -8,16 +8,26 @@ from apps.media.optimize import optimize, renditions
 from apps.projects.models import Project
 
 
-def _png(width=2600, height=1740):
-    """A smooth gradient scaled up — cheap to build, realistic to compress."""
+def _gradient(width, height):
     from PIL import Image
 
     r = Image.linear_gradient("L")
     g = Image.linear_gradient("L").transpose(Image.Transpose.ROTATE_90)
     b = Image.linear_gradient("L").transpose(Image.Transpose.ROTATE_180)
-    im = Image.merge("RGB", (r, g, b)).resize((width, height))
+    return Image.merge("RGB", (r, g, b)).resize((width, height))
+
+
+def _png(width=2600, height=1740):
+    """A smooth gradient scaled up — cheap to build, realistic to compress."""
     buf = io.BytesIO()
-    im.save(buf, format="PNG")
+    _gradient(width, height).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _jpeg(width=600, height=400):
+    """A small JPEG that the pipeline should keep untouched."""
+    buf = io.BytesIO()
+    _gradient(width, height).save(buf, format="JPEG", quality=80)
     return buf.getvalue()
 
 
@@ -88,6 +98,20 @@ class ProductImageOptimizeTaskTests(TestCase):
         self.assertGreater(img.bytes, 0)
         self.assertTrue(img.renditions)
         self.assertIn(f"{img.width}w", img.srcset)
+
+    def test_small_web_image_is_kept_untouched(self):
+        raw = _jpeg()
+        upload = SimpleUploadedFile("small.jpg", raw, content_type="image/jpeg")
+        with self.captureOnCommitCallbacks(execute=True):
+            img = ProductImage.objects.create(product=self.product, image=upload)
+
+        img.refresh_from_db()
+        self.assertIsNotNone(img.optimized_at)
+        self.assertTrue(img.image.name.endswith(".jpg"))   # not re-encoded
+        self.assertFalse(img.original.name)                # no master copy needed
+        self.assertTrue(img.kept_original)
+        self.assertEqual(img.renditions, {})
+        self.assertEqual(img.bytes, len(raw))
 
     @override_settings(PRODUCT_IMAGE_OPTIMIZE=False)
     def test_optimization_can_be_disabled(self):

@@ -253,6 +253,12 @@ SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", False)
 PRODUCT_IMAGE_TARGET_KB = int(env("PRODUCT_IMAGE_TARGET_KB", "200"))
 PRODUCT_IMAGE_MAX_EDGE = int(env("PRODUCT_IMAGE_MAX_EDGE", "2048"))
 PRODUCT_IMAGE_OPTIMIZE = env_bool("PRODUCT_IMAGE_OPTIMIZE", True)
+# Uploads already at or under this and in a web format (JPEG/WebP, sane
+# dimensions) are kept untouched — recorded, not re-encoded.
+PRODUCT_IMAGE_SKIP_UNDER_KB = int(env("PRODUCT_IMAGE_SKIP_UNDER_KB", "300"))
+# Celery rate cap for apps.catalog.tasks.optimize_product_image (read on the
+# decorator). Keep low so a backfill batch stays a background trickle.
+PRODUCT_IMAGE_RATE_LIMIT = env("PRODUCT_IMAGE_RATE_LIMIT", "6/m")
 
 
 # --- DRF ---------------------------------------------------------------
