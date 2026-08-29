@@ -15,6 +15,11 @@ if [ "${RUN_MIGRATIONS:-1}" = "1" ]; then
   python manage.py migrate --noinput
 fi
 
-python manage.py collectstatic --noinput --clear
+# Only the web image needs static collected (WhiteNoise serves from there).
+# worker/beat set RUN_COLLECTSTATIC=0. No --clear: it wipes + rehashes every
+# file on each boot (slow, and a brief 404 window under ManifestStaticStorage).
+if [ "${RUN_COLLECTSTATIC:-1}" = "1" ]; then
+  python manage.py collectstatic --noinput
+fi
 
 exec "$@"

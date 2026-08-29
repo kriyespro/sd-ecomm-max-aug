@@ -45,6 +45,12 @@ services:
 
   web:
     <<: *app
+    environment:
+      <<: *app-env
+      # Real concurrency = workers * threads. Tune per box; keep workers small
+      # on a shared VPS (each is a full Django + Pillow process).
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-3}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-4}
     volumes:
       # MEDIA_DIR (host path) makes uploads readable by an nginx running on the
       # host. Unset -> the named volume (self-contained, but only the container
@@ -66,6 +72,7 @@ services:
     environment:
       <<: *app-env
       RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
     volumes:
       - ${MEDIA_DIR:-media}:/app/media
 
@@ -75,6 +82,7 @@ services:
     environment:
       <<: *app-env
       RUN_MIGRATIONS: "0"
+      RUN_COLLECTSTATIC: "0"
 
   # Scheduled pg_dump with daily/weekly/monthly retention -> pgbackups volume.
   # On-demand:  docker compose exec pgbackup /backup.sh

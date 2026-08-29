@@ -5,10 +5,17 @@ import os
 
 bind = os.environ.get("GUNICORN_BIND", "0.0.0.0:8000")
 
-# Sync workers. The skin sandbox uses a per-process ThreadPoolExecutor, so
-# threads > 1 also help there; default to a small thread count.
-workers = int(os.environ.get("GUNICORN_WORKERS", 2 * multiprocessing.cpu_count() + 1))
-threads = int(os.environ.get("GUNICORN_THREADS", 2))
+# gthread workers: real concurrency is workers * threads. Django here is
+# I/O-bound (DB, Redis, upstream), so a few threads per worker beat more
+# processes and cost far less RAM.
+#
+# multiprocessing.cpu_count() reports the HOST core count and ignores the
+# cgroup/VPS limit, so an unbounded 2*cpu+1 spawns a dozen+ 200 MB workers on a
+# small box and drives it into swap. Cap the auto value; override per box with
+# GUNICORN_WORKERS / GUNICORN_THREADS.
+_auto_workers = min(2 * multiprocessing.cpu_count() + 1, 5)
+workers = int(os.environ.get("GUNICORN_WORKERS", _auto_workers))
+threads = int(os.environ.get("GUNICORN_THREADS", 4))
 worker_class = os.environ.get("GUNICORN_WORKER_CLASS", "gthread")
 
 timeout = int(os.environ.get("GUNICORN_TIMEOUT", 30))
