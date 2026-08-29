@@ -11,6 +11,21 @@ from .runtime import use_skin
 
 _PREFIXES = ("/app/", "/demo/", "/shop/")
 
+# On a store's own domain (request.storefront_host) everything is the storefront
+# EXCEPT these shared mounts (see config.storefront_urls).
+_NON_STOREFRONT = (
+    "/admin/", "/sd/", "/api/", "/accounts/", "/payments/", "/shipping/",
+    "/healthz", "/readyz", "/.well-known", "/media/", "/static/",
+)
+
+
+def _is_storefront_request(request):
+    if request.path.startswith(_PREFIXES):
+        return True
+    return getattr(request, "storefront_host", False) and not request.path.startswith(
+        _NON_STOREFRONT
+    )
+
 
 class NoStoreStorefrontMiddleware:
     def __init__(self, get_response):
@@ -18,10 +33,7 @@ class NoStoreStorefrontMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        storefront = request.path.startswith(_PREFIXES) or getattr(
-            request, "storefront_host", False
-        )
-        if settings.DEBUG and storefront:
+        if settings.DEBUG and _is_storefront_request(request):
             response["Cache-Control"] = "no-store, must-revalidate"
         return response
 
@@ -55,10 +67,7 @@ class StorefrontSkinMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if not (
-            request.path.startswith("/app/")
-            or getattr(request, "storefront_host", False)
-        ):
+        if not _is_storefront_request(request):
             return self.get_response(request)
 
         slug, skin_obj = "default", None

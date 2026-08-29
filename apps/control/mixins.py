@@ -12,11 +12,21 @@ ACTIVE_PROJECT_SESSION_KEY = "active_project_id"
 def get_active_project(request):
     """Resolve the project the staff user is currently operating on.
 
-    Order: explicit session choice -> the request's resolved project ->
-    the user's sole accessible project. Returns ``None`` when the user must
-    pick one.
+    Order: the store's own domain -> explicit session choice -> the request's
+    resolved project -> the user's sole accessible project. Returns ``None``
+    when the user must pick one.
     """
     available = projects_for_user(request.user)
+    resolved = getattr(request, "project", None)
+
+    # On a store's own domain, Mission Control manages *that* store — the Host
+    # wins over a stale session pick from another store.
+    if (
+        getattr(request, "storefront_host", False)
+        and resolved
+        and available.filter(pk=resolved.pk).exists()
+    ):
+        return resolved
 
     pid = request.session.get(ACTIVE_PROJECT_SESSION_KEY)
     if pid:
@@ -24,7 +34,6 @@ def get_active_project(request):
         if match:
             return match
 
-    resolved = getattr(request, "project", None)
     if resolved and available.filter(pk=resolved.pk).exists():
         return resolved
 

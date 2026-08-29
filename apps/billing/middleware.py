@@ -8,6 +8,10 @@ from django.http import HttpResponse
 
 _STOREFRONT_PREFIXES = ("/app/", "/demo/", "/shop/")
 
+# The owner must still reach Mission Control (and log in / pay) on a suspended
+# store, including on the store's own domain.
+_EXEMPT_PREFIXES = ("/admin/", "/sd/", "/accounts/", "/payments/", "/api/", "/healthz", "/readyz")
+
 _SUSPENDED_HTML = (
     "<!doctype html><html><head><title>Store unavailable</title></head>"
     "<body style='font-family:system-ui;text-align:center;padding:15vh 1rem'>"
@@ -21,9 +25,10 @@ class SubscriptionGateMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith(_STOREFRONT_PREFIXES) or getattr(
+        gated = request.path.startswith(_STOREFRONT_PREFIXES) or getattr(
             request, "storefront_host", False
-        ):
+        )
+        if gated and not request.path.startswith(_EXEMPT_PREFIXES):
             project = getattr(request, "project", None)
             if project is not None:
                 sub = getattr(project, "subscription", None)

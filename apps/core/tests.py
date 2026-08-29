@@ -111,6 +111,20 @@ class StorefrontHostMiddlewareTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp["Location"], "/shop/")
 
+    def test_mission_control_reachable_on_store_domain(self):
+        from django.contrib.auth import get_user_model
+
+        from apps.accounts.models import Membership
+
+        user = get_user_model().objects.create_user(
+            username="own", email="own@acme.test", password="pw", is_staff=True
+        )
+        Membership.objects.create(user=user, project=self.project, role="owner")
+        self.client.force_login(user)
+        resp = self.client.get("/admin/", HTTP_HOST="shop.acme.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Products")  # store nav rendered
+
 
 class StorefrontUrlconfTests(TestCase):
     def test_storefront_home_is_at_root(self):

@@ -24,6 +24,9 @@ urlpatterns = [
     path("readyz/", health.readyz),
     path(".well-known/sd-domain-check", domain_check),
     path("accounts/", include("apps.accounts.urls", namespace="accounts")),
+    # Mission Control on the store's own domain — the Host resolves the store,
+    # so the owner lands straight in it (no store picker).
+    path("admin/", include("apps.control.urls", namespace="control")),
     path("payments/", include("apps.payments.urls", namespace="payments")),
     path("shipping/", include("apps.shipping.urls", namespace="shipping")),
     path("api/", include("apps.api.urls", namespace="api")),
