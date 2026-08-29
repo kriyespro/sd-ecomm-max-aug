@@ -121,7 +121,7 @@ class StorefrontHostMiddlewareTests(TestCase):
         )
         Membership.objects.create(user=user, project=self.project, role="owner")
         self.client.force_login(user)
-        resp = self.client.get("/admin/", HTTP_HOST="shop.acme.test")
+        resp = self.client.get("/admin/", HTTP_HOST="shop.acme.test", follow=True)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Products")  # store nav rendered
 

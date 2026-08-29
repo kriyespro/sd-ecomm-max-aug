@@ -4,6 +4,7 @@ All views require an active staff user via ControlAccessMixin. Mutations are
 POST-only. HTMX endpoints return HTML partials, never JSON.
 """
 
+from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
@@ -11,17 +12,31 @@ from django.urls import reverse_lazy
 from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.base import TemplateResponseMixin
 
+from apps.accounts.permissions import is_platform_staff
 from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
 from . import services
-from .mixins import ACTIVE_PROJECT_SESSION_KEY
+from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 
 User = get_user_model()
 
 
 class DashboardView(ControlAccessMixin, TemplateView):
     template_name = "control/dashboard.jinja"
+
+    def get(self, request, *args, **kwargs):
+        # This dashboard is the platform overview (global user / project counts).
+        # A store user must never land here — with no store in context the
+        # sidebar is empty, and the numbers aren't theirs. Route them into a
+        # store instead.
+        if not is_platform_staff(request.user):
+            if get_active_project(request) is not None:
+                return redirect("control:order_list")
+            if projects_for_user(request.user).exists():
+                messages.info(request, "Choose a store to manage.")
+                return redirect("control:project_picker")
+        return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
