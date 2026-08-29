@@ -1,0 +1,177 @@
+{% extends "base.jinja" %}
+
+{% block title %}mnxstore — start your ecommerce store in a day{% endblock %}
+{% block meta_description %}mnxstore is a hosted commerce platform: quick store setup, your own custom domain, Razorpay payments, and a full admin dashboard — without running any servers.{% endblock %}
+
+{% block body %}
+<div class="bg-white text-slate-900">
+
+  {# ---------- nav ---------- #}
+  <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <a href="/" class="text-lg font-semibold tracking-tight">mnx<span class="text-indigo-600">store</span></a>
+      <nav class="hidden items-center gap-8 text-sm text-slate-600 md:flex">
+        <a href="#features" class="hover:text-slate-900">Features</a>
+        <a href="#how" class="hover:text-slate-900">How it works</a>
+        <a href="#domains" class="hover:text-slate-900">Custom domains</a>
+        {% if plans %}<a href="#pricing" class="hover:text-slate-900">Pricing</a>{% endif %}
+      </nav>
+      <div class="flex items-center gap-3 text-sm">
+        <a href="{{ url('accounts:login') }}" class="hidden text-slate-600 hover:text-slate-900 sm:block">Sign in</a>
+        <a href="{{ url('accounts:login') }}" class="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800">Open your store</a>
+      </div>
+    </div>
+  </header>
+
+  {# ---------- hero ---------- #}
+  <section class="relative overflow-hidden">
+    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-white"></div>
+    <div class="relative mx-auto max-w-6xl px-5 py-24 text-center sm:py-32">
+      <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+        Hosted commerce · no servers to run
+      </p>
+      <h1 class="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
+        Start your ecommerce store in a day
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
+        Quick store setup, your own custom domain, Razorpay payments, and a full admin dashboard —
+        all in one place. You bring the products; mnxstore runs everything else.
+      </p>
+      <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="{{ url('accounts:login') }}" class="w-full rounded-xl bg-indigo-600 px-6 py-3 text-center font-semibold text-white shadow-sm hover:bg-indigo-500 sm:w-auto">
+          Open your store
+        </a>
+        <a href="#features" class="w-full rounded-xl border border-slate-300 px-6 py-3 text-center font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto">
+          See what's included
+        </a>
+      </div>
+      <p class="mt-6 text-sm text-slate-500">Runs on HTTPS out of the box · Razorpay checkout · connect a domain you already own</p>
+    </div>
+  </section>
+
+  {# ---------- features ---------- #}
+  <section id="features" class="mx-auto max-w-6xl px-5 py-20">
+    <div class="mx-auto max-w-2xl text-center">
+      <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Everything a store needs, already wired</h2>
+      <p class="mt-4 text-slate-600">No plugins to assemble. The pieces below ship together and talk to each other.</p>
+    </div>
+    <div class="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      {% set feats = [
+        ("Quick store setup", "Add products, pick a skin, and your store is browsable the same day — no theme coding, no plugin hunting."),
+        ("Razorpay payments", "Card, UPI, netbanking, and wallets through Razorpay. Orders and payment status stay in sync automatically."),
+        ("Your own custom domain", "Point a domain you own, verify it with one DNS record, and it goes live on HTTPS — no cert wrangling."),
+        ("Full admin dashboard", "Mission Control for staff: catalogue, orders, customers, coupons, shipping, skins, domains, and billing in one panel."),
+        ("Storefront that looks the part", "Swappable skins with a clean product grid, quick view, search, wishlist, and a slide-out cart."),
+        ("Catalogue & inventory", "Products, variants, categories, brands, automatic image optimisation, and stock tracking."),
+      ] %}
+      {% for title, body in feats %}
+      <div class="rounded-2xl border border-slate-200 p-6 transition hover:border-indigo-300 hover:shadow-sm">
+        <div class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">{{ loop.index }}</div>
+        <h3 class="font-semibold text-slate-900">{{ title }}</h3>
+        <p class="mt-2 text-sm text-slate-600">{{ body }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ---------- how it works ---------- #}
+  <section id="how" class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-6xl px-5 py-20">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Live in a day, in three steps</h2>
+      </div>
+      <div class="mt-14 grid gap-8 md:grid-cols-3">
+        {% set steps = [
+          ("Add products, pick a look", "Load the catalogue and choose a skin. Your store is browsable at its mnxstore address right away."),
+          ("Connect Razorpay & your domain", "Drop in your Razorpay keys, add one DNS record for your domain, and mnxstore verifies it for you."),
+          ("Open for orders", "Share the link. Customers check out with Razorpay; every order lands in your dashboard."),
+        ] %}
+        {% for title, body in steps %}
+        <div class="relative rounded-2xl bg-white p-7 ring-1 ring-slate-200">
+          <span class="text-4xl font-bold text-indigo-200">0{{ loop.index }}</span>
+          <h3 class="mt-3 font-semibold text-slate-900">{{ title }}</h3>
+          <p class="mt-2 text-sm text-slate-600">{{ body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ---------- custom domains ---------- #}
+  <section id="domains" class="mx-auto max-w-6xl px-5 py-20">
+    <div class="grid items-center gap-12 lg:grid-cols-2">
+      <div>
+        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Your brand, your domain</h2>
+        <p class="mt-4 text-slate-600">
+          Add a hostname you own in the dashboard. Point one DNS record at the platform — or flip on the
+          Cloudflare proxy — and mnxstore verifies it automatically, then serves it over HTTPS with a
+          managed certificate. Nothing to install, no renewals to track.
+        </p>
+        <ul class="mt-6 space-y-3 text-sm text-slate-700">
+          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> Verify by A record, or TXT record, or Cloudflare proxy</li>
+          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> Auto-checked every few minutes — no waiting on support</li>
+          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> HTTPS handled for you, including renewals</li>
+        </ul>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-slate-900 p-6 font-mono text-xs leading-relaxed text-slate-300">
+        <p class="text-slate-500"># in your DNS provider</p>
+        <p><span class="text-emerald-400">A</span>&nbsp;&nbsp;&nbsp;&nbsp;shop.yourbrand.com&nbsp;&nbsp;&#8594;&nbsp;&nbsp;the platform IP</p>
+        <p class="mt-3 text-slate-500"># mnxstore, a minute later</p>
+        <p><span class="text-emerald-400">verified</span>&nbsp;&nbsp;shop.yourbrand.com is live</p>
+        <p class="text-slate-500">https://shop.yourbrand.com/</p>
+      </div>
+    </div>
+  </section>
+
+  {# ---------- pricing ---------- #}
+  {% if plans %}
+  <section id="pricing" class="border-t border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-6xl px-5 py-20">
+      <div class="mx-auto max-w-2xl text-center">
+        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Plans</h2>
+        <p class="mt-4 text-slate-600">Prices in INR. Switch or cancel from the dashboard.</p>
+      </div>
+      <div class="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        {% for p in plans %}
+        <div class="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
+          <h3 class="font-semibold text-slate-900">{{ p.name }}</h3>
+          {% if p.tagline %}<p class="mt-1 text-sm text-slate-500">{{ p.tagline }}</p>{% endif %}
+          <p class="mt-4 text-3xl font-bold text-slate-900">
+            &#8377;{{ p.price_monthly|int }}<span class="text-sm font-normal text-slate-500">/mo</span>
+          </p>
+          {% if p.features %}
+          <ul class="mt-5 space-y-2 text-sm text-slate-600">
+            {% for f in p.features %}<li class="flex gap-2"><span class="text-indigo-600">&#10003;</span> {{ f }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+          <a href="{{ url('accounts:login') }}" class="mt-6 rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-800">Choose {{ p.name }}</a>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---------- CTA ---------- #}
+  <section class="mx-auto max-w-6xl px-5 py-20">
+    <div class="rounded-3xl bg-indigo-600 px-8 py-14 text-center text-white sm:px-16">
+      <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Start your ecommerce store in a day</h2>
+      <p class="mx-auto mt-4 max-w-xl text-indigo-100">Quick setup, custom domain, Razorpay checkout, full admin dashboard. Your customers never see the plumbing.</p>
+      <a href="{{ url('accounts:login') }}" class="mt-8 inline-block rounded-xl bg-white px-6 py-3 font-semibold text-indigo-700 hover:bg-indigo-50">Open your store</a>
+    </div>
+  </section>
+
+  {# ---------- footer ---------- #}
+  <footer class="border-t border-slate-200">
+    <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-10 text-sm text-slate-500 sm:flex-row">
+      <p>mnx<span class="text-indigo-600">store</span> — hosted commerce</p>
+      <div class="flex gap-6">
+        <a href="#features" class="hover:text-slate-700">Features</a>
+        <a href="#pricing" class="hover:text-slate-700">Pricing</a>
+        <a href="{{ url('accounts:login') }}" class="hover:text-slate-700">Sign in</a>
+      </div>
+    </div>
+  </footer>
+
+</div>
+{% endblock %}
