@@ -11,11 +11,13 @@ from django.urls import include, path, re_path
 from django.views.static import serve as _serve_media
 
 from apps.core import health
+from apps.projects.views import domain_check
 
 urlpatterns = [
     path("healthz/", health.healthz),
     path("readyz/", health.readyz),
     path("metrics", health.metrics),
+    path(".well-known/sd-domain-check", domain_check),
     path("sd/", admin.site.urls),
     path("accounts/", include("apps.accounts.urls", namespace="accounts")),
     path("admin/", include("apps.control.urls", namespace="control")),

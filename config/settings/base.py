@@ -220,7 +220,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "verify-pending-domains": {
         "task": "apps.projects.tasks.verify_pending_domains_task",
-        "schedule": 900.0,   # every 15 min
+        "schedule": 300.0,   # every 5 min — auto-verify shortly after DNS is set
     },
     "billing-issue-due-invoices": {
         "task": "apps.billing.tasks.issue_due_invoices_task",
@@ -246,6 +246,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 # /media/), but handy when hitting the app directly with no proxy in front.
 # DEBUG implies it.
 SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", False)
+
+# Custom-domain verification (apps.projects.domains). PLATFORM_PUBLIC_IP is this
+# server's public A-record target; a store owner who points their domain
+# straight here (DNS-only) is verified without a TXT record. Cloudflare-proxied
+# domains are verified via the /.well-known/sd-domain-check token instead.
+PLATFORM_PUBLIC_IP = env("PLATFORM_PUBLIC_IP", "")
 
 # Product image optimisation (apps.media.optimize + apps.catalog.tasks).
 # Uploads are re-encoded to WebP in the background, squeezed under the target

@@ -1,29 +1,56 @@
 """Custom-domain onboarding + DNS verification.
 
-Flow:
-  1. add_domain(project, host)  -> Domain(is_verified=False) with a token
-  2. owner adds a TXT record   _sd-verify.<host>  =  sd-verify=<token>
-  3. verify_domain(domain)      -> dig TXT lookup; flips is_verified on match
+Flow (any one of these proves control and flips ``is_verified``):
 
-Only verified domains route traffic (see apps.core.middleware).
+  1. **TXT**  — owner adds ``_sd-verify.<host>`` = ``sd-verify=<token>``.
+  2. **A record** — ``<host>`` resolves straight to ``PLATFORM_PUBLIC_IP``
+     (DNS-only / grey cloud). Nothing else to add.
+  3. **Cloudflare** — ``<host>`` resolves to Cloudflare edge IPs (orange cloud)
+     *and* a public ``GET https://<host>/.well-known/sd-domain-check`` returns
+     this domain's token — i.e. the proxied host really routes here.
+
+Only verified domains route traffic (see ``apps.core.middleware``).
 
 Security notes:
 - ``host`` is validated against a strict hostname regex before it ever reaches
-  the shell, and dig is invoked with a fixed argv list (shell=False), so there
-  is no command-injection surface.
-- A host already claimed (verified) by another project cannot be re-added.
+  the shell; ``dig`` runs with a fixed argv list (shell=False) — no injection.
+- The token probe only fires once every A record is a Cloudflare edge IP, so the
+  outbound request lands on Cloudflare, never an internal address. The path is
+  fixed and the token is already public (it is the TXT challenge value).
+- A host already verified by another project cannot be re-added.
 """
 
+import ipaddress
 import re
 import subprocess
+import urllib.error
+import urllib.request
 
+from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
 from .models import Domain, validate_hostname
 
 _TXT_TIMEOUT = 6
+_PROBE_TIMEOUT = 6
 _SAFE_HOST = re.compile(r"^[a-z0-9.-]{1,253}$")
+
+# Cloudflare's published edge ranges — a proxied ("orange cloud") record resolves
+# to one of these. Source: https://www.cloudflare.com/ips/
+_CLOUDFLARE_NETS = [
+    ipaddress.ip_network(n)
+    for n in (
+        "173.245.48.0/20", "103.21.244.0/22", "103.22.200.0/22",
+        "103.31.4.0/22", "141.101.64.0/18", "108.162.192.0/18",
+        "190.93.240.0/20", "188.114.96.0/20", "197.234.240.0/22",
+        "198.41.128.0/17", "162.158.0.0/15", "104.16.0.0/13",
+        "104.24.0.0/14", "172.64.0.0/13", "131.0.72.0/22",
+        "2400:cb00::/32", "2606:4700::/32", "2803:f800::/32",
+        "2405:b500::/32", "2405:8100::/32", "2a06:98c0::/29",
+        "2c0f:f248::/32",
+    )
+]
 
 
 class DomainError(Exception):
@@ -70,45 +97,120 @@ def remove_domain(*, domain):
         project.save(update_fields=["primary_domain", "updated_at"])
 
 
-def _lookup_txt(name):
-    """Return the list of TXT strings for ``name`` (empty on any failure)."""
+def _dig(qtype, name):
+    """``dig +short <qtype> <name>`` -> list of answer lines (empty on failure)."""
     if not _SAFE_HOST.match(name):
         return []
     try:
         out = subprocess.run(
-            ["dig", "+short", "+time=3", "+tries=1", "TXT", name],
+            ["dig", "+short", "+time=3", "+tries=1", qtype, name],
             capture_output=True, text=True, timeout=_TXT_TIMEOUT, check=False,
         ).stdout
     except (subprocess.SubprocessError, OSError):
         return []
-    values = []
-    for line in out.splitlines():
-        line = line.strip().strip('"')
-        if line:
-            values.append(line)
-    return values
+    return [line.strip().strip('"') for line in out.splitlines() if line.strip()]
+
+
+def _lookup_txt(name):
+    return _dig("TXT", name)
+
+
+def _lookup_ips(host):
+    """Resolved A + AAAA addresses for ``host`` (CNAME lines dropped)."""
+    ips = []
+    for qtype in ("A", "AAAA"):
+        for line in _dig(qtype, host):
+            try:
+                ipaddress.ip_address(line)
+            except ValueError:
+                continue
+            ips.append(line)
+    return ips
+
+
+def _is_cloudflare_ip(ip):
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return any(addr in net for net in _CLOUDFLARE_NETS)
+
+
+def _fetch_domain_check(host):
+    """``GET https://<host>/.well-known/sd-domain-check`` -> body (empty on any failure)."""
+    if not _SAFE_HOST.match(host):
+        return ""
+    req = urllib.request.Request(
+        f"https://{host}/.well-known/sd-domain-check",
+        headers={"User-Agent": "sd-domain-verifier/1"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=_PROBE_TIMEOUT) as resp:
+            if resp.status != 200:
+                return ""
+            return resp.read(128).decode("ascii", "ignore").strip()
+    except (urllib.error.URLError, OSError, ValueError):
+        return ""
 
 
 def verify_domain(domain):
-    """Check the TXT record and flip ``is_verified`` on success."""
+    """Check DNS / routing and flip ``is_verified`` on the first method that passes."""
     domain.last_checked_at = timezone.now()
-    found = _lookup_txt(domain.txt_name)
-    ok = domain.txt_value in found
+    host = domain.host
+    method = ""
 
-    if ok:
+    # 1. DNS TXT challenge — independent of where the A record points.
+    if domain.txt_value in _lookup_txt(domain.txt_name):
+        method = "txt"
+
+    if not method:
+        server_ip = (getattr(settings, "PLATFORM_PUBLIC_IP", "") or "").strip()
+        ips = _lookup_ips(host)
+        # 2. A record points straight at this server (DNS-only / grey cloud).
+        if server_ip and server_ip in ips:
+            method = "a-record"
+        # 3. Cloudflare-proxied: confirm the proxied host actually routes here.
+        elif ips and all(_is_cloudflare_ip(ip) for ip in ips):
+            if _fetch_domain_check(host) == domain.verification_token:
+                method = "cloudflare"
+            else:
+                domain.last_check_error = (
+                    "Cloudflare proxy detected, but the domain is not routing to "
+                    "this store yet. Keep the record proxied (orange cloud) and "
+                    "retry in a minute."
+                )
+                domain.save(update_fields=[
+                    "is_verified", "verified_at", "last_checked_at",
+                    "last_check_error", "updated_at",
+                ])
+                return False
+
+    if method:
         domain.is_verified = True
         domain.verified_at = domain.verified_at or timezone.now()
         domain.last_check_error = ""
     else:
         domain.last_check_error = (
-            "TXT record not found yet — DNS can take a few minutes to propagate."
-            if not found else
-            "A TXT record exists but does not match the expected value."
+            "No matching TXT record and the domain does not point here yet — "
+            "DNS changes can take a few minutes to propagate."
         )
     domain.save(update_fields=[
         "is_verified", "verified_at", "last_checked_at", "last_check_error", "updated_at",
     ])
     return domain.is_verified
+
+
+def domain_token_for_host(host):
+    """Token to serve at ``/.well-known/sd-domain-check`` for ``host`` (or '')."""
+    host = (host or "").strip().lower().rstrip(".")
+    if not _SAFE_HOST.match(host):
+        return ""
+    return (
+        Domain.objects.filter(host=host)
+        .values_list("verification_token", flat=True)
+        .first()
+        or ""
+    )
 
 
 def domains_for(project):

@@ -48,19 +48,24 @@
 
     {% if not d.is_verified %}
     <div class="mt-4 rounded-lg bg-slate-50 p-4 text-xs text-slate-600">
-      <p class="font-semibold text-slate-700">1. Add this DNS record at your registrar:</p>
+      <p class="font-semibold text-slate-700">Easiest — Cloudflare:</p>
+      <p class="mt-1">In Cloudflare DNS add an <span class="font-mono">A</span> record for
+        <span class="font-mono">{{ d.host }}</span> pointing to
+        <span class="font-mono font-medium">{{ platform_ip or 'the platform IP' }}</span>,
+        proxy <span class="font-medium">on</span> (orange cloud). Verifies automatically within
+        a few minutes — or click <span class="font-medium">Verify now</span>.</p>
+
+      <p class="mt-3 font-semibold text-slate-700">Or, without Cloudflare — either one:</p>
       <table class="mt-2 w-full text-left font-mono">
+        <tr><td class="py-0.5 pr-4 text-slate-400">A record</td><td class="break-all">{{ d.host }} → {{ platform_ip or 'platform IP' }}</td></tr>
+      </table>
+      <p class="mt-2 text-slate-400">…or prove ownership with a TXT record:</p>
+      <table class="mt-1 w-full text-left font-mono">
         <tr><td class="py-0.5 pr-4 text-slate-400">Type</td><td>TXT</td></tr>
         <tr><td class="py-0.5 pr-4 text-slate-400">Name / Host</td><td class="break-all">{{ d.txt_name }}</td></tr>
         <tr><td class="py-0.5 pr-4 text-slate-400">Value</td><td class="break-all">{{ d.txt_value }}</td></tr>
       </table>
-      <p class="mt-3 font-semibold text-slate-700">2. Point the domain at the platform:</p>
-      <table class="mt-2 w-full text-left font-mono">
-        <tr><td class="py-0.5 pr-4 text-slate-400">Subdomain (shop.…)</td><td>CNAME → {{ app_host.split(':')[0] }}</td></tr>
-        <tr><td class="py-0.5 pr-4 text-slate-400">Apex (brand.com)</td><td>A / ALIAS → platform IP</td></tr>
-      </table>
-      <p class="mt-3">3. Click <span class="font-medium">Verify now</span>. DNS can take a few minutes to propagate.</p>
-      {% if d.last_check_error %}<p class="mt-2 text-amber-700">{{ d.last_check_error }}</p>{% endif %}
+      {% if d.last_check_error %}<p class="mt-3 text-amber-700">{{ d.last_check_error }}</p>{% endif %}
       {% if d.last_checked_at %}<p class="mt-1 text-slate-400">Last checked {{ d.last_checked_at.strftime('%d %b %H:%M') }}</p>{% endif %}
     </div>
     {% else %}

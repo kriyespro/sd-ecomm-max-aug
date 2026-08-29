@@ -4,6 +4,7 @@ Store owners / managers connect their own hostnames; a domain only routes
 traffic once its TXT record is verified.
 """
 
+from django.conf import settings
 from django.contrib import messages
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -36,6 +37,7 @@ class DomainListView(_DomainAccess, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx["domains"] = domain_svc.domains_for(self.active_project)
         ctx["app_host"] = self.request.get_host()
+        ctx["platform_ip"] = getattr(settings, "PLATFORM_PUBLIC_IP", "") or ""
         return ctx
 
 
