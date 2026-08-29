@@ -1,6 +1,10 @@
 from django.test import RequestFactory, TestCase, override_settings
+from django.urls import resolve, reverse
 
-from apps.core.middleware import _resolve_project
+from apps.core.middleware import (
+    StorefrontHostMiddleware,
+    _resolve_project,
+)
 from apps.projects.models import Domain, Project
 
 
@@ -11,11 +15,6 @@ class RootViewTests(TestCase):
         Domain.objects.create(
             project=self.project, host="shop.acme.test", is_verified=True
         )
-
-    def test_store_host_redirects_to_storefront(self):
-        resp = self.client.get("/", HTTP_HOST="shop.acme.test")
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp["Location"], "/app/")
 
     def test_unverified_host_gets_landing(self):
         Domain.objects.create(project=self.project, host="pending.acme.test")
@@ -64,3 +63,66 @@ class ResolveProjectTests(TestCase):
             project=self.project, host="mnxstore.test", is_verified=True
         )
         self.assertIsNone(_resolve_project(self._req("www.mnxstore.test")))
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class StorefrontHostMiddlewareTests(TestCase):
+    def setUp(self):
+        self.rf = RequestFactory()
+        self.project = Project.objects.create(name="Acme")
+        Domain.objects.create(
+            project=self.project, host="shop.acme.test", is_verified=True
+        )
+
+    def _run(self, host):
+        request = self.rf.get("/", HTTP_HOST=host)
+        StorefrontHostMiddleware(lambda r: r)(request)
+        return request
+
+    def test_verified_domain_host_swaps_urlconf(self):
+        request = self._run("shop.acme.test")
+        self.assertTrue(request.storefront_host)
+        self.assertEqual(request.urlconf, "config.storefront_urls")
+
+    def test_primary_domain_host_swaps_urlconf(self):
+        self.project.primary_domain = "acme-primary.test"
+        self.project.save(update_fields=["primary_domain", "updated_at"])
+        request = self._run("acme-primary.test")
+        self.assertTrue(request.storefront_host)
+
+    def test_unverified_domain_host_does_not_swap(self):
+        Domain.objects.create(project=self.project, host="pending.test")
+        request = self._run("pending.test")
+        self.assertFalse(request.storefront_host)
+        self.assertFalse(hasattr(request, "urlconf"))
+
+    @override_settings(PLATFORM_HOSTS=["shop.acme.test"])
+    def test_platform_host_never_swaps(self):
+        request = self._run("shop.acme.test")
+        self.assertFalse(request.storefront_host)
+
+    def test_store_host_serves_storefront_at_root(self):
+        resp = self.client.get("/", HTTP_HOST="shop.acme.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn("Location", resp)
+
+    def test_store_host_redirects_legacy_app_path(self):
+        resp = self.client.get("/app/shop/", HTTP_HOST="shop.acme.test")
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/shop/")
+
+
+class StorefrontUrlconfTests(TestCase):
+    def test_storefront_home_is_at_root(self):
+        self.assertEqual(reverse("shopfront:home", urlconf="config.storefront_urls"), "/")
+
+    def test_root_resolves_to_shopfront_home(self):
+        match = resolve("/", urlconf="config.storefront_urls")
+        self.assertEqual(match.func.view_class.__name__, "HomeView")
+
+    def test_legacy_app_path_redirects_to_root(self):
+        match = resolve("/app/shop/", urlconf="config.storefront_urls")
+        self.assertEqual(match.func.view_class.__name__, "RedirectView")
+
+    def test_default_urlconf_still_serves_app_prefix(self):
+        self.assertEqual(reverse("shopfront:home"), "/app/")

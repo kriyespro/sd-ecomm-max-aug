@@ -294,7 +294,7 @@ class Command(BaseCommand):
         banner.heading = "Considered essentials, made to last."
         banner.subheading = "New season"
         banner.cta_label = "Shop the collection"
-        banner.cta_url = "/app/shop/"
+        banner.cta_url = "/shop/"
         banner.is_active = True
         if self.refresh or not banner.image:
             data = _download(_unsplash_url(HERO_PHOTO, 1800, 1400))

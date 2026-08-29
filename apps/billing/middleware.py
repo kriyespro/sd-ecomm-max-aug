@@ -21,7 +21,9 @@ class SubscriptionGateMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.path.startswith(_STOREFRONT_PREFIXES):
+        if request.path.startswith(_STOREFRONT_PREFIXES) or getattr(
+            request, "storefront_host", False
+        ):
             project = getattr(request, "project", None)
             if project is not None:
                 sub = getattr(project, "subscription", None)

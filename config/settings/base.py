@@ -103,6 +103,7 @@ MIDDLEWARE = [
     # Resolves request.project from the Host header. Must run after auth so it
     # can fall back to the authenticated user's memberships.
     "apps.core.middleware.ProjectResolverMiddleware",
+    "apps.core.middleware.StorefrontHostMiddleware",
     "apps.shopfront.middleware.StorefrontSkinMiddleware",
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
     "apps.billing.middleware.SubscriptionGateMiddleware",

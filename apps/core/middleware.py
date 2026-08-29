@@ -82,3 +82,40 @@ class ProjectResolverMiddleware:
     def __call__(self, request):
         request.project = SimpleLazyObject(lambda: _resolve_project(request))
         return self.get_response(request)
+
+
+def _is_store_host(host):
+    """``host`` is a store's own dedicated domain — a verified custom Domain or a
+    project's staff-set primary_domain (not the single-membership dev fallback)."""
+    from apps.projects.models import Domain, Project
+
+    if not host:
+        return False
+    return (
+        Domain.objects.filter(host=host, is_verified=True).exists()
+        or Project.objects.filter(primary_domain=host).exists()
+    )
+
+
+class StorefrontHostMiddleware:
+    """When the Host is a store's own domain, serve the storefront at ``/`` so
+    the merchant gets clean URLs on their domain instead of the ``/app/`` prefix.
+
+    Swaps ``request.urlconf`` to :mod:`config.storefront_urls` (storefront mounted
+    at the root; legacy ``/app/…`` paths 301 to the root equivalent) and sets
+    ``request.storefront_host`` for the skin / subscription-gate middleware.
+
+    Must run before ``StorefrontSkinMiddleware``.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        request.storefront_host = False
+        host = normalize_host(request.get_host())
+        platform = getattr(settings, "PLATFORM_HOSTS", ())
+        if host and host not in platform and _is_store_host(host):
+            request.storefront_host = True
+            request.urlconf = "config.storefront_urls"
+        return self.get_response(request)

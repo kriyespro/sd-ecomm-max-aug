@@ -18,7 +18,10 @@ class NoStoreStorefrontMiddleware:
 
     def __call__(self, request):
         response = self.get_response(request)
-        if settings.DEBUG and request.path.startswith(_PREFIXES):
+        storefront = request.path.startswith(_PREFIXES) or getattr(
+            request, "storefront_host", False
+        )
+        if settings.DEBUG and storefront:
             response["Cache-Control"] = "no-store, must-revalidate"
         return response
 
@@ -41,17 +44,21 @@ def _preview_skin(request):
 
 
 class StorefrontSkinMiddleware:
-    """Bind the active storefront skin for the duration of an ``/app/`` request
-    so the skin-aware Jinja environment renders the right template bundle.
+    """Bind the active storefront skin so the skin-aware Jinja environment renders
+    the right template bundle — for ``/app/…`` requests and for requests on a
+    store's own domain (``request.storefront_host``, served at the root).
 
-    Placed after ``ProjectResolverMiddleware`` (needs ``request.project``).
+    Placed after ``ProjectResolverMiddleware`` + ``StorefrontHostMiddleware``.
     """
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        if not request.path.startswith("/app/"):
+        if not (
+            request.path.startswith("/app/")
+            or getattr(request, "storefront_host", False)
+        ):
             return self.get_response(request)
 
         slug, skin_obj = "default", None
