@@ -1,150 +1,439 @@
 {% extends "base.jinja" %}
 
 {% block title %}mnxstore — start your ecommerce store in a day{% endblock %}
-{% block meta_description %}mnxstore is a hosted commerce platform: quick store setup, your own custom domain, Razorpay payments, and a full admin dashboard — without running any servers.{% endblock %}
+{% block meta_description %}mnxstore is a hosted commerce platform for India: quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full admin dashboard — no servers to run.{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+          display: ['"Space Grotesk"', 'Inter', 'sans-serif'],
+        },
+        colors: {
+          brand: {
+            50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',
+            500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',
+          },
+        },
+        keyframes: {
+          float: { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+        },
+        animation: { float: 'float 6s ease-in-out infinite' },
+      },
+    },
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  .mesh {
+    background:
+      radial-gradient(40rem 40rem at 15% -10%, #e0e7ff 0%, transparent 60%),
+      radial-gradient(34rem 34rem at 95% 0%, #ede9fe 0%, transparent 55%),
+      radial-gradient(30rem 30rem at 50% 120%, #dbeafe 0%, transparent 60%);
+  }
+  .ticker { animation: scrollx 28s linear infinite; }
+  @keyframes scrollx { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+    .ticker, .animate-float { animation: none !important; }
+  }
+</style>
+{% endblock %}
 
 {% block body %}
-<div class="bg-white text-slate-900">
+{% macro icon(name) %}
+<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+  {% if name == 'bolt' %}<path d="M13 2 4.5 13.5H12l-1 8.5L19.5 10.5H12z"/>
+  {% elif name == 'card' %}<rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="M2.5 9.5h19M6 15h4"/>
+  {% elif name == 'globe' %}<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.7 3 2.7 15 0 18M12 3c-2.7 3-2.7 15 0 18"/>
+  {% elif name == 'grid' %}<rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/>
+  {% elif name == 'sparkles' %}<path d="M12 3v6M12 15v6M3 12h6M15 12h6M6 6l3 3M15 15l3 3M18 6l-3 3M9 15l-3 3"/>
+  {% elif name == 'plug' %}<path d="M9 2v6M15 2v6M6 8h12v3a6 6 0 0 1-12 0zM12 17v5"/>
+  {% elif name == 'check' %}<path d="m5 13 4 4 10-11"/>
+  {% elif name == 'shield' %}<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="m9 12 2 2 4-4"/>
+  {% elif name == 'chart' %}<path d="M4 20V4M4 20h16M8 16v-4M13 16V8M18 16v-7"/>
+  {% endif %}
+</svg>
+{% endmacro %}
+<div class="bg-white font-sans text-slate-900">
 
-  {# ---------- nav ---------- #}
-  <header class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/80 backdrop-blur">
+  {# ================= NAV ================= #}
+  <header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/75 backdrop-blur-lg">
     <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
-      <a href="/" class="text-lg font-semibold tracking-tight">mnx<span class="text-indigo-600">store</span></a>
-      <nav class="hidden items-center gap-8 text-sm text-slate-600 md:flex">
+      <a href="/" class="font-display text-lg font-700 tracking-tight">mnx<span class="text-brand-600">store</span></a>
+      <nav class="hidden items-center gap-8 text-sm font-500 text-slate-600 md:flex">
         <a href="#features" class="hover:text-slate-900">Features</a>
         <a href="#how" class="hover:text-slate-900">How it works</a>
-        <a href="#domains" class="hover:text-slate-900">Custom domains</a>
+        <a href="#domains" class="hover:text-slate-900">Domains</a>
+        <a href="#compare" class="hover:text-slate-900">Why mnxstore</a>
         {% if plans %}<a href="#pricing" class="hover:text-slate-900">Pricing</a>{% endif %}
+        <a href="#faq" class="hover:text-slate-900">FAQ</a>
       </nav>
-      <div class="flex items-center gap-3 text-sm">
+      <div class="flex items-center gap-3 text-sm font-500">
         <a href="{{ url('accounts:login') }}" class="hidden text-slate-600 hover:text-slate-900 sm:block">Sign in</a>
-        <a href="{{ url('accounts:login') }}" class="rounded-lg bg-slate-900 px-4 py-2 font-medium text-white hover:bg-slate-800">Open your store</a>
+        <a href="{{ url('accounts:login') }}" class="rounded-lg bg-slate-900 px-4 py-2 font-600 text-white transition hover:bg-slate-800">Open your store</a>
       </div>
     </div>
   </header>
 
-  {# ---------- hero ---------- #}
-  <section class="relative overflow-hidden">
-    <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-indigo-50 via-white to-white"></div>
-    <div class="relative mx-auto max-w-6xl px-5 py-24 text-center sm:py-32">
-      <p class="mb-4 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-        Hosted commerce · no servers to run
-      </p>
-      <h1 class="mx-auto max-w-3xl text-4xl font-bold tracking-tight text-slate-900 sm:text-6xl">
-        Start your ecommerce store in a day
+  {# ================= HERO ================= #}
+  <section class="mesh relative overflow-hidden">
+    <div class="mx-auto max-w-6xl px-5 pb-10 pt-20 text-center sm:pt-28">
+      <a href="#how" class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-xs font-600 text-brand-700 shadow-sm">
+        <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span>
+        Hosted commerce for India · no servers to run
+      </a>
+      <h1 class="mx-auto max-w-3xl font-display text-4xl font-700 leading-[1.05] tracking-tight text-slate-900 sm:text-6xl">
+        Start your ecommerce store
+        <span class="bg-gradient-to-r from-brand-600 via-violet-600 to-brand-500 bg-clip-text text-transparent"> in a day</span>
       </h1>
-      <p class="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
-        Quick store setup, your own custom domain, Razorpay payments, and a full admin dashboard —
-        all in one place. You bring the products; mnxstore runs everything else.
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
+        Quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full
+        admin dashboard — all in one place. You bring the products; mnxstore runs everything else.
       </p>
-      <div class="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-        <a href="{{ url('accounts:login') }}" class="w-full rounded-xl bg-indigo-600 px-6 py-3 text-center font-semibold text-white shadow-sm hover:bg-indigo-500 sm:w-auto">
+      <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="{{ url('accounts:login') }}" class="w-full rounded-xl bg-brand-600 px-6 py-3 text-center font-600 text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-500 sm:w-auto">
           Open your store
         </a>
-        <a href="#features" class="w-full rounded-xl border border-slate-300 px-6 py-3 text-center font-semibold text-slate-700 hover:bg-slate-50 sm:w-auto">
+        <a href="#features" class="w-full rounded-xl border border-slate-300 bg-white px-6 py-3 text-center font-600 text-slate-700 transition hover:bg-slate-50 sm:w-auto">
           See what's included
         </a>
       </div>
-      <p class="mt-6 text-sm text-slate-500">Runs on HTTPS out of the box · Razorpay checkout · connect a domain you already own</p>
+      <p class="mt-5 text-sm text-slate-500">HTTPS out of the box · Razorpay checkout · connect a domain you already own</p>
+    </div>
+
+    {# ---- product mock ---- #}
+    <div class="reveal relative mx-auto -mb-24 max-w-5xl px-5">
+      <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+        <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+          <span class="h-3 w-3 rounded-full bg-slate-300"></span>
+          <span class="h-3 w-3 rounded-full bg-slate-300"></span>
+          <span class="h-3 w-3 rounded-full bg-slate-300"></span>
+          <div class="ml-3 flex-1 rounded-md bg-white px-3 py-1 text-left text-xs text-slate-400 ring-1 ring-slate-200">
+            https://shop.yourbrand.com
+          </div>
+        </div>
+        <div class="grid gap-0 sm:grid-cols-[1fr_1.6fr]">
+          <div class="hidden border-r border-slate-100 p-5 sm:block">
+            <div class="mb-4 h-4 w-24 rounded bg-slate-200"></div>
+            {% for w in [16, 12, 20, 14, 10] %}<div class="mb-2.5 h-3 rounded bg-slate-100" style="width: {{ w * 6 }}px"></div>{% endfor %}
+            <div class="mt-6 rounded-lg bg-brand-50 p-3">
+              <div class="h-3 w-16 rounded bg-brand-200"></div>
+              <div class="mt-2 h-6 w-24 rounded bg-brand-600/80"></div>
+            </div>
+          </div>
+          <div class="p-5">
+            <div class="mb-4 flex items-center justify-between">
+              <div class="h-4 w-28 rounded bg-slate-200"></div>
+              <div class="h-7 w-20 rounded-lg bg-slate-900"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-3">
+              {% for i in range(6) %}
+              <div>
+                <div class="aspect-square rounded-lg bg-gradient-to-br from-slate-100 to-slate-200"></div>
+                <div class="mt-2 h-2.5 w-4/5 rounded bg-slate-200"></div>
+                <div class="mt-1.5 h-2.5 w-1/2 rounded bg-slate-100"></div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="animate-float absolute -right-2 top-8 hidden w-56 rounded-xl border border-slate-200 bg-white p-4 shadow-xl sm:block">
+        <p class="text-xs font-600 text-emerald-600">● New order · ₹2,480</p>
+        <p class="mt-1 text-sm font-600 text-slate-800">Paid via Razorpay (UPI)</p>
+        <p class="mt-0.5 text-xs text-slate-400">2 items · ship to Pune</p>
+      </div>
     </div>
   </section>
 
-  {# ---------- features ---------- #}
+  {# ================= STAT BAR ================= #}
+  {% if stats and stats.stores %}
+  <section class="border-y border-slate-200 bg-slate-50 pt-32">
+    <div class="mx-auto grid max-w-4xl gap-6 px-5 py-10 text-center sm:grid-cols-3">
+      <div><p class="font-display text-3xl font-700 text-slate-900">{{ stats.stores }}</p><p class="mt-1 text-sm text-slate-500">stores on the platform</p></div>
+      <div><p class="font-display text-3xl font-700 text-slate-900">{{ stats.products }}</p><p class="mt-1 text-sm text-slate-500">products listed</p></div>
+      <div><p class="font-display text-3xl font-700 text-slate-900">{{ stats.themes }}</p><p class="mt-1 text-sm text-slate-500">storefront themes</p></div>
+    </div>
+  </section>
+  {% else %}
+  <div class="pt-28"></div>
+  {% endif %}
+
+  {# ================= FEATURES ================= #}
   <section id="features" class="mx-auto max-w-6xl px-5 py-20">
-    <div class="mx-auto max-w-2xl text-center">
-      <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Everything a store needs, already wired</h2>
+    <div class="reveal mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Everything a store needs, already wired</h2>
       <p class="mt-4 text-slate-600">No plugins to assemble. The pieces below ship together and talk to each other.</p>
     </div>
-    <div class="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+    <div class="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {% set feats = [
-        ("Quick store setup", "Add products, pick a skin, and your store is browsable the same day — no theme coding, no plugin hunting."),
-        ("Razorpay payments", "Card, UPI, netbanking, and wallets through Razorpay. Orders and payment status stay in sync automatically."),
-        ("Your own custom domain", "Point a domain you own, verify it with one DNS record, and it goes live on HTTPS — no cert wrangling."),
-        ("Full admin dashboard", "Mission Control for staff: catalogue, orders, customers, coupons, shipping, skins, domains, and billing in one panel."),
-        ("Storefront that looks the part", "Swappable skins with a clean product grid, quick view, search, wishlist, and a slide-out cart."),
-        ("Catalogue & inventory", "Products, variants, categories, brands, automatic image optimisation, and stock tracking."),
+        ('bolt', 'Quick store setup', 'Add products, pick a theme, and your store is browsable the same day — no theme coding, no plugin hunting.'),
+        ('card', 'Razorpay payments', 'Cards, UPI, netbanking and wallets through Razorpay. Orders and payment status stay in sync automatically.'),
+        ('globe', 'Your own custom domain', 'Point a domain you own, verify with one DNS record, and it goes live on HTTPS — certificates handled for you.'),
+        ('grid', 'Full admin dashboard', 'Catalogue, orders, customers, coupons, shipping, themes, domains and billing in one Mission Control panel.'),
+        ('sparkles', 'Themes that look the part', 'Swappable storefront themes with product grid, quick view, search, wishlist and a slide-out cart.'),
+        ('plug', 'Built-in REST API', 'The same store data behind a REST API, so a mobile app or headless frontend can plug straight in.'),
       ] %}
-      {% for title, body in feats %}
-      <div class="rounded-2xl border border-slate-200 p-6 transition hover:border-indigo-300 hover:shadow-sm">
-        <div class="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold text-white">{{ loop.index }}</div>
-        <h3 class="font-semibold text-slate-900">{{ title }}</h3>
-        <p class="mt-2 text-sm text-slate-600">{{ body }}</p>
+      {% for ic, title, body in feats %}
+      <div class="reveal group rounded-2xl border border-slate-200 p-6 transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-lg hover:shadow-slate-200/60">
+        <div class="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm shadow-brand-600/30">{{ icon(ic) }}</div>
+        <h3 class="font-600 text-slate-900">{{ title }}</h3>
+        <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
       </div>
       {% endfor %}
     </div>
   </section>
 
-  {# ---------- how it works ---------- #}
+  {# ================= HOW IT WORKS ================= #}
   <section id="how" class="border-y border-slate-200 bg-slate-50">
     <div class="mx-auto max-w-6xl px-5 py-20">
-      <div class="mx-auto max-w-2xl text-center">
-        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Live in a day, in three steps</h2>
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Live in a day, in three steps</h2>
       </div>
-      <div class="mt-14 grid gap-8 md:grid-cols-3">
+      <div class="mt-14 grid gap-6 md:grid-cols-3">
         {% set steps = [
-          ("Add products, pick a look", "Load the catalogue and choose a skin. Your store is browsable at its mnxstore address right away."),
-          ("Connect Razorpay & your domain", "Drop in your Razorpay keys, add one DNS record for your domain, and mnxstore verifies it for you."),
-          ("Open for orders", "Share the link. Customers check out with Razorpay; every order lands in your dashboard."),
+          ('Add products, pick a look', 'Load the catalogue and choose a theme. Your store is browsable at its mnxstore address right away.'),
+          ('Connect Razorpay & your domain', 'Drop in your Razorpay keys, add one DNS record for your domain, and mnxstore verifies it for you.'),
+          ('Open for orders', 'Share the link. Customers check out with Razorpay; every order lands in your dashboard.'),
         ] %}
         {% for title, body in steps %}
-        <div class="relative rounded-2xl bg-white p-7 ring-1 ring-slate-200">
-          <span class="text-4xl font-bold text-indigo-200">0{{ loop.index }}</span>
-          <h3 class="mt-3 font-semibold text-slate-900">{{ title }}</h3>
-          <p class="mt-2 text-sm text-slate-600">{{ body }}</p>
+        <div class="reveal relative rounded-2xl bg-white p-7 ring-1 ring-slate-200">
+          <span class="font-display text-4xl font-700 text-brand-200">0{{ loop.index }}</span>
+          <h3 class="mt-3 font-600 text-slate-900">{{ title }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+          {% if not loop.last %}<div class="absolute -right-3 top-1/2 hidden h-6 w-6 -translate-y-1/2 items-center justify-center text-slate-300 md:flex">&rarr;</div>{% endif %}
         </div>
         {% endfor %}
       </div>
     </div>
   </section>
 
-  {# ---------- custom domains ---------- #}
-  <section id="domains" class="mx-auto max-w-6xl px-5 py-20">
+  {# ================= SPOTLIGHT: THEMES ================= #}
+  <section class="mx-auto max-w-6xl overflow-hidden px-5 py-20">
     <div class="grid items-center gap-12 lg:grid-cols-2">
-      <div>
-        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Your brand, your domain</h2>
-        <p class="mt-4 text-slate-600">
-          Add a hostname you own in the dashboard. Point one DNS record at the platform — or flip on the
-          Cloudflare proxy — and mnxstore verifies it automatically, then serves it over HTTPS with a
-          managed certificate. Nothing to install, no renewals to track.
+      <div class="reveal">
+        <p class="text-sm font-600 uppercase tracking-wide text-brand-600">Storefront</p>
+        <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">A shop your customers trust on sight</h2>
+        <p class="mt-4 leading-relaxed text-slate-600">
+          Pick from {{ stats.themes if stats and stats.themes else 'a range of' }} built-in themes — each a full storefront with
+          product pages, quick view, search, wishlist, cart drawer and a mobile-first checkout. Switch themes anytime;
+          your catalogue stays put.
         </p>
-        <ul class="mt-6 space-y-3 text-sm text-slate-700">
-          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> Verify by A record, or TXT record, or Cloudflare proxy</li>
-          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> Auto-checked every few minutes — no waiting on support</li>
-          <li class="flex gap-3"><span class="text-indigo-600">&#10003;</span> HTTPS handled for you, including renewals</li>
-        </ul>
+        <a href="{{ url('accounts:login') }}" class="mt-6 inline-block text-sm font-600 text-brand-600 hover:text-brand-700">Browse themes in the dashboard &rarr;</a>
       </div>
-      <div class="rounded-2xl border border-slate-200 bg-slate-900 p-6 font-mono text-xs leading-relaxed text-slate-300">
-        <p class="text-slate-500"># in your DNS provider</p>
-        <p><span class="text-emerald-400">A</span>&nbsp;&nbsp;&nbsp;&nbsp;shop.yourbrand.com&nbsp;&nbsp;&#8594;&nbsp;&nbsp;the platform IP</p>
-        <p class="mt-3 text-slate-500"># mnxstore, a minute later</p>
-        <p><span class="text-emerald-400">verified</span>&nbsp;&nbsp;shop.yourbrand.com is live</p>
-        <p class="text-slate-500">https://shop.yourbrand.com/</p>
+      <div class="reveal">
+        <div class="grid grid-cols-3 gap-3">
+          {% for s in skins[:9] %}
+          <div class="rounded-xl border border-slate-200 bg-white p-3 text-center shadow-sm">
+            <div class="mb-2 aspect-[4/3] rounded-md bg-gradient-to-br from-brand-100 via-slate-100 to-violet-100"></div>
+            <span class="text-xs font-500 text-slate-600">{{ s }}</span>
+          </div>
+          {% endfor %}
+        </div>
       </div>
     </div>
   </section>
 
-  {# ---------- pricing ---------- #}
+  {# ================= SPOTLIGHT: PAYMENTS ================= #}
+  <section class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-6xl px-5 py-20">
+      <div class="grid items-center gap-12 lg:grid-cols-2">
+        <div class="reveal order-2 lg:order-1">
+          <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-4">
+              <span class="font-600 text-slate-800">Checkout</span>
+              <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-600 text-emerald-700">Secure · Razorpay</span>
+            </div>
+            <div class="mt-4 space-y-3">
+              <div class="flex justify-between text-sm"><span class="text-slate-500">Subtotal</span><span class="font-500">₹2,300</span></div>
+              <div class="flex justify-between text-sm"><span class="text-slate-500">Shipping</span><span class="font-500">₹180</span></div>
+              <div class="flex justify-between border-t border-slate-100 pt-3 text-sm font-700"><span>Total</span><span>₹2,480</span></div>
+            </div>
+            <div class="mt-4 grid grid-cols-4 gap-2">
+              {% for m in ['UPI', 'Card', 'Net­bank', 'Wallet'] %}
+              <span class="rounded-lg border border-slate-200 py-2 text-center text-xs font-600 text-slate-600">{{ m }}</span>
+              {% endfor %}
+            </div>
+            <div class="mt-4 h-10 rounded-lg bg-brand-600 text-center text-sm font-600 leading-10 text-white">Pay ₹2,480</div>
+          </div>
+        </div>
+        <div class="reveal order-1 lg:order-2">
+          <p class="text-sm font-600 uppercase tracking-wide text-brand-600">Payments</p>
+          <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">Payments that just work in India</h2>
+          <p class="mt-4 leading-relaxed text-slate-600">
+            Connect your Razorpay account once. Customers pay by UPI, card, netbanking or wallet, and mnxstore
+            reconciles every payment against its order — including captures, failures and refunds — so your
+            dashboard is always the source of truth.
+          </p>
+          <ul class="mt-6 space-y-3 text-sm text-slate-700">
+            <li class="flex gap-3"><span class="text-brand-600">{{ icon('check') }}</span> Webhook-verified payment status, not guesswork</li>
+            <li class="flex gap-3"><span class="text-brand-600">{{ icon('check') }}</span> Refund from the order screen</li>
+            <li class="flex gap-3"><span class="text-brand-600">{{ icon('check') }}</span> Coupons, shipping rules and taxes applied server-side</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ================= SPOTLIGHT: DASHBOARD ================= #}
+  <section class="mx-auto max-w-6xl px-5 py-20">
+    <div class="grid items-center gap-12 lg:grid-cols-2">
+      <div class="reveal">
+        <p class="text-sm font-600 uppercase tracking-wide text-brand-600">Dashboard</p>
+        <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">Run the whole store from one screen</h2>
+        <p class="mt-4 leading-relaxed text-slate-600">
+          Mission Control is a single admin for catalogue, orders, customers, coupons, shipping zones, themes,
+          domains and billing. Role-based access for staff, an audit log on every change, and nothing to
+          self-host.
+        </p>
+        <div class="mt-6 grid grid-cols-2 gap-3 text-sm">
+          {% for t in ['Orders & fulfilment', 'Catalogue & stock', 'Customers & segments', 'Coupons & campaigns', 'Shipping zones', 'Staff roles & audit log'] %}
+          <div class="flex items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-slate-700"><span class="text-brand-500">{{ icon('check') }}</span>{{ t }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="reveal">
+        <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+          <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs font-600 text-slate-500">
+            {{ icon('chart') }} Orders
+          </div>
+          <table class="w-full text-left text-xs">
+            <thead class="text-slate-400">
+              <tr>{% for h in ['Order', 'Customer', 'Total', 'Status'] %}<th class="px-4 py-2 font-500">{{ h }}</th>{% endfor %}</tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              {% set rows = [
+                ('#1042', 'A. Sharma', '₹2,480', 'Paid'),
+                ('#1041', 'R. Iyer', '₹899', 'Shipped'),
+                ('#1040', 'K. Menon', '₹5,120', 'Paid'),
+                ('#1039', 'S. Gupta', '₹1,350', 'Refunded'),
+              ] %}
+              {% for o, c, t, s in rows %}
+              <tr>
+                <td class="px-4 py-2.5 font-600 text-slate-700">{{ o }}</td>
+                <td class="px-4 py-2.5 text-slate-500">{{ c }}</td>
+                <td class="px-4 py-2.5 text-slate-700">{{ t }}</td>
+                <td class="px-4 py-2.5">
+                  <span class="rounded-full px-2 py-0.5 font-600
+                    {% if s == 'Paid' %}bg-emerald-50 text-emerald-700
+                    {% elif s == 'Shipped' %}bg-blue-50 text-blue-700
+                    {% else %}bg-slate-100 text-slate-600{% endif %}">{{ s }}</span>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ================= CUSTOM DOMAINS ================= #}
+  <section id="domains" class="border-y border-slate-200 bg-slate-900 text-white">
+    <div class="mx-auto max-w-6xl px-5 py-20">
+      <div class="grid items-center gap-12 lg:grid-cols-2">
+        <div class="reveal">
+          <p class="text-sm font-600 uppercase tracking-wide text-brand-300">Custom domains</p>
+          <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">Your brand, your domain, on HTTPS</h2>
+          <p class="mt-4 leading-relaxed text-slate-300">
+            Add a hostname you own in the dashboard. Point one DNS record at the platform — or flip on the
+            Cloudflare proxy — and mnxstore verifies it automatically, then serves it over HTTPS with a
+            managed certificate. No installs, no renewals to track.
+          </p>
+          <ul class="mt-6 space-y-3 text-sm text-slate-300">
+            <li class="flex gap-3"><span class="text-brand-300">{{ icon('check') }}</span> Verify by A record, TXT record, or Cloudflare proxy</li>
+            <li class="flex gap-3"><span class="text-brand-300">{{ icon('check') }}</span> Auto-checked every few minutes — no support ticket</li>
+            <li class="flex gap-3"><span class="text-brand-300">{{ icon('check') }}</span> HTTPS and renewals handled for you</li>
+          </ul>
+        </div>
+        <div class="reveal rounded-2xl border border-white/10 bg-black/40 p-6 font-mono text-xs leading-relaxed text-slate-300">
+          <p class="text-slate-500"># in your DNS provider</p>
+          <p><span class="text-emerald-400">A</span>&nbsp;&nbsp;&nbsp;&nbsp;shop.yourbrand.com&nbsp;&nbsp;&rarr;&nbsp;&nbsp;the platform IP</p>
+          <p class="mt-3 text-slate-500"># mnxstore, a minute later</p>
+          <p><span class="text-emerald-400">verified</span>&nbsp;&nbsp;shop.yourbrand.com is live</p>
+          <p class="text-brand-300">https://shop.yourbrand.com/</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ================= COMPARE ================= #}
+  <section id="compare" class="mx-auto max-w-5xl px-5 py-20">
+    <div class="reveal mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Why mnxstore</h2>
+      <p class="mt-4 text-slate-600">Skip the stack you'd otherwise stitch together yourself.</p>
+    </div>
+    <div class="reveal mt-12 overflow-x-auto">
+      <table class="w-full min-w-[36rem] border-separate border-spacing-0 text-sm">
+        <thead>
+          <tr class="text-left text-slate-500">
+            <th class="px-4 py-3 font-500">What you need</th>
+            <th class="px-4 py-3 font-600 text-brand-700">mnxstore</th>
+            <th class="px-4 py-3 font-500">Do-it-yourself</th>
+          </tr>
+        </thead>
+        <tbody class="text-slate-700">
+          {% set crows = [
+            ('Storefront + checkout', 'Included, themeable', 'Build or buy a theme'),
+            ('Razorpay integration', 'Wired, webhook-verified', 'Wire it and test edge cases'),
+            ('Custom domain + HTTPS', 'One DNS record, auto', 'DNS, certs, renewals, nginx'),
+            ('Admin dashboard', 'Included, role-based', 'Build CRUD + auth'),
+            ('Hosting & scaling', 'Managed', 'Servers, backups, monitoring'),
+            ('Time to launch', 'A day', 'Weeks'),
+          ] %}
+          {% for need, ours, diy in crows %}
+          <tr>
+            <td class="border-t border-slate-200 px-4 py-3 font-500">{{ need }}</td>
+            <td class="border-t border-slate-200 bg-brand-50/50 px-4 py-3 font-500 text-slate-900">
+              <span class="mr-1.5 inline-block text-brand-600 align-middle">{{ icon('check') }}</span>{{ ours }}
+            </td>
+            <td class="border-t border-slate-200 px-4 py-3 text-slate-500">{{ diy }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {# ================= PRICING ================= #}
   {% if plans %}
   <section id="pricing" class="border-t border-slate-200 bg-slate-50">
     <div class="mx-auto max-w-6xl px-5 py-20">
-      <div class="mx-auto max-w-2xl text-center">
-        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Plans</h2>
-        <p class="mt-4 text-slate-600">Prices in INR. Switch or cancel from the dashboard.</p>
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Simple pricing</h2>
+        <p class="mt-4 text-slate-600">Prices in INR. Switch or cancel anytime from the dashboard.</p>
       </div>
       <div class="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {% for p in plans %}
-        <div class="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
-          <h3 class="font-semibold text-slate-900">{{ p.name }}</h3>
+        {% set popular = p.code == popular_code %}
+        <div class="reveal relative flex flex-col rounded-2xl border bg-white p-6
+          {% if popular %}border-brand-500 shadow-xl shadow-brand-600/10 ring-1 ring-brand-500{% else %}border-slate-200{% endif %}">
+          {% if popular %}<span class="absolute -top-3 left-6 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-600 text-white">Most popular</span>{% endif %}
+          <h3 class="font-display font-700 text-slate-900">{{ p.name }}</h3>
           {% if p.tagline %}<p class="mt-1 text-sm text-slate-500">{{ p.tagline }}</p>{% endif %}
-          <p class="mt-4 text-3xl font-bold text-slate-900">
-            &#8377;{{ p.price_monthly|int }}<span class="text-sm font-normal text-slate-500">/mo</span>
+          <p class="mt-4 font-display text-4xl font-700 text-slate-900">
+            &#8377;{{ p.price_monthly|int }}<span class="text-sm font-400 text-slate-500">/mo</span>
           </p>
+          {% if p.price_yearly %}<p class="mt-1 text-xs text-slate-400">or &#8377;{{ p.price_yearly|int }} billed yearly</p>{% endif %}
           {% if p.features %}
           <ul class="mt-5 space-y-2 text-sm text-slate-600">
-            {% for f in p.features %}<li class="flex gap-2"><span class="text-indigo-600">&#10003;</span> {{ f }}</li>{% endfor %}
+            {% for f in p.features %}<li class="flex gap-2"><span class="text-brand-600">{{ icon('check') }}</span> {{ f }}</li>{% endfor %}
           </ul>
           {% endif %}
-          <a href="{{ url('accounts:login') }}" class="mt-6 rounded-lg bg-slate-900 px-4 py-2 text-center text-sm font-medium text-white hover:bg-slate-800">Choose {{ p.name }}</a>
+          <a href="{{ url('accounts:login') }}" class="mt-6 rounded-lg px-4 py-2 text-center text-sm font-600 transition
+            {% if popular %}bg-brand-600 text-white hover:bg-brand-500{% else %}bg-slate-900 text-white hover:bg-slate-800{% endif %}">
+            Choose {{ p.name }}
+          </a>
         </div>
         {% endfor %}
       </div>
@@ -152,26 +441,87 @@
   </section>
   {% endif %}
 
-  {# ---------- CTA ---------- #}
-  <section class="mx-auto max-w-6xl px-5 py-20">
-    <div class="rounded-3xl bg-indigo-600 px-8 py-14 text-center text-white sm:px-16">
-      <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Start your ecommerce store in a day</h2>
-      <p class="mx-auto mt-4 max-w-xl text-indigo-100">Quick setup, custom domain, Razorpay checkout, full admin dashboard. Your customers never see the plumbing.</p>
-      <a href="{{ url('accounts:login') }}" class="mt-8 inline-block rounded-xl bg-white px-6 py-3 font-semibold text-indigo-700 hover:bg-indigo-50">Open your store</a>
+  {# ================= FAQ ================= #}
+  <section id="faq" class="mx-auto max-w-3xl px-5 py-20">
+    <div class="reveal text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Questions</h2>
+    </div>
+    <div class="reveal mt-10 divide-y divide-slate-200 border-y border-slate-200">
+      {% set faqs = [
+        ('How fast can I actually launch?', 'If your product data and images are ready, a store can be live on your own domain the same day. The domain verification itself takes a few minutes after you add the DNS record.'),
+        ('Do I need my own Razorpay account?', 'Yes — you connect your own Razorpay keys, so payouts go straight to your bank. mnxstore handles the integration, reconciliation and refunds.'),
+        ('Can I use a domain I already own?', 'Yes. Add it in the dashboard, add one DNS record (A record or Cloudflare proxy), and it auto-verifies. HTTPS is managed for you.'),
+        ('Can I move my theme or data later?', 'Themes are swappable at any time without touching your catalogue. Your store data is yours and exportable.'),
+        ('Is there a REST API?', 'Yes. The same data behind the storefront is available over a REST API for mobile apps or a headless frontend.'),
+      ] %}
+      {% for q, a in faqs %}
+      <details class="group py-4">
+        <summary class="flex cursor-pointer list-none items-center justify-between font-600 text-slate-800">
+          {{ q }}
+          <span class="ml-4 text-slate-400 transition group-open:rotate-45">+</span>
+        </summary>
+        <p class="mt-3 text-sm leading-relaxed text-slate-600">{{ a }}</p>
+      </details>
+      {% endfor %}
     </div>
   </section>
 
-  {# ---------- footer ---------- #}
-  <footer class="border-t border-slate-200">
-    <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-10 text-sm text-slate-500 sm:flex-row">
-      <p>mnx<span class="text-indigo-600">store</span> — hosted commerce</p>
-      <div class="flex gap-6">
-        <a href="#features" class="hover:text-slate-700">Features</a>
-        <a href="#pricing" class="hover:text-slate-700">Pricing</a>
-        <a href="{{ url('accounts:login') }}" class="hover:text-slate-700">Sign in</a>
+  {# ================= CTA ================= #}
+  <section class="mx-auto max-w-6xl px-5 pb-20">
+    <div class="reveal overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 to-violet-700 px-8 py-14 text-center text-white sm:px-16">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Start your ecommerce store in a day</h2>
+      <p class="mx-auto mt-4 max-w-xl text-brand-100">Quick setup, custom domain, Razorpay checkout, full admin dashboard. Your customers never see the plumbing.</p>
+      <a href="{{ url('accounts:login') }}" class="mt-8 inline-block rounded-xl bg-white px-6 py-3 font-600 text-brand-700 transition hover:-translate-y-0.5 hover:bg-brand-50">Open your store</a>
+    </div>
+  </section>
+
+  {# ================= FOOTER ================= #}
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto grid max-w-6xl gap-8 px-5 py-12 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <p class="font-display text-lg font-700">mnx<span class="text-brand-600">store</span></p>
+        <p class="mt-2 text-sm text-slate-500">Hosted commerce for India.</p>
       </div>
+      <div>
+        <p class="text-xs font-600 uppercase tracking-wide text-slate-400">Product</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-600">
+          <li><a href="#features" class="hover:text-slate-900">Features</a></li>
+          <li><a href="#domains" class="hover:text-slate-900">Custom domains</a></li>
+          {% if plans %}<li><a href="#pricing" class="hover:text-slate-900">Pricing</a></li>{% endif %}
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs font-600 uppercase tracking-wide text-slate-400">Company</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-600">
+          <li><a href="#compare" class="hover:text-slate-900">Why mnxstore</a></li>
+          <li><a href="#faq" class="hover:text-slate-900">FAQ</a></li>
+        </ul>
+      </div>
+      <div>
+        <p class="text-xs font-600 uppercase tracking-wide text-slate-400">Get started</p>
+        <ul class="mt-3 space-y-2 text-sm text-slate-600">
+          <li><a href="{{ url('accounts:login') }}" class="hover:text-slate-900">Sign in</a></li>
+          <li><a href="{{ url('accounts:login') }}" class="hover:text-slate-900">Open your store</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="border-t border-slate-100 py-6 text-center text-xs text-slate-400">
+      &copy; {{ now_year }} mnxstore
     </div>
   </footer>
 
 </div>
+
+<script>
+  (function () {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('in'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.reveal').forEach(function (el) { io.observe(el); });
+  })();
+</script>
 {% endblock %}
