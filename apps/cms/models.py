@@ -139,6 +139,13 @@ class Banner(TenantScopedModel):
     def __str__(self):
         return f"{self.name} ({self.placement})"
 
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.image, target_kb=170, max_edge=1920)
+        shrink_image_field(self.mobile_image, target_kb=90, max_edge=900)
+        super().save(*args, **kwargs)
+
     @property
     def is_live(self):
         if not self.is_active:
@@ -435,6 +442,12 @@ class StoreProfile(TenantScopedModel):
 
     def __str__(self):
         return f"StoreProfile<{self.project_id}>"
+
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.logo, target_kb=40, max_edge=512)
+        super().save(*args, **kwargs)
 
     @property
     def whatsapp_link(self):

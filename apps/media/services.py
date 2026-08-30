@@ -1,12 +1,57 @@
 """Upload handling: validation, checksum de-dupe, image dimensions + thumbnails."""
 
 import io
+import logging
+import posixpath
 from hashlib import sha256
 
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import UploadedFile
 
 from .models import AssetKind, MediaAsset
+
+logger = logging.getLogger(__name__)
+
+
+def shrink_image_field(field_file, *, target_kb, max_edge, marker=".sd"):
+    """Re-encode an ``ImageField`` file to a compact WebP, in place.
+
+    Call from a model's ``save()`` before ``super().save()``. No-op when: the
+    field is empty, the file was already processed (its name carries ``marker``),
+    Pillow is missing, the source cannot be read, or it is already small and
+    web-friendly. On success the field points at ``<stem><marker>.webp`` and the
+    caller still owns persisting the row.
+    """
+    if not field_file:
+        return
+    name = field_file.name or ""
+    stem, _ext = posixpath.splitext(posixpath.basename(name))
+    if stem.endswith(marker):
+        return
+    try:
+        field_file.open("rb")
+        raw = field_file.read()
+    except (OSError, ValueError) as exc:
+        logger.warning("shrink_image_field: cannot read %s: %s", name, exc)
+        return
+    finally:
+        try:
+            field_file.close()
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        from .optimize import process
+
+        result = process(
+            raw, target_bytes=target_kb * 1024, max_edge=max_edge,
+            skip_under_bytes=target_kb * 1024,
+        )
+    except Exception as exc:  # noqa: BLE001 - a bad image must not block the save
+        logger.warning("shrink_image_field: optimise failed for %s: %s", name, exc)
+        return
+    if result.get("skipped") or not result.get("main"):
+        return
+    field_file.save(f"{stem}{marker}.webp", ContentFile(result["main"]), save=False)
 
 MAX_SIZE = 15 * 1024 * 1024  # 15 MB
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"}

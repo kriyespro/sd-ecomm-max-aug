@@ -18,7 +18,7 @@
   <div class="flex gap-4 py-5">
     {% set img = (i.product.images.all() | first) %}
     <div class="h-20 w-16 flex-shrink-0 overflow-hidden bg-line/40">
-      {% if img %}<img src="{{ img.image.url }}" class="h-full w-full object-cover">{% endif %}
+      {% if img %}<img src="{{ img.renditions.get('512') or img.image.url }}" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">{% endif %}
     </div>
     <div class="flex-1">
       <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="text-sm font-medium hover:text-accent">{{ i.product.title }}</a>

@@ -35,7 +35,7 @@
         <button @click="active = {{ loop.index0 }}"
                 class="h-16 w-14 flex-shrink-0 overflow-hidden border transition-colors lg:h-24 lg:w-20"
                 :class="active === {{ loop.index0 }} ? 'border-ink' : 'border-line hover:border-mute'">
-          <img src="{{ i.image.url }}" alt="" class="h-full w-full object-cover">
+          <img src="{{ i.renditions.get('512') or i.image.url }}" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">
         </button>
         {% endfor %}
       </div>
@@ -46,6 +46,9 @@
           {% if imgs %}
           {% for i in imgs %}
           <img src="{{ i.image.url }}" alt="{{ product.title }}"
+               {% if i.srcset %}srcset="{{ i.srcset }}" sizes="(min-width:1024px) 45vw, 100vw"{% endif %}
+               {% if i.width %}width="{{ i.width }}" height="{{ i.height }}"{% endif %}
+               {% if loop.first %}fetchpriority="high" decoding="async"{% else %}loading="lazy" decoding="async"{% endif %}
                class="card-img absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
                :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
           {% endfor %}

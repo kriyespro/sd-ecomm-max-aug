@@ -4,7 +4,11 @@
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden bg-white">
     <div class="aspect-[4/5] overflow-hidden bg-line/40">
       {% if img %}
-      <img src="{{ img.image.url }}" alt="{{ img.alt or p.title }}" class="card-img h-full w-full object-cover">
+      <img src="{{ img.image.url }}"
+           {% if img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
+           {% if img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
+           alt="{{ img.alt or p.title }}" loading="lazy" decoding="async"
+           class="card-img h-full w-full object-cover">
       {% else %}
       <div class="flex h-full items-center justify-center text-4xl text-line">◈</div>
       {% endif %}

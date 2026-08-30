@@ -7,7 +7,7 @@
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
 <section class="relative isolate flex min-h-[78vh] items-end overflow-hidden bg-ink">
   {% if hero_img %}
-  <img src="{{ hero_img }}" alt="" class="absolute inset-0 -z-10 h-full w-full object-cover">
+  <img src="{{ hero_img }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
   {% endif %}
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/35 to-ink/10"></div>
 
@@ -41,7 +41,7 @@
   <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
     {% for t in cat_tiles %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group relative block aspect-[3/2] overflow-hidden bg-line/40">
-      {% if t.image %}<img src="{{ t.image }}" alt="{{ t.category.name }}" class="card-img h-full w-full object-cover">{% endif %}
+      {% if t.image %}<img src="{{ t.image }}" alt="{{ t.category.name }}" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">{% endif %}
       <div class="absolute inset-0 bg-ink/25 transition-colors group-hover:bg-ink/35"></div>
       <span class="absolute inset-0 flex items-center justify-center font-display text-2xl text-paper">{{ t.category.name }}</span>
     </a>
