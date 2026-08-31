@@ -4,9 +4,9 @@
   <div class="lg:col-span-2">
     <div class="divide-y divide-line border-y border-line">
       {% for i in items %}
-      <div class="flex gap-5 py-6">
+      <div class="flex gap-4 py-6 sm:gap-5">
         {% set img = (i.product.images.all() | first) %}
-        <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="h-28 w-24 flex-shrink-0 overflow-hidden bg-line/40">
+        <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="h-24 w-20 flex-shrink-0 overflow-hidden bg-line/40 sm:h-28 sm:w-24">
           {% if img %}<img src="{{ img.renditions.get('512') or img.image.url }}" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">{% endif %}
         </a>
         <div class="flex flex-1 flex-col">
@@ -14,7 +14,7 @@
           {% if i.variant %}<p class="text-xs text-mute">{{ i.variant.name or i.variant.sku }}</p>{% endif %}
           <p class="mt-1 text-sm text-mute">{{ i.unit_price | money }} each</p>
 
-          <div class="mt-auto flex items-center gap-4 pt-3">
+          <div class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-3">
             <form hx-post="{{ url('shopfront:cart_update') }}" hx-target="#cart-page" hx-swap="innerHTML"
                   class="flex items-center border border-line">
               <input type="hidden" name="item" value="{{ i.pk }}">
@@ -28,7 +28,7 @@
             </form>
           </div>
         </div>
-        <p class="font-display text-lg">{{ i.line_total | money }}</p>
+        <p class="shrink-0 whitespace-nowrap font-display text-lg">{{ i.line_total | money }}</p>
       </div>
       {% endfor %}
     </div>

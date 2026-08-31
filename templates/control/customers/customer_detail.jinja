@@ -30,14 +30,14 @@
 
   <div class="grid gap-4 lg:grid-cols-3">
     <div class="lg:col-span-2 space-y-4">
-      <div class="grid grid-cols-3 gap-4">
-        <div class="rounded-xl bg-white p-4 text-center ring-1 ring-slate-200">
-          <p class="text-xs text-slate-400">Orders</p><p class="text-lg font-semibold">{{ customer.orders_count }}</p>
+      <div class="grid grid-cols-3 gap-2 sm:gap-4">
+        <div class="rounded-xl bg-white p-3 text-center ring-1 ring-slate-200 sm:p-4">
+          <p class="text-xs text-slate-400">Orders</p><p class="text-base font-semibold sm:text-lg">{{ customer.orders_count }}</p>
         </div>
-        <div class="rounded-xl bg-white p-4 text-center ring-1 ring-slate-200">
-          <p class="text-xs text-slate-400">Total spent</p><p class="text-lg font-semibold">{{ customer.total_spent }}</p>
+        <div class="rounded-xl bg-white p-3 text-center ring-1 ring-slate-200 sm:p-4">
+          <p class="text-xs text-slate-400">Total spent</p><p class="break-all text-base font-semibold sm:text-lg">{{ customer.total_spent }}</p>
         </div>
-        <div class="rounded-xl bg-white p-4 text-center ring-1 ring-slate-200">
+        <div class="rounded-xl bg-white p-3 text-center ring-1 ring-slate-200 sm:p-4">
           <p class="text-xs text-slate-400">Last order</p><p class="text-sm font-semibold">{{ customer.last_order_at.strftime("%b %d, %Y") if customer.last_order_at else "—" }}</p>
         </div>
       </div>
