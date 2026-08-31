@@ -170,10 +170,14 @@ class ProductView(View):
             .select_related("brand", "category").prefetch_related("images")[:4]
         )
 
-        # recently viewed (session)
-        recent = [slug] + [s for s in request.session.get("recent_slugs", []) if s != slug]
-        request.session["recent_slugs"] = recent[:10]
-        request.session.modified = True
+        # recently viewed (session) — only maintained once the visitor already
+        # has a session, so a fresh anonymous PDP hit stays cookie-free / edge
+        # cacheable.
+        recent = [slug]
+        if request.session.session_key:
+            recent += [s for s in request.session.get("recent_slugs", []) if s != slug]
+            request.session["recent_slugs"] = recent[:10]
+            request.session.modified = True
         rv_slugs = recent[1:7]
         rv_map = {
             p.slug: p for p in Product.objects.filter(
@@ -282,7 +286,7 @@ class CartView(View):
 class CartAddView(View):
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         product = get_object_or_404(Product, project=project, slug=request.POST.get("product"), status="active")
         variant = None
         if request.POST.get("variant"):
@@ -310,7 +314,7 @@ def _cart_mutation_response(request, project):
 class CartUpdateView(View):
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         item = cart.items.filter(pk=request.POST.get("item")).first()
         if item is not None:
             cart_svc.set_quantity(cart=cart, item=item, quantity=int(request.POST.get("quantity") or 0))
@@ -320,7 +324,7 @@ class CartUpdateView(View):
 class CartRemoveView(View):
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         item = cart.items.filter(pk=request.POST.get("item")).first()
         if item is not None:
             cart_svc.remove_item(cart=cart, item=item)
@@ -350,7 +354,7 @@ class CheckoutView(View):
 
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         if not cart.items.exists():
             return redirect("shopfront:cart")
         address = _address(request.POST)
@@ -402,7 +406,7 @@ class CheckoutView(View):
 class ShippingQuoteView(View):
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         a = _address(request.POST)
         methods = ship_svc.available_methods(
             project=project,
@@ -417,7 +421,7 @@ class ShippingQuoteView(View):
 class CouponPreviewView(View):
     def post(self, request):
         project = current_project(request)
-        cart = get_cart(request, project)
+        cart = get_cart(request, project, create=True)
         code = request.POST.get("coupon_code", "").strip()
         discount, msg, ok = Decimal("0"), "", False
         if code:

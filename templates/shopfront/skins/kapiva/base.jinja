@@ -32,6 +32,14 @@
   {% endif %}
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+  <script>
+    // CSRF token read from the cookie, never baked into the HTML — keeps
+    // anonymous storefront pages identical for every visitor and edge-cacheable.
+    document.addEventListener('htmx:configRequest', function (e) {
+      var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+      if (m) e.detail.headers['X-CSRFToken'] = decodeURIComponent(m[1]);
+    });
+  </script>
   <style>
     :root { --accent: {{ (accent or '#163524') | rgb_channels }}; }
 body{background:radial-gradient(1100px 480px at 0% -10%,rgba(196,154,74,.10),transparent 50%),#f6efe4;}
@@ -53,7 +61,6 @@ body{background:radial-gradient(1100px 480px at 0% -10%,rgba(196,154,74,.10),tra
   </style>
 </head>
 <body class="min-h-screen bg-paper font-sans text-ink antialiased"
-      hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'
       x-data="shop()" @keydown.escape="cartOpen=false; searchOpen=false; quickOpen=false"
       @cart-open.window="cartOpen=true; quickOpen=false" @toast.window="pushToast($event.detail)"
       @open-quick.window="quickOpen=true">

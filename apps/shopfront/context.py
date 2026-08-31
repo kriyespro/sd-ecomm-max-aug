@@ -23,12 +23,21 @@ def current_project(request):
     return project
 
 
-def get_cart(request, project):
-    if not request.session.session_key:
-        request.session.save()
+def get_cart(request, project, *, create=False):
+    """Active cart for this request.
+
+    ``create=False`` (the default, used by page renders) will NOT start a
+    session for an anonymous visitor who has none — it hands back an unsaved
+    empty cart instead, so the response stays cookie-free and edge-cacheable.
+    Cart-mutating views pass ``create=True``.
+    """
     user = request.user if request.user.is_authenticated else None
+    if create and user is None and not request.session.session_key:
+        request.session.save()
     return cart_svc.get_or_create_cart(
-        project=project, user=user, session_key=request.session.session_key
+        project=project, user=user,
+        session_key=request.session.session_key or "",
+        create=create or user is not None,
     )
 
 
@@ -41,9 +50,10 @@ def base_context(request, project, **extra):
     # reverse manager's get_queryset(), which hands back whatever sits in
     # _prefetched_objects_cache. A bare list there breaks .exists() (checkout)
     # and .select_related() (the ornza cart context).
-    cart_items = cart.items.select_related("product", "variant")
-    len(cart_items)  # force evaluation -> fills cart_items._result_cache
-    cart._prefetched_objects_cache = {"items": cart_items}
+    if not getattr(cart, "_is_empty", False):
+        cart_items = cart.items.select_related("product", "variant")
+        len(cart_items)  # force evaluation -> fills cart_items._result_cache
+        cart._prefetched_objects_cache = {"items": cart_items}
     chrome = store_chrome(project)
 
     ctx = {

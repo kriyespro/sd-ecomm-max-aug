@@ -9,14 +9,38 @@ from apps.catalog.models import Product, Variant
 from .models import Cart, CartItem
 
 
+class EmptyCart:
+    """Stand-in for "this visitor has no cart yet", used by read-only storefront
+    renders so a browsing anonymous visitor never creates a Cart row (or, up in
+    the view layer, a session cookie). Exposes just what the templates read."""
+
+    pk = None
+    id = None
+    email = ""
+    is_active = True
+    _is_empty = True
+    item_count = 0
+    subtotal = Decimal("0.00")
+
+    def __init__(self, project):
+        self.project = project
+        self.items = CartItem.objects.none()
+
+
 def _line_price(product: Product, variant: Variant | None) -> Decimal:
     if variant is not None:
         return variant.effective_price
     return product.current_price
 
 
-def get_or_create_cart(*, project, user=None, session_key="", email=""):
-    """Return the active cart for this project + identity, creating one if needed."""
+def get_or_create_cart(*, project, user=None, session_key="", email="", create=True):
+    """Return the active cart for this project + identity.
+
+    ``create=False`` returns an unsaved, empty ``Cart`` when the visitor has no
+    cart yet — used by read-only storefront page renders so a browsing
+    anonymous visitor never spawns a Cart row (or, upstream, a session cookie),
+    which keeps the response cacheable at the edge.
+    """
     qs = Cart.objects.filter(project=project, is_active=True)
     cart = None
     if user is not None and user.is_authenticated:
@@ -25,6 +49,8 @@ def get_or_create_cart(*, project, user=None, session_key="", email=""):
         cart = qs.filter(session_key=session_key, user__isnull=True).order_by("-created_at").first()
 
     if cart is None:
+        if not create:
+            return EmptyCart(project)
         cart = Cart.objects.create(
             project=project,
             user=user if (user is not None and user.is_authenticated) else None,

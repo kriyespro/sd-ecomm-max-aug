@@ -14,6 +14,7 @@ from decimal import Decimal, InvalidOperation
 from django.middleware.csrf import get_token
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils.functional import lazy
 from jinja2 import Environment
 from jinja2.bccache import FileSystemBytecodeCache
 from jinja2.exceptions import TemplateNotFound
@@ -160,10 +161,21 @@ def environment(**options):
 def csrf(request):
     """Context processor: per-request CSRF helpers for Jinja2 templates.
 
+    Both values are lazy: ``get_token`` (which forces the CSRF cookie to be
+    set on the response) runs only if a template actually renders one of them.
+    That keeps storefront pages with no form cookie-free, hence edge-cacheable.
     ``csrf_input`` is marked safe so autoescape leaves the ``<input>`` intact.
     """
-    token = get_token(request)
-    field = Markup(
-        '<input type="hidden" name="csrfmiddlewaretoken" value="{}">'
-    ).format(token)
-    return {"csrf_input": field, "csrf_token": token}
+
+    def _token():
+        return get_token(request)
+
+    def _field():
+        return Markup(
+            '<input type="hidden" name="csrfmiddlewaretoken" value="{}">'
+        ).format(get_token(request))
+
+    return {
+        "csrf_input": lazy(_field, Markup)(),
+        "csrf_token": lazy(_token, str)(),
+    }
