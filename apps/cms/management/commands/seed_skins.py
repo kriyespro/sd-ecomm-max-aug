@@ -165,8 +165,8 @@ def _render_base(default_base, preset):
         out, count=1, flags=re.DOTALL,
     )
     out = re.sub(
-        r":root \{ --accent: \{\{ accent or '#[0-9a-fA-F]+' \}\}; \}",
-        f":root {{ --accent: {{{{ accent or '{c['accent']}' }}}}; }}"
+        r":root \{ --accent: \{\{ \(accent or '#[0-9a-fA-F]+'\) \| rgb_channels \}\}; \}",
+        f":root {{ --accent: {{{{ (accent or '{c['accent']}') | rgb_channels }}}}; }}"
         + (f"\n{extra_css}" if extra_css else ""),
         out, count=1,
     )

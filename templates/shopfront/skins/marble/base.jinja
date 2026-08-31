@@ -12,6 +12,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  {% set _skincss = skin_css_href(skin_slug) %}
+  {% if _skincss %}
+  <link rel="stylesheet" href="{{ _skincss }}">
+  {% else %}
   <script src="https://cdn.tailwindcss.com?plugins=forms"></script>
   <script>
     tailwind.config = {
@@ -25,16 +29,19 @@
       }},
     };
   </script>
+  {% endif %}
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
   <style>
-    :root { --accent: {{ accent or '#57534e' }}; }
+    :root { --accent: {{ (accent or '#57534e') | rgb_channels }}; }
     [x-cloak] { display: none !important; }
     /* base identity — renders even if the Tailwind CDN is unavailable */
     body { background:#f5f5f4; color:#292524; font-family:Manrope, system-ui, sans-serif; -webkit-font-smoothing:antialiased; }
     h1,h2,.font-display { font-family:"Cormorant Garamond", Georgia, serif; }
     a { color:inherit; }
     img { max-width:100%; height:auto; display:block; }
+    /* skip layout/paint for off-screen sections until scrolled near */
+    .cv-auto { content-visibility:auto; contain-intrinsic-size:auto 720px; }
     .card-img { transition: transform .6s cubic-bezier(.2,.6,.2,1); }
     .group:hover .card-img { transform: scale(1.045); }
     .htmx-request .htmx-hide { opacity: .4; pointer-events: none; }
@@ -170,7 +177,7 @@
         <p class="font-display text-lg">Your Bag</p>
         <button @click="cartOpen=false" class="text-mute hover:text-ink">✕</button>
       </div>
-      <div id="cart-drawer-body" hx-get="{{ url('shopfront:cart_drawer') }}" hx-trigger="load, cart-open from:body" class="flex-1 overflow-y-auto">
+      <div id="cart-drawer-body" hx-get="{{ url('shopfront:cart_drawer') }}" hx-trigger="cart-open from:body" class="flex-1 overflow-y-auto">
         {% include "shopfront/partials/_cart_drawer.jinja" %}
       </div>
     </aside>

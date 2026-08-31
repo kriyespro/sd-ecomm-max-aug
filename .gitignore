@@ -23,6 +23,10 @@ db.sqlite3
 /media/
 *.log
 
+# compiled per-skin Tailwind bundles — built in the Docker image
+# (tools/build_tailwind_skins.py); dev falls back to the Tailwind Play CDN.
+/static/shopfront/skins/*.css
+
 # --- editors / OS ---
 .DS_Store
 .idea/

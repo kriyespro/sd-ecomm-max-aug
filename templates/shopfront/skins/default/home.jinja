@@ -63,7 +63,7 @@
 
 {# NEW ARRIVALS #}
 {% if new_arrivals %}
-<section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-8 font-display text-3xl">New arrivals</h2>
   <div class="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
     {% for p in new_arrivals %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
@@ -73,7 +73,7 @@
 
 {# TESTIMONIALS #}
 {% if testimonials %}
-<section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-10 text-center font-display text-3xl">What people say</h2>
   <div class="grid gap-8 md:grid-cols-3">
     {% for r in testimonials %}
@@ -88,7 +88,7 @@
 {% endif %}
 
 {# VALUE PROPS #}
-<section class="border-y border-line bg-panel">
+<section class="cv-auto border-y border-line bg-panel">
   <div class="mx-auto grid max-w-7xl gap-8 px-5 py-14 text-center sm:grid-cols-3 lg:px-8">
     {% for t, d in [('Free shipping', 'On all orders over ₹999'), ('Cash on delivery', 'Available across India'), ('7-day returns', 'Easy, no-questions returns')] %}
     <div>

@@ -78,8 +78,8 @@ def _base_from_default(default_base):
         out, count=1, flags=re.DOTALL,
     )
     out = re.sub(
-        r":root \{ --accent: \{\{ accent or '#[0-9a-fA-F]+' \}\}; \}",
-        f":root {{ --accent: {{{{ accent or '{C['accent']}' }}}}; }}\n{EXTRA_CSS}",
+        r":root \{ --accent: \{\{ \(accent or '#[0-9a-fA-F]+'\) \| rgb_channels \}\}; \}",
+        f":root {{ --accent: {{{{ (accent or '{C['accent']}') | rgb_channels }}}}; }}\n" + EXTRA_CSS,
         out, count=1,
     )
     out = re.sub(
@@ -295,6 +295,11 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--activate", action="store_true")
         parser.add_argument("--project", default="acme-store")
+        parser.add_argument(
+            "--force", action="store_true",
+            help="Also overwrite home.jinja / _card.jinja (they carry hand-tuned "
+                 "perf attributes; by default a re-run only refreshes base.jinja).",
+        )
 
     def handle(self, *args, **opts):
         default_base = (SKINS_DIR / "default" / "base.jinja")
@@ -304,8 +309,10 @@ class Command(BaseCommand):
         folder = SKINS_DIR / "ornza"
         (folder / "partials").mkdir(parents=True, exist_ok=True)
         (folder / "base.jinja").write_text(_base_from_default(default_base.read_text()))
-        (folder / "home.jinja").write_text(HOME)
-        (folder / "partials" / "_card.jinja").write_text(CARD)
+        for rel, body in (("home.jinja", HOME), ("partials/_card.jinja", CARD)):
+            dest = folder / rel
+            if opts["force"] or not dest.exists():
+                dest.write_text(body)
 
         skin, created = Skin.objects.update_or_create(
             slug="ornza",

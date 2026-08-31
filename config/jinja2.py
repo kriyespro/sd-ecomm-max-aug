@@ -6,6 +6,7 @@ Exposes the helpers templates expect: ``static``, ``url`` (Django's
 by :func:`csrf` below, wired as a context processor in settings.
 """
 
+import functools
 import os
 import tempfile
 from decimal import Decimal, InvalidOperation
@@ -74,6 +75,47 @@ class SkinEnvironment(Environment):
         return super()._load_template(name, *args, **kwargs)
 
 
+def _rgb_channels(value, fallback="17 17 17"):
+    """``"#c9a55a"`` -> ``"201 165 90"`` for ``rgb(var(--accent) / <alpha>)``.
+
+    Storefront skins expose the store's accent colour as the ``--accent`` custom
+    property in space-separated RGB channels so the compiled Tailwind build can
+    do ``bg-accent/25`` opacity modifiers against it.
+    """
+    if not value:
+        return fallback
+    hexv = str(value).strip().lstrip("#")
+    if len(hexv) == 3:
+        hexv = "".join(c * 2 for c in hexv)
+    if len(hexv) != 6:
+        return fallback
+    try:
+        return f"{int(hexv[0:2], 16)} {int(hexv[2:4], 16)} {int(hexv[4:6], 16)}"
+    except ValueError:
+        return fallback
+
+
+@functools.lru_cache(maxsize=64)
+def _skin_css_href(slug):
+    """Static URL of the compiled Tailwind CSS for ``slug``, or ``None`` when it
+    has not been built/collected (dev, or before the first image build) — the
+    skin base template then falls back to the Tailwind Play CDN.
+
+    Cached per process: the collected file set does not change while a worker
+    runs.
+    """
+    path = f"shopfront/skins/{slug}.css"
+    try:
+        from django.contrib.staticfiles import finders
+        from django.contrib.staticfiles.storage import staticfiles_storage
+
+        if finders.find(path) or staticfiles_storage.exists(path):
+            return staticfiles_storage.url(path)
+    except Exception:  # noqa: BLE001 - never let a missing asset 500 a storefront
+        pass
+    return None
+
+
 def _money(value, symbol="₹"):
     try:
         return f"{symbol}{Decimal(str(value)):,.0f}"
@@ -107,9 +149,11 @@ def environment(**options):
         {
             "static": static,
             "url": reverse,
+            "skin_css_href": _skin_css_href,
         }
     )
     env.filters["money"] = _money
+    env.filters["rgb_channels"] = _rgb_channels
     return env
 
 
