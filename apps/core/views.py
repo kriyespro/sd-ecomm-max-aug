@@ -1,4 +1,15 @@
+from django.contrib import messages
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.core.models import AuditLog
+from apps.core.services import record_audit
+
+# Marketing-partner commission band + the sales gate to reach the top rate.
+PARTNER_COMMISSION_MIN = 20
+PARTNER_COMMISSION_MAX = 30
+PARTNER_SALES_TO_QUALIFY = 3
 
 # Fallback theme names when the Skin table is empty (fresh install) — these are
 # the built-in skin folders under templates/shopfront/skins/.
@@ -80,3 +91,44 @@ def _landing_skins():
     except Exception:  # noqa: BLE001
         pass
     return _BUILTIN_SKINS
+
+
+# --- marketing partners -------------------------------------------------
+
+def _partner_context(form=None):
+    from apps.core.forms import PartnerApplicationForm
+
+    return {
+        "form": form or PartnerApplicationForm(),
+        "commission_min": PARTNER_COMMISSION_MIN,
+        "commission_max": PARTNER_COMMISSION_MAX,
+        "sales_to_qualify": PARTNER_SALES_TO_QUALIFY,
+        "now_year": timezone.now().year,
+    }
+
+
+def partners(request):
+    """Public marketing-partner (DGC) programme page + application form."""
+    from apps.core.forms import PartnerApplicationForm
+
+    if getattr(request, "project", None):
+        # a store's own domain never serves the platform partner page
+        return redirect("/app/")
+
+    if request.method == "POST":
+        form = PartnerApplicationForm(request.POST)
+        if form.is_valid():
+            app = form.save()
+            record_audit(
+                actor=request.user if request.user.is_authenticated else None,
+                action=AuditLog.Action.CREATE, target=app,
+                changes={"email": app.email}, request=request,
+            )
+            messages.success(
+                request,
+                "Application received. We'll email you once it's reviewed.",
+            )
+            return redirect(f"{reverse('partners')}#apply")
+        return render(request, "marketing/partners.jinja", _partner_context(form), status=400)
+
+    return render(request, "marketing/partners.jinja", _partner_context())

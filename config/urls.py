@@ -11,6 +11,7 @@ from django.urls import include, path, re_path
 from django.views.static import serve as _serve_media
 
 from apps.core import health
+from apps.core.views import partners as partners_view
 from apps.core.views import root as root_view
 from apps.projects.views import domain_check
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path("demo/", include("apps.storefront.urls", namespace="storefront")),
     path("app/", include("apps.shopfront.urls", namespace="shopfront")),
     path("shop/", include("apps.storefront.ornza_urls", namespace="ornza")),
+    path("partners/", partners_view, name="partners"),
     path("", root_view, name="root"),
     path("", include("apps.cms.urls", namespace="cms")),
 ]

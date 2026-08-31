@@ -135,6 +135,45 @@ class UserCreateView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
         return self.render_to_response({"form": form})
 
 
+class PartnerApplicationListView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
+    template_name = "control/partners/list.jinja"
+
+    def get(self, request, *args, **kwargs):
+        status = request.GET.get("status", "")
+        apps_qs = services.list_partner_applications(status)
+        return self.render_to_response({
+            "applications": apps_qs,
+            "status": status,
+            "pending_count": services.list_partner_applications("pending").count(),
+        })
+
+
+class PartnerApplicationReviewView(PlatformAdminRequiredMixin, View):
+    def post(self, request, pk, *args, **kwargs):
+        from apps.accounts.models import PartnerApplication
+
+        application = get_object_or_404(PartnerApplication, pk=pk)
+        decision = request.POST.get("decision", "")
+        try:
+            temp_password = services.review_partner_application(
+                actor=request.user, application=application, decision=decision,
+                note=request.POST.get("note", ""), request=request,
+            )
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            if temp_password:
+                messages.success(
+                    request,
+                    f"Approved. Partner login: {application.email} · temporary "
+                    f"password {temp_password} — share it with them; they should "
+                    f"change it on first sign-in.",
+                )
+            else:
+                messages.success(request, "Application rejected.")
+        return redirect("control:partner_applications")
+
+
 class UserDetailView(PlatformAdminRequiredMixin, DetailView):
     template_name = "control/user_detail.jinja"
     context_object_name = "target"

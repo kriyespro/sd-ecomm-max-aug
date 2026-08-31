@@ -1,0 +1,66 @@
+{% extends "control/base_control.jinja" %}
+
+{% block page_title %}Partner applications{% endblock %}
+
+{% block content %}
+<div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
+  {% for key, label in [('', 'All'), ('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')] %}
+  <a href="{{ url('control:partner_applications') }}{% if key %}?status={{ key }}{% endif %}"
+     class="rounded-lg px-3 py-1.5 font-medium ring-1 ring-inset
+       {% if status == key %}bg-slate-900 text-white ring-slate-900{% else %}bg-white text-slate-600 ring-slate-200 hover:bg-slate-50{% endif %}">
+    {{ label }}{% if key == 'pending' and pending_count %} ({{ pending_count }}){% endif %}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="space-y-4">
+  {% for a in applications %}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div class="min-w-0">
+        <p class="font-semibold text-slate-900">{{ a.full_name }}
+          <span class="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold
+            {% if a.status == 'approved' %}bg-emerald-50 text-emerald-700
+            {% elif a.status == 'rejected' %}bg-rose-50 text-rose-700
+            {% else %}bg-amber-50 text-amber-700{% endif %}">{{ a.get_status_display() }}</span>
+        </p>
+        <p class="mt-0.5 text-sm text-slate-500">
+          {{ a.email }}{% if a.phone %} · {{ a.phone }}{% endif %}{% if a.company %} · {{ a.company }}{% endif %}
+        </p>
+        <p class="mt-2 whitespace-pre-line text-sm text-slate-700">{{ a.audience }}</p>
+        <p class="mt-2 text-xs text-slate-400">
+          Applied {{ a.created_at.strftime('%d %b %Y') }}
+          {% if a.reviewed_at %} · reviewed by {{ a.reviewed_by.email if a.reviewed_by else '—' }} on {{ a.reviewed_at.strftime('%d %b %Y') }}{% endif %}
+          {% if a.created_user %} · account: {{ a.created_user.email }}{% endif %}
+        </p>
+      </div>
+      {% if a.status == 'pending' %}
+      <div class="flex shrink-0 gap-2">
+        <form method="post" action="{{ url('control:partner_application_review', pk=a.pk) }}">
+          {{ csrf_input }}
+          <input type="hidden" name="decision" value="approve">
+          <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500">Approve</button>
+        </form>
+        <form method="post" action="{{ url('control:partner_application_review', pk=a.pk) }}"
+              onsubmit="return confirm('Reject this application?')">
+          {{ csrf_input }}
+          <input type="hidden" name="decision" value="reject">
+          <button class="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50">Reject</button>
+        </form>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% else %}
+  <div class="rounded-xl bg-white p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+    No applications{% if status %} with status “{{ status }}”{% endif %}.
+  </div>
+  {% endfor %}
+</div>
+
+<p class="mt-6 text-xs text-slate-400">
+  Approving creates a DGC (marketing-partner) login and shows a one-time password.
+  Set the store's <em>manager</em> to this partner when you create their referred stores so
+  commission is credited — see <a href="{{ url('control:billing_commissions') }}" class="underline">Billing → Commissions</a>.
+</p>
+{% endblock %}

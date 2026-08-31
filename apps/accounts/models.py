@@ -58,6 +58,45 @@ class Profile(TimeStampedModel):
         return self.platform_role == PlatformRole.MANAGER and not self.user.is_superuser
 
 
+class PartnerApplication(TimeStampedModel):
+    """Someone applying to the marketing-partner (DGC) programme from the public
+    /partners/ page. A platform admin reviews it and, on approval, a
+    ``platform_manager`` account is created for them."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    full_name = models.CharField(max_length=140)
+    email = models.EmailField(db_index=True)
+    phone = models.CharField(max_length=20, blank=True)
+    company = models.CharField(max_length=140, blank=True)
+    audience = models.TextField(
+        help_text="How they reach merchants — agency, community, channel, etc."
+    )
+
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="reviewed_partner_applications",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_note = models.CharField(max_length=300, blank=True)
+    created_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="partner_application",
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.full_name} <{self.email}> ({self.status})"
+
+
 class Membership(TimeStampedModel):
     """A user's role within one project (project.md section 5)."""
 

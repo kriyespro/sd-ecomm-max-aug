@@ -320,3 +320,40 @@ class UserSetPasswordTests(TestCase):
             {"new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww"},
         )
         self.assertEqual(resp.status_code, 403)
+
+
+class PartnerApplicationReviewTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser("root", "root@t.test", "pw")
+        from apps.accounts.models import PartnerApplication
+        self.app = PartnerApplication.objects.create(
+            full_name="Ravi Partner", email="ravi@x.test",
+            audience="Runs a seller community.",
+        )
+
+    def test_approve_creates_dgc_login(self):
+        self.client.force_login(self.admin)
+        resp = self.client.post(f"/admin/partners/{self.app.pk}/review/", {"decision": "approve"})
+        self.assertEqual(resp.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, "approved")
+        self.assertIsNotNone(self.app.created_user)
+        self.assertEqual(self.app.created_user.profile.platform_role, "platform_manager")
+        self.assertTrue(self.app.created_user.is_staff)
+
+    def test_reject_sets_status_and_creates_no_user(self):
+        self.client.force_login(self.admin)
+        resp = self.client.post(f"/admin/partners/{self.app.pk}/review/", {"decision": "reject"})
+        self.assertEqual(resp.status_code, 302)
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, "rejected")
+        self.assertIsNone(self.app.created_user)
+
+    def test_non_admin_cannot_review(self):
+        staff = get_user_model().objects.create_user("s", "s@t.test", "pw", is_staff=True)
+        self.client.force_login(staff)
+        resp = self.client.post(f"/admin/partners/{self.app.pk}/review/", {"decision": "approve"})
+        self.assertIn(resp.status_code, (302, 403))
+        self.app.refresh_from_db()
+        self.assertEqual(self.app.status, "pending")

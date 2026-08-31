@@ -182,3 +182,35 @@ class StoreResolverCacheTests(TestCase):
         chrome = store_chrome(self.project)
         self.assertEqual(chrome["profile"].tagline, "Made well")
         self.assertEqual(chrome["store_logo"], "")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PartnerPageTests(TestCase):
+    def test_page_renders_with_commission_band_and_gate(self):
+        resp = self.client.get(reverse("partners"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "20")
+        self.assertContains(resp, "30")
+        self.assertContains(resp, "3 successful sales")
+
+    def test_valid_application_is_stored(self):
+        from apps.accounts.models import PartnerApplication
+
+        resp = self.client.post(reverse("partners"), {
+            "full_name": "Ada Ref", "email": "ADA@x.test",
+            "audience": "Community of 500 sellers.", "website": "",
+        })
+        self.assertEqual(resp.status_code, 302)
+        app = PartnerApplication.objects.get()
+        self.assertEqual(app.email, "ada@x.test")
+        self.assertEqual(app.status, "pending")
+
+    def test_honeypot_blocks_submission(self):
+        from apps.accounts.models import PartnerApplication
+
+        resp = self.client.post(reverse("partners"), {
+            "full_name": "Bot", "email": "bot@x.test",
+            "audience": "spam", "website": "http://spam",
+        })
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(PartnerApplication.objects.exists())

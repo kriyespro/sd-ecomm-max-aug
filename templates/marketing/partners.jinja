@@ -1,0 +1,304 @@
+{% extends "base.jinja" %}
+
+{% block title %}mnxstore partners — earn {{ commission_min }}–{{ commission_max }}% recurring commission{% endblock %}
+{% block meta_description %}Become an mnxstore marketing partner. Refer merchants, and earn {{ commission_min }}–{{ commission_max }}% recurring commission on their subscription for as long as they stay.{% endblock %}
+
+{% block head %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Space Grotesk"', 'Inter', 'sans-serif'],
+      },
+      colors: { brand: {
+        50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',
+        500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',
+      }},
+    }},
+  };
+</script>
+<style>
+  html { scroll-behavior: smooth; }
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  .aurora {
+    background:
+      radial-gradient(42rem 42rem at 12% -12%, #e0e7ff 0%, transparent 60%),
+      radial-gradient(34rem 34rem at 96% -4%, #ede9fe 0%, transparent 55%);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<svg width="0" height="0" class="absolute" aria-hidden="true"><defs>
+  <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366f1"/><stop offset="0.55" stop-color="#7c3aed"/><stop offset="1" stop-color="#4f46e5"/>
+  </linearGradient>
+  <pattern id="p-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M40 0H0V40" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+  </pattern>
+</defs></svg>
+
+{% macro ic(name) %}
+<svg class="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {% if name == 'coin' %}<ellipse cx="12" cy="7" rx="7" ry="3" fill="currentColor" fill-opacity=".14"/><ellipse cx="12" cy="7" rx="7" ry="3"/><path d="M5 7v10c0 1.7 3.1 3 7 3s7-1.3 7-3V7M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>
+  {% elif name == 'repeat' %}<path d="M4 9a8 8 0 0 1 13-3l3 3M20 15a8 8 0 0 1-13 3l-3-3" fill="none"/><path d="M20 4v5h-5M4 20v-5h5"/>
+  {% elif name == 'users' %}<circle cx="9" cy="8" r="3.2" fill="currentColor" fill-opacity=".14"/><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.5a3 3 0 0 1 0 5.8M18 20c0-2.5-1.2-4.7-3-6"/>
+  {% elif name == 'check' %}<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".12"/><path d="m8 12.5 2.5 2.5L16 9"/>
+  {% elif name == 'doc' %}<path d="M7 3h7l5 5v13H7z" fill="currentColor" fill-opacity=".12"/><path d="M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6"/>
+  {% elif name == 'rocket' %}<path d="M12 3c3 1.5 5 4.7 5 9 0 2.2-.7 3.5-1.5 4.5h-7C7.7 15.5 7 14.2 7 12c0-4.3 2-7.5 5-9z" fill="currentColor" fill-opacity=".14"/><path d="M12 3c3 1.5 5 4.7 5 9 0 2.2-.7 3.5-1.5 4.5h-7C7.7 15.5 7 14.2 7 12c0-4.3 2-7.5 5-9z"/><circle cx="12" cy="10" r="1.6"/><path d="M9.5 17c-.8 1.2-1 2.5-1 4 1.3-.3 2.4-.9 3-1.8M14.5 17c.8 1.2 1 2.5 1 4-1.3-.3-2.4-.9-3-1.8"/>
+  {% endif %}
+</svg>
+{% endmacro %}
+
+<div class="bg-white font-sans text-slate-900">
+
+  {# ===== NAV ===== #}
+  <header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/75 backdrop-blur-lg">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <a href="/" class="inline-flex items-center gap-2">
+        <svg class="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
+          <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="font-display text-lg font-700 tracking-tight">mnx<span class="text-brand-600">store</span></span>
+      </a>
+      <nav class="hidden items-center gap-8 text-sm font-500 text-slate-600 md:flex">
+        <a href="/#features" class="hover:text-slate-900">Platform</a>
+        <a href="/#pricing" class="hover:text-slate-900">Pricing</a>
+        <a href="#how" class="font-600 text-brand-700">Partners</a>
+        <a href="#terms" class="hover:text-slate-900">Terms</a>
+      </nav>
+      <div class="flex items-center gap-3 text-sm font-500">
+        <a href="{{ url('accounts:login') }}" class="hidden text-slate-600 hover:text-slate-900 sm:block">Sign in</a>
+        <a href="#apply" class="rounded-lg bg-slate-900 px-4 py-2 font-600 text-white transition hover:bg-slate-800">Apply now</a>
+      </div>
+    </div>
+  </header>
+
+  {# ===== HERO ===== #}
+  <section class="aurora relative overflow-hidden">
+    <svg class="pointer-events-none absolute inset-0 -z-0 h-full w-full opacity-60" aria-hidden="true"><rect width="100%" height="100%" fill="url(#p-grid)"/></svg>
+    <div class="relative mx-auto max-w-4xl px-5 pb-16 pt-20 text-center sm:pt-28">
+      <span class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-xs font-600 text-brand-700 shadow-sm backdrop-blur">
+        <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span> mnxstore Marketing Partner programme
+      </span>
+      <h1 class="mx-auto max-w-3xl font-display text-4xl font-700 leading-[1.05] tracking-tight sm:text-5xl">
+        Sell mnxstore to merchants.
+        <span class="bg-gradient-to-r from-brand-600 via-violet-600 to-brand-500 bg-clip-text text-transparent">Earn every month they stay.</span>
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
+        Marketing partners bring merchants onto mnxstore and earn
+        <strong class="font-600 text-slate-900">{{ commission_min }}–{{ commission_max }}% recurring commission</strong>
+        on each referred store's subscription — paid for as long as that store keeps its plan.
+        No commission is taken from the merchant's own product sales.
+      </p>
+      <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <a href="#apply" class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 font-600 text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-500 sm:w-auto">
+          <span class="h-4 w-4">{{ ic('rocket') }}</span> Apply to become a partner
+        </a>
+        <a href="#how" class="w-full rounded-xl border border-slate-300 bg-white px-6 py-3 font-600 text-slate-700 transition hover:bg-slate-50 sm:w-auto">How it works</a>
+      </div>
+    </div>
+  </section>
+
+  {# ===== COMMISSION BAND ===== #}
+  <section class="mx-auto max-w-5xl px-5 py-16">
+    <div class="reveal grid gap-5 sm:grid-cols-3">
+      {% set bands = [
+        (ic('doc'), 'You apply', 'Tell us how you reach merchants. We review every application by hand.'),
+        (ic('users'), 'You refer', 'Bring a merchant onto a paid plan. Your account is credited as their partner.'),
+        (ic('coin'), 'You earn', commission_min ~ '–' ~ commission_max ~ '% of that store\'s subscription, every billing cycle, for the life of the account.'),
+      ] %}
+      {% for glyph, title, body in bands %}
+      <div class="rounded-2xl border border-slate-200 p-6">
+        <div class="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 p-2.5 text-white">{{ glyph }}</div>
+        <h3 class="font-600">{{ title }}</h3>
+        <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="reveal mt-8 overflow-hidden rounded-2xl border border-brand-200 bg-brand-50/60">
+      <div class="grid divide-y divide-brand-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+        <div class="p-6">
+          <p class="text-xs font-600 uppercase tracking-wide text-brand-700">Starting rate</p>
+          <p class="mt-1 font-display text-4xl font-700 text-slate-900">{{ commission_min }}%</p>
+          <p class="mt-1 text-sm text-slate-600">Recurring, from your first referred store.</p>
+        </div>
+        <div class="p-6">
+          <p class="text-xs font-600 uppercase tracking-wide text-brand-700">After {{ sales_to_qualify }} successful sales</p>
+          <p class="mt-1 font-display text-4xl font-700 text-slate-900">{{ commission_max }}%</p>
+          <p class="mt-1 text-sm text-slate-600">You're a full Marketing Partner — the higher rate applies to every active referral.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ===== HOW IT WORKS ===== #}
+  <section id="how" class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-5xl px-5 py-20">
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">From application to payout</h2>
+      </div>
+      <div class="mt-14 grid gap-6 md:grid-cols-4">
+        {% set steps = [
+          ('Apply', 'Submit the form below with your name, contact and how you plan to reach merchants.'),
+          ('Get approved', 'We review by hand. On approval you get a partner login to Mission Control.'),
+          ('Refer merchants', 'Sign merchants up (or send them to us). Each paid store is linked to your account.'),
+          ('Earn monthly', 'Commission accrues on every paid subscription invoice and is paid out on schedule.'),
+        ] %}
+        {% for title, body in steps %}
+        <div class="reveal rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 font-display text-lg font-700 text-brand-600 ring-1 ring-brand-100">{{ loop.index }}</span>
+          <h3 class="mt-3 font-600 text-slate-900">{{ title }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ===== APPLICATION FORM ===== #}
+  <section id="apply" class="mx-auto max-w-2xl px-5 py-20">
+    <div class="reveal text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Apply to become a partner</h2>
+      <p class="mt-3 text-slate-600">We review every application. Approved partners get a Mission Control login.</p>
+    </div>
+
+    {% for m in messages %}
+    <div class="mt-8 rounded-xl border px-4 py-3 text-sm
+      {% if 'success' in m.tags %}border-emerald-200 bg-emerald-50 text-emerald-800{% else %}border-rose-200 bg-rose-50 text-rose-800{% endif %}">
+      {{ m }}
+    </div>
+    {% endfor %}
+
+    <form method="post" action="{{ url('partners') }}#apply" class="reveal mt-8 space-y-4 rounded-2xl border border-slate-200 p-6 shadow-sm">
+      {{ csrf_input }}
+      {% if form.non_field_errors() %}
+      <div class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">
+        {% for e in form.non_field_errors() %}{{ e }}{% endfor %}
+      </div>
+      {% endif %}
+      <div style="position:absolute;left:-9999px" aria-hidden="true">{{ form.website }}</div>
+
+      {% for field in [form.full_name, form.email, form.phone, form.company, form.audience] %}
+      <div>
+        <label for="{{ field.id_for_label }}" class="mb-1 block text-sm font-500 text-slate-700">
+          {{ field.label }}{% if field.field.required %} <span class="text-rose-500">*</span>{% endif %}
+        </label>
+        {{ field }}
+        {% if field.errors %}<p class="mt-1 text-xs text-rose-600">{% for e in field.errors %}{{ e }}{% endfor %}</p>{% endif %}
+        {% if field.help_text %}<p class="mt-1 text-xs text-slate-400">{{ field.help_text }}</p>{% endif %}
+      </div>
+      {% endfor %}
+
+      <button type="submit" class="w-full rounded-xl bg-brand-600 px-6 py-3 font-600 text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-500">
+        Submit application
+      </button>
+      <p class="text-center text-xs text-slate-400">
+        By applying you agree to the <a href="#terms" class="underline">partner terms</a> below.
+      </p>
+    </form>
+  </section>
+
+  {# ===== TERMS ===== #}
+  <section id="terms" class="border-t border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-3xl px-5 py-20">
+      <h2 class="font-display text-2xl font-700 tracking-tight sm:text-3xl">Partner terms &amp; conditions</h2>
+      <div class="mt-8 space-y-6 text-sm leading-relaxed text-slate-600">
+        <div>
+          <h3 class="font-600 text-slate-900">1. Becoming a partner</h3>
+          <p class="mt-1">
+            Applications are reviewed individually and approval is at mnxstore's discretion.
+            An approved applicant joins at the <strong>{{ commission_min }}% starting commission rate</strong>.
+            A partner is recognised as a full <strong>Marketing Partner</strong> — and moves to the
+            <strong>{{ commission_max }}% rate</strong> — only after <strong>{{ sales_to_qualify }} successful sales</strong>:
+            {{ sales_to_qualify }} separate referred merchants who each activate and pay for a subscription
+            plan and remain in good standing for at least one full billing cycle.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-600 text-slate-900">2. What commission is paid on</h3>
+          <p class="mt-1">
+            Commission is a percentage of the <strong>subscription fee</strong> that a referred store pays
+            mnxstore, on every paid invoice, for as long as that store keeps an active paid plan.
+            Commission is <strong>not</strong> paid on the merchant's own product sales, shipping, taxes or
+            any third-party payment fees. Free trials, unpaid, refunded, charged-back, void or
+            downgraded-to-free periods earn nothing.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-600 text-slate-900">3. Attribution</h3>
+          <p class="mt-1">
+            A store is credited to one partner — the partner recorded on that store's subscription at
+            the time it is created. Self-referrals, and stores you or a connected party own or operate,
+            do not qualify.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-600 text-slate-900">4. Payouts</h3>
+          <p class="mt-1">
+            Commission accrues per paid invoice and is listed in your partner dashboard as pending,
+            then approved, then paid. Payouts are made on mnxstore's regular schedule once the pending
+            balance clears the minimum threshold, to the payout details on file. A referred store's
+            refund or chargeback reverses the related commission.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-600 text-slate-900">5. Conduct</h3>
+          <p class="mt-1">
+            No spam, no misleading claims about mnxstore, no bidding on mnxstore trademarks in paid
+            search, no cookie-stuffing or incentivised sign-ups. mnxstore may withhold commission for,
+            suspend, or remove a partner who breaches these terms or engages in fraudulent activity.
+          </p>
+        </div>
+        <div>
+          <h3 class="font-600 text-slate-900">6. Changes</h3>
+          <p class="mt-1">
+            Commission rates, thresholds and these terms may change with notice. Changes apply from
+            their effective date forward and do not retroactively reduce commission already accrued.
+            Either side may end the partnership at any time; commission already earned on still-active
+            referred stores continues under the terms in force when it accrued.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ===== FOOTER ===== #}
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-slate-500 sm:flex-row">
+      <a href="/" class="inline-flex items-center gap-2">
+        <svg class="h-6 w-6" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
+          <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="font-display font-700 text-slate-700">mnx<span class="text-brand-600">store</span></span>
+      </a>
+      <p>&copy; {{ now_year }} mnxstore · <a href="/" class="hover:text-slate-900">Home</a> · <a href="/#pricing" class="hover:text-slate-900">Pricing</a></p>
+    </div>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      els.forEach(function (el) { el.classList.add('in'); }); return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+{% endblock %}

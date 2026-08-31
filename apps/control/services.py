@@ -11,8 +11,9 @@ from django.contrib.auth import login as auth_login
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 
-from apps.accounts.models import PlatformRole
+from apps.accounts.models import PartnerApplication, PlatformRole
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.projects.models import Project
@@ -186,3 +187,55 @@ def stop_impersonation(*, request):
         request=request,
     )
     return original
+
+
+# --- Marketing-partner applications ----------------------------------
+
+def list_partner_applications(status=""):
+    qs = PartnerApplication.objects.select_related("reviewed_by", "created_user")
+    status = (status or "").strip()
+    if status:
+        qs = qs.filter(status=status)
+    return qs
+
+
+def review_partner_application(*, actor, application, decision, note="", request=None):
+    """Approve or reject a partner application.
+
+    Approving mints a ``platform_manager`` (DGC) account with a one-time
+    password, which the caller shows to the admin to pass on. Returns the temp
+    password on approval, else ``None``.
+    """
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can review partner applications.")
+    if application.status != PartnerApplication.Status.PENDING:
+        raise ValidationError("This application has already been reviewed.")
+    if decision not in ("approve", "reject"):
+        raise ValidationError("Unknown decision.")
+
+    application.reviewed_by = actor
+    application.reviewed_at = timezone.now()
+    application.review_note = (note or "")[:300]
+    temp_password = None
+
+    if decision == "approve":
+        temp_password = get_random_string(12)
+        user = create_platform_user(
+            actor=actor, email=application.email, raw_password=temp_password,
+            first_name=application.full_name.split(" ")[0],
+            last_name=" ".join(application.full_name.split(" ")[1:]),
+            platform_role=PlatformRole.MANAGER, request=request,
+        )
+        application.created_user = user
+        application.status = PartnerApplication.Status.APPROVED
+    else:
+        application.status = PartnerApplication.Status.REJECTED
+
+    application.save(update_fields=[
+        "status", "reviewed_by", "reviewed_at", "review_note", "created_user", "updated_at",
+    ])
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=application,
+        changes={"decision": decision, "email": application.email}, request=request,
+    )
+    return temp_password
