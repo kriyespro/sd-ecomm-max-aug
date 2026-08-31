@@ -56,7 +56,10 @@ class BillingSettings(TimeStampedModel):
     invoice_prefix = models.CharField(max_length=12, default="INV")
     currency = models.CharField(max_length=3, default="INR")
 
-    default_commission_monthly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("20"))
+    # DGC (marketing-partner) commission — a share of what a referred store pays
+    # the platform for its subscription, on every paid invoice. Not tied to the
+    # store's own product sales.
+    default_commission_monthly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
     default_commission_yearly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
 
     class Meta:
@@ -89,7 +92,9 @@ class Plan(TimeStampedModel):
     price_monthly = models.DecimalField(**_MONEY, default=Decimal("0"))
     price_yearly = models.DecimalField(**_MONEY, default=Decimal("0"), help_text="Total for 12 months.")
 
-    commission_monthly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("20"))
+    # % of this plan's fee paid to the DGC who signed the store up (recurring,
+    # every paid invoice). Read live at accrual time — see _accrue_commission.
+    commission_monthly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
     commission_yearly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
 
     # Limits — null = unlimited.

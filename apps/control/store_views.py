@@ -53,7 +53,7 @@ class StoreCreateForm(forms.Form):
     plan = forms.ModelChoiceField(queryset=Plan.objects.filter(is_active=True).order_by("sort_order"))
     period = forms.ChoiceField(choices=BillingPeriod.choices, initial=BillingPeriod.MONTHLY)
     manager = forms.ModelChoiceField(
-        required=False, label="Platform manager (commission credited here)",
+        required=False, label="DGC / marketing partner (commission credited here)",
         queryset=User.objects.filter(profile__platform_role=PlatformRole.MANAGER, is_active=True),
     )
 
