@@ -34,11 +34,16 @@ def get_cart(request, project):
 
 def base_context(request, project, **extra):
     cart = get_cart(request, project)
-    # Pull the cart lines once — cart.subtotal / cart.item_count and any template
-    # that iterates cart.items now reuse this instead of re-querying each time.
-    cart._prefetched_objects_cache = {
-        "items": list(cart.items.select_related("product", "variant"))
-    }
+    # Pull the cart lines once so cart.subtotal / cart.item_count and any
+    # template that iterates cart.items reuse them instead of re-querying.
+    # This must be a *materialised queryset*, not a list: Django routes
+    # cart.items.all() / .exists() / .count() / .select_related() through the
+    # reverse manager's get_queryset(), which hands back whatever sits in
+    # _prefetched_objects_cache. A bare list there breaks .exists() (checkout)
+    # and .select_related() (the ornza cart context).
+    cart_items = cart.items.select_related("product", "variant")
+    len(cart_items)  # force evaluation -> fills cart_items._result_cache
+    cart._prefetched_objects_cache = {"items": cart_items}
     chrome = store_chrome(project)
 
     ctx = {
