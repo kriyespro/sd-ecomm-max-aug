@@ -332,6 +332,12 @@ class PartnerApplicationReviewTests(TestCase):
             audience="Runs a seller community.",
         )
 
+    def test_list_page_renders(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get("/admin/partners/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "ravi@x.test")
+
     def test_approve_creates_dgc_login(self):
         self.client.force_login(self.admin)
         resp = self.client.post(f"/admin/partners/{self.app.pk}/review/", {"decision": "approve"})

@@ -36,12 +36,12 @@
       </div>
       {% if a.status == 'pending' %}
       <div class="flex shrink-0 gap-2">
-        <form method="post" action="{{ url('control:partner_application_review', pk=a.pk) }}">
+        <form method="post" action="{{ url('control:partner_application_review', kwargs={'pk': a.pk}) }}">
           {{ csrf_input }}
           <input type="hidden" name="decision" value="approve">
           <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500">Approve</button>
         </form>
-        <form method="post" action="{{ url('control:partner_application_review', pk=a.pk) }}"
+        <form method="post" action="{{ url('control:partner_application_review', kwargs={'pk': a.pk}) }}"
               onsubmit="return confirm('Reject this application?')">
           {{ csrf_input }}
           <input type="hidden" name="decision" value="reject">
