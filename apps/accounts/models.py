@@ -12,7 +12,10 @@ from apps.core.models import TimeStampedModel
 
 class PlatformRole(models.TextChoices):
     NONE = "none", "None"
-    MANAGER = "platform_manager", "Platform Manager"
+    # "Digital Growth Consultant" — runs multiple stores from one dashboard as
+    # their owner, earns commission on those stores. DB value kept as
+    # ``platform_manager`` for continuity with existing rows / code.
+    MANAGER = "platform_manager", "Digital Growth Consultant (DGC)"
     OWNER = "platform_owner", "Platform Owner"
     # Super Admin maps to Django's is_superuser.
 

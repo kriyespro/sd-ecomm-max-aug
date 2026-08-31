@@ -1,3 +1,5 @@
+import re
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
@@ -100,45 +102,71 @@ class DashboardRoutingTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
-class PlatformChromeTintTests(TestCase):
-    """The platform (indigo) tint must show on platform-wide tools even when the
-    admin has a store selected, and never on store-scoped pages."""
+class ChromeThemeByRoleTests(TestCase):
+    """Mission Control chrome colour follows the viewer's highest role:
+    platform=indigo, DGC=orange, store owner=emerald, store manager=rose."""
 
     def setUp(self):
-        User = get_user_model()
-        self.admin = User.objects.create_superuser(
-            username="root", email="root@t.test", password="pw"
-        )
         self.project = Project.objects.create(name="TintCo", status="active")
-        Membership.objects.create(user=self.admin, project=self.project, role="owner")
-        self.client.force_login(self.admin)
         session = self.client.session
         session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         session.save()
 
-    def _tinted(self, path):
+    def _hue(self, path="/admin/products/"):
         body = self.client.get(path, HTTP_HOST="testserver", follow=True).content.decode()
-        return "bg-indigo-950" in body
+        m = re.search(r"<aside class=\"[^\"]*?bg-([a-z]+)-950", body)
+        return m.group(1) if m else None
 
-    def test_platform_pages_are_tinted_despite_a_selected_store(self):
-        for path in ("/admin/", "/admin/stores/", "/admin/users/", "/admin/billing/"):
-            self.assertTrue(self._tinted(path), path)
-
-    def test_store_scoped_pages_are_not_tinted(self):
-        for path in ("/admin/products/", "/admin/orders/", "/admin/cms/theme/"):
-            self.assertFalse(self._tinted(path), path)
-
-    def test_store_owner_never_sees_the_platform_tint(self):
-        User = get_user_model()
-        owner = User.objects.create_user(
-            username="ow", email="ow@t.test", password="pw", is_staff=True
-        )
-        Membership.objects.create(user=owner, project=self.project, role="owner")
-        self.client.force_login(owner)
+    def _login(self, user):
+        self.client.force_login(user)
         session = self.client.session
         session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         session.save()
-        self.assertFalse(self._tinted("/admin/products/"))
+
+    def test_superuser_is_indigo_everywhere(self):
+        su = get_user_model().objects.create_superuser("root", "r@t.test", "pw")
+        self._login(su)
+        self.assertEqual(self._hue("/admin/products/"), "indigo")
+        self.assertEqual(self._hue("/admin/stores/"), "indigo")
+
+    def test_dgc_is_orange(self):
+        from apps.accounts.models import PlatformRole, Profile
+
+        u = get_user_model().objects.create_user("dgc", "d@t.test", "pw", is_staff=True)
+        Profile.objects.update_or_create(
+            user=u, defaults={"platform_role": PlatformRole.MANAGER}
+        )
+        self._login(u)
+        self.assertEqual(self._hue("/admin/stores/"), "orange")
+
+    def test_store_owner_is_emerald_and_store_manager_is_rose(self):
+        User = get_user_model()
+        owner = User.objects.create_user("ow", "o@t.test", "pw", is_staff=True)
+        Membership.objects.create(user=owner, project=self.project, role="owner")
+        self._login(owner)
+        self.assertEqual(self._hue(), "emerald")
+
+        mgr = User.objects.create_user("mg", "m@t.test", "pw", is_staff=True)
+        Membership.objects.create(user=mgr, project=self.project, role="manager")
+        self._login(mgr)
+        self.assertEqual(self._hue(), "rose")
+
+    def test_django_admin_link_only_for_superuser(self):
+        User = get_user_model()
+        su = User.objects.create_superuser("root", "r@t.test", "pw")
+        owner = User.objects.create_user("ow", "o@t.test", "pw", is_staff=True)
+        Membership.objects.create(user=owner, project=self.project, role="owner")
+
+        self._login(su)
+        self.assertContains(
+            self.client.get("/admin/products/", HTTP_HOST="testserver", follow=True),
+            "Django admin /sd/",
+        )
+        self._login(owner)
+        self.assertNotContains(
+            self.client.get("/admin/products/", HTTP_HOST="testserver", follow=True),
+            "Django admin /sd/",
+        )
 
 
 class UserCreateTests(TestCase):

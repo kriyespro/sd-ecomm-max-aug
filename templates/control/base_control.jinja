@@ -3,14 +3,17 @@
 {% block title %}{% block page_title %}Mission Control{% endblock %} · Mission Control{% endblock %}
 
 {% block body %}
-{# Platform mode = a platform person not currently scoped into a store. Tint the
-   chrome indigo so it is unmistakable from a store's (slate) Mission Control. #}
+{# Mission Control colour scheme by the viewer's highest role:
+   platform (superuser / Platform Owner) = indigo, DGC (Platform Manager) =
+   orange, store owner = green, store manager = pink, staff = slate. #}
+{% set _hue = {'platform':'indigo','dgc':'orange','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
+{% set _badge = {'platform':'Platform','dgc':'DGC','owner':'Owner','manager':'Manager','staff':''}[control_chrome_theme] %}
 {% set _plat = control_platform_scope %}
-{% set _side = 'bg-indigo-950' if _plat else 'bg-slate-900' %}
-{% set _side_hover = 'hover:bg-indigo-900' if _plat else 'hover:bg-slate-800' %}
-{% set _side_active = 'bg-indigo-900 text-white' if _plat else 'bg-slate-800 text-white' %}
-{% set _side_border = 'border-indigo-900' if _plat else 'border-slate-800' %}
-<div x-data="{ sidebar: true, nav: false }" class="flex min-h-screen {{ 'bg-indigo-50' if _plat else 'bg-slate-100' }}">
+{% set _side = 'bg-' ~ _hue ~ '-950' %}
+{% set _side_hover = 'hover:bg-' ~ _hue ~ '-900' %}
+{% set _side_active = 'bg-' ~ _hue ~ '-900 text-white' %}
+{% set _side_border = 'border-' ~ _hue ~ '-900' %}
+<div x-data="{ sidebar: true, nav: false }" class="flex min-h-screen bg-{{ _hue }}-50">
 
   {# backdrop behind the mobile drawer #}
   <div x-show="nav" x-cloak @click="nav = false"
@@ -96,27 +99,29 @@
           {{ navlink("control:store_plan", "Plan & billing", "💠") }}
         {% endif %}
       {% elif control_is_platform_staff %}
-        <div x-show="sidebar" x-cloak class="mt-4 rounded-lg {{ 'bg-indigo-900/60' if _plat else 'bg-slate-800/60' }} p-3 text-xs text-slate-400">
+        <div x-show="sidebar" x-cloak class="mt-4 rounded-lg bg-{{ _hue }}-900/60 p-3 text-xs text-slate-400">
           Pick a store from <a href="{{ url('control:stores') }}" class="text-slate-200 underline">Stores</a>
           to manage its catalog, orders and settings.
         </div>
       {% endif %}
     </nav>
+    {% if request.user.is_superuser %}
     <a href="/sd/" class="border-t {{ _side_border }} px-4 py-3 text-xs hover:text-white">
       <span x-show="sidebar" x-cloak>Django admin /sd/</span>
       <span x-show="!sidebar" x-cloak>⚙</span>
     </a>
+    {% endif %}
   </aside>
 
   {# --- Main --- #}
   <div class="flex min-w-0 flex-1 flex-col">
-    <header class="flex h-14 items-center gap-3 border-b {{ 'border-indigo-300' if _plat else 'border-slate-200' }} bg-white px-4">
+    <header class="flex h-14 items-center gap-3 border-b border-{{ _hue }}-300 bg-white px-4">
       <button aria-label="Menu"
               @click="window.matchMedia('(min-width:1024px)').matches ? (sidebar = !sidebar) : (nav = !nav, sidebar = true)"
               class="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
       <h1 class="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-slate-700">
         <span class="truncate">{% block header_title %}{{ self.page_title() }}{% endblock %}</span>
-        {% if _plat %}<span class="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Platform</span>{% endif %}
+        {% if _badge %}<span class="shrink-0 rounded bg-{{ _hue }}-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-{{ _hue }}-700">{{ _badge }}</span>{% endif %}
       </h1>
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">

@@ -12,6 +12,25 @@ from apps.projects.services import projects_for_user
 from .mixins import get_active_project
 
 
+def _chrome_theme(user, store_role_val, platform_scope):
+    """One keyword driving the Mission Control colour scheme, by the viewer's
+    highest role: superuser / Platform Owner -> platform, Platform Manager
+    (a Digital Growth Consultant) -> dgc, then per store role."""
+    profile = getattr(user, "profile", None)
+    role = getattr(profile, "platform_role", "none")
+    if user.is_superuser or role == "platform_owner":
+        return "platform"
+    if role == "platform_manager":
+        return "dgc"
+    if platform_scope:
+        return "platform"
+    if store_role_val == "owner":
+        return "owner"
+    if store_role_val == "manager":
+        return "manager"
+    return "staff"
+
+
 def _is_store_scoped_view(request, default):
     """Is the current view scoped to one store (mixes in ``ActiveProjectMixin``)?
 
@@ -42,6 +61,7 @@ def control(request):
     platform_scope = platform_staff and not _is_store_scoped_view(
         request, default=active is not None
     )
+    role = store_role(user, active)
     return {
         "control_active_project": active,
         "control_available_projects": available,
@@ -49,7 +69,8 @@ def control(request):
         "control_is_platform_admin": is_platform_admin(user),
         "control_is_platform_staff": platform_staff,
         "control_platform_scope": platform_scope,
+        "control_chrome_theme": _chrome_theme(user, role, platform_scope),
         "control_can_manage_store": can_manage,
-        "control_store_role": store_role(user, active),
+        "control_store_role": role,
         "control_can_upload_skin": can_manage and (upload_on or is_platform_admin(user)),
     }
