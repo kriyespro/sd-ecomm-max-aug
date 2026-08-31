@@ -99,6 +99,48 @@ class DashboardRoutingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
 
+@override_settings(ALLOWED_HOSTS=["*"])
+class PlatformChromeTintTests(TestCase):
+    """The platform (indigo) tint must show on platform-wide tools even when the
+    admin has a store selected, and never on store-scoped pages."""
+
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.project = Project.objects.create(name="TintCo", status="active")
+        Membership.objects.create(user=self.admin, project=self.project, role="owner")
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        session.save()
+
+    def _tinted(self, path):
+        body = self.client.get(path, HTTP_HOST="testserver", follow=True).content.decode()
+        return "bg-indigo-950" in body
+
+    def test_platform_pages_are_tinted_despite_a_selected_store(self):
+        for path in ("/admin/", "/admin/stores/", "/admin/users/", "/admin/billing/"):
+            self.assertTrue(self._tinted(path), path)
+
+    def test_store_scoped_pages_are_not_tinted(self):
+        for path in ("/admin/products/", "/admin/orders/", "/admin/cms/theme/"):
+            self.assertFalse(self._tinted(path), path)
+
+    def test_store_owner_never_sees_the_platform_tint(self):
+        User = get_user_model()
+        owner = User.objects.create_user(
+            username="ow", email="ow@t.test", password="pw", is_staff=True
+        )
+        Membership.objects.create(user=owner, project=self.project, role="owner")
+        self.client.force_login(owner)
+        session = self.client.session
+        session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        session.save()
+        self.assertFalse(self._tinted("/admin/products/"))
+
+
 class UserCreateTests(TestCase):
     def setUp(self):
         User = get_user_model()

@@ -5,12 +5,12 @@
 {% block body %}
 {# Platform mode = a platform person not currently scoped into a store. Tint the
    chrome indigo so it is unmistakable from a store's (slate) Mission Control. #}
-{% set _plat = control_is_platform_staff and not control_active_project %}
+{% set _plat = control_platform_scope %}
 {% set _side = 'bg-indigo-950' if _plat else 'bg-slate-900' %}
 {% set _side_hover = 'hover:bg-indigo-900' if _plat else 'hover:bg-slate-800' %}
 {% set _side_active = 'bg-indigo-900 text-white' if _plat else 'bg-slate-800 text-white' %}
 {% set _side_border = 'border-indigo-900' if _plat else 'border-slate-800' %}
-<div x-data="{ sidebar: true }" class="flex min-h-screen bg-slate-100">
+<div x-data="{ sidebar: true }" class="flex min-h-screen {{ 'bg-indigo-50' if _plat else 'bg-slate-100' }}">
 
   {# --- Sidebar --- #}
   <aside :class="sidebar ? 'w-60' : 'w-16'"
