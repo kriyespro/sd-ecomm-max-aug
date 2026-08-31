@@ -56,15 +56,15 @@
         a few minutes — or click <span class="font-medium">Verify now</span>.</p>
 
       <p class="mt-3 font-semibold text-slate-700">Or, without Cloudflare — either one:</p>
-      <table class="mt-2 w-full text-left font-mono">
+      <div class="overflow-x-auto"><table class="mt-2 w-full text-left font-mono min-w-[36rem]">
         <tr><td class="py-0.5 pr-4 text-slate-400">A record</td><td class="break-all">{{ d.host }} → {{ platform_ip or 'platform IP' }}</td></tr>
-      </table>
+      </table></div>
       <p class="mt-2 text-slate-400">…or prove ownership with a TXT record:</p>
-      <table class="mt-1 w-full text-left font-mono">
+      <div class="overflow-x-auto"><table class="mt-1 w-full text-left font-mono min-w-[36rem]">
         <tr><td class="py-0.5 pr-4 text-slate-400">Type</td><td>TXT</td></tr>
         <tr><td class="py-0.5 pr-4 text-slate-400">Name / Host</td><td class="break-all">{{ d.txt_name }}</td></tr>
         <tr><td class="py-0.5 pr-4 text-slate-400">Value</td><td class="break-all">{{ d.txt_value }}</td></tr>
-      </table>
+      </table></div>
       {% if d.last_check_error %}<p class="mt-3 text-amber-700">{{ d.last_check_error }}</p>{% endif %}
       {% if d.last_checked_at %}<p class="mt-1 text-slate-400">Last checked {{ d.last_checked_at.strftime('%d %b %H:%M') }}</p>{% endif %}
     </div>

@@ -32,7 +32,7 @@
       <a href="{{ url('control:inventory_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add stock record</a>
     </div>
   </div>
-  <table class="w-full text-left text-sm">
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr>
         <th class="px-4 py-2">Product</th><th class="px-4 py-2">Warehouse</th>
@@ -44,7 +44,7 @@
     <tbody id="inv-rows" class="divide-y divide-slate-100">
       {% include "control/inventory/_item_rows.jinja" %}
     </tbody>
-  </table>
+  </table></div>
 </div>
 
 <div id="modal"></div>

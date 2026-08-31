@@ -4,7 +4,7 @@
 {% block content %}
 <div class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
   <header class="mb-10">
-    <h1 class="font-display text-4xl">
+    <h1 class="font-display text-3xl sm:text-4xl">
       {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
       {% elif query %}“{{ query }}”
       {% else %}Shop all{% endif %}

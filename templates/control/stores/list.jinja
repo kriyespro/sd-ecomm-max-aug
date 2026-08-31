@@ -15,7 +15,7 @@
   </div>
 
   <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-    <table class="w-full text-left text-sm">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
         <tr><th class="px-4 py-2">Store</th><th class="px-4 py-2">Domain</th><th class="px-4 py-2">Plan</th>
           <th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right"></th></tr>
@@ -41,7 +41,7 @@
         <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No stores yet. Create one to get started.</td></tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </div>
 </div>
 {% endblock %}

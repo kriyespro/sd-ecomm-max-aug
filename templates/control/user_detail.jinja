@@ -8,15 +8,15 @@
 
   <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
     <h2 class="text-lg font-semibold">{{ target.get_full_name() or target.get_username() }}</h2>
-    <dl class="mt-4 grid grid-cols-3 gap-y-3 text-sm">
-      <dt class="text-slate-400">Username</dt><dd class="col-span-2">{{ target.get_username() }}</dd>
-      <dt class="text-slate-400">Email</dt><dd class="col-span-2">{{ target.email or "—" }}</dd>
-      <dt class="text-slate-400">Joined</dt><dd class="col-span-2">{{ target.date_joined.strftime("%b %d, %Y %H:%M") }}</dd>
-      <dt class="text-slate-400">Last login</dt><dd class="col-span-2">{{ target.last_login.strftime("%b %d, %Y %H:%M") if target.last_login else "never" }}</dd>
-      <dt class="text-slate-400">Phone</dt><dd class="col-span-2">{{ target.profile.phone or "—" }}</dd>
-      <dt class="text-slate-400">Platform role</dt><dd class="col-span-2">{{ target.profile.get_platform_role_display() }}</dd>
-      <dt class="text-slate-400">Staff / Super</dt><dd class="col-span-2">{{ target.is_staff }} / {{ target.is_superuser }}</dd>
-      <dt class="text-slate-400">Banned</dt><dd class="col-span-2">{{ target.profile.is_banned }}</dd>
+    <dl class="mt-4 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-3 sm:gap-y-3">
+      <dt class="text-slate-400">Username</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.get_username() }}</dd>
+      <dt class="text-slate-400">Email</dt><dd class="mb-2 break-all sm:col-span-2 sm:mb-0">{{ target.email or "—" }}</dd>
+      <dt class="text-slate-400">Joined</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.date_joined.strftime("%b %d, %Y %H:%M") }}</dd>
+      <dt class="text-slate-400">Last login</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.last_login.strftime("%b %d, %Y %H:%M") if target.last_login else "never" }}</dd>
+      <dt class="text-slate-400">Phone</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.profile.phone or "—" }}</dd>
+      <dt class="text-slate-400">Platform role</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.profile.get_platform_role_display() }}</dd>
+      <dt class="text-slate-400">Staff / Super</dt><dd class="mb-2 sm:col-span-2 sm:mb-0">{{ target.is_staff }} / {{ target.is_superuser }}</dd>
+      <dt class="text-slate-400">Banned</dt><dd class="sm:col-span-2">{{ target.profile.is_banned }}</dd>
     </dl>
   </div>
 

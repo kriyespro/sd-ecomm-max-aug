@@ -39,7 +39,7 @@
   <div class="grid gap-5 lg:grid-cols-2">
     <div class="rounded-xl bg-white ring-1 ring-slate-200">
       <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Recent invoices</div>
-      <table class="w-full text-left text-sm">
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
         <tbody class="divide-y divide-slate-100">
           {% for inv in recent_invoices %}
           <tr>
@@ -53,12 +53,12 @@
           </tr>
           {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="4">No invoices yet.</td></tr>{% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
 
     <div class="rounded-xl bg-white ring-1 ring-slate-200">
       <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Overdue</div>
-      <table class="w-full text-left text-sm">
+      <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
         <tbody class="divide-y divide-slate-100">
           {% for inv in overdue %}
           <tr>
@@ -68,7 +68,7 @@
           </tr>
           {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="3">Nothing overdue.</td></tr>{% endfor %}
         </tbody>
-      </table>
+      </table></div>
     </div>
   </div>
 </div>

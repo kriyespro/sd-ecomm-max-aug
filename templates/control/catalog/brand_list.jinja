@@ -7,7 +7,7 @@
     <h2 class="text-sm font-semibold text-slate-700">Brands · {{ active_project.name }}</h2>
     <a href="{{ url('control:brand_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New brand</a>
   </div>
-  <table class="w-full text-left text-sm">
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Slug</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
     </thead>
@@ -26,6 +26,6 @@
       <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No brands yet.</td></tr>
       {% endfor %}
     </tbody>
-  </table>
+  </table></div>
 </div>
 {% endblock %}

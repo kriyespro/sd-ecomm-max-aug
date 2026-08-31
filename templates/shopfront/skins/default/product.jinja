@@ -6,7 +6,7 @@
 {% set imgs = product.images.all() | list %}
 {% set saving = (product.price - product.current_price) if product.on_sale else 0 %}
 
-<div class="mx-auto max-w-7xl px-5 py-8 lg:px-8"
+<div class="mx-auto max-w-7xl px-5 py-8 pb-28 lg:px-8 lg:pb-8"
      x-data="{
        active: 0,
        total: {{ imgs | length }},
@@ -68,7 +68,7 @@
     {# ---------- BUY COLUMN ---------- #}
     <div class="lg:sticky lg:top-24 lg:h-fit lg:pt-2">
       {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">{{ product.brand.name }}</p>{% endif %}
-      <h1 class="mt-2 font-display text-4xl leading-tight">{{ product.title }}</h1>
+      <h1 class="mt-2 font-display text-3xl leading-tight sm:text-4xl">{{ product.title }}</h1>
 
       {% if product.rating_count %}
       <a href="#reviews" class="mt-3 inline-flex items-center gap-2 text-sm">

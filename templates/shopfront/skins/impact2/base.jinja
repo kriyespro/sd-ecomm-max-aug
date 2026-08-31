@@ -70,11 +70,11 @@ h1,h2,h3,.font-display{font-weight:800;letter-spacing:-.025em;}
           :class="scrolled ? 'border-line bg-paper/85 backdrop-blur-md' : 'border-transparent bg-paper'"
           class="sticky top-0 z-40 border-b transition-colors">
     <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 lg:px-8">
-      <button class="lg:hidden" @click="menuOpen=true" aria-label="Menu">
+      <button class="shrink-0 lg:hidden" @click="menuOpen=true" aria-label="Menu">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
 
-      <a href="{{ url('shopfront:home') }}" class="font-display text-2xl font-500 tracking-[0.14em] text-ink lg:text-[1.7rem]">
+      <a href="{{ url('shopfront:home') }}" class="min-w-0 truncate font-display text-xl font-500 tracking-[0.14em] text-ink sm:text-2xl lg:text-[1.7rem]">
         {% include "shopfront/partials/_brand.jinja" %}
       </a>
 
@@ -85,7 +85,7 @@ h1,h2,h3,.font-display{font-weight:800;letter-spacing:-.025em;}
         {% endfor %}
       </nav>
 
-      <div class="flex items-center gap-4">
+      <div class="flex shrink-0 items-center gap-4">
         <button @click="searchOpen = !searchOpen" aria-label="Search" class="hover:text-accent">
           <svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="m20 20-3.5-3.5"/></svg>
         </button>

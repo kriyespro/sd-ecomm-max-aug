@@ -3,7 +3,7 @@
 
 {% block content %}
 <div class="mx-auto max-w-6xl px-5 py-12 lg:px-8">
-  <h1 class="mb-10 font-display text-4xl">Checkout</h1>
+  <h1 class="mb-10 font-display text-3xl sm:text-4xl">Checkout</h1>
 
   <form method="post" action="{{ url('shopfront:checkout') }}" class="grid gap-12 lg:grid-cols-3">
     {{ csrf_input }}

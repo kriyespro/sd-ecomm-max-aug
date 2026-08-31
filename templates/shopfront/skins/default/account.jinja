@@ -6,7 +6,7 @@
 {% if user.is_authenticated %}
   <div class="flex items-center justify-between">
     <div>
-      <h1 class="font-display text-4xl">Hello{{ ', ' ~ user.first_name if user.first_name }}</h1>
+      <h1 class="font-display text-3xl sm:text-4xl">Hello{{ ', ' ~ user.first_name if user.first_name }}</h1>
       <p class="mt-1 text-sm text-mute">{{ user.email }}</p>
     </div>
     <form method="post" action="{{ url('shopfront:logout') }}">{{ csrf_input }}

@@ -10,18 +10,27 @@
 {% set _side_hover = 'hover:bg-indigo-900' if _plat else 'hover:bg-slate-800' %}
 {% set _side_active = 'bg-indigo-900 text-white' if _plat else 'bg-slate-800 text-white' %}
 {% set _side_border = 'border-indigo-900' if _plat else 'border-slate-800' %}
-<div x-data="{ sidebar: true }" class="flex min-h-screen {{ 'bg-indigo-50' if _plat else 'bg-slate-100' }}">
+<div x-data="{ sidebar: true, nav: false }" class="flex min-h-screen {{ 'bg-indigo-50' if _plat else 'bg-slate-100' }}">
 
-  {# --- Sidebar --- #}
-  <aside :class="sidebar ? 'w-60' : 'w-16'"
-         class="flex flex-col {{ _side }} text-slate-300 transition-all duration-200">
+  {# backdrop behind the mobile drawer #}
+  <div x-show="nav" x-cloak @click="nav = false"
+       class="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"></div>
+
+  {# --- Sidebar: off-canvas drawer below lg, static rail at lg+ --- #}
+  <aside class="fixed inset-y-0 left-0 z-40 flex w-60 flex-col {{ _side }} text-slate-300
+                transition-transform duration-200
+                lg:static lg:z-auto lg:translate-x-0 lg:transition-[width]"
+         :class="{
+           '-translate-x-full': !nav, 'translate-x-0': nav,
+           'lg:w-60': sidebar, 'lg:w-16': !sidebar
+         }">
     <div class="flex h-14 items-center gap-2 px-4 font-semibold text-white">
       <span class="text-lg">⌘</span>
       <span x-show="sidebar" x-cloak>Mission Control</span>
     </div>
     <nav class="flex-1 overflow-y-auto px-2 py-2 text-sm">
       {% macro navlink(name, label, icon) %}
-        <a href="{{ url(name) }}"
+        <a href="{{ url(name) }}" @click="nav = false"
            class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} hover:text-white
                   {{ _side_active if request.resolver_match and request.resolver_match.view_name == name else '' }}">
           <span class="w-4 text-center">{{ icon }}</span>
@@ -100,15 +109,17 @@
   </aside>
 
   {# --- Main --- #}
-  <div class="flex flex-1 flex-col">
-    <header class="flex h-14 items-center justify-between border-b {{ 'border-indigo-300' if _plat else 'border-slate-200' }} bg-white px-4">
-      <button @click="sidebar = !sidebar" class="rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
-      <h1 class="flex items-center gap-2 text-sm font-semibold text-slate-700">
-        {% block header_title %}{{ self.page_title() }}{% endblock %}
-        {% if _plat %}<span class="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Platform</span>{% endif %}
+  <div class="flex min-w-0 flex-1 flex-col">
+    <header class="flex h-14 items-center gap-3 border-b {{ 'border-indigo-300' if _plat else 'border-slate-200' }} bg-white px-4">
+      <button aria-label="Menu"
+              @click="window.matchMedia('(min-width:1024px)').matches ? (sidebar = !sidebar) : (nav = !nav, sidebar = true)"
+              class="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
+      <h1 class="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-slate-700">
+        <span class="truncate">{% block header_title %}{{ self.page_title() }}{% endblock %}</span>
+        {% if _plat %}<span class="shrink-0 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Platform</span>{% endif %}
       </h1>
 
-      <div class="flex items-center gap-3">
+      <div class="flex shrink-0 items-center gap-2 sm:gap-3">
         {# Store switcher — a dropdown for a handful of stores, a link once there are many #}
         {% if control_active_project %}
           {% if control_available_count and control_available_count <= 12 %}
@@ -160,7 +171,7 @@
     {% endif %}
 
     {% if messages %}
-    <div class="space-y-1 px-6 pt-4">
+    <div class="space-y-1 px-4 pt-4 sm:px-6">
       {% for message in messages %}
       <div class="rounded-lg px-3 py-2 text-sm
                   {{ 'bg-emerald-50 text-emerald-800' if 'success' in message.tags
@@ -172,7 +183,7 @@
     </div>
     {% endif %}
 
-    <main class="flex-1 p-6">
+    <main class="flex-1 p-4 sm:p-6">
       {% block content %}{% endblock %}
     </main>
   </div>

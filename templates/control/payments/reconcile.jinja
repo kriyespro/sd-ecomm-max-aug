@@ -8,7 +8,7 @@
 
   <div class="rounded-xl bg-white ring-1 ring-slate-200">
     {% if mismatches %}
-    <table class="w-full text-left text-sm">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
         <tr><th class="px-4 py-2">Order</th><th class="px-4 py-2">Issue</th></tr>
       </thead>
@@ -20,7 +20,7 @@
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% else %}
     <p class="p-6 text-center text-sm text-emerald-700">All orders reconcile with their payments.</p>
     {% endif %}

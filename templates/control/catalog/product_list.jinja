@@ -32,13 +32,13 @@
       <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
     </div>
   </div>
-  <table class="w-full text-left text-sm">
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">SKU</th><th class="px-4 py-2">Price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Category</th><th class="px-4 py-2 text-right">Actions</th></tr>
     </thead>
     <tbody id="product-rows" class="divide-y divide-slate-100">
       {% include "control/catalog/_product_rows.jinja" %}
     </tbody>
-  </table>
+  </table></div>
 </div>
 {% endblock %}

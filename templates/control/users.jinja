@@ -19,7 +19,7 @@
            hx-swap="innerHTML"
            class="w-full max-w-md rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
   </div>
-  <table class="w-full text-left text-sm">
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr>
         <th class="px-4 py-2">User</th>
@@ -32,6 +32,6 @@
     <tbody id="user-rows" class="divide-y divide-slate-100">
       {% include "control/partials/_user_rows.jinja" %}
     </tbody>
-  </table>
+  </table></div>
 </div>
 {% endblock %}
