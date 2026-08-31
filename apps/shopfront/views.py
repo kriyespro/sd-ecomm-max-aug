@@ -21,7 +21,7 @@ from django.views import View
 from .render import render, render_to_string
 
 from apps.cart import services as cart_svc
-from apps.catalog.models import Product, Variant
+from apps.catalog.models import Product, ProductImage, Variant
 from apps.categories.models import Category
 from apps.checkout import services as checkout_svc
 from apps.cms.models import Page
@@ -49,26 +49,42 @@ class HomeView(View):
         from apps.reviews.models import Review
 
         project = current_project(request)
-        catalogue = list(
+
+        # Only the columns _card.jinja reads — skips the description / SEO blobs.
+        base = (
             Product.objects.filter(project=project, status="active", search_indexed=True)
-            .select_related("brand", "category").prefetch_related("images")
+            .only("id", "project", "slug", "title", "price", "sale_price",
+                  "is_new_arrival", "rating_avg", "rating_count")
+            .prefetch_related("images")
             .order_by("-created_at")
         )
 
-        featured = [p for p in catalogue if p.is_featured][:8] or catalogue[:8]
-        new_arrivals = [p for p in catalogue if p.is_new_arrival][:8] or catalogue[:8]
+        def _rail(qs):
+            rows = list(qs[:8])
+            return rows or list(base[:8])
 
-        # one representative image per category for the tile grid — from the
-        # already-loaded catalogue, no extra queries
-        tiles, seen = [], set()
-        for p in catalogue:
-            c = p.category
-            if c and c.id not in seen and c.is_active:
-                seen.add(c.id)
-                imgs = list(p.images.all())
-                tiles.append({"category": c, "image": imgs[0].image.url if imgs else None})
-            if len(tiles) == 6:
-                break
+        featured = _rail(base.filter(is_featured=True))
+        new_arrivals = _rail(base.filter(is_new_arrival=True))
+
+        # tile grid: up to 6 active categories that have a live product, each
+        # with one representative image
+        tiles = []
+        for cat in (
+            Category.objects.filter(
+                project=project, is_active=True,
+                products__status="active", products__search_indexed=True,
+            )
+            .distinct().order_by("order", "name")[:6]
+        ):
+            pi = (
+                ProductImage.objects.filter(
+                    product__project=project, product__category=cat,
+                    product__status="active", product__search_indexed=True,
+                )
+                .order_by("-is_primary", "-product__created_at")
+                .first()
+            )
+            tiles.append({"category": cat, "image": pi.image.url if pi else None})
 
         testimonials = list(
             Review.objects.filter(project=project, status=ReviewStatus.APPROVED)
@@ -93,7 +109,9 @@ class ShopView(View):
         project = current_project(request)
         qs = (
             Product.objects.filter(project=project, status="active", search_indexed=True)
-            .select_related("brand", "category").prefetch_related("images")
+            .only("id", "project", "slug", "title", "price", "sale_price",
+                  "is_new_arrival", "rating_avg", "rating_count")
+            .prefetch_related("images")
         )
         f = request.GET
         cat = f.get("category", "").strip()

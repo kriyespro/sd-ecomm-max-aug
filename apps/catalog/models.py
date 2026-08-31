@@ -218,6 +218,12 @@ class Product(TenantScopedModel, SeoFieldsModel):
         indexes = [
             models.Index(fields=["project", "status"]),
             models.Index(fields=["project", "sku"]),
+            # storefront product feed (home / shop default sort)
+            models.Index(fields=["project", "status", "search_indexed", "-created_at"],
+                         name="catalog_prod_feed_idx"),
+            # category-filtered storefront listing
+            models.Index(fields=["project", "category", "status"],
+                         name="catalog_prod_cat_idx"),
         ]
 
     def __str__(self):

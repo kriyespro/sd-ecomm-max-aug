@@ -24,6 +24,14 @@ keepalive = 5
 max_requests = int(os.environ.get("GUNICORN_MAX_REQUESTS", 1000))
 max_requests_jitter = 100
 
+# Load the app in the master, then fork workers — the Python heap (Django,
+# Pillow, compiled templates) is shared copy-on-write, so N workers cost far
+# less than N full interpreters. Safe here: no DB/socket is opened at import
+# (connections are lazy and per-worker; CONN_MAX_AGE handles reuse).
+preload_app = os.environ.get("GUNICORN_PRELOAD", "true").lower() != "false"
+# gthread scratch space on tmpfs, not the (possibly disk-backed) default.
+worker_tmp_dir = "/dev/shm"
+
 # Trust the X-Forwarded-* headers from the edge proxy only.
 forwarded_allow_ips = os.environ.get("GUNICORN_FORWARDED_ALLOW_IPS", "*")
 
