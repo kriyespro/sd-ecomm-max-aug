@@ -15,7 +15,7 @@ from apps.projects.models import Project
 User = get_user_model()
 
 
-def _get_or_create_staff_user(email, name=""):
+def _get_or_create_staff_user(email, name="", password=None):
     email = email.strip().lower()
     user = User.objects.filter(email__iexact=email).first()
     created = user is None
@@ -24,7 +24,10 @@ def _get_or_create_staff_user(email, name=""):
         user = User.objects.create_user(
             username=email[:150], email=email, first_name=first, last_name=last,
         )
-        user.set_unusable_password()
+        if password:
+            user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.is_staff = True
         user.save()
     elif not user.is_staff:
@@ -37,7 +40,8 @@ def _get_or_create_staff_user(email, name=""):
 @transaction.atomic
 def create_store(*, name, owner_email, plan, actor, request=None,
                  primary_domain="", currency="INR", country="IN",
-                 owner_name="", period=BillingPeriod.MONTHLY, manager=None):
+                 owner_name="", period=BillingPeriod.MONTHLY, manager=None,
+                 owner_password=None):
     name = (name or "").strip()
     if not name:
         raise ValidationError("Store name is required.")
@@ -62,7 +66,7 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     sub.manager = manager
     sub.save(update_fields=["plan", "period", "manager", "updated_at"])
 
-    owner, created_owner = _get_or_create_staff_user(owner_email, owner_name)
+    owner, created_owner = _get_or_create_staff_user(owner_email, owner_name, owner_password)
     Membership.objects.update_or_create(
         user=owner, project=project,
         defaults={"role": StoreRole.OWNER, "is_active": True},
@@ -74,9 +78,9 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     return project, owner, created_owner
 
 
-def add_member(*, project, email, name, role, actor, request=None):
+def add_member(*, project, email, name, role, actor, request=None, password=None):
     """Add (creating the account if needed) an owner / manager / staff member."""
-    _get_or_create_staff_user(email, name)  # ensure the account exists
+    _get_or_create_staff_user(email, name, password)  # ensure the account exists
     return team_svc.add_member(
         actor=actor, project=project, email=email, role=role, request=request,
     )

@@ -3,11 +3,18 @@
 {% block title %}{% block page_title %}Mission Control{% endblock %} · Mission Control{% endblock %}
 
 {% block body %}
+{# Platform mode = a platform person not currently scoped into a store. Tint the
+   chrome indigo so it is unmistakable from a store's (slate) Mission Control. #}
+{% set _plat = control_is_platform_staff and not control_active_project %}
+{% set _side = 'bg-indigo-950' if _plat else 'bg-slate-900' %}
+{% set _side_hover = 'hover:bg-indigo-900' if _plat else 'hover:bg-slate-800' %}
+{% set _side_active = 'bg-indigo-900 text-white' if _plat else 'bg-slate-800 text-white' %}
+{% set _side_border = 'border-indigo-900' if _plat else 'border-slate-800' %}
 <div x-data="{ sidebar: true }" class="flex min-h-screen bg-slate-100">
 
   {# --- Sidebar --- #}
   <aside :class="sidebar ? 'w-60' : 'w-16'"
-         class="flex flex-col bg-slate-900 text-slate-300 transition-all duration-200">
+         class="flex flex-col {{ _side }} text-slate-300 transition-all duration-200">
     <div class="flex h-14 items-center gap-2 px-4 font-semibold text-white">
       <span class="text-lg">⌘</span>
       <span x-show="sidebar" x-cloak>Mission Control</span>
@@ -15,8 +22,8 @@
     <nav class="flex-1 overflow-y-auto px-2 py-2 text-sm">
       {% macro navlink(name, label, icon) %}
         <a href="{{ url(name) }}"
-           class="flex items-center gap-3 rounded-lg px-3 py-1.5 hover:bg-slate-800 hover:text-white
-                  {{ 'bg-slate-800 text-white' if request.resolver_match and request.resolver_match.view_name == name else '' }}">
+           class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} hover:text-white
+                  {{ _side_active if request.resolver_match and request.resolver_match.view_name == name else '' }}">
           <span class="w-4 text-center">{{ icon }}</span>
           <span x-show="sidebar" x-cloak>{{ label }}</span>
         </a>
@@ -80,13 +87,13 @@
           {{ navlink("control:store_plan", "Plan & billing", "💠") }}
         {% endif %}
       {% elif control_is_platform_staff %}
-        <div x-show="sidebar" x-cloak class="mt-4 rounded-lg bg-slate-800/60 p-3 text-xs text-slate-400">
+        <div x-show="sidebar" x-cloak class="mt-4 rounded-lg {{ 'bg-indigo-900/60' if _plat else 'bg-slate-800/60' }} p-3 text-xs text-slate-400">
           Pick a store from <a href="{{ url('control:stores') }}" class="text-slate-200 underline">Stores</a>
           to manage its catalog, orders and settings.
         </div>
       {% endif %}
     </nav>
-    <a href="/sd/" class="border-t border-slate-800 px-4 py-3 text-xs hover:text-white">
+    <a href="/sd/" class="border-t {{ _side_border }} px-4 py-3 text-xs hover:text-white">
       <span x-show="sidebar" x-cloak>Django admin /sd/</span>
       <span x-show="!sidebar" x-cloak>⚙</span>
     </a>
@@ -94,9 +101,12 @@
 
   {# --- Main --- #}
   <div class="flex flex-1 flex-col">
-    <header class="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
+    <header class="flex h-14 items-center justify-between border-b {{ 'border-indigo-300' if _plat else 'border-slate-200' }} bg-white px-4">
       <button @click="sidebar = !sidebar" class="rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
-      <h1 class="text-sm font-semibold text-slate-700">{% block header_title %}{{ self.page_title() }}{% endblock %}</h1>
+      <h1 class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+        {% block header_title %}{{ self.page_title() }}{% endblock %}
+        {% if _plat %}<span class="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">Platform</span>{% endif %}
+      </h1>
 
       <div class="flex items-center gap-3">
         {# Store switcher — a dropdown for a handful of stores, a link once there are many #}

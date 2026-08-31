@@ -44,7 +44,7 @@
           </td>
           <td class="px-4 py-2">
             <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">{{ m.get_role_display() }}</span>
-            {% if not m.user.has_usable_password() %}<span class="ml-1 text-[10px] text-amber-600">needs password</span>{% endif %}
+            {% if not m.user.has_usable_password() %}<a href="{{ url('control:user_set_password', kwargs={'pk': m.user.pk}) }}" class="ml-1 text-[10px] text-amber-600 underline">set password</a>{% endif %}
           </td>
         </tr>
         {% endfor %}
@@ -56,6 +56,8 @@
       <input name="email" type="email" required placeholder="person@email.com"
              class="min-w-[14rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
       <input name="name" placeholder="Name (if new)" class="w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <input name="password" type="password" autocomplete="new-password" placeholder="Password (if new)"
+             class="w-44 rounded-lg border border-slate-300 px-3 py-2 text-sm">
       <select name="role" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
         {% for val, label in role_choices %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
       </select>

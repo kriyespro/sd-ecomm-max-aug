@@ -49,6 +49,7 @@ urlpatterns = [
 
     # Users (platform-wide directory)
     path("users/", views.UserListView.as_view(), name="users"),
+    path("users/new/", views.UserCreateView.as_view(), name="user_create"),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user_detail"),
     path("users/<int:pk>/set-password/", views.UserSetPasswordView.as_view(), name="user_set_password"),
     path("users/<int:pk>/ban/", views.UserBanView.as_view(), name="user_ban"),

@@ -8,10 +8,11 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.utils import timezone
 
+from apps.accounts.models import PlatformRole
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.projects.models import Project
@@ -61,6 +62,44 @@ def search_users(query="", limit=50):
 def _is_platform_admin(user):
     profile = getattr(user, "profile", None)
     return bool(user.is_superuser or (profile and profile.is_platform_admin))
+
+
+def create_platform_user(*, actor, email, raw_password, first_name="",
+                         last_name="", platform_role=PlatformRole.NONE, request=None):
+    """Platform-admin creates a standalone account. No store needed — the user
+    can be assigned to a store later. Authority + audit enforced here; password
+    strength is validated in the form."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can create users.")
+    email = (email or "").strip().lower()
+    if not email:
+        raise ValidationError("Email is required.")
+    if User.objects.filter(email__iexact=email).exists():
+        raise ValidationError("A user with that email already exists.")
+    if platform_role not in dict(PlatformRole.choices):
+        platform_role = PlatformRole.NONE
+    if platform_role == PlatformRole.OWNER and not actor.is_superuser:
+        raise PermissionDenied("Only a superuser can create a Platform Owner.")
+
+    user = User.objects.create_user(
+        username=email[:150], email=email,
+        first_name=(first_name or "").strip(), last_name=(last_name or "").strip(),
+    )
+    user.set_password(raw_password)
+    # Platform roles need Mission Control; a "none" account gets is_staff only
+    # once it is added to a store team (apps.accounts.team._sync_staff_flag).
+    user.is_staff = platform_role != PlatformRole.NONE
+    user.save()
+
+    profile = user.profile
+    profile.platform_role = platform_role
+    profile.save(update_fields=["platform_role", "updated_at"])
+
+    record_audit(
+        actor=actor, action=AuditLog.Action.CREATE, target=user,
+        changes={"email": email, "platform_role": platform_role}, request=request,
+    )
+    return user
 
 
 def set_user_password(*, actor, target, raw_password, request=None):

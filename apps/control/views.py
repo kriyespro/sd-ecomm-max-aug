@@ -6,6 +6,7 @@ POST-only. HTMX endpoints return HTML partials, never JSON.
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -17,7 +18,7 @@ from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
 from . import services
-from .forms import AdminSetPasswordForm
+from .forms import AdminSetPasswordForm, PlatformUserCreateForm
 from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 
 User = get_user_model()
@@ -104,6 +105,34 @@ class UserListView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
             context={"users": users, "q": query},
             using=self.template_engine,
         )
+
+
+class UserCreateView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
+    template_name = "control/user_create.jinja"
+
+    def get(self, request, *args, **kwargs):
+        return self.render_to_response({"form": PlatformUserCreateForm()})
+
+    def post(self, request, *args, **kwargs):
+        form = PlatformUserCreateForm(request.POST)
+        if form.is_valid():
+            try:
+                user = services.create_platform_user(
+                    actor=request.user,
+                    email=form.cleaned_data["email"],
+                    first_name=form.cleaned_data.get("first_name", ""),
+                    last_name=form.cleaned_data.get("last_name", ""),
+                    raw_password=form.cleaned_data["new_password1"],
+                    platform_role=form.cleaned_data.get("platform_role") or "none",
+                    request=request,
+                )
+            except (ValidationError, PermissionDenied) as exc:
+                for m in getattr(exc, "messages", [str(exc)]):
+                    form.add_error(None, m)
+            else:
+                messages.success(request, f"User {user.email} created.")
+                return redirect("control:user_detail", pk=user.pk)
+        return self.render_to_response({"form": form})
 
 
 class UserDetailView(PlatformAdminRequiredMixin, DetailView):

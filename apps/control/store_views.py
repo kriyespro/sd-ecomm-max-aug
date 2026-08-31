@@ -3,6 +3,7 @@
 from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
@@ -42,6 +43,12 @@ class StoreCreateForm(forms.Form):
 
     owner_email = forms.EmailField(label="Owner email")
     owner_name = forms.CharField(required=False, label="Owner name")
+    owner_password = forms.CharField(
+        required=False, label="Owner password", widget=forms.PasswordInput(render_value=False),
+        strip=False,
+        help_text="Set a password so a new owner can sign in right away. "
+                  "Leave blank for an existing account, or to set it later under Users.",
+    )
 
     plan = forms.ModelChoiceField(queryset=Plan.objects.filter(is_active=True).order_by("sort_order"))
     period = forms.ChoiceField(choices=BillingPeriod.choices, initial=BillingPeriod.MONTHLY)
@@ -56,6 +63,12 @@ class StoreCreateForm(forms.Form):
         # A Platform Manager can only sign a store up under their own name.
         if actor is not None and not is_platform_admin(actor):
             self.fields.pop("manager", None)
+
+    def clean_owner_password(self):
+        pw = self.cleaned_data.get("owner_password") or ""
+        if pw:
+            validate_password(pw)
+        return pw
 
 
 class StoreListView(_StoreScope, ListView):
@@ -97,13 +110,19 @@ class StoreCreateView(_StoreScope, FormView):
                 plan=form.cleaned_data["plan"],
                 period=form.cleaned_data["period"],
                 manager=manager, actor=actor, request=self.request,
+                owner_password=form.cleaned_data.get("owner_password") or None,
             )
         except ValidationError as exc:
             for m in exc.messages:
                 form.add_error(None, m)
             return self.form_invalid(form)
 
-        note = "a password-reset link" if created else "their existing login"
+        if not created:
+            note = "their existing login"
+        elif form.cleaned_data.get("owner_password"):
+            note = "the password you just set"
+        else:
+            note = "a password you set under Users → the owner → Reset password"
         messages.success(
             self.request,
             f"Store “{project.name}” created. The owner ({owner.email}) signs in with {note}.",
@@ -135,11 +154,14 @@ class StoreDetailView(_StoreScope, DetailView):
 class StoreMemberAddView(_StoreScope, View):
     def post(self, request, pk, *args, **kwargs):
         store = self.get_store(pk)
+        password = (request.POST.get("password") or "").strip()
         try:
+            if password:
+                validate_password(password)
             store_services.add_member(
                 project=store, email=request.POST.get("email", ""),
                 name=request.POST.get("name", ""), role=request.POST.get("role", ""),
-                actor=request.user, request=request,
+                actor=request.user, request=request, password=password or None,
             )
             messages.success(request, "Team member added.")
         except (ValidationError, PermissionDenied) as exc:

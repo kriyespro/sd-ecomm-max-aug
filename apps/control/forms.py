@@ -5,8 +5,11 @@ field and related querysets are scoped to that project.
 """
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.password_validation import validate_password
 
+from apps.accounts.models import PlatformRole
 from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
 from apps.categories.models import Category
 from apps.cms.models import (
@@ -423,6 +426,39 @@ class ThemeSettingsForm(ProjectScopedForm):
         if self.project is not None:
             field.queryset = allowed_skins_for(self.project)
         field.empty_label = "Default"
+
+
+class PlatformUserCreateForm(forms.Form):
+    """Platform admin mints a standalone account (no store required)."""
+
+    email = forms.EmailField()
+    first_name = forms.CharField(required=False)
+    last_name = forms.CharField(required=False)
+    platform_role = forms.ChoiceField(
+        choices=PlatformRole.choices, initial=PlatformRole.NONE, required=False,
+        help_text="Platform Owner / Manager get Mission Control access. "
+                  "“None” = a plain account you can assign to a store later.",
+    )
+    new_password1 = forms.CharField(label="Password", widget=forms.PasswordInput, strip=False)
+    new_password2 = forms.CharField(label="Confirm password", widget=forms.PasswordInput, strip=False)
+
+    def clean_email(self):
+        email = (self.cleaned_data["email"] or "").strip().lower()
+        if get_user_model().objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError("A user with that email already exists.")
+        return email
+
+    def clean(self):
+        cleaned = super().clean()
+        p1, p2 = cleaned.get("new_password1"), cleaned.get("new_password2")
+        if p1 and p2 and p1 != p2:
+            self.add_error("new_password2", "The two passwords don’t match.")
+        elif p1:
+            try:
+                validate_password(p1)
+            except forms.ValidationError as exc:
+                self.add_error("new_password1", exc)
+        return cleaned
 
 
 class AdminSetPasswordForm(SetPasswordForm):

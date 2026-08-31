@@ -99,6 +99,105 @@ class DashboardRoutingTests(TestCase):
         self.assertEqual(resp.status_code, 200)
 
 
+class UserCreateTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.client.force_login(self.admin)
+
+    def test_creates_plain_user_who_can_log_in(self):
+        resp = self.client.post(
+            "/admin/users/new/",
+            {
+                "email": "New@Shop.test", "first_name": "Nita", "last_name": "R",
+                "platform_role": "none",
+                "new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww",
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        user = get_user_model().objects.get(email="new@shop.test")
+        self.assertTrue(user.check_password("Zx9!kLmq7Ww"))
+        self.assertFalse(user.is_staff)  # no role yet
+        self.assertTrue(self.client.login(username="new@shop.test", password="Zx9!kLmq7Ww"))
+
+    def test_platform_role_grants_staff(self):
+        self.client.post(
+            "/admin/users/new/",
+            {
+                "email": "mgr@t.test", "platform_role": "platform_manager",
+                "new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww",
+            },
+        )
+        user = get_user_model().objects.get(email="mgr@t.test")
+        self.assertTrue(user.is_staff)
+        self.assertEqual(user.profile.platform_role, "platform_manager")
+
+    def test_duplicate_email_rejected(self):
+        get_user_model().objects.create_user(username="dup", email="dup@t.test", password="x")
+        resp = self.client.post(
+            "/admin/users/new/",
+            {
+                "email": "dup@t.test", "platform_role": "none",
+                "new_password1": "Zx9!kLmq7Ww", "new_password2": "Zx9!kLmq7Ww",
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "already exists")
+
+    def test_non_admin_forbidden(self):
+        owner = get_user_model().objects.create_user(
+            username="ow", email="ow@t.test", password="pw", is_staff=True
+        )
+        self.client.force_login(owner)
+        self.assertEqual(self.client.get("/admin/users/new/").status_code, 403)
+
+
+class StoreCreateOwnerPasswordTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        self.client.force_login(self.admin)
+
+    def _payload(self, **over):
+        data = {
+            "name": "Fresh Store", "primary_domain": "",
+            "currency": "INR", "country": "IN",
+            "owner_email": "owner@fresh.test", "owner_name": "Ola Owner",
+            "plan": self.plan.pk, "period": "monthly",
+        }
+        data.update(over)
+        return data
+
+    def test_owner_password_lets_new_owner_log_in(self):
+        resp = self.client.post(
+            "/admin/stores/new/", self._payload(owner_password="Zx9!kLmq7Ww")
+        )
+        self.assertEqual(resp.status_code, 302)
+        owner = get_user_model().objects.get(email="owner@fresh.test")
+        self.assertTrue(owner.check_password("Zx9!kLmq7Ww"))
+        self.assertTrue(self.client.login(username="owner@fresh.test", password="Zx9!kLmq7Ww"))
+
+    def test_blank_owner_password_keeps_account_unusable(self):
+        resp = self.client.post("/admin/stores/new/", self._payload())
+        self.assertEqual(resp.status_code, 302)
+        owner = get_user_model().objects.get(email="owner@fresh.test")
+        self.assertFalse(owner.has_usable_password())
+
+    def test_weak_owner_password_rejected(self):
+        resp = self.client.post(
+            "/admin/stores/new/", self._payload(owner_password="123")
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(get_user_model().objects.filter(email="owner@fresh.test").exists())
+
+
 class UserSetPasswordTests(TestCase):
     def setUp(self):
         User = get_user_model()
