@@ -59,6 +59,20 @@ outside the contract below is unavailable and will fail validation.
 > 7. **Dynamic behaviour**: use the HTMX endpoints in *Interactivity*. Keep the
 >    theme's own JS only for visual things (sliders, menus, parallax). Preserve
 >    the DOM ids/targets listed there — the backend swaps into them.
+>    - The **page/layout** owns each swap-target id (`<div id="cart-drawer-body">`
+>      etc.); the **partial** that HTMX returns into it is *raw content with no
+>      wrapping id*. Never put the same id on both — an `innerHTML` swap then
+>      nests `#foo` inside `#foo` and the second interaction breaks.
+>    - CSRF for HTMX: add one global handler in `base.jinja` `{% block head %}`
+>      so every request carries the token —
+>      `document.addEventListener('htmx:configRequest', e => { const m =
+>      document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/); if (m)
+>      e.detail.headers['X-CSRFToken'] = decodeURIComponent(m[1]); });`
+>    - Quick view: after the `#quickview-body` swap you must open the modal
+>      yourself — listen for `htmx:afterSwap` on that target, or `$dispatch`.
+>    - Add-to-cart response fires `HX-Trigger: cart-open` + a `toast` event, and
+>      OOB-swaps `#cart-count`. Make `#cart-drawer-body` refetch itself with
+>      `hx-get="{{ url('shopfront:cart_drawer') }}" hx-trigger="cart-open from:body"`.
 > 8. **Accent colour**: wire the theme's primary/CTA colour to `{{ accent }}`
 >    (a hex string) so the store owner's Theme setting takes effect. Other
 >    tokens: `{{ font_body }}`, `{{ font_heading }}`, `{{ custom_css }}` (inject
@@ -105,8 +119,12 @@ outside the contract below is unavailable and will fail validation.
 >
 > **Listing pages** (`shop.jinja`, `_grid.jinja`) — `products` `[product]`,
 > `pagination` `{page, pages, count, has_prev, has_next, prev_url, next_url}`,
-> `filters` `{categories:[{name, slug, url, count}], sorts:[{key, label,
+> `filters` `{categories:[{name, slug, url}], sorts:[{key, label,
 > selected}], active_category, query, price_min, price_max}`.
+> `active_category` is a **slug string** (match it against `filters.categories`
+> for the label), not an object.
+>
+> **`_suggest.jinja`** (search suggest) — `suggestions` `[product]`, `query`.
 >
 > **`home.jinja`** — `featured` `[product]`, `new_arrivals` `[product]`,
 > `category_tiles` `[{name, url, image_url}]`, `testimonials`

@@ -300,6 +300,7 @@ def build(request, template_name, ctx):
     # search suggest
     if "suggestions" in ctx:
         out["suggestions"] = [_product(p) for p in ctx["suggestions"]]
+        out["query"] = ctx.get("query", "")
 
     # wishlist button fragment
     for key in ("wl_slug", "wl_active", "wl_need_login"):
@@ -373,13 +374,21 @@ def build(request, template_name, ctx):
     if template_name.endswith("_quickview.jinja") and "product" in ctx:
         pass  # product already set above
 
-    # checkout
+    # checkout — available_methods() yields (method, quote) pairs
     if "shipping_methods" in ctx:
-        out["shipping_methods"] = [
-            {"id": m.id, "label": m.name, "price": m.base_rate,
-             "eta_label": f"{m.min_days}-{m.max_days} days", "selected": False}
-            for m in ctx["shipping_methods"]
-        ]
+        methods = []
+        for i, row in enumerate(ctx["shipping_methods"]):
+            method, quote = row if isinstance(row, (tuple, list)) else (row, None)
+            price = quote if quote is not None else getattr(method, "base_rate", 0)
+            try:
+                eta = method.estimate_label()
+            except Exception:  # noqa: BLE001
+                eta = f"{getattr(method, 'min_days', '')}-{getattr(method, 'max_days', '')} days"
+            methods.append({
+                "id": method.id, "label": method.name, "price": price,
+                "eta_label": eta, "selected": i == 0,
+            })
+        out["shipping_methods"] = methods
     if "coupon_code" in ctx or "coupon_ok" in ctx:
         out["coupon"] = {
             "code": ctx.get("coupon_code", ""),
