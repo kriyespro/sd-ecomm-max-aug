@@ -1,7 +1,7 @@
 {% extends "base.jinja" %}
 
-{% block title %}mnxstore — start your ecommerce store in a day{% endblock %}
-{% block meta_description %}mnxstore is a hosted commerce platform for India: quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full admin dashboard — no servers to run.{% endblock %}
+{% block title %}sellinaday — start your ecommerce store in a day{% endblock %}
+{% block meta_description %}sellinaday is a hosted commerce platform for India: quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full admin dashboard — no servers to run.{% endblock %}
 
 {% block head %}
 {# Fonts are self-hosted in base.jinja. The compiled site bundle carries the
@@ -104,7 +104,7 @@
     <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
     <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
-  <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">mnx<span class="text-brand-{{ '300' if dark else '600' }}">store</span></span>
+  <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">sell<span class="text-brand-{{ '300' if dark else '600' }}">inaday</span></span>
 </span>
 {% endmacro %}
 
@@ -174,7 +174,7 @@
         <a href="#features" class="hover:text-slate-900">Features</a>
         <a href="#how" class="hover:text-slate-900">How it works</a>
         <a href="#domains" class="hover:text-slate-900">Domains</a>
-        <a href="#compare" class="hover:text-slate-900">Why mnxstore</a>
+        <a href="#compare" class="hover:text-slate-900">Why sellinaday</a>
         {% if plans %}<a href="#pricing" class="hover:text-slate-900">Pricing</a>{% endif %}
         <a href="{{ url('partners') }}" class="hover:text-slate-900">Partners</a>
         <a href="#faq" class="hover:text-slate-900">FAQ</a>
@@ -213,7 +213,7 @@
       </h1>
       <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
         Quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full
-        admin dashboard — all in one place. You bring the products; mnxstore runs everything else.
+        admin dashboard — all in one place. You bring the products; sellinaday runs everything else.
       </p>
       <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
         <a href="{{ url('accounts:login') }}" class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-center font-600 text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-500 sm:w-auto">
@@ -363,8 +363,8 @@
           <path d="M444 9l10 7-10 7" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         {% set steps = [
-          ('Add products, pick a look', 'Load the catalogue and choose a theme. Your store is browsable at its mnxstore address right away.'),
-          ('Connect Razorpay & your domain', 'Drop in your Razorpay keys, add one DNS record for your domain, and mnxstore verifies it for you.'),
+          ('Add products, pick a look', 'Load the catalogue and choose a theme. Your store is browsable at its sellinaday address right away.'),
+          ('Connect Razorpay & your domain', 'Drop in your Razorpay keys, add one DNS record for your domain, and sellinaday verifies it for you.'),
           ('Open for orders', 'Share the link. Customers check out with Razorpay; every order lands in your dashboard.'),
         ] %}
         {% for title, body in steps %}
@@ -446,7 +446,7 @@
           <p class="text-sm font-600 uppercase tracking-wide text-brand-600">Payments</p>
           <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">Payments that just work in India</h2>
           <p class="mt-4 leading-relaxed text-slate-600">
-            Connect your Razorpay account once. Customers pay by UPI, card, netbanking or wallet, and mnxstore
+            Connect your Razorpay account once. Customers pay by UPI, card, netbanking or wallet, and sellinaday
             reconciles every payment against its order — including captures, failures and refunds — so your
             dashboard is always the source of truth.
           </p>
@@ -526,7 +526,7 @@
           <h2 class="mt-2 font-display text-3xl font-700 tracking-tight sm:text-4xl">Your brand, your domain, on HTTPS</h2>
           <p class="mt-4 leading-relaxed text-slate-300">
             Add a hostname you own in the dashboard. Point one DNS record at the platform — or flip on the
-            Cloudflare proxy — and mnxstore verifies it automatically, then serves it over HTTPS with a
+            Cloudflare proxy — and sellinaday verifies it automatically, then serves it over HTTPS with a
             managed certificate. No installs, no renewals to track.
           </p>
           <ul class="mt-6 space-y-3 text-sm text-slate-300">
@@ -538,7 +538,7 @@
         <div class="reveal rounded-2xl border border-white/10 bg-black/40 p-6 font-mono text-xs leading-relaxed text-slate-300 shadow-2xl">
           <p class="text-slate-500"># in your DNS provider</p>
           <p><span class="text-emerald-400">A</span>&nbsp;&nbsp;&nbsp;&nbsp;shop.yourbrand.com&nbsp;&nbsp;&rarr;&nbsp;&nbsp;the platform IP</p>
-          <p class="mt-3 text-slate-500"># mnxstore, a minute later</p>
+          <p class="mt-3 text-slate-500"># sellinaday, a minute later</p>
           <p class="flex items-center gap-2">
             <svg class="h-4 w-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>
             <span class="text-emerald-400">verified</span>&nbsp;shop.yourbrand.com is live
@@ -552,7 +552,7 @@
   {# ================= COMPARE ================= #}
   <section id="compare" class="mx-auto max-w-5xl px-5 py-20">
     <div class="reveal mx-auto max-w-2xl text-center">
-      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Why mnxstore</h2>
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Why sellinaday</h2>
       <p class="mt-4 text-slate-600">Skip the stack you'd otherwise stitch together yourself.</p>
     </div>
     <div class="reveal mt-12 overflow-x-auto">
@@ -560,7 +560,7 @@
         <thead>
           <tr class="text-left text-slate-500">
             <th class="px-4 py-3 font-500">What you need</th>
-            <th class="px-4 py-3 font-600 text-brand-700">mnxstore</th>
+            <th class="px-4 py-3 font-600 text-brand-700">sellinaday</th>
             <th class="px-4 py-3 font-500">Do-it-yourself</th>
           </tr>
         </thead>
@@ -633,7 +633,7 @@
     <div class="reveal mt-10 divide-y divide-slate-200 border-y border-slate-200">
       {% set faqs = [
         ('How fast can I actually launch?', 'If your product data and images are ready, a store can be live on your own domain the same day. The domain verification itself takes a few minutes after you add the DNS record.'),
-        ('Do I need my own Razorpay account?', 'Yes — you connect your own Razorpay keys, so payouts go straight to your bank. mnxstore handles the integration, reconciliation and refunds.'),
+        ('Do I need my own Razorpay account?', 'Yes — you connect your own Razorpay keys, so payouts go straight to your bank. sellinaday handles the integration, reconciliation and refunds.'),
         ('Can I use a domain I already own?', 'Yes. Add it in the dashboard, add one DNS record (A record or Cloudflare proxy), and it auto-verifies. HTTPS is managed for you.'),
         ('Can I move my theme or data later?', 'Themes are swappable at any time without touching your catalogue. Your store data is yours and exportable.'),
         ('Is there a REST API?', 'Yes. The same data behind the storefront is available over a REST API for mobile apps or a headless frontend.'),
@@ -687,7 +687,7 @@
       <div>
         <p class="text-xs font-600 uppercase tracking-wide text-slate-400">Company</p>
         <ul class="mt-3 space-y-2 text-sm text-slate-600">
-          <li><a href="#compare" class="hover:text-slate-900">Why mnxstore</a></li>
+          <li><a href="#compare" class="hover:text-slate-900">Why sellinaday</a></li>
           <li><a href="{{ url('partners') }}" class="hover:text-slate-900">Partner programme</a></li>
           <li><a href="#faq" class="hover:text-slate-900">FAQ</a></li>
         </ul>
@@ -701,7 +701,7 @@
       </div>
     </div>
     <div class="border-t border-slate-100 py-6 text-center text-xs text-slate-400">
-      &copy; {{ now_year }} mnxstore
+      &copy; {{ now_year }} sellinaday
     </div>
   </footer>
 
