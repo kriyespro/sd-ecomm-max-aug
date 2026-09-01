@@ -363,3 +363,46 @@ class PartnerApplicationReviewTests(TestCase):
         self.assertIn(resp.status_code, (302, 403))
         self.app.refresh_from_db()
         self.assertEqual(self.app.status, "pending")
+
+
+class ProductDuplicateTests(TestCase):
+    def setUp(self):
+        from apps.catalog.models import Product
+
+        User = get_user_model()
+        self.user = User.objects.create_superuser(
+            username="pdup", email="pdup@t.test", password="pw"
+        )
+        self.project = Project.objects.create(name="DupStore", status="active")
+        self.client.force_login(self.user)
+        session = self.client.session
+        session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        session.save()
+        self.product = Product.objects.create(
+            project=self.project, title="Original", price="199.00", status="active",
+            search_indexed=True,
+        )
+
+    def test_form_shows_duplicate_and_add_another(self):
+        resp = self.client.get(f"/admin/products/{self.product.pk}/")
+        self.assertContains(resp, "Duplicate")
+        self.assertContains(resp, "Add another product")
+
+    def test_duplicate_creates_draft_copy_and_redirects_to_it(self):
+        from apps.catalog.models import Product
+
+        resp = self.client.post(f"/admin/products/{self.product.pk}/duplicate/")
+        self.assertEqual(resp.status_code, 302)
+        clone = Product.objects.exclude(pk=self.product.pk).get(project=self.project)
+        self.assertEqual(resp["Location"], f"/admin/products/{clone.pk}/")
+        self.assertEqual(clone.title, "Original (copy)")
+        self.assertEqual(clone.status, "draft")
+        self.assertFalse(clone.search_indexed)
+        self.assertNotEqual(clone.slug, self.product.slug)
+        self.assertNotEqual(clone.sku, self.product.sku)
+
+    def test_price_field_follows_kind_in_form_order(self):
+        from apps.control.forms import ProductForm
+
+        order = list(ProductForm.base_fields)
+        self.assertEqual(order.index("price"), order.index("kind") + 1)

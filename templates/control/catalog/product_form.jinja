@@ -4,6 +4,22 @@
 
 {% block content %}
 <div class="mx-auto max-w-3xl space-y-4">
+  <div class="flex flex-wrap items-center gap-2">
+    <a href="{{ url('control:product_create') }}"
+       class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+      + Add another product
+    </a>
+    {% if object %}
+    <form method="post" action="{{ url('control:product_duplicate', kwargs={'pk': object.pk}) }}">
+      {{ csrf_input }}
+      <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        Duplicate
+      </button>
+    </form>
+    {% endif %}
+    <a href="{{ url('control:product_list') }}" class="ml-auto text-sm text-slate-500 hover:text-slate-800">← All products</a>
+  </div>
+
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {{ csrf_input }}
     <div class="grid gap-4 rounded-xl bg-white p-6 ring-1 ring-slate-200 md:grid-cols-2">

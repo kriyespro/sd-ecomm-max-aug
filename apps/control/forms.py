@@ -111,11 +111,11 @@ class ProductForm(ProjectScopedForm):
     class Meta:
         model = Product
         fields = [
-            "title", "slug", "kind", "status",
+            "title", "slug", "kind", "price", "status",
             "type", "brand", "category",
             "sku", "barcode", "hsn_sac", "tax_class",
             "short_description", "description",
-            "price", "sale_price", "cost_price",
+            "sale_price", "cost_price",
             "weight", "length", "width", "height",
             "is_featured", "is_new_arrival", "is_bestseller", "search_indexed",
             "tags",

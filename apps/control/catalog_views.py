@@ -4,9 +4,13 @@ Thin views: querysets filtered by ``self.active_project``; forms receive it as a
 kwarg; mutations recorded to the audit log.
 """
 
+import os
+
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
+from django.core.files.base import ContentFile
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
 from django.views.generic import (
@@ -339,6 +343,69 @@ class ProductImageMoveView(_ProductImageBase):
                 a.order, b.order = b.order, a.order
                 ProductImage.objects.bulk_update([a, b], ["order"])
         return self._render_panel(product)
+
+
+class ProductDuplicateView(_ScopedQuerysetMixin, View):
+    """Clone a product (+ its tags, attribute values, variants and images) as a
+    draft and open the copy for editing."""
+
+    model = Product
+
+    def post(self, request, *args, **kwargs):
+        from apps.billing import limits
+        from apps.catalog.models import ProductStatus, Variant
+
+        src = get_object_or_404(self.get_queryset(), pk=self.kwargs["pk"])
+        try:
+            limits.check_can_add_product(self.active_project)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+            return redirect("control:product_edit", pk=src.pk)
+
+        clone = Product.objects.get(pk=src.pk)
+        clone.pk = None
+        clone._state.adding = True
+        clone.slug = ""
+        clone.sku = ""
+        clone.title = f"{src.title} (copy)"
+        clone.status = ProductStatus.DRAFT
+        clone.search_indexed = False
+        clone.rating_avg = 0
+        clone.rating_count = 0
+        clone.save()
+
+        clone.tags.set(src.tags.all())
+        clone.attribute_values.set(src.attribute_values.all())
+
+        for v in src.variants.all():
+            new_v = Variant.objects.get(pk=v.pk)
+            new_v.pk = None
+            new_v._state.adding = True
+            new_v.sku = ""
+            new_v.product = clone
+            new_v.save()
+            new_v.attribute_values.set(v.attribute_values.all())
+
+        for img in src.images.all():
+            if not img.image:
+                continue
+            try:
+                img.image.open("rb")
+                data = img.image.read()
+            finally:
+                img.image.close()
+            new_img = ProductImage(
+                product=clone, alt=img.alt, order=img.order, is_primary=img.is_primary,
+            )
+            new_img.image.save(os.path.basename(img.image.name), ContentFile(data), save=True)
+
+        record_audit(
+            actor=request.user, project=self.active_project,
+            action=AuditLog.Action.CREATE, target=clone,
+            changes={"duplicated_from": src.pk}, request=request,
+        )
+        messages.success(request, "Product duplicated — you're now editing the copy.")
+        return redirect("control:product_edit", pk=clone.pk)
 
 
 class ProductDeleteView(_ScopedQuerysetMixin, DeleteView):
