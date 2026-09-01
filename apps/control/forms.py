@@ -513,15 +513,15 @@ class SkinUploadForm(forms.Form):
         help_text="Optional — defaults to the name in theme.json.",
     )
     bundle = forms.FileField(
-        help_text="A .zip of the converted skin folder (templates + assets/).",
+        help_text="A .zip of the converted skin folder (templates + assets/). Max 10 MB.",
     )
 
     def clean_bundle(self):
         f = self.cleaned_data["bundle"]
         if not f.name.lower().endswith(".zip"):
             raise forms.ValidationError("Upload a .zip file.")
-        if f.size > 2 * 1024 * 1024:
-            raise forms.ValidationError("Bundle is over 2 MB.")
+        if f.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("Bundle is over 10 MB.")
         return f
 
 

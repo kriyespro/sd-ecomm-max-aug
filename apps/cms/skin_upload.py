@@ -19,7 +19,7 @@ from apps.shopfront.sandbox import missing_required
 
 from .models import Skin, SkinAsset, SkinFile, SkinSource, SkinStatus
 
-MAX_ZIP = 2 * 1024 * 1024
+MAX_ZIP = 10 * 1024 * 1024
 MAX_FILES = 250
 MAX_TEMPLATE_BYTES = 400_000
 MAX_ASSET_BYTES = 1_500_000
