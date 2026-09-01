@@ -12,6 +12,24 @@
     <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
   </header>
 
+  {# CATEGORY BANNER — placement "category" bound to this category in /admin/cms/banners/ #}
+  {% set _catban = category_banners.get(active_category) if active_category else none %}
+  {% if _catban and _catban.image %}
+  <a href="{{ _catban.cta_url or '' }}" class="group relative mb-10 block overflow-hidden bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
+    <picture>
+      {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
+      <img src="{{ _catban.image.url }}" alt="{{ _catban.heading }}" loading="lazy" decoding="async"
+           class="h-40 w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-56">
+    </picture>
+    {% if _catban.heading or _catban.subheading %}
+    <div class="absolute inset-0 flex flex-col justify-end gap-1 bg-gradient-to-t from-ink/75 to-transparent p-6">
+      {% if _catban.heading %}<h2 class="font-display text-2xl text-paper">{{ _catban.heading }}</h2>{% endif %}
+      {% if _catban.subheading %}<p class="text-sm text-paper/80">{{ _catban.subheading }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
   {# compact inline bar on mobile (labels hidden, controls wrap); labelled grid at sm+ #}
   <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
         hx-trigger="change, input changed delay:450ms"

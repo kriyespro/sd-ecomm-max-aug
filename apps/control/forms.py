@@ -15,6 +15,7 @@ from apps.categories.models import Category
 from apps.cms.models import (
     FAQ,
     Banner,
+    BannerPlacement,
     ContentBlock,
     Menu,
     MenuItem,
@@ -343,6 +344,20 @@ class BannerForm(ProjectScopedForm):
         super().__init__(*args, **kwargs)
         self.fields["category"].queryset = Category.objects.filter(project=self.project)
         self.fields["category"].required = False
+        self.fields["placement"].help_text = (
+            "Where this banner shows on the storefront — "
+            "hero: top of the home page · promo: full-width strip on the home page · "
+            "category: top of that category's product listing (set the category below) · "
+            "product: strip on every product page · popup: modal on the first home visit · "
+            "announcement: the scrolling bar at the very top."
+        )
+        self.fields["category"].help_text = "Required when placement is “Category”."
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("placement") == BannerPlacement.CATEGORY and not cleaned.get("category"):
+            self.add_error("category", "Choose a category for a category-placement banner.")
+        return cleaned
 
 
 class FAQForm(ProjectScopedForm):

@@ -122,12 +122,27 @@ def _build_chrome(project):
         .first()
     )
     profile = StoreProfile.objects.filter(project=project).first()
-    banners = {}
-    for b in project.banners.filter(
-        placement__in=("announcement", "hero")
-    ).order_by("priority"):
-        if b.is_live and b.placement not in banners:
-            banners[b.placement] = b
+    # All live banners, grouped by placement. "hero" / "announcement" / "popup"
+    # / "product" take the first live one; "promo" stacks; "category" is keyed
+    # by the category slug so a listing page can pick its own.
+    singles = {}
+    promo = []
+    category_banners = {}
+    for b in (
+        project.banners.filter(is_active=True)
+        .select_related("category")
+        .order_by("priority", "id")
+    ):
+        if not b.is_live:
+            continue
+        if b.placement == "promo":
+            promo.append(b)
+        elif b.placement == "category":
+            if b.category and b.category.slug not in category_banners:
+                category_banners[b.category.slug] = b
+        elif b.placement not in singles:
+            singles[b.placement] = b
+    banners = singles
     return {
         "accent": theme.primary_color if theme else "#b08d57",
         "profile": profile,
@@ -144,6 +159,10 @@ def _build_chrome(project):
         ],
         "announcement": banners.get("announcement"),
         "hero_banner": banners.get("hero"),
+        "promo_banners": promo,
+        "category_banners": category_banners,
+        "product_banner": banners.get("product"),
+        "popup_banner": banners.get("popup"),
         "free_ship_over": ShippingMethod.objects.filter(
             project=project, is_active=True, free_over__isnull=False
         ).aggregate(m=Min("free_over"))["m"],

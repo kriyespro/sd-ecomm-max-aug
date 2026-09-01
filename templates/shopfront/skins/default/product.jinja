@@ -26,6 +26,24 @@
     <span class="mx-1">/</span><span class="text-ink">{{ product.title }}</span>
   </nav>
 
+  {# PRODUCT BANNER — placement "product" (or the "category" banner for this product's category) #}
+  {% set _pban = product_banner or (category_banners.get(product.category.slug) if product.category else none) %}
+  {% if _pban and _pban.image %}
+  <a href="{{ _pban.cta_url or '' }}" class="group relative mb-8 block overflow-hidden bg-ink {{ 'pointer-events-none' if not _pban.cta_url }}">
+    <picture>
+      {% if _pban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _pban.mobile_image.url }}">{% endif %}
+      <img src="{{ _pban.image.url }}" alt="{{ _pban.heading }}" loading="lazy" decoding="async"
+           class="h-28 w-full object-cover sm:h-36">
+    </picture>
+    {% if _pban.heading or _pban.cta_label %}
+    <div class="absolute inset-0 flex items-center justify-between gap-4 bg-ink/30 px-6">
+      {% if _pban.heading %}<h2 class="font-display text-lg text-paper sm:text-xl">{{ _pban.heading }}</h2>{% endif %}
+      {% if _pban.cta_label %}<span class="shrink-0 bg-paper px-5 py-2 text-[11px] font-semibold uppercase tracking-luxe text-ink group-hover:bg-accent group-hover:text-paper">{{ _pban.cta_label }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
   <div class="grid gap-10 lg:grid-cols-[1fr_460px] lg:gap-16">
     {# ---------- GALLERY ---------- #}
     <div class="flex flex-col-reverse gap-4 lg:flex-row">
