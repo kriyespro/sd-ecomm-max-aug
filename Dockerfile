@@ -19,10 +19,11 @@ RUN pip install -r requirements-prod.txt
 
 COPY . .
 
-# Storefront skins: compile one Tailwind bundle per skin with the standalone CLI
-# (no Node; bundles the `forms` plugin). Output lands in static/, collected at
-# container start. If this ever fails to produce a file, the skin templates fall
-# back to the Tailwind Play CDN at runtime.
+# Tailwind bundles: one per storefront skin, plus one site-wide bundle for the
+# non-skin surface (marketing, Mission Control, auth, no-store storefront).
+# Compiled with the standalone CLI (no Node; bundles the `forms` plugin). Output
+# lands in static/, collected at container start. If a build ever fails to
+# produce a file, the templates fall back to the Tailwind Play CDN at runtime.
 ARG TAILWIND_VERSION=v3.4.17
 ARG TARGETARCH
 RUN set -eux; \
@@ -35,6 +36,7 @@ RUN set -eux; \
       "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-${tw_arch}"; \
     chmod +x /usr/local/bin/tailwindcss; \
     python tools/build_tailwind_skins.py; \
+    python tools/build_tailwind_site.py; \
     rm /usr/local/bin/tailwindcss
 
 RUN adduser --system --group --no-create-home app \

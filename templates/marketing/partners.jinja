@@ -4,9 +4,10 @@
 {% block meta_description %}Become an mnxstore marketing partner. Refer merchants, and earn {{ commission_min }}–{{ commission_max }}% recurring commission on their subscription for as long as they stay.{% endblock %}
 
 {% block head %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+{# Fonts self-hosted in base.jinja; compiled site bundle carries the theme.
+   Inline config is the dev / Play-CDN fallback only — keep in sync with
+   tools/build_tailwind_site.py. #}
+{% if not site_css_href() %}
 <script>
   tailwind.config = {
     theme: { extend: {
@@ -21,6 +22,7 @@
     }},
   };
 </script>
+{% endif %}
 <style>
   html { scroll-behavior: smooth; }
   .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }

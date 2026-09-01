@@ -5,7 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ store.name }}{% endblock %}</title>
   {% if meta %}<meta name="description" content="{{ meta.description }}">{% endif %}
+  {% set _site_css = site_css_href() %}
+  {% if _site_css %}
+  <link rel="stylesheet" href="{{ _site_css }}">
+  {% else %}
   <script src="https://cdn.tailwindcss.com"></script>
+  {% endif %}
   <style>:root{ --brand: {{ primary_color }}; } .btn-brand{ background: var(--brand); }</style>
 </head>
 <body class="min-h-screen bg-slate-50 text-slate-900">

@@ -97,24 +97,34 @@ def _rgb_channels(value, fallback="17 17 17"):
 
 
 @functools.lru_cache(maxsize=64)
-def _skin_css_href(slug):
-    """Static URL of the compiled Tailwind CSS for ``slug``, or ``None`` when it
-    has not been built/collected (dev, or before the first image build) — the
-    skin base template then falls back to the Tailwind Play CDN.
+def _compiled_css_href(path):
+    """Static URL of a compiled Tailwind bundle, or ``None`` when it has not been
+    built/collected (dev, or before the first image build) — the linking template
+    then falls back to the Tailwind Play CDN.
 
     Cached per process: the collected file set does not change while a worker
     runs.
     """
-    path = f"shopfront/skins/{slug}.css"
     try:
         from django.contrib.staticfiles import finders
         from django.contrib.staticfiles.storage import staticfiles_storage
 
         if finders.find(path) or staticfiles_storage.exists(path):
             return staticfiles_storage.url(path)
-    except Exception:  # noqa: BLE001 - never let a missing asset 500 a storefront
+    except Exception:  # noqa: BLE001 - never let a missing asset 500 a page
         pass
     return None
+
+
+def _skin_css_href(slug):
+    """Compiled Tailwind bundle for storefront skin ``slug`` (or ``None``)."""
+    return _compiled_css_href(f"shopfront/skins/{slug}.css")
+
+
+def _site_css_href():
+    """Compiled site-wide Tailwind bundle for the non-skin surface (marketing,
+    Mission Control, auth, no-store storefront), or ``None``."""
+    return _compiled_css_href("site/site.css")
 
 
 def _money(value, symbol="₹"):
@@ -151,6 +161,7 @@ def environment(**options):
             "static": static,
             "url": reverse,
             "skin_css_href": _skin_css_href,
+            "site_css_href": _site_css_href,
         }
     )
     env.filters["money"] = _money

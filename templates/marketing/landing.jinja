@@ -4,9 +4,10 @@
 {% block meta_description %}mnxstore is a hosted commerce platform for India: quick store setup, your own custom domain on HTTPS, Razorpay payments, and a full admin dashboard — no servers to run.{% endblock %}
 
 {% block head %}
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+{# Fonts are self-hosted in base.jinja. The compiled site bundle carries the
+   theme below; this inline config is only the dev / Play-CDN fallback and must
+   stay in sync with tools/build_tailwind_site.py. #}
+{% if not site_css_href() %}
 <script>
   tailwind.config = {
     theme: {
@@ -33,6 +34,7 @@
     },
   };
 </script>
+{% endif %}
 <style>
   html { scroll-behavior: smooth; }
   .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }

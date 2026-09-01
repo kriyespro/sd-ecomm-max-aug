@@ -68,10 +68,18 @@ class SkinTailwindHelpersTests(TestCase):
             self.assertEqual(_rgb_channels(bad), "17 17 17")
 
     def test_skin_css_href_none_when_not_built(self):
-        from config.jinja2 import _skin_css_href
+        from config.jinja2 import _compiled_css_href, _skin_css_href
 
-        _skin_css_href.cache_clear()
+        _compiled_css_href.cache_clear()
         self.assertIsNone(_skin_css_href("definitely-not-a-real-skin"))
+
+    def test_site_css_href_returns_none_or_static_url(self):
+        from config.jinja2 import _compiled_css_href, _site_css_href
+
+        _compiled_css_href.cache_clear()
+        href = _site_css_href()
+        # None until the bundle is built + collected; a static URL afterwards.
+        self.assertTrue(href is None or href.endswith("site/site.css"))
 
     def test_every_built_in_skin_base_still_has_a_tailwind_config_block(self):
         import re
