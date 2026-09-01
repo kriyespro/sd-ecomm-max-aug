@@ -1,7 +1,7 @@
 {% extends "base.jinja" %}
 
-{% block title %}sellinaday partners — earn {{ commission_min }}–{{ commission_max }}% recurring commission{% endblock %}
-{% block meta_description %}Become a sellinaday marketing partner. Refer merchants, and earn {{ commission_min }}–{{ commission_max }}% recurring commission on their subscription for as long as they stay.{% endblock %}
+{% block title %}shopinaday partners — earn {{ commission_min }}–{{ commission_max }}% recurring commission{% endblock %}
+{% block meta_description %}Become a shopinaday marketing partner. Refer merchants, and earn {{ commission_min }}–{{ commission_max }}% recurring commission on their subscription for as long as they stay.{% endblock %}
 
 {% block head %}
 {# Fonts self-hosted in base.jinja; compiled site bundle carries the theme.
@@ -71,7 +71,7 @@
           <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
           <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span class="font-display text-lg font-700 tracking-tight">sell<span class="text-brand-600">inaday</span></span>
+        <span class="font-display text-lg font-700 tracking-tight">shop<span class="text-brand-600">inaday</span></span>
       </a>
       <nav class="hidden items-center gap-8 text-sm font-500 text-slate-600 md:flex">
         <a href="/#features" class="hover:text-slate-900">Platform</a>
@@ -91,14 +91,14 @@
     <svg class="pointer-events-none absolute inset-0 -z-0 h-full w-full opacity-60" aria-hidden="true"><rect width="100%" height="100%" fill="url(#p-grid)"/></svg>
     <div class="relative mx-auto max-w-4xl px-5 pb-16 pt-20 text-center sm:pt-28">
       <span class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-xs font-600 text-brand-700 shadow-sm backdrop-blur">
-        <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span> sellinaday Marketing Partner programme
+        <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span> shopinaday Marketing Partner programme
       </span>
       <h1 class="mx-auto max-w-3xl font-display text-4xl font-700 leading-[1.05] tracking-tight sm:text-5xl">
-        Bring merchants to sellinaday.
+        Bring merchants to shopinaday.
         <span class="bg-gradient-to-r from-brand-600 via-violet-600 to-brand-500 bg-clip-text text-transparent">Earn every month they stay.</span>
       </h1>
       <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
-        Marketing partners bring merchants onto sellinaday and earn
+        Marketing partners bring merchants onto shopinaday and earn
         <strong class="font-600 text-slate-900">{{ commission_min }}–{{ commission_max }}% recurring commission</strong>
         on each referred store's subscription — paid for as long as that store keeps its plan.
         No commission is taken from the merchant's own product sales.
@@ -220,7 +220,7 @@
         <div>
           <h3 class="font-600 text-slate-900">1. Becoming a partner</h3>
           <p class="mt-1">
-            Applications are reviewed individually and approval is at sellinaday's discretion.
+            Applications are reviewed individually and approval is at shopinaday's discretion.
             An approved applicant joins at the <strong>{{ commission_min }}% starting commission rate</strong>.
             A partner is recognised as a full <strong>Marketing Partner</strong> — and moves to the
             <strong>{{ commission_max }}% rate</strong> — only after <strong>{{ sales_to_qualify }} successful sales</strong>:
@@ -232,7 +232,7 @@
           <h3 class="font-600 text-slate-900">2. What commission is paid on</h3>
           <p class="mt-1">
             Commission is a percentage of the <strong>subscription fee</strong> that a referred store pays
-            sellinaday, on every paid invoice, for as long as that store keeps an active paid plan.
+            shopinaday, on every paid invoice, for as long as that store keeps an active paid plan.
             Commission is <strong>not</strong> paid on the merchant's own product sales, shipping, taxes or
             any third-party payment fees. Free trials, unpaid, refunded, charged-back, void or
             downgraded-to-free periods earn nothing.
@@ -250,7 +250,7 @@
           <h3 class="font-600 text-slate-900">4. Payouts</h3>
           <p class="mt-1">
             Commission accrues per paid invoice and is listed in your partner dashboard as pending,
-            then approved, then paid. Payouts are made on sellinaday's regular schedule once the pending
+            then approved, then paid. Payouts are made on shopinaday's regular schedule once the pending
             balance clears the minimum threshold, to the payout details on file. A referred store's
             refund or chargeback reverses the related commission.
           </p>
@@ -258,8 +258,8 @@
         <div>
           <h3 class="font-600 text-slate-900">5. Conduct</h3>
           <p class="mt-1">
-            No spam, no misleading claims about sellinaday, no bidding on sellinaday trademarks in paid
-            search, no cookie-stuffing or incentivised sign-ups. sellinaday may withhold commission for,
+            No spam, no misleading claims about shopinaday, no bidding on shopinaday trademarks in paid
+            search, no cookie-stuffing or incentivised sign-ups. shopinaday may withhold commission for,
             suspend, or remove a partner who breaches these terms or engages in fraudulent activity.
           </p>
         </div>
@@ -284,9 +284,9 @@
           <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
           <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span class="font-display font-700 text-slate-700">sell<span class="text-brand-600">inaday</span></span>
+        <span class="font-display font-700 text-slate-700">shop<span class="text-brand-600">inaday</span></span>
       </a>
-      <p>&copy; {{ now_year }} sellinaday · <a href="/" class="hover:text-slate-900">Home</a> · <a href="/#pricing" class="hover:text-slate-900">Pricing</a></p>
+      <p>&copy; {{ now_year }} shopinaday · <a href="/" class="hover:text-slate-900">Home</a> · <a href="/#pricing" class="hover:text-slate-900">Pricing</a></p>
     </div>
   </footer>
 </div>
