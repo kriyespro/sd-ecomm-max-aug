@@ -190,6 +190,7 @@ def _compile_check(templates):
     )
     env.globals.update({"url": lambda *a, **k: "", "asset": lambda *a, **k: ""})
     env.filters["money"] = lambda v, *a, **k: v
+    env.filters["date"] = lambda v, *a, **k: v
     for path in templates:
         try:
             env.get_template(path)

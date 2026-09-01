@@ -76,6 +76,21 @@ def _money(value, symbol="₹"):
         return f"{symbol}{value}"
 
 
+def _date(value, fmt="%d %b %Y"):
+    if value is None or value == "":
+        return ""
+    if isinstance(value, str):
+        from datetime import datetime
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    try:
+        return value.strftime(fmt)
+    except (AttributeError, ValueError):
+        return value
+
+
 def _capped_range(*args):
     """range() for skins — hard-capped so ``{% for i in range(1e9) %}`` can't
     hang the render thread (which cannot be force-killed)."""
@@ -119,6 +134,7 @@ def _build_env(skin):
         "range": _capped_range,
     })
     env.filters["money"] = _money
+    env.filters["date"] = _date
     return env
 
 
