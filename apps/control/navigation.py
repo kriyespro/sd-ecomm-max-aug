@@ -6,6 +6,8 @@ control page, for every role. Nothing here is per-page — a view only needs to
 set ``{% block page_title %}`` and it gets a correct trail.
 """
 
+from functools import lru_cache
+
 from django.urls import NoReverseMatch, reverse
 
 MOUNT = "/admin/"
@@ -69,38 +71,51 @@ _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users", "partn
 _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "store_plan"}
 
 
-def _url(name):
-    try:
-        return reverse(f"control:{name}")
-    except NoReverseMatch:
-        return None
-
-
-def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
-              can_upload_skin):
-    """Resolved, already-permission-filtered sidebar tree."""
-    nav = []
+@lru_cache(maxsize=1)
+def _resolved_sections():
+    """``_SECTIONS`` with every item's URL reversed once. URLconf is static per
+    process, so this runs on the first control request and never again — the
+    context processor is on every ``/admin/`` hit, HTMX polls included."""
+    out = []
     for key, label, icon, raw_items in _SECTIONS:
-        if key == "platform" and not platform_staff:
-            continue
-        if key != "platform" and not active_project:
-            continue
-
         items = []
         for url_name, item_label, item_icon in raw_items:
-            if url_name in _PLATFORM_ADMIN_ONLY and not platform_admin:
-                continue
-            if url_name in _STORE_MANAGE_ONLY and not can_manage:
-                continue
-            if url_name == "skin_upload" and not can_upload_skin:
-                continue
-            href = _url(url_name)
-            if href is None:
+            try:
+                href = reverse(f"control:{url_name}")
+            except NoReverseMatch:
                 continue
             items.append({
                 "name": url_name, "label": item_label,
                 "icon": item_icon, "url": href,
             })
+        out.append((key, label, icon, items))
+    return out
+
+
+@lru_cache(maxsize=1)
+def dashboard_url():
+    try:
+        return reverse("control:dashboard")
+    except NoReverseMatch:
+        return MOUNT
+
+
+def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
+              can_upload_skin):
+    """Permission-filtered sidebar tree (URLs come pre-resolved and cached)."""
+    nav = []
+    for key, label, icon, resolved_items in _resolved_sections():
+        if key == "platform" and not platform_staff:
+            continue
+        if key != "platform" and not active_project:
+            continue
+
+        items = [
+            it for it in resolved_items
+            if not (it["name"] in _PLATFORM_ADMIN_ONLY and not platform_admin)
+            and not (it["name"] in _STORE_MANAGE_ONLY and not can_manage)
+            and not (it["name"] == "skin_upload" and not can_upload_skin)
+        ]
         if not items:
             continue
         nav.append({
@@ -119,7 +134,7 @@ def build_breadcrumb(request, nav):
     Returns ``(crumbs, active_section_key, active_url)``.
     """
     path = request.path or MOUNT
-    dash = _url("dashboard") or MOUNT
+    dash = dashboard_url()
 
     best = None  # (section, item)
     for section in nav:
