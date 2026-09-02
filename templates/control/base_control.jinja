@@ -31,75 +31,36 @@
       <span class="text-lg">⌘</span>
       <span x-show="sidebar" x-cloak>Mission Control</span>
     </div>
-    <nav class="flex-1 overflow-y-auto px-2 py-2 text-sm">
-      {% macro navlink(name, label, icon) %}
-        <a href="{{ url(name) }}" @click="nav = false"
-           class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} hover:text-white
-                  {{ _side_active if request.resolver_match and request.resolver_match.view_name == name else '' }}">
-          <span class="w-4 text-center">{{ icon }}</span>
-          <span x-show="sidebar" x-cloak>{{ label }}</span>
-        </a>
-      {% endmacro %}
-      {% macro section(title) %}
-        <p x-show="sidebar" x-cloak class="px-3 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-wider text-slate-500">{{ title }}</p>
-      {% endmacro %}
+    {# Accordion nav: click a section header to open it; opening one closes the
+       rest. The section containing the current page is open on load. In the
+       collapsed icon rail (lg:w-16) every item shows regardless. #}
+    <nav x-data="{ open: '{{ control_nav_active_key or (control_nav[0].key if control_nav else '') }}' }"
+         class="flex-1 overflow-y-auto px-2 py-2 text-sm">
+      {% set _tints = ['bg-white/[0.02]', 'bg-white/[0.05]', 'bg-white/[0.03]', 'bg-white/[0.06]', 'bg-white/[0.04]', 'bg-white/[0.06]', 'bg-white/[0.03]'] %}
+      {% for s in control_nav %}
+      <div class="mb-1 overflow-hidden rounded-lg {{ _tints[loop.index0 % (_tints | length)] }}">
+        <button type="button" @click="open = (open === '{{ s.key }}' ? '' : '{{ s.key }}')"
+                class="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-{{ _hue }}-200 hover:text-white"
+                :class="open === '{{ s.key }}' && '{{ _side_active }}'">
+          <span class="w-4 shrink-0 text-center text-sm">{{ s.icon }}</span>
+          <span x-show="sidebar" x-cloak class="flex-1 truncate">{{ s.label }}</span>
+          <span x-show="sidebar" x-cloak class="shrink-0 text-[10px] transition-transform"
+                :class="open === '{{ s.key }}' && 'rotate-90'">▸</span>
+        </button>
+        <div x-show="!sidebar || open === '{{ s.key }}'" x-cloak class="space-y-0.5 px-1 pb-2 pt-0.5">
+          {% for it in s['items'] %}
+          <a href="{{ it.url }}" @click="nav = false"
+             class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} hover:text-white
+                    {{ (_side_active ~ ' font-medium') if control_nav_active_url == it.url else '' }}">
+            <span class="w-4 shrink-0 text-center">{{ it.icon }}</span>
+            <span x-show="sidebar" x-cloak class="truncate">{{ it.label }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
 
-      {# ============ PLATFORM ============ #}
-      {% if control_is_platform_staff %}
-        {{ section("Platform") }}
-        {{ navlink("control:stores", "Stores", "🏢") }}
-        {% if control_is_platform_admin %}
-          {{ navlink("control:billing", "Billing", "💰") }}
-          {{ navlink("control:billing_plans", "Plans & pricing", "🏷") }}
-          {{ navlink("control:skin_list", "Skins", "🎭") }}
-          {{ navlink("control:users", "Users", "👤") }}
-          {{ navlink("control:partner_applications", "Partners", "🤝") }}
-        {% endif %}
-      {% endif %}
-
-      {# ============ ACTIVE STORE ============ #}
-      {% if control_active_project %}
-        {{ section(control_active_project.name) }}
-        {{ navlink("control:dashboard", "Dashboard", "▦") }}
-        {{ navlink("control:order_list", "Orders", "🧾") }}
-        {{ navlink("control:customers", "Customers", "🧑") }}
-
-        {{ section("Catalog") }}
-        {{ navlink("control:product_list", "Products", "📦") }}
-        {{ navlink("control:category_list", "Categories", "🗂") }}
-        {{ navlink("control:brand_list", "Brands", "🏷") }}
-        {{ navlink("control:inventory_list", "Inventory", "📊") }}
-        {{ navlink("control:warehouse_list", "Warehouses", "🏬") }}
-
-        {{ section("Marketing") }}
-        {{ navlink("control:coupon_list", "Coupons", "🎟") }}
-        {{ navlink("control:review_list", "Reviews", "★") }}
-        {{ navlink("control:notification_settings", "Notifications", "🔔") }}
-
-        {{ section("Storefront") }}
-        {{ navlink("control:cms_store_profile", "Store profile", "🏪") }}
-        {{ navlink("control:cms_pages", "Pages", "📄") }}
-        {{ navlink("control:cms_banners", "Banners", "🖼") }}
-        {{ navlink("control:cms_menus", "Menus", "🧭") }}
-        {{ navlink("control:cms_theme", "Theme", "🎨") }}
-        {{ navlink("control:seo_settings", "SEO", "🔍") }}
-        {{ navlink("control:media", "Media", "🗄") }}
-        {% if control_can_upload_skin %}{{ navlink("control:skin_upload", "Skin upload", "⬆️") }}{% endif %}
-
-        {{ section("Insights") }}
-        {{ navlink("control:analytics", "Analytics", "📈") }}
-        {{ navlink("control:reports", "Reports", "📑") }}
-
-        {{ section("Settings") }}
-        {{ navlink("control:shipping_zones", "Shipping", "🚚") }}
-        {{ navlink("control:webhooks", "Webhooks", "🔗") }}
-        {% if control_can_manage_store %}
-          {{ navlink("control:payment_providers", "Payments", "💳") }}
-          {{ navlink("control:domains", "Domains", "🌐") }}
-          {{ navlink("control:team", "Team", "👥") }}
-          {{ navlink("control:store_plan", "Plan & billing", "💠") }}
-        {% endif %}
-      {% elif control_is_platform_staff %}
+      {% if not control_active_project and control_is_platform_staff %}
         <div x-show="sidebar" x-cloak class="mt-4 rounded-lg bg-{{ _hue }}-900/60 p-3 text-xs text-slate-400">
           Pick a store from <a href="{{ url('control:stores') }}" class="text-slate-200 underline">Stores</a>
           to manage its catalog, orders and settings.
@@ -120,10 +81,20 @@
       <button aria-label="Menu"
               @click="window.matchMedia('(min-width:1024px)').matches ? (sidebar = !sidebar) : (nav = !nav, sidebar = true)"
               class="shrink-0 rounded p-1 text-slate-500 hover:bg-slate-100">☰</button>
-      <h1 class="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold text-slate-700">
-        <span class="truncate">{% block header_title %}{{ self.page_title() }}{% endblock %}</span>
-        {% if _badge %}<span class="shrink-0 rounded bg-{{ _hue }}-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-{{ _hue }}-700">{{ _badge }}</span>{% endif %}
-      </h1>
+      <div class="flex min-w-0 flex-1 flex-col justify-center leading-tight">
+        {% if control_breadcrumb | length > 1 %}
+        <nav aria-label="Breadcrumb" class="flex items-center gap-1 truncate text-[11px] text-slate-400">
+          {% for _label, _href in control_breadcrumb %}
+          <a href="{{ _href }}" class="shrink-0 hover:text-{{ _hue }}-700 hover:underline">{{ _label }}</a>
+          <span class="shrink-0 text-slate-300">›</span>
+          {% endfor %}
+        </nav>
+        {% endif %}
+        <h1 class="flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <span class="truncate">{% block header_title %}{{ self.page_title() }}{% endblock %}</span>
+          {% if _badge %}<span class="shrink-0 rounded bg-{{ _hue }}-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-{{ _hue }}-700">{{ _badge }}</span>{% endif %}
+        </h1>
+      </div>
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
         {# Store switcher — a dropdown for a handful of stores, a link once there are many #}

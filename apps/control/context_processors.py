@@ -10,6 +10,7 @@ from apps.accounts.permissions import (
 from apps.projects.services import projects_for_user
 
 from .mixins import get_active_project
+from .navigation import build_breadcrumb, build_nav
 
 
 def _chrome_theme(user, store_role_val, platform_scope):
@@ -62,8 +63,23 @@ def control(request):
         request, default=active is not None
     )
     role = store_role(user, active)
+    can_upload = can_manage and (upload_on or is_platform_admin(user))
+
+    nav = build_nav(
+        platform_staff=platform_staff,
+        platform_admin=is_platform_admin(user),
+        active_project=active,
+        can_manage=can_manage,
+        can_upload_skin=can_upload,
+    )
+    crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
+
     return {
         "control_active_project": active,
+        "control_nav": nav,
+        "control_breadcrumb": crumbs,
+        "control_nav_active_key": nav_active_key,
+        "control_nav_active_url": nav_active_url,
         "control_available_projects": available,
         "control_available_count": available.count(),
         "control_is_platform_admin": is_platform_admin(user),
@@ -72,5 +88,5 @@ def control(request):
         "control_chrome_theme": _chrome_theme(user, role, platform_scope),
         "control_can_manage_store": can_manage,
         "control_store_role": role,
-        "control_can_upload_skin": can_manage and (upload_on or is_platform_admin(user)),
+        "control_can_upload_skin": can_upload,
     }
