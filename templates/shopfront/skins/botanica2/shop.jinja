@@ -1,0 +1,103 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}
+  {%- if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %} · {{ store.name }}
+  {%- elif query %}“{{ query }}” · {{ store.name }}
+  {%- else %}Shop · {{ store.name }}{% endif -%}
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
+
+  {# breadcrumb #}
+  <nav class="flex items-center gap-2 text-[11px] uppercase tracking-luxe text-mute">
+    <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
+    <span>/</span>
+    <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop</a>
+    {% if active_category %}<span>/</span>
+    <span class="text-ink">{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}</span>{% endif %}
+  </nav>
+
+  <header class="mt-4">
+    <h1 class="font-display text-3xl sm:text-4xl">
+      {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
+      {% elif query %}“{{ query }}”
+      {% else %}Shop all{% endif %}
+    </h1>
+    <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} product{{ 's' if result_count != 1 }}</p>
+  </header>
+
+  {# CATEGORY BANNER — placement "category" bound to this category #}
+  {% set _catban = category_banners.get(active_category) if active_category else none %}
+  {% if _catban and _catban.image %}
+  <a href="{{ _catban.cta_url or '' }}" class="group relative mt-8 block overflow-hidden rounded-3xl bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
+    <picture>
+      {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
+      <img src="{{ _catban.image.url }}" alt="{{ _catban.heading }}" loading="lazy" decoding="async"
+           class="h-44 w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-60">
+    </picture>
+    {% if _catban.heading or _catban.subheading %}
+    <div class="absolute inset-0 flex flex-col justify-end gap-1 bg-gradient-to-t from-ink/75 to-transparent p-6">
+      {% if _catban.heading %}<h2 class="font-display text-2xl text-paper">{{ _catban.heading }}</h2>{% endif %}
+      {% if _catban.subheading %}<p class="text-sm text-paper/80">{{ _catban.subheading }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  {# CATEGORY CHIPS — quick switch, horizontal scroll on mobile #}
+  <div class="mt-8 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+    <a href="{{ url('shopfront:shop') }}"
+       class="shrink-0 rounded-full border px-4 py-1.5 text-[12px] font-medium transition-colors
+              {{ 'border-accent bg-accent text-paper' if not active_category else 'border-line bg-panel text-ink hover:border-accent' }}">
+      All
+    </a>
+    {% for c in all_categories %}
+    <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}"
+       class="shrink-0 rounded-full border px-4 py-1.5 text-[12px] font-medium transition-colors
+              {{ 'border-accent bg-accent text-paper' if c.slug == active_category else 'border-line bg-panel text-ink hover:border-accent' }}">
+      {{ c.name }}
+    </a>
+    {% endfor %}
+  </div>
+
+  {# FILTER BAR #}
+  <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
+        hx-trigger="change, input changed delay:450ms" hx-indicator="#grid"
+        class="mt-6 flex flex-wrap items-center gap-2 border-y border-line py-3
+               sm:grid sm:grid-cols-2 sm:gap-4 sm:py-4 lg:grid-cols-4">
+    {% set _fld = "w-full rounded-full border border-line bg-panel px-4 py-2 text-sm outline-none focus:border-accent" %}
+    {% set _lbl = "mb-1 hidden text-[11px] font-semibold uppercase tracking-luxe text-mute sm:block" %}
+
+    <label class="basis-full text-sm sm:basis-auto">
+      <span class="{{ _lbl }}">Search</span>
+      <input type="search" name="q" value="{{ query }}" placeholder="Search products…" class="{{ _fld }}">
+    </label>
+    <label class="min-w-0 flex-1 text-sm sm:flex-none">
+      <span class="{{ _lbl }}">Category</span>
+      <select name="category" class="{{ _fld }}">
+        <option value="">All categories</option>
+        {% for c in all_categories %}<option value="{{ c.slug }}" {{ 'selected' if c.slug == active_category }}>{{ c.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="min-w-0 flex-1 text-sm sm:flex-none">
+      <span class="{{ _lbl }}">Sort</span>
+      <select name="sort" class="{{ _fld }}">
+        {% for v, t in [('new','Newest'),('price_asc','Price: low to high'),('price_desc','Price: high to low'),('rating','Top rated'),('name','Name')] %}
+        <option value="{{ v }}" {{ 'selected' if v == sort }}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="basis-full text-sm sm:basis-auto">
+      <span class="{{ _lbl }}">Price</span>
+      <div class="flex items-center gap-2">
+        <input name="min" value="{{ price_min }}" inputmode="numeric" placeholder="Min ₹" class="{{ _fld }}">
+        <span class="text-mute">–</span>
+        <input name="max" value="{{ price_max }}" inputmode="numeric" placeholder="Max ₹" class="{{ _fld }}">
+      </div>
+    </div>
+  </form>
+
+  <div id="grid" class="mt-8">
+    {% include "shopfront/partials/_grid.jinja" %}
+  </div>
+</div>
+{% endblock %}
