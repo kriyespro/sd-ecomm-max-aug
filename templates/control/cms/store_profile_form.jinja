@@ -1,9 +1,13 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
+{% from "control/_forms.jinja" import render_field %}
 {% block page_title %}Store profile{% endblock %}
 
+{% block head %}{{ super() }}
+<link rel="stylesheet" href="{{ static('vendor/cropperjs/cropper.min.css') }}">
+{% endblock %}
+
 {% block content %}
-<form method="post" enctype="multipart/form-data"
+<form method="post" enctype="multipart/form-data" id="store-profile-form"
       class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
   {{ csrf_input }}
   <div>
@@ -13,17 +17,178 @@
     </p>
   </div>
 
-  {% if form.instance.logo %}
-  <div class="flex items-center gap-3 rounded-lg bg-slate-50 p-3">
-    <img src="{{ form.instance.logo.url }}" alt="Current logo" class="h-10 w-auto object-contain">
-    <span class="text-xs text-slate-500">Current logo</span>
-  </div>
+  {% if form.non_field_errors() %}
+  <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
   {% endif %}
 
-  {{ render_form(form) }}
+  {# ---- Logo field with crop ---- #}
+  {% set logo = form.logo %}
+  <div class="space-y-2" x-data="logoCrop()">
+    <label for="{{ logo.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ logo.label }}</label>
+
+    <div class="flex items-start gap-4">
+      <div class="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200">
+        <img id="logo-preview" alt="Logo preview"
+             src="{{ form.instance.logo.url if form.instance.logo else '' }}"
+             class="max-h-full max-w-full object-contain {{ '' if form.instance.logo else 'hidden' }}">
+        <span id="logo-placeholder" class="text-[10px] text-slate-400 {{ 'hidden' if form.instance.logo else '' }}">No logo</span>
+      </div>
+      <div class="min-w-0 flex-1 space-y-1">
+        {{ logo.as_widget(attrs={"class": "block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200", "accept": "image/*", "@change": "onPick($event)"}) }}
+        <p class="text-xs text-slate-400">
+          PNG or SVG with a transparent background works best. Raster images open
+          a cropper; the final logo is stored at up to 512&nbsp;px.
+        </p>
+        <p x-show="cropped" x-cloak class="text-xs font-medium text-emerald-600">
+          ✓ Cropped — save the form to apply.
+          <button type="button" @click="recrop()" class="ml-1 underline">Re-crop</button>
+        </p>
+        {% for error in logo.errors %}<p class="text-xs text-red-600">{{ error }}</p>{% endfor %}
+      </div>
+    </div>
+
+    {# ---- Cropper modal ---- #}
+    <div x-show="open" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+         @keydown.escape.window="cancel()">
+      <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+        <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <h3 class="text-sm font-semibold text-slate-700">Crop logo</h3>
+          <button type="button" @click="cancel()" class="text-slate-400 hover:text-slate-700">✕</button>
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-hidden bg-slate-100 p-3">
+          <div class="mx-auto max-h-[52vh]"><img id="logo-crop-src" alt="" class="block max-w-full"></div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 px-4 py-3 text-xs">
+          <span class="text-slate-500">Ratio:</span>
+          {% for label, val, key in [('Free', 'NaN', 'free'), ('1:1', '1', '1'), ('16:9', '1.7777', '16-9'), ('3:1', '3', '3'), ('4:1', '4', '4')] %}
+          <button type="button" @click="setRatio({{ val }})"
+                  :class="ratioKey === '{{ key }}' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                  class="rounded px-2 py-1 font-medium">{{ label }}</button>
+          {% endfor %}
+          <span class="mx-1 h-4 w-px bg-slate-200"></span>
+          <button type="button" @click="zoom(0.1)" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Zoom +</button>
+          <button type="button" @click="zoom(-0.1)" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Zoom −</button>
+          <button type="button" @click="rot()" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Rotate</button>
+          <button type="button" @click="reset()" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Reset</button>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+          <button type="button" @click="cancel()" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-200">Cancel</button>
+          <button type="button" @click="apply()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Apply crop</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ---- Remaining fields ---- #}
+  {% for field in form.visible_fields() %}
+    {% if field.name != 'logo' %}{{ render_field(field) }}{% endif %}
+  {% endfor %}
+  {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
 
   <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">
     Save store profile
   </button>
 </form>
+
+<script src="{{ static('vendor/cropperjs/cropper.min.js') }}"></script>
+<script>
+function logoCrop() {
+  // Kept out of Alpine's reactive state on purpose — Alpine's Proxy wrapper
+  // breaks Cropper's internal `this`.
+  let cropper = null;
+  let lastFile = null;
+  let origName = 'logo';
+  const input = () => document.getElementById('{{ logo.id_for_label }}');
+
+  function startCropper(file) {
+    lastFile = file;
+    const img = document.getElementById('logo-crop-src');
+    img.src = URL.createObjectURL(file);
+    return () => {
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(img, {
+        viewMode: 1, autoCropArea: 1, background: false,
+        responsive: true, checkOrientation: true,
+      });
+    };
+  }
+
+  return {
+    open: false, cropped: false, ratioKey: 'free',
+
+    onPick(e) {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      origName = (f.name || 'logo').replace(/\.[^.]+$/, '');
+      if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name || '')) {
+        this._preview(URL.createObjectURL(f));   // vector — nothing to crop
+        this.cropped = false;
+        return;
+      }
+      if (!f.type.startsWith('image/')) return;
+      const init = startCropper(f);
+      this.ratioKey = 'free';
+      this.open = true;
+      this.$nextTick(init);
+    },
+
+    recrop() {
+      if (!lastFile) { input().click(); return; }
+      const init = startCropper(lastFile);
+      this.ratioKey = 'free';
+      this.open = true;
+      this.$nextTick(init);
+    },
+
+    setRatio(r) {
+      this.ratioKey = isNaN(r) ? 'free' : (r === 1.7777 ? '16-9' : String(r));
+      if (cropper) cropper.setAspectRatio(r);
+    },
+    zoom(d) { if (cropper) cropper.zoom(d); },
+    rot() { if (cropper) cropper.rotate(-90); },
+    reset() { if (cropper) { cropper.reset(); this.ratioKey = 'free'; cropper.setAspectRatio(NaN); } },
+
+    apply() {
+      if (!cropper) return;
+      const canvas = cropper.getCroppedCanvas({
+        maxWidth: 1600, maxHeight: 1600,
+        imageSmoothingEnabled: true, imageSmoothingQuality: 'high',
+      });
+      if (!canvas) return;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], origName + '.png', { type: 'image/png' });
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input().files = dt.files;
+        } catch (err) {
+          console.warn('crop: cannot assign cropped file, keeping original', err);
+        }
+        this._preview(URL.createObjectURL(blob));
+        this.cropped = true;
+        this._close();
+      }, 'image/png');
+    },
+
+    cancel() { this._close(); },
+
+    _close() {
+      this.open = false;
+      if (cropper) { cropper.destroy(); cropper = null; }
+    },
+
+    _preview(src) {
+      const p = document.getElementById('logo-preview');
+      const ph = document.getElementById('logo-placeholder');
+      p.src = src; p.classList.remove('hidden');
+      if (ph) ph.classList.add('hidden');
+    },
+  };
+}
+</script>
 {% endblock %}
