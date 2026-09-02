@@ -2,6 +2,21 @@
 {% block title %}{{ store.name }} — Rooted in nature, made for you{% endblock %}
 
 {% block content %}
+{#
+  ══════════════════════════════════════════════════════════════════════
+  EDIT HOMEPAGE COPY HERE
+  ══════════════════════════════════════════════════════════════════════
+  trust_strip — the 4 badges just under the hero. Each row is
+  ('Headline', 'sub-line'). Add / remove / reword freely; keep 3–4 for
+  the layout to stay even.
+#}
+{% set trust_strip = [
+  ('Free shipping',    'Orders over ₹999'),
+  ('Cash on delivery', 'Across India'),
+  ('7-day returns',    'No questions asked'),
+  ('Clean formulas',   'No nasties, ever'),
+] %}
+
 {# ============ HERO — full-bleed image with overlay ============ #}
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
@@ -38,7 +53,7 @@
 {# ============ TRUST STRIP ============ #}
 <div class="border-y border-line bg-panel">
   <div class="mx-auto grid max-w-7xl grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x">
-    {% for t, s in [('Free shipping', 'Orders over ₹999'), ('Cash on delivery', 'Across India'), ('7-day returns', 'No questions asked'), ('Clean formulas', 'No nasties, ever')] %}
+    {% for t, s in trust_strip %}
     <div class="flex items-center gap-3 border-t border-line px-5 py-5 sm:border-t-0">
       <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">&#10022;</span>
       <div>

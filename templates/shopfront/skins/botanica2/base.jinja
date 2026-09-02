@@ -86,19 +86,19 @@
   {% set _prof = store_profile %}
   {% set _has_contact = _prof and (_prof.support_phone or _prof.support_email or _prof.whatsapp_link) %}
   {% if announcement or _has_contact %}
-  <div class="bg-ink text-[11px] text-paper/85">
-    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-2 lg:px-8">
-      <div class="flex min-w-0 items-center gap-4">
+  <div class="bg-ink text-[12px] text-paper/85">
+    <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-2.5 lg:px-8">
+      <div class="flex min-w-0 items-center gap-5 text-[13px] font-medium sm:text-sm">
         {% if _prof and _prof.support_phone %}
-        <a href="tel:{{ _prof.support_phone }}" class="flex shrink-0 items-center gap-1.5 hover:text-gold">
-          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M4 5c0 8 7 15 15 15l1-4-5-2-2 2c-2-1-4-3-5-5l2-2-2-5-4 1Z"/></svg>
+        <a href="tel:{{ _prof.support_phone }}" class="flex shrink-0 items-center gap-2 hover:text-gold">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M4 5c0 8 7 15 15 15l1-4-5-2-2 2c-2-1-4-3-5-5l2-2-2-5-4 1Z"/></svg>
           <span>{{ _prof.support_phone }}</span>
         </a>
         {% endif %}
         {% if _prof and _prof.support_email %}
-        <a href="mailto:{{ _prof.support_email }}" class="hidden shrink-0 items-center gap-1.5 hover:text-gold sm:flex">
-          <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
-          <span>{{ _prof.support_email }}</span>
+        <a href="mailto:{{ _prof.support_email }}" class="flex min-w-0 shrink items-center gap-2 hover:text-gold">
+          <svg class="h-4 w-4 shrink-0" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
+          <span class="truncate">{{ _prof.support_email }}</span>
         </a>
         {% endif %}
         {% if _prof and _prof.whatsapp_link %}
@@ -107,16 +107,16 @@
       </div>
 
       {% if announcement %}
-      <p class="hidden min-w-0 flex-1 truncate text-center uppercase tracking-luxe text-paper/90 md:block">
+      <p class="hidden shrink-0 truncate uppercase tracking-luxe text-paper/80 lg:block">
         <span class="text-gold">&#10022;</span> {{ announcement.heading }}
         {% if announcement.cta_url %}<a href="{{ announcement.cta_url }}" class="ml-2 underline underline-offset-2 hover:text-gold">{{ announcement.cta_label or 'Shop' }}</a>{% endif %}
       </p>
-      {% else %}
-      <span class="hidden shrink-0 uppercase tracking-luxe text-paper/70 sm:inline">Free shipping over ₹999</span>
+      {% elif _has_contact %}
+      <span class="hidden shrink-0 uppercase tracking-luxe text-paper/60 sm:inline">Free shipping over ₹999</span>
       {% endif %}
     </div>
     {% if announcement %}
-    <p class="truncate px-5 pb-2 text-center uppercase tracking-luxe text-paper/90 md:hidden">
+    <p class="truncate border-t border-paper/10 px-5 py-2 text-center uppercase tracking-luxe text-paper/90 lg:hidden">
       <span class="text-gold">&#10022;</span> {{ announcement.heading }}
       {% if announcement.cta_url %}<a href="{{ announcement.cta_url }}" class="ml-2 underline underline-offset-2">{{ announcement.cta_label or 'Shop' }}</a>{% endif %}
     </p>
