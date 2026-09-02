@@ -74,8 +74,23 @@ def control(request):
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 
+    # The store this Host resolves to (a store's own domain / subdomain), when
+    # it differs from the one currently selected — drives a "you're managing a
+    # different store" banner so a stale session pick can't silently mislead.
+    host_project = getattr(request, "project", None)
+    try:
+        host_mismatch = (
+            host_project is not None
+            and active is not None
+            and host_project.pk != active.pk
+            and available.filter(pk=host_project.pk).exists()
+        )
+    except Exception:  # noqa: BLE001 - request.project may be a lazy 404
+        host_project, host_mismatch = None, False
+
     return {
         "control_active_project": active,
+        "control_host_project": host_project if host_mismatch else None,
         "control_nav": nav,
         "control_breadcrumb": crumbs,
         "control_nav_active_key": nav_active_key,

@@ -147,6 +147,18 @@
     </div>
     {% endif %}
 
+    {% if control_host_project %}
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
+      <span>This domain is <strong>{{ control_host_project.name }}</strong>, but you're managing
+        <strong>{{ control_active_project.name }}</strong>.</span>
+      <form method="post" action="{{ url('control:store_switch', kwargs={'pk': control_host_project.pk}) }}">
+        {{ csrf_input }}
+        <input type="hidden" name="next" value="{{ request.get_full_path() }}">
+        <button class="rounded bg-amber-900 px-2 py-1 text-xs font-medium text-white">Switch to {{ control_host_project.name }}</button>
+      </form>
+    </div>
+    {% endif %}
+
     {% if messages %}
     <div class="space-y-1 px-4 pt-4 sm:px-6">
       {% for message in messages %}

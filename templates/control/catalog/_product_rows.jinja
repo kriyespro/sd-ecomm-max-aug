@@ -22,5 +22,13 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No products found.</td></tr>
+<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-400">
+  {% if q or status %}
+  No products match this filter in <span class="font-medium text-slate-600">{{ active_project.name }}</span>.
+  {% else %}
+  No products in <span class="font-medium text-slate-600">{{ active_project.name }}</span> yet.
+  <a href="{{ url('control:product_create') }}" class="text-slate-600 underline">Add one</a>{% if control_available_count and control_available_count > 1 %},
+  or <a href="{{ url('control:stores') }}" class="text-slate-600 underline">switch store</a> if this isn't the one you meant{% endif %}.
+  {% endif %}
+</td></tr>
 {% endfor %}
