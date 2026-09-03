@@ -28,11 +28,11 @@
 
   {# PRODUCT BANNER — placement "product" (or the "category" banner for this product's category) #}
   {% set _pban = product_banner or (category_banners.get(product.category.slug) if product.category else none) %}
-  {% if _pban and _pban.image %}
+  {% if _pban %}
   <a href="{{ _pban.cta_url or '' }}" class="group relative mb-8 block overflow-hidden bg-ink {{ 'pointer-events-none' if not _pban.cta_url }}">
     <picture>
       {% if _pban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _pban.mobile_image.url }}">{% endif %}
-      <img src="{{ _pban.image.url }}" alt="{{ _pban.heading }}" loading="lazy" decoding="async"
+      <img src="{{ _pban.image | media_src(1600, 400, 'Product banner') }}" alt="{{ _pban.heading }}" loading="lazy" decoding="async"
            class="h-28 w-full object-cover sm:h-36">
     </picture>
     {% if _pban.heading or _pban.cta_label %}
@@ -60,7 +60,7 @@
       {% endif %}
 
       <div class="relative w-full min-w-0 lg:flex-1">
-        <div class="group relative aspect-[4/5] w-full cursor-zoom-in overflow-hidden bg-line/40" @click="lb = true">
+        <div class="group relative aspect-[4/5] w-full overflow-hidden bg-line/40 {{ 'cursor-zoom-in' if imgs }}" {% if imgs %}@click="lb = true"{% endif %}>
           {% if imgs %}
           {% for i in imgs %}
           <img src="{{ i.image.url }}" alt="{{ product.title }}"
@@ -71,9 +71,9 @@
                :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
           {% endfor %}
           {% else %}
-          <div class="flex h-full items-center justify-center font-display text-7xl text-line">◈</div>
+          <img src="{{ none | media_src(1000, 1250, 'Product photo') }}" alt="{{ product.title }}" class="absolute inset-0 h-full w-full object-cover">
           {% endif %}
-          <span class="absolute bottom-3 right-3 bg-paper/90 px-2 py-1 text-[10px] font-medium tracking-wide text-ink opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>
+          {% if imgs %}<span class="absolute bottom-3 right-3 bg-paper/90 px-2 py-1 text-[10px] font-medium tracking-wide text-ink opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>{% endif %}
         </div>
         {% if imgs | length > 1 %}
         <button @click.stop="prev()" class="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center bg-paper/90 text-ink hover:bg-ink hover:text-paper">‹</button>

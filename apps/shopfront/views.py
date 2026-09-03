@@ -76,15 +76,21 @@ class HomeView(View):
             )
             .distinct().order_by("order", "name")[:6]
         ):
-            pi = (
-                ProductImage.objects.filter(
-                    product__project=project, product__category=cat,
-                    product__status="active", product__search_indexed=True,
+            # The category's own image wins; otherwise borrow a product photo;
+            # the skin falls back to a sized placeholder when neither exists.
+            if cat.image:
+                tile_img = cat.image.url
+            else:
+                pi = (
+                    ProductImage.objects.filter(
+                        product__project=project, product__category=cat,
+                        product__status="active", product__search_indexed=True,
+                    )
+                    .order_by("-is_primary", "-product__created_at")
+                    .first()
                 )
-                .order_by("-is_primary", "-product__created_at")
-                .first()
-            )
-            tiles.append({"category": cat, "image": pi.image.url if pi else None})
+                tile_img = pi.image.url if pi else None
+            tiles.append({"category": cat, "image": tile_img})
 
         testimonials = list(
             Review.objects.filter(project=project, status=ReviewStatus.APPROVED)

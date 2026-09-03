@@ -104,4 +104,7 @@ def control(request):
         "control_can_manage_store": can_manage,
         "control_store_role": role,
         "control_can_upload_skin": can_upload,
+        "control_demo_seeded": bool(
+            can_manage and active and (active.feature_flags or {}).get("demo_seeded")
+        ),
     }

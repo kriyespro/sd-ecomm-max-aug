@@ -75,7 +75,27 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     record_audit(actor=actor, project=project, action=AuditLog.Action.CREATE,
                  target=project, changes={"owner": owner.email,
                                           "plan": plan.code}, request=request)
+
+    # Fill the storefront with editable demo content (text everywhere, images
+    # left blank so the skins show sized placeholders). Never block store
+    # creation on it.
+    transaction.on_commit(lambda: _seed_demo(project.pk))
+
     return project, owner, created_owner
+
+
+def _seed_demo(project_id):
+    from apps.control.starter_content import seed_starter_content
+    from apps.projects.models import Project
+
+    try:
+        seed_starter_content(Project.objects.get(pk=project_id))
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "starter content seeding failed for project %s", project_id
+        )
 
 
 def add_member(*, project, email, name, role, actor, request=None, password=None):

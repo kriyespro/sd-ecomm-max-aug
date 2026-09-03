@@ -156,16 +156,20 @@ def environment(**options):
     if inner_loader is not None and not isinstance(inner_loader, _SkinLoader):
         options["loader"] = _SkinLoader(inner_loader)
     env = SkinEnvironment(**options)
+    from apps.media.placeholders import media_src, svg_placeholder
+
     env.globals.update(
         {
             "static": static,
             "url": reverse,
             "skin_css_href": _skin_css_href,
             "site_css_href": _site_css_href,
+            "placeholder": svg_placeholder,
         }
     )
     env.filters["money"] = _money
     env.filters["rgb_channels"] = _rgb_channels
+    env.filters["media_src"] = media_src
     return env
 
 

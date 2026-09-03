@@ -147,6 +147,20 @@
     </div>
     {% endif %}
 
+    {% if control_demo_seeded %}
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-{{ _hue }}-100 px-4 py-2 text-sm text-{{ _hue }}-900">
+      <span>This store is showing <strong>demo content</strong> — edit the sample
+        products, banners and pages, then swap in your own images where you see
+        the grey <span class="font-mono text-xs">1600×900</span> placeholders.</span>
+      <form method="post" action="{{ url('control:demo_remove') }}"
+            onsubmit="return confirm('Delete all demo products, banners and pages? Anything you added stays.')">
+        {{ csrf_input }}
+        <input type="hidden" name="next" value="{{ request.get_full_path() }}">
+        <button class="rounded bg-{{ _hue }}-900 px-2 py-1 text-xs font-medium text-white">Remove demo content</button>
+      </form>
+    </div>
+    {% endif %}
+
     {% if control_host_project %}
     <div class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
       <span>This domain is <strong>{{ control_host_project.name }}</strong>, but you're managing

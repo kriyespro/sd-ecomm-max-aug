@@ -317,3 +317,24 @@ class StoreProfileView(ActiveProjectMixin, UpdateView):
                      action=AuditLog.Action.UPDATE, target=self.object, request=self.request)
         messages.success(self.request, "Store profile saved.")
         return response
+
+
+class DemoContentRemoveView(ActiveProjectMixin, View):
+    """One-click wipe of the auto-seeded demo catalogue / banners / pages.
+
+    Deletes only the rows the seeder recorded on ``feature_flags``; anything the
+    owner has added stays. POST-only, from the "showing demo content" banner.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from apps.control.starter_content import is_seeded, remove_starter_content
+
+        if not is_seeded(self.active_project):
+            messages.info(request, "No demo content to remove.")
+        else:
+            remove_starter_content(self.active_project)
+            record_audit(actor=request.user, project=self.active_project,
+                         action=AuditLog.Action.DELETE, target=self.active_project,
+                         changes={"demo_content": "removed"}, request=request)
+            messages.success(request, "Demo content removed.")
+        return redirect(request.POST.get("next") or "control:product_list")
