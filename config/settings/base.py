@@ -182,6 +182,18 @@ LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "control:dashboard"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
+# --- Google sign-in (self-signup) -------------------------------------
+# Public signup is Google-only. Create an OAuth 2.0 Web client in Google Cloud
+# console, add the callback below as an authorised redirect URI, then set these
+# on the server. Empty CLIENT_ID -> the signup page shows a "not configured"
+# notice instead of the button.
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", "")
+GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", "")
+# Must match a redirect URI registered on the OAuth client exactly, e.g.
+# https://shopinaday.com/accounts/google/callback/. Leave blank to derive it
+# from the incoming request (works when X-Forwarded-Proto is set by the proxy).
+GOOGLE_OAUTH_REDIRECT_URI = env("GOOGLE_OAUTH_REDIRECT_URI", "")
+
 
 # --- I18N / TZ -----------------------------------------------------------
 
