@@ -107,4 +107,12 @@ def control(request):
         "control_demo_seeded": bool(
             can_manage and active and (active.feature_flags or {}).get("demo_seeded")
         ),
+        # Public storefront URL for the "See your store" header link — the
+        # store's own domain (the storefront only serves on a store host, never
+        # on the platform host). None -> the link points at domain setup.
+        "control_storefront_url": (
+            f"https://{active.primary_domain.strip()}/"
+            if active and (active.primary_domain or "").strip()
+            else None
+        ),
     }

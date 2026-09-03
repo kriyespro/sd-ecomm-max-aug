@@ -93,6 +93,15 @@
         <h1 class="flex items-center gap-2 text-sm font-semibold text-slate-700">
           <span class="truncate">{% block header_title %}{{ self.page_title() }}{% endblock %}</span>
           {% if _badge %}<span class="shrink-0 rounded bg-{{ _hue }}-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-{{ _hue }}-700">{{ _badge }}</span>{% endif %}
+          {% if control_active_project %}
+          <a href="{{ control_storefront_url or url('control:domains') }}"
+             {% if control_storefront_url %}target="_blank" rel="noopener"{% endif %}
+             title="{{ 'Open your storefront in a new tab' if control_storefront_url else 'Connect a domain to open your storefront' }}"
+             class="shrink-0 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-emerald-700">
+            See your store
+            <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></svg>
+          </a>
+          {% endif %}
         </h1>
       </div>
 
