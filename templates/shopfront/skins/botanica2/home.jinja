@@ -26,11 +26,11 @@
   {% endif %}
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
-  <div class="mx-auto w-full max-w-7xl px-5 pb-14 pt-40 lg:px-8 lg:pb-20">
+  <div class="mx-auto w-full max-w-7xl px-5 pb-12 pt-28 sm:pb-14 sm:pt-40 lg:px-8 lg:pb-20">
     <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
-      <span class="h-px w-8 bg-gold"></span>{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}
+      <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}</span>
     </p>
-    <h1 class="mt-4 max-w-3xl font-display text-[2.6rem] leading-[1.05] text-paper sm:text-6xl lg:text-7xl">
+    <h1 class="mt-4 max-w-3xl font-display text-[2rem] leading-[1.08] text-paper sm:text-6xl sm:leading-[1.05] lg:text-7xl">
       {% if hero_banner and hero_banner.heading %}{{ hero_banner.heading }}{% else %}Rooted in nature,<br>made for the everyday.{% endif %}
     </h1>
     <p class="mt-5 max-w-md text-[15px] leading-relaxed text-paper/80">
@@ -39,11 +39,11 @@
     </p>
     <div class="mt-9 flex flex-wrap gap-3">
       <a href="{{ hero_banner.cta_url if (hero_banner and hero_banner.cta_url) else url('shopfront:shop') }}"
-         class="bg-paper px-9 py-4 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper">
+         class="bg-paper px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-9 sm:py-4">
         {{ hero_banner.cta_label if (hero_banner and hero_banner.cta_label) else 'Shop the collection' }}
       </a>
       <a href="{{ url('shopfront:shop') }}?sort=rating"
-         class="border border-paper/60 px-9 py-4 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink">
+         class="border border-paper/60 px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink sm:px-9 sm:py-4">
         Best rated
       </a>
     </div>
@@ -68,7 +68,7 @@
 {# ============ SHOP BY CATEGORY — one row, up to 6 ============ #}
 {% if cat_tiles %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex items-end justify-between">
+  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="font-display text-2xl sm:text-3xl">Shop by category</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
@@ -101,9 +101,9 @@
     </picture>
     {% endif %}
     {% if b.heading or b.subheading or b.cta_label %}
-    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-ink/30 p-8 lg:p-14">
+    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-ink/30 p-6 sm:p-8 lg:p-14">
       {% if b.subheading %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-paper/80">{{ b.subheading }}</p>{% endif %}
-      {% if b.heading %}<h2 class="max-w-xl font-display text-3xl text-paper sm:text-4xl">{{ b.heading }}</h2>{% endif %}
+      {% if b.heading %}<h2 class="max-w-xl font-display text-2xl text-paper sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
       {% if b.cta_label %}<span class="mt-2 bg-paper px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors group-hover:bg-accent group-hover:text-paper">{{ b.cta_label }}</span>{% endif %}
     </div>
     {% endif %}
@@ -113,14 +113,14 @@
 
 {# ============ FEATURED ============ #}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex items-end justify-between">
+  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <div>
       <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">Best sellers</p>
       <h2 class="mt-1 font-display text-2xl sm:text-3xl">Loved by the community</h2>
     </div>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-2 gap-x-5 gap-y-9 md:grid-cols-3 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 lg:grid-cols-4">
     {% for p in featured %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
@@ -148,11 +148,11 @@
 {# ============ NEW ARRIVALS ============ #}
 {% if new_arrivals %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex items-end justify-between">
+  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="font-display text-2xl sm:text-3xl">New arrivals</h2>
     <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-2 gap-x-5 gap-y-9 md:grid-cols-3 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 lg:grid-cols-4">
     {% for p in new_arrivals %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
