@@ -6,6 +6,10 @@
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
 <section class="relative grid min-h-[88vh] overflow-hidden bg-[#080604] text-paper lg:min-h-screen lg:grid-cols-2">
+  {% if hero_banner and hero_banner.mobile_image %}
+  <img src="{{ hero_banner.mobile_image.url }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 z-0 h-full w-full object-cover lg:hidden">
+  <div class="absolute inset-0 z-0 bg-gradient-to-t from-[#080604] via-[#080604]/75 to-[#080604]/35 lg:hidden"></div>
+  {% endif %}
   <div class="relative z-10 flex flex-col justify-center px-6 py-20 sm:px-10 lg:pl-[8%] lg:pr-[6%]">
     <p class="ornza-fade flex items-center gap-3 text-[10px] font-medium uppercase tracking-[0.35em] text-accent" style="animation-delay:.15s">
       <span class="h-px w-8 flex-shrink-0 bg-accent"></span>{{ hero_banner.subheading if hero_banner else 'Fine jewellery, made by hand' }}

@@ -22,7 +22,10 @@
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
 <section class="relative isolate flex min-h-[72vh] items-end overflow-hidden bg-ink sm:min-h-[80vh] lg:min-h-[88vh]">
   {% if hero_img %}
-  <img src="{{ hero_img }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+  <picture>
+    {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
+    <img src="{{ hero_img }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+  </picture>
   {% endif %}
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
