@@ -57,6 +57,15 @@
         </button>
         {% endfor %}
       </div>
+      {% elif not imgs %}
+      {# empty state — show the multi-photo layout so it's clear you can add several #}
+      <div class="flex min-w-0 max-w-full gap-3 lg:max-w-none lg:flex-col">
+        {% for label in ['Front', 'Angle', 'Detail'] %}
+        <div class="h-16 w-14 flex-shrink-0 overflow-hidden border border-line lg:h-24 lg:w-20">
+          <img src="{{ placeholder(400, 500, label) }}" alt="" class="h-full w-full object-cover">
+        </div>
+        {% endfor %}
+      </div>
       {% endif %}
 
       <div class="relative w-full min-w-0 lg:flex-1">
@@ -71,7 +80,7 @@
                :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
           {% endfor %}
           {% else %}
-          <img src="{{ none | media_src(1000, 1250, 'Product photo') }}" alt="{{ product.title }}" class="absolute inset-0 h-full w-full object-cover">
+          <img src="{{ placeholder(1000, 1250, 'Main photo') }}" alt="{{ product.title }}" class="absolute inset-0 h-full w-full object-cover">
           {% endif %}
           {% if imgs %}<span class="absolute bottom-3 right-3 bg-paper/90 px-2 py-1 text-[10px] font-medium tracking-wide text-ink opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>{% endif %}
         </div>

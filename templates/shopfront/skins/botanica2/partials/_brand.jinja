@@ -5,6 +5,10 @@
 {%- if store_logo -%}
 <img src="{{ store_logo }}" alt="{{ store.name }}"
      class="h-[46px] w-auto max-w-[195px] object-contain sm:h-[46px] sm:max-w-[200px] lg:h-[52px] lg:max-w-[240px]">
+{%- elif store_is_demo -%}
+<img src="{{ placeholder(320, 96, 'Your logo') }}" alt="{{ store.name }}"
+     title="Upload your logo in Storefront → Store profile"
+     class="h-[46px] w-auto object-contain lg:h-[52px]">
 {%- else -%}
 <span class="truncate">{{ store.name }}</span>
 {%- endif -%}

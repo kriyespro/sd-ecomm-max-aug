@@ -2,6 +2,8 @@
     Rendered inside the skin's existing <a>/<span> so it inherits type styles. -#}
 {%- if store_logo -%}
 <img src="{{ store_logo }}" alt="{{ store.name }}" class="inline-block h-[42px] w-auto max-w-[62vw] object-contain align-middle sm:max-w-none lg:h-11">
+{%- elif store_is_demo -%}
+<img src="{{ placeholder(320, 96, 'Your logo') }}" alt="{{ store.name }}" title="Upload your logo in Storefront → Store profile" class="inline-block h-[42px] w-auto object-contain align-middle lg:h-11">
 {%- else -%}
 {{ store.name }}
 {%- endif -%}

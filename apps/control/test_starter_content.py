@@ -129,3 +129,48 @@ class PlaceholderHelperTests(TestCase):
         self.assertEqual(media_src("/media/a.jpg", 10, 10), "/media/a.jpg")
         self.assertTrue(media_src(None, 10, 10).startswith("data:image/svg+xml"))
         self.assertTrue(media_src("", 10, 10).startswith("data:image/svg+xml"))
+
+
+class DemoFlagAndPlaceholderRenderTests(TestCase):
+    def setUp(self):
+        # store_chrome() is cache-backed and the cache outlives a TestCase's
+        # transaction rollback — clear it so a reused pk can't serve a prior
+        # test's chrome.
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def _render_home(self, project, skin="default"):
+        from django.contrib.auth.models import AnonymousUser
+        from django.contrib.sessions.backends.db import SessionStore
+        from django.test import RequestFactory
+
+        from apps.shopfront import views
+        from apps.shopfront.runtime import use_skin
+
+        rq = RequestFactory().get("/")
+        rq.project, rq.user, rq.session = project, AnonymousUser(), SessionStore()
+        rq.skin_slug = skin
+        with use_skin(skin):
+            return views.HomeView().get(rq).content.decode()
+
+    def test_chrome_exposes_demo_flag(self):
+        from apps.core.store_resolver import store_chrome
+
+        p = _project()
+        self.assertFalse(store_chrome(p)["demo"])
+        seed_starter_content(p)
+        self.assertTrue(store_chrome(p)["demo"])
+
+    def test_demo_store_shows_logo_placeholder_not_wordmark(self):
+        p = _project("Placeholder Store")
+        seed_starter_content(p)
+        html = self._render_home(p)
+        self.assertIn("data:image/svg+xml", html)
+        self.assertIn("Your%20logo", html)
+
+    def test_non_demo_store_keeps_text_wordmark(self):
+        p = _project("Plain Store")
+        html = self._render_home(p)
+        self.assertNotIn("Your%20logo", html)
+        self.assertIn("Plain Store", html)

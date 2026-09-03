@@ -65,6 +65,7 @@ def base_context(request, project, **extra):
         "store_logo": chrome["store_logo"],
         "categories": chrome["categories"],
         "footer_pages": chrome["footer_pages"],
+        "store_is_demo": chrome.get("demo", False),
         "cart": cart,
         "cart_count": cart.item_count,
         "cart_subtotal": cart.subtotal,

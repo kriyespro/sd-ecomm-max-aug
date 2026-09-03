@@ -27,11 +27,12 @@
     <label for="{{ logo.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ logo.label }}</label>
 
     <div class="flex items-start gap-4">
-      <div class="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200">
+      <div class="grid h-16 w-28 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200">
         <img id="logo-preview" alt="Logo preview"
              src="{{ form.instance.logo.url if form.instance.logo else '' }}"
              class="max-h-full max-w-full object-contain {{ '' if form.instance.logo else 'hidden' }}">
-        <span id="logo-placeholder" class="text-[10px] text-slate-400 {{ 'hidden' if form.instance.logo else '' }}">No logo</span>
+        <img id="logo-placeholder" alt="" src="{{ placeholder(320, 96, 'Your logo') }}"
+             class="max-h-full max-w-full object-contain {{ 'hidden' if form.instance.logo else '' }}">
       </div>
       <div class="min-w-0 flex-1 space-y-1">
         {{ logo.as_widget(attrs={"class": "block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200", "accept": "image/*", "@change": "onPick($event)"}) }}
