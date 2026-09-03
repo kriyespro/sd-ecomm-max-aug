@@ -20,6 +20,19 @@ class _PlanBase(StoreRoleRequiredMixin, ActiveProjectMixin):
     required_store_roles = OWNER_MANAGER
     role_denied_message = "Only the store owner or a manager can manage billing."
 
+    def check_active_project_access(self, request):
+        denied = super().check_active_project_access(request)
+        if denied is not None:
+            return denied
+        # A DGC-managed store's own team doesn't self-serve billing.
+        from apps.accounts.permissions import is_platform_staff
+
+        if billing_svc.is_dgc_managed(self.active_project) and not is_platform_staff(request.user):
+            raise PermissionDenied(
+                "Your plan is managed by your onboarding partner. Contact them to change it."
+            )
+        return None
+
     def subscription(self):
         sub = getattr(self.active_project, "subscription", None)
         if sub is None:

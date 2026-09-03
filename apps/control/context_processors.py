@@ -65,12 +65,20 @@ def control(request):
     role = store_role(user, active)
     can_upload = can_manage and (upload_on or is_platform_admin(user))
 
+    # A DGC-managed store's own team never sees plan & pricing — the partner
+    # owns that relationship. Platform staff always see it.
+    from apps.billing.services import is_dgc_managed
+
+    dgc_managed = bool(active and is_dgc_managed(active))
+    can_manage_billing = platform_staff or (can_manage and not dgc_managed)
+
     nav = build_nav(
         platform_staff=platform_staff,
         platform_admin=is_platform_admin(user),
         active_project=active,
         can_manage=can_manage,
         can_upload_skin=can_upload,
+        can_manage_billing=can_manage_billing,
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 

@@ -28,7 +28,7 @@ class RootViewTests(TestCase):
         self.assertContains(resp, "Start your ecommerce store in a day")
         # Pricing is built from the seeded billing plans, with one highlighted.
         self.assertContains(resp, "Most popular")
-        self.assertContains(resp, "Choose Growth")
+        self.assertContains(resp, "Start with Growth")
 
     @override_settings(PLATFORM_HOSTS=["shop.acme.test"])
     def test_platform_host_overrides_a_matching_store(self):

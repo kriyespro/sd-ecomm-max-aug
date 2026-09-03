@@ -69,7 +69,9 @@ _SECTIONS = [
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users", "partner_applications"}
 # Items only shown to a store owner / manager (not plain staff).
-_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "store_plan", "onboarding"}
+_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
+# Billing self-service — hidden when a DGC owns the billing relationship.
+_BILLING_ONLY = {"store_plan"}
 
 
 @lru_cache(maxsize=1)
@@ -102,7 +104,7 @@ def dashboard_url():
 
 
 def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
-              can_upload_skin):
+              can_upload_skin, can_manage_billing=True):
     """Permission-filtered sidebar tree (URLs come pre-resolved and cached)."""
     nav = []
     for key, label, icon, resolved_items in _resolved_sections():
@@ -115,6 +117,7 @@ def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
             it for it in resolved_items
             if not (it["name"] in _PLATFORM_ADMIN_ONLY and not platform_admin)
             and not (it["name"] in _STORE_MANAGE_ONLY and not can_manage)
+            and not (it["name"] in _BILLING_ONLY and not can_manage_billing)
             and not (it["name"] == "skin_upload" and not can_upload_skin)
         ]
         if not items:

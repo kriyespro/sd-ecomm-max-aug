@@ -51,7 +51,12 @@ class BillingSettings(TimeStampedModel):
     razorpay_webhook_secret = models.CharField(max_length=200, blank=True)
     is_test_mode = models.BooleanField(default=True)
 
-    trial_days = models.PositiveIntegerField(default=14)
+    trial_days = models.PositiveIntegerField(
+        default=14, help_text="Trial length for stores a partner / the platform sets up.",
+    )
+    self_signup_trial_days = models.PositiveIntegerField(
+        default=7, help_text="Trial length for stores opened through public self-signup.",
+    )
     grace_days = models.PositiveIntegerField(default=7, help_text="Days after due date before suspend.")
     invoice_prefix = models.CharField(max_length=12, default="INV")
     currency = models.CharField(max_length=3, default="INR")

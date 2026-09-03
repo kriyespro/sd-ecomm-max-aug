@@ -44,8 +44,12 @@ def _next_invoice_number(prefix):
 # --- subscribe / change plan -------------------------------------
 
 @transaction.atomic
-def ensure_subscription(project, *, plan=None, manager=None):
-    """Give a brand-new store a trial subscription. Idempotent."""
+def ensure_subscription(project, *, plan=None, manager=None, trial_days=None):
+    """Give a brand-new store a trial subscription. Idempotent.
+
+    ``trial_days`` overrides ``BillingSettings.trial_days`` — used by public
+    self-signup, which gets a shorter trial than a partner-provisioned store.
+    """
     if hasattr(project, "subscription"):
         return project.subscription
     cfg = BillingSettings.load()
@@ -53,13 +57,33 @@ def ensure_subscription(project, *, plan=None, manager=None):
     if plan is None:
         raise BillingError("No active plan to start a trial on.")
     now = timezone.now()
-    trial_end = now + timedelta(days=cfg.trial_days)
+    days = cfg.trial_days if trial_days is None else trial_days
+    trial_end = now + timedelta(days=days)
     return Subscription.objects.create(
         project=project, plan=plan, period=BillingPeriod.MONTHLY,
         status=SubscriptionStatus.TRIALING,
         current_period_start=now, current_period_end=trial_end, trial_end=trial_end,
         manager=manager,
     )
+
+
+def reset_trial(subscription, days):
+    """Re-length a still-running trial. Used right after self-signup, where the
+    post_save signal has already created a standard-length trial."""
+    if subscription.status != SubscriptionStatus.TRIALING:
+        return subscription
+    end = subscription.current_period_start + timedelta(days=days)
+    subscription.trial_end = end
+    subscription.current_period_end = end
+    subscription.save(update_fields=["trial_end", "current_period_end", "updated_at"])
+    return subscription
+
+
+def is_dgc_managed(project) -> bool:
+    """True when a platform manager (DGC) is credited for this store — they own
+    the billing relationship, so the store's own team never sees plan & pricing."""
+    sub = getattr(project, "subscription", None)
+    return bool(sub and sub.manager_id)
 
 
 @transaction.atomic
