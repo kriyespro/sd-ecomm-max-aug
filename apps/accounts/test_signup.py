@@ -52,6 +52,19 @@ class SelfSignupServiceTests(TestCase):
             StoreProfile.objects.get(project=project).support_phone, "+91 98765 43210"
         )
 
+    @override_settings(PLATFORM_BASE_DOMAIN="shopinaday.test")
+    def test_assigns_verified_primary_subdomain_from_email(self):
+        from apps.projects.models import Domain
+
+        project, _, _ = self_signup(
+            name="", email="ada@gmail.test", store_name="Ada Co", phone="9", oauth=True,
+        )
+        d = Domain.objects.get(project=project)
+        self.assertEqual(d.host, "ada.shopinaday.test")
+        self.assertTrue(d.is_verified and d.is_primary)
+        project.refresh_from_db()
+        self.assertEqual(project.primary_domain, "ada.shopinaday.test")
+
     def test_phone_is_required(self):
         from django.core.exceptions import ValidationError
 

@@ -15,6 +15,7 @@ from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.cms.models import StoreProfile
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
+from apps.projects import subdomains
 from apps.projects.verticals import VERTICALS, vertical_of
 
 from .mixins import ActiveProjectMixin
@@ -25,6 +26,13 @@ TEXT = ("mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2
 
 
 class OnboardingForm(forms.Form):
+    subdomain = forms.CharField(
+        label="Store web address", max_length=subdomains.MAX_LEN, required=False,
+        widget=forms.TextInput(attrs={
+            "class": TEXT, "autocapitalize": "none", "autocomplete": "off",
+            "pattern": "[a-zA-Z0-9-]+",
+        }),
+    )
     contact_email = forms.EmailField(
         label="Contact email",
         widget=forms.EmailInput(attrs={"class": TEXT, "placeholder": "you@brand.com"}),
@@ -43,11 +51,33 @@ class OnboardingForm(forms.Form):
         label="What do you sell?", choices=VERTICALS, widget=forms.RadioSelect,
     )
 
+    def __init__(self, *args, project=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.project = project
+        if not subdomains.base_domain():
+            self.fields.pop("subdomain", None)
+
+    def clean_subdomain(self):
+        raw = (self.cleaned_data.get("subdomain") or "").strip()
+        if not raw:
+            return ""
+        slug = subdomains.slugify(raw)
+        if len(slug) < 2:
+            raise forms.ValidationError("Use at least 2 letters or numbers.")
+        if not subdomains.is_available(slug, project=self.project):
+            raise forms.ValidationError("That address is taken — try another.")
+        return slug
+
 
 class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
     template_name = "control/onboarding.jinja"
     form_class = OnboardingForm
     required_store_roles = OWNER_MANAGER
+
+    def get_form_kwargs(self):
+        kw = super().get_form_kwargs()
+        kw["project"] = self.active_project
+        return kw
 
     def get_initial(self):
         p = self.active_project
@@ -57,11 +87,13 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
             "contact_phone": (prof and (prof.support_phone or prof.whatsapp)) or "",
             "address": (prof and prof.address) or "",
             "vertical": vertical_of(p) or None,
+            "subdomain": subdomains.current_slug(p),
         }
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["store"] = self.active_project
+        ctx["base_domain"] = subdomains.base_domain()
         return ctx
 
     def form_valid(self, form):
@@ -84,9 +116,17 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
         p.feature_flags = flags
         p.save(update_fields=["feature_flags"])
 
+        slug = cd.get("subdomain")
+        if slug and slug != subdomains.current_slug(p):
+            try:
+                subdomains.assign(p, slug)
+            except Exception:  # noqa: BLE001
+                messages.warning(self.request, "Couldn't update the web address — try again from Domains.")
+
         record_audit(
             actor=self.request.user, project=p, action=AuditLog.Action.UPDATE,
-            target=p, changes={"onboarding": "completed", "vertical": cd["vertical"]},
+            target=p, changes={"onboarding": "completed", "vertical": cd["vertical"],
+                               "subdomain": slug or ""},
             request=self.request,
         )
         messages.success(

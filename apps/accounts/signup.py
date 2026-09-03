@@ -71,6 +71,19 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
         defaults={"role": StoreRole.OWNER, "is_active": True},
     )
 
+    # Auto platform subdomain so the storefront is live right away. Editable in
+    # the setup wizard. Never block signup on it.
+    try:
+        from apps.projects import subdomains
+
+        if subdomains.base_domain():
+            slug = subdomains.unique_slug(email.split("@")[0] or store_name)
+            subdomains.assign(project, slug)
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("subdomain assignment failed")
+
     # The billing post_save signal already opened a standard-length trial with
     # no manager — shorten it to the self-signup length, pin the chosen plan.
     cfg = BillingSettings.load()

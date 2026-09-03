@@ -277,6 +277,13 @@ def _bare_host(raw):
 
 PLATFORM_HOSTS = [h for h in (_bare_host(x) for x in env_list("DJANGO_PLATFORM_HOSTS", [])) if h]
 
+# The apex a new store's auto subdomain hangs off — e.g. "shopinaday.com" gives
+# every signup "<slug>.shopinaday.com". Needs a wildcard "*.<domain>" A record
+# at the platform IP. Empty (local/dev) -> no subdomain is assigned.
+PLATFORM_BASE_DOMAIN = _bare_host(env("DJANGO_PLATFORM_BASE_DOMAIN", "")) or (
+    PLATFORM_HOSTS[0] if PLATFORM_HOSTS else ""
+)
+
 # Product image optimisation (apps.media.optimize + apps.catalog.tasks).
 # Uploads are re-encoded to WebP in the background, squeezed under the target
 # size, with responsive renditions generated alongside.

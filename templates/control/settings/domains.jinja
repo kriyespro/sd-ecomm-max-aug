@@ -17,6 +17,8 @@
     <button class="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add domain</button>
   </form>
 
+  {% include "control/settings/_dns_guide.jinja" %}
+
   {% for d in domains %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <div class="flex flex-wrap items-center justify-between gap-2">

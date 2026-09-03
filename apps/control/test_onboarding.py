@@ -70,6 +70,30 @@ class OnboardingGateTests(TestCase):
         # gate now lets the owner through
         self.assertEqual(self.client.get("/admin/products/").status_code, 200)
 
+    @override_settings(PLATFORM_BASE_DOMAIN="shopinaday.test")
+    def test_subdomain_field_prefilled_and_editable(self):
+        from apps.projects import subdomains
+        from apps.projects.models import Domain
+
+        subdomains.assign(self.project, "freshco")
+        resp = self.client.get("/admin/start/")
+        self.assertContains(resp, "shopinaday.test")
+        self.assertContains(resp, 'value="freshco"')
+
+        resp = self.client.post(
+            "/admin/start/",
+            {
+                "contact_email": "hi@fresh.test", "vertical": "fmcg",
+                "subdomain": "fresh-market",
+            },
+        )
+        self.assertRedirects(resp, "/admin/products/", fetch_redirect_response=False)
+        self.assertTrue(Domain.objects.filter(
+            project=self.project, host="fresh-market.shopinaday.test",
+            is_verified=True, is_primary=True,
+        ).exists())
+        self.assertFalse(Domain.objects.filter(host="freshco.shopinaday.test").exists())
+
     def test_skip(self):
         resp = self.client.post("/admin/start/skip/")
         self.assertRedirects(resp, "/admin/products/", fetch_redirect_response=False)

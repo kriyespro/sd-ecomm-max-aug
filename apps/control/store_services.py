@@ -72,6 +72,20 @@ def create_store(*, name, owner_email, plan, actor, request=None,
         defaults={"role": StoreRole.OWNER, "is_active": True},
     )
 
+    # No custom domain given -> hand the store a platform subdomain so it's
+    # reachable straight away (the owner can rename it in the setup wizard).
+    if not domain:
+        try:
+            from apps.projects import subdomains
+
+            if subdomains.base_domain():
+                slug = subdomains.unique_slug(owner_email.split("@")[0] or name)
+                subdomains.assign(project, slug)
+        except Exception:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("subdomain assignment failed")
+
     record_audit(actor=actor, project=project, action=AuditLog.Action.CREATE,
                  target=project, changes={"owner": owner.email,
                                           "plan": plan.code}, request=request)

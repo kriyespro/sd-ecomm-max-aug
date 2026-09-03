@@ -17,6 +17,30 @@
     <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
     {% endif %}
 
+    {# ---- 0. Web address (auto, editable) ---- #}
+    {% if form.subdomain %}
+    <div class="rounded-xl border border-slate-200 bg-white p-6"
+         x-data="{ s: '{{ form.subdomain.value() or '' }}' }">
+      <h2 class="text-sm font-semibold text-slate-700">Your store address</h2>
+      <p class="mt-1 text-xs text-slate-400">
+        Live now — share it while you set up. Connect your own domain later from Domains.
+      </p>
+      <div class="mt-4 flex items-stretch overflow-hidden rounded-lg border border-slate-300 focus-within:border-slate-500">
+        <input name="{{ form.subdomain.html_name }}" x-model="s"
+               value="{{ form.subdomain.value() or '' }}"
+               @input="s = s.toLowerCase().replace(/[^a-z0-9-]/g,'')"
+               class="min-w-0 flex-1 bg-white px-3 py-2 text-sm outline-none"
+               autocapitalize="none" autocomplete="off" spellcheck="false">
+        <span class="flex items-center bg-slate-50 px-3 text-sm text-slate-500">.{{ base_domain }}</span>
+      </div>
+      <p class="mt-2 text-xs text-slate-500">
+        Storefront: <a class="font-medium text-slate-700 underline" :href="'https://' + (s || 'yourstore') + '.{{ base_domain }}/'"
+           x-text="'https://' + (s || 'yourstore') + '.{{ base_domain }}/'" target="_blank" rel="noopener"></a>
+      </p>
+      {% for error in form.subdomain.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+    </div>
+    {% endif %}
+
     {# ---- 1. Contact ---- #}
     <div class="rounded-xl border border-slate-200 bg-white p-6">
       <h2 class="text-sm font-semibold text-slate-700">1 · Contact details</h2>
