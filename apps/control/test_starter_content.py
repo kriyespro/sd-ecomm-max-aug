@@ -12,7 +12,9 @@ from apps.cms.models import Banner, Page
 from apps.control.starter_content import (
     is_seeded,
     remove_starter_content,
+    reset_and_seed,
     seed_starter_content,
+    wipe_storefront_content,
 )
 from apps.media.placeholders import media_src, svg_placeholder
 from apps.projects.models import Project
@@ -89,6 +91,94 @@ class SeedStarterContentTests(TestCase):
         self.assertTrue(rated.exists())
         for prod in rated:
             self.assertGreater(prod.rating_avg, 0)
+
+
+class WipeAndResetTests(TestCase):
+    def _order_for(self, project, product):
+        from apps.orders.models import Order, OrderItem
+
+        o = Order.objects.create(
+            project=project, number="T-1", email="b@x.test",
+            subtotal=0, discount_total=0, tax_total=0, shipping_total=0,
+            grand_total=0,
+        )
+        OrderItem.objects.create(
+            order=o, product=product, product_title=product.title,
+            unit_price=product.price, quantity=1, line_total=product.price,
+        )
+        return o
+
+    def test_wipe_clears_content_but_keeps_orders(self):
+        p = _project()
+        seed_starter_content(p)
+        prod = Product.objects.filter(project=p).first()
+        order = self._order_for(p, prod)
+
+        counts = wipe_storefront_content(p)
+
+        self.assertFalse(Product.objects.filter(project=p).exists())
+        self.assertFalse(Category.objects.filter(project=p).exists())
+        self.assertFalse(Banner.objects.filter(project=p).exists())
+        self.assertGreaterEqual(counts["products"], 8)
+
+        order.refresh_from_db()
+        self.assertTrue(order.pk)  # order kept
+        self.assertIsNone(order.items.first().product_id)  # link nulled, snapshot stays
+        self.assertEqual(order.items.first().product_title, prod.title)
+
+    def test_wipe_releases_carts_that_protect_products(self):
+        from apps.cart.models import Cart, CartItem
+
+        p = _project()
+        seed_starter_content(p)
+        prod = Product.objects.filter(project=p).first()
+        cart = Cart.objects.create(project=p, session_key="s1")
+        CartItem.objects.create(cart=cart, product=prod, quantity=1,
+                                unit_price=prod.price)
+
+        wipe_storefront_content(p)  # must not raise ProtectedError
+
+        self.assertFalse(Cart.objects.filter(project=p).exists())
+        self.assertFalse(Product.objects.filter(project=p).exists())
+
+    def test_reset_and_seed_gives_a_fresh_set(self):
+        p = _project()
+        Category.objects.create(project=p, name="Old junk")
+        Product.objects.create(project=p, title="Old junk", price=1, status="active")
+
+        reset_and_seed(p)
+
+        self.assertEqual(Product.objects.filter(project=p).count(), 8)
+        self.assertFalse(Product.objects.filter(project=p, title="Old junk").exists())
+        self.assertTrue(is_seeded(p))
+
+
+class DemoContentImportViewTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+
+        self.admin = get_user_model().objects.create_superuser("root", "r@t.test", "pw")
+        self.plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        self.project = _project("Import Target")
+        Product.objects.create(project=self.project, title="Real", price=9, status="active")
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session["active_project_id"] = self.project.pk
+        session.save()
+
+    def test_wrong_confirm_changes_nothing(self):
+        resp = self.client.post("/admin/cms/demo-content/import/", {"confirm": "delete"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(Product.objects.filter(project=self.project, title="Real").exists())
+        self.assertFalse(is_seeded(self.project))
+
+    def test_confirmed_import_wipes_and_seeds(self):
+        resp = self.client.post("/admin/cms/demo-content/import/", {"confirm": "DELETE"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(Product.objects.filter(project=self.project, title="Real").exists())
+        self.assertEqual(Product.objects.filter(project=self.project).count(), 8)
+        self.project.refresh_from_db()
+        self.assertTrue(is_seeded(self.project))
 
 
 class CreateStoreSeedsDemoTests(TestCase):

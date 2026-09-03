@@ -338,3 +338,29 @@ class DemoContentRemoveView(ActiveProjectMixin, View):
                          changes={"demo_content": "removed"}, request=request)
             messages.success(request, "Demo content removed.")
         return redirect(request.POST.get("next") or "control:product_list")
+
+
+class DemoContentImportView(ActiveProjectMixin, View):
+    """Wipe this store's catalogue + CMS content and replace it with a fresh
+    demo set. Destructive — gated behind a typed "DELETE" confirmation, for
+    existing stores that want to start from the template.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from apps.control.starter_content import reset_and_seed
+
+        if (request.POST.get("confirm") or "").strip() != "DELETE":
+            messages.error(request, 'Type DELETE to confirm — nothing was changed.')
+            return redirect(request.POST.get("next") or "control:cms_store_profile")
+
+        counts = reset_and_seed(self.active_project)
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.DELETE, target=self.active_project,
+                     changes={"demo_import": "wiped + reseeded", "removed": counts},
+                     request=request)
+        messages.success(
+            request,
+            "Store reset and demo content imported. Edit the samples, then "
+            "swap in your own images.",
+        )
+        return redirect("control:product_list")

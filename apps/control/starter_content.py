@@ -259,6 +259,49 @@ def remove_starter_content(project) -> None:
     logger.info("starter content removed for project %s", project.pk)
 
 
+@transaction.atomic
+def wipe_storefront_content(project) -> dict:
+    """Delete this store's catalogue + CMS content so a clean demo set can take
+    its place. Destructive — used only behind a type-"DELETE" confirmation.
+
+    Removes: products (+ images / inventory / wishlist entries), categories,
+    brands, banners, pages, FAQs, menus, content blocks, reviews, and every
+    shopping cart (cart lines PROTECT products). Leaves orders, customers,
+    coupons, shipping, payments, domains, team and theme untouched — order
+    lines keep their snapshot and just lose the product link.
+    """
+    from apps.cart.models import Cart
+    from apps.catalog.models import Brand, Product
+    from apps.categories.models import Category
+    from apps.cms.models import Banner, ContentBlock, FAQ, Menu, Page
+    from apps.reviews.models import Review
+
+    counts = {}
+    # carts first — CartItem.product is PROTECT
+    counts["carts"] = Cart.objects.filter(project=project).delete()[0]
+    for key, model in (
+        ("reviews", Review), ("products", Product), ("brands", Brand),
+        ("categories", Category), ("banners", Banner), ("pages", Page),
+        ("faqs", FAQ), ("menus", Menu), ("blocks", ContentBlock),
+    ):
+        counts[key] = model.objects.filter(project=project).delete()[0]
+    project.feature_flags.pop(_FLAG, None)
+    project.feature_flags.pop(_REF, None)
+    project.save(update_fields=["feature_flags"])
+    _bust(project)
+    logger.warning("storefront content wiped for project %s: %s", project.pk, counts)
+    return counts
+
+
+@transaction.atomic
+def reset_and_seed(project) -> dict:
+    """Wipe the storefront, then lay down a fresh demo set — atomically, so a
+    seeding failure can't leave the store empty. The "import demo content"
+    action offered to existing stores."""
+    wipe_storefront_content(project)
+    return seed_starter_content(project, force=True)
+
+
 def _bust(project) -> None:
     try:
         from apps.core.store_resolver import bust_project_chrome

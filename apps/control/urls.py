@@ -221,6 +221,7 @@ urlpatterns = [
     path("cms/theme/", cmsv.ThemeSettingsView.as_view(), name="cms_theme"),
     path("cms/store-profile/", cmsv.StoreProfileView.as_view(), name="cms_store_profile"),
     path("cms/demo-content/remove/", cmsv.DemoContentRemoveView.as_view(), name="demo_remove"),
+    path("cms/demo-content/import/", cmsv.DemoContentImportView.as_view(), name="demo_import"),
 
     # Domains
     # Store plan & billing (owner / manager)

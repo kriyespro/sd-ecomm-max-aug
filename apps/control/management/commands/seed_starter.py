@@ -12,6 +12,7 @@ from django.core.management.base import BaseCommand, CommandError
 from apps.control.starter_content import (
     is_seeded,
     remove_starter_content,
+    reset_and_seed,
     seed_starter_content,
 )
 from apps.projects.models import Project
@@ -26,6 +27,9 @@ class Command(BaseCommand):
                             help="Re-seed even if already seeded")
         parser.add_argument("--remove", action="store_true",
                             help="Delete the seeded demo rows instead")
+        parser.add_argument("--reset", action="store_true",
+                            help="DESTRUCTIVE: wipe all storefront content first, "
+                                 "then seed a fresh demo set")
 
     def handle(self, *args, **opts):
         ident = opts["project"]
@@ -38,6 +42,14 @@ class Command(BaseCommand):
         if opts["remove"]:
             remove_starter_content(project)
             self.stdout.write(self.style.SUCCESS(f"Removed demo content from {project.name}"))
+            return
+
+        if opts["reset"]:
+            ref = reset_and_seed(project)
+            counts = ", ".join(f"{len(v)} {k}" for k, v in ref.items())
+            self.stdout.write(self.style.WARNING(
+                f"Wiped storefront content and re-seeded {project.name}: {counts}"
+            ))
             return
 
         if is_seeded(project) and not opts["force"]:
