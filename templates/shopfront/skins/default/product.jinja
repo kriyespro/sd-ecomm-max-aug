@@ -44,11 +44,11 @@
   </a>
   {% endif %}
 
-  <div class="grid gap-10 lg:grid-cols-[1fr_460px] lg:gap-16">
+  <div class="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_460px] lg:gap-16">
     {# ---------- GALLERY ---------- #}
-    <div class="flex flex-col-reverse gap-4 lg:flex-row">
+    <div class="flex min-w-0 flex-col-reverse gap-4 lg:flex-row">
       {% if imgs | length > 1 %}
-      <div class="flex gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:flex-col lg:overflow-visible lg:pb-0 [&::-webkit-scrollbar]:hidden">
+      <div class="flex min-w-0 max-w-full gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:max-w-none lg:flex-col lg:overflow-visible lg:pb-0 [&::-webkit-scrollbar]:hidden">
         {% for i in imgs %}
         <button @click="active = {{ loop.index0 }}"
                 class="h-16 w-14 flex-shrink-0 overflow-hidden border transition-colors lg:h-24 lg:w-20"
@@ -59,8 +59,8 @@
       </div>
       {% endif %}
 
-      <div class="relative flex-1">
-        <div class="group relative aspect-[4/5] cursor-zoom-in overflow-hidden bg-line/40" @click="lb = true">
+      <div class="relative w-full min-w-0 lg:flex-1">
+        <div class="group relative aspect-[4/5] w-full cursor-zoom-in overflow-hidden bg-line/40" @click="lb = true">
           {% if imgs %}
           {% for i in imgs %}
           <img src="{{ i.image.url }}" alt="{{ product.title }}"
