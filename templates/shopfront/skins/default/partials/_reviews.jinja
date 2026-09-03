@@ -29,7 +29,7 @@
     <form hx-post="{{ url('shopfront:review', kwargs={'slug': product.slug}) }}" hx-target="#reviews" hx-swap="outerHTML"
           class="mt-8 space-y-3 border-t border-line pt-6">
       <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Write a review</p>
-      <div class="flex gap-2">
+      <div class="flex flex-col gap-2 sm:flex-row">
         <input name="author_name" required placeholder="Name" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
         <input name="author_email" type="email" required placeholder="Email" class="w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent">
       </div>
@@ -57,10 +57,10 @@
         <p class="text-sm text-accent">{{ '★' * r.rating }}<span class="text-line">{{ '★' * (5 - r.rating) }}</span></p>
         <span class="text-xs text-mute">{{ r.created_at.strftime('%b %Y') }}</span>
       </div>
-      {% if r.title %}<p class="mt-2 font-medium">{{ r.title }}</p>{% endif %}
-      {% if r.body %}<p class="mt-1 text-sm leading-relaxed text-ink/80">{{ r.body }}</p>{% endif %}
-      <p class="mt-2 text-xs text-mute">{{ r.author_name }}{% if r.is_verified_purchase %} · <span class="text-emerald-700">Verified purchase</span>{% endif %}</p>
-      {% if r.admin_reply %}<p class="mt-2 rounded bg-accent-soft px-3 py-2 text-xs text-ink/70">{{ store.name }}: {{ r.admin_reply }}</p>{% endif %}
+      {% if r.title %}<p class="mt-2 break-words font-medium">{{ r.title }}</p>{% endif %}
+      {% if r.body %}<p class="mt-1 break-words text-sm leading-relaxed text-ink/80">{{ r.body }}</p>{% endif %}
+      <p class="mt-2 break-words text-xs text-mute">{{ r.author_name }}{% if r.is_verified_purchase %} · <span class="text-emerald-700">Verified purchase</span>{% endif %}</p>
+      {% if r.admin_reply %}<p class="mt-2 break-words rounded bg-accent-soft px-3 py-2 text-xs text-ink/70">{{ store.name }}: {{ r.admin_reply }}</p>{% endif %}
     </div>
     {% else %}
     <p class="text-sm text-mute">No approved reviews to show.</p>

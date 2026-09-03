@@ -6,9 +6,9 @@
          {% if imgs[0].srcset %}srcset="{{ imgs[0].srcset }}" sizes="(min-width:640px) 40vw, 100vw"{% endif %}
          decoding="async" class="h-full w-full object-cover">{% endif %}
   </div>
-  <div class="p-8">
+  <div class="p-6 sm:p-8">
     {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">{{ product.brand.name }}</p>{% endif %}
-    <h2 class="mt-1 font-display text-3xl leading-tight">{{ product.title }}</h2>
+    <h2 class="mt-1 break-words font-display text-2xl leading-tight sm:text-3xl">{{ product.title }}</h2>
     <p class="mt-3 text-lg">
       {% if product.on_sale %}
       <span class="text-mute line-through">{{ product.price | money }}</span>
