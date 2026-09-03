@@ -1,0 +1,92 @@
+{# Size & Colour quick builder — apparel verticals only. Two comma lists drive a
+   live combo table; each row can override price / sale / stock. Submitted as
+   sizes, colors and combo_price[KEY] / combo_sale[KEY] / combo_stock[KEY] where
+   KEY is "<size>|||<color>". Reconciled server-side by apps.catalog.variants. #}
+<div class="rounded-xl bg-white p-6 ring-1 ring-slate-200"
+     x-data='sizeColor({{ sc_rows|tojson }}, {{ sc_sizes|tojson }}, {{ sc_colors|tojson }})'>
+  <h2 class="text-sm font-semibold text-slate-700">Size &amp; colour</h2>
+  <p class="mt-1 text-xs text-slate-400">
+    List the options you sell, separated by commas. We build one purchasable
+    variant per combination — shoppers pick size and colour on the product page.
+    Leave a price blank to use the product price.
+  </p>
+
+  <div class="mt-4 grid gap-4 sm:grid-cols-2">
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Sizes</label>
+      <input name="sizes" x-model="sizes" placeholder="S, M, L, XL"
+             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+    </div>
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Colours</label>
+      <input name="colors" x-model="colors" placeholder="Black, White, Navy"
+             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+    </div>
+  </div>
+
+  <template x-if="combos.length">
+    <div class="mt-5 overflow-x-auto">
+      <table class="w-full min-w-[34rem] text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+            <th class="py-2 pr-3 font-medium">Variant</th>
+            <th class="py-2 pr-3 font-medium">Price</th>
+            <th class="py-2 pr-3 font-medium">Sale price</th>
+            <th class="py-2 font-medium">Stock</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="[s, c] in combos" :key="key(s, c)">
+            <tr class="border-b border-slate-100">
+              <td class="py-2 pr-3 font-medium text-slate-700" x-text="label(s, c)"></td>
+              <td class="py-2 pr-3">
+                <input type="text" inputmode="decimal" :name="'combo_price[' + key(s, c) + ']'"
+                       :value="val(key(s, c), 'price')"
+                       class="w-24 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none"
+                       placeholder="—">
+              </td>
+              <td class="py-2 pr-3">
+                <input type="text" inputmode="decimal" :name="'combo_sale[' + key(s, c) + ']'"
+                       :value="val(key(s, c), 'sale_price')"
+                       class="w-24 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none"
+                       placeholder="—">
+              </td>
+              <td class="py-2">
+                <input type="text" inputmode="numeric" :name="'combo_stock[' + key(s, c) + ']'"
+                       :value="val(key(s, c), 'stock')"
+                       class="w-20 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none"
+                       placeholder="0">
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+      <p class="mt-2 text-xs text-slate-400" x-text="combos.length + ' variant' + (combos.length === 1 ? '' : 's')"></p>
+    </div>
+  </template>
+</div>
+
+<script>
+function sizeColor(rows, sizes, colors) {
+  return {
+    rows: rows || {},
+    sizes: sizes || '',
+    colors: colors || '',
+    _split(s) {
+      return [...new Set((s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
+    },
+    get sizeList() { return this._split(this.sizes); },
+    get colorList() { return this._split(this.colors); },
+    get combos() {
+      const S = this.sizeList, C = this.colorList;
+      if (S.length && C.length) return S.flatMap(s => C.map(c => [s, c]));
+      if (S.length) return S.map(s => [s, '']);
+      if (C.length) return C.map(c => ['', c]);
+      return [];
+    },
+    key(s, c) { return s + '|||' + c; },
+    label(s, c) { return [s, c].filter(Boolean).join(' / '); },
+    val(k, f) { return (this.rows[k] && this.rows[k][f]) || ''; },
+  };
+}
+</script>

@@ -25,6 +25,11 @@
     <div class="grid gap-4 rounded-xl bg-white p-6 ring-1 ring-slate-200 md:grid-cols-2">
       {{ render_form(form) }}
     </div>
+
+    {% if size_color_enabled %}
+      {% include "control/catalog/_size_color.jinja" %}
+    {% endif %}
+
     <p class="text-xs text-slate-400">
       Type, brand, category and tags are optional. Manage them under
       <a href="{{ url('control:product_type_list') }}" class="underline">Types</a>,

@@ -2,6 +2,7 @@ from django.urls import path
 
 from . import billing_views as billv
 from . import catalog_views as cat
+from . import onboarding_views as onbv
 from . import cms_views as cmsv
 from . import coupon_views as coup
 from . import customer_views as custv
@@ -29,6 +30,10 @@ urlpatterns = [
     # Store switcher
     path("choose-store/", views.ProjectPickerView.as_view(), name="project_picker"),
     path("set-store/", views.SetProjectView.as_view(), name="set_project"),
+
+    # First-run setup wizard (store owner / manager)
+    path("start/", onbv.OnboardingView.as_view(), name="onboarding"),
+    path("start/skip/", onbv.OnboardingSkipView.as_view(), name="onboarding_skip"),
 
     # Team (per-store staff)
     path("team/", teamv.TeamListView.as_view(), name="team"),

@@ -71,8 +71,12 @@ class StoreProfileViewTests(TestCase):
 class DashboardRoutingTests(TestCase):
     def setUp(self):
         User = get_user_model()
-        self.a = Project.objects.create(name="StoreA", status="active")
-        self.b = Project.objects.create(name="StoreB", status="active")
+        self.a = Project.objects.create(
+            name="StoreA", status="active", feature_flags={"onboarded": True}
+        )
+        self.b = Project.objects.create(
+            name="StoreB", status="active", feature_flags={"onboarded": True}
+        )
         Domain.objects.create(project=self.a, host="a.test", is_verified=True)
         self.owner = User.objects.create_user(
             username="o2", email="o2@t.test", password="pw", is_staff=True
@@ -107,7 +111,9 @@ class ChromeThemeByRoleTests(TestCase):
     platform=indigo, DGC=orange, store owner=emerald, store manager=rose."""
 
     def setUp(self):
-        self.project = Project.objects.create(name="TintCo", status="active")
+        self.project = Project.objects.create(
+            name="TintCo", status="active", feature_flags={"onboarded": True}
+        )
         session = self.client.session
         session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         session.save()

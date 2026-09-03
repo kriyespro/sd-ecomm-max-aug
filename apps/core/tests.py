@@ -42,7 +42,9 @@ class RootViewTests(TestCase):
 class ResolveProjectTests(TestCase):
     def setUp(self):
         self.rf = RequestFactory()
-        self.project = Project.objects.create(name="Acme")
+        self.project = Project.objects.create(
+            name="Acme", feature_flags={"onboarded": True}
+        )
         Domain.objects.create(
             project=self.project, host="shop.acme.test", is_verified=True
         )
@@ -69,7 +71,9 @@ class ResolveProjectTests(TestCase):
 class StorefrontHostMiddlewareTests(TestCase):
     def setUp(self):
         self.rf = RequestFactory()
-        self.project = Project.objects.create(name="Acme")
+        self.project = Project.objects.create(
+            name="Acme", feature_flags={"onboarded": True}
+        )
         Domain.objects.create(
             project=self.project, host="shop.acme.test", is_verified=True
         )

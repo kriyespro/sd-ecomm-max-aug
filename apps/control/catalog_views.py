@@ -229,7 +229,52 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         return ctx
 
 
-class ProductCreateView(_ScopedFormMixin, CreateView):
+class _ProductSizeColorMixin:
+    """Apparel stores (see ``apps.projects.verticals``) get the Size & Colour
+    quick builder on the product form. On save the two comma lists + per-combo
+    price/stock table are reconciled into ``Variant`` rows."""
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        from apps.projects.verticals import wants_size_color
+
+        enabled = wants_size_color(self.active_project)
+        ctx["size_color_enabled"] = enabled
+        obj = ctx.get("object")
+        if enabled and obj is not None:
+            from apps.catalog.variants import size_color_of
+
+            sizes, colors, rows = size_color_of(obj)
+            ctx["sc_sizes"] = ", ".join(sizes)
+            ctx["sc_colors"] = ", ".join(colors)
+            ctx["sc_rows"] = rows
+        else:
+            ctx["sc_sizes"] = ctx["sc_colors"] = ""
+            ctx["sc_rows"] = {}
+        return ctx
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        from apps.projects.verticals import wants_size_color
+
+        if wants_size_color(self.active_project):
+            from apps.catalog.variants import (
+                apply_size_color,
+                matrix_from_post,
+                parse_list,
+            )
+
+            post = self.request.POST
+            apply_size_color(
+                self.object,
+                sizes=parse_list(post.get("sizes")),
+                colors=parse_list(post.get("colors")),
+                matrix=matrix_from_post(post),
+            )
+        return response
+
+
+class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
     model = Product
     form_class = ProductForm
     template_name = "control/catalog/product_form.jinja"
@@ -243,7 +288,7 @@ class ProductCreateView(_ScopedFormMixin, CreateView):
         return reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
 
 
-class ProductUpdateView(_ScopedFormMixin, UpdateView):
+class ProductUpdateView(_ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
     model = Product
     form_class = ProductForm
     template_name = "control/catalog/product_form.jinja"

@@ -135,27 +135,7 @@
       <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-7 space-y-5" x-data="{ q: 1 }">
         <input type="hidden" name="product" value="{{ product.slug }}">
 
-        {% if variants %}
-        <div>
-          <span class="mb-2 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Option</span>
-          {% if variants | length <= 6 %}
-          <div class="flex flex-wrap gap-2" x-data="{ v: '{{ variants[0].pk }}' }">
-            <input type="hidden" name="variant" :value="v">
-            {% for vr in variants %}
-            <button type="button" @click="v = '{{ vr.pk }}'"
-                    class="border px-4 py-2 text-sm transition-colors"
-                    :class="v === '{{ vr.pk }}' ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink'">
-              {{ vr.name or vr.sku }}
-            </button>
-            {% endfor %}
-          </div>
-          {% else %}
-          <select name="variant" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
-            {% for vr in variants %}<option value="{{ vr.pk }}">{{ vr.name or vr.sku }} — {{ vr.effective_price | money }}</option>{% endfor %}
-          </select>
-          {% endif %}
-        </div>
-        {% endif %}
+        {% include "shopfront/partials/_variant_picker.jinja" %}
 
         <div class="flex items-stretch gap-3">
           <div class="flex items-center border border-line">

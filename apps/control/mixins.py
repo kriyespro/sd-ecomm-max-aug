@@ -8,6 +8,10 @@ from apps.projects.services import projects_for_user
 
 ACTIVE_PROJECT_SESSION_KEY = "active_project_id"
 
+# URL names a not-yet-onboarded owner may still reach (the wizard itself, the
+# store picker, sign-out).
+_ONBOARDING_EXEMPT = {"onboarding", "onboarding_skip", "project_picker", "set_project"}
+
 
 def get_active_project(request):
     """Resolve the project the staff user is currently operating on.
@@ -71,8 +75,28 @@ class ActiveProjectMixin(ControlAccessMixin):
     def check_active_project_access(self, request):
         """Hook for subclasses to run extra checks once ``self.active_project``
         is set. Return an ``HttpResponse`` to short-circuit, or ``None`` to
-        continue. May also raise ``PermissionDenied``. Default: allow."""
+        continue. May also raise ``PermissionDenied``. Default: the onboarding
+        gate — a store owner / manager who hasn't finished the setup wizard is
+        sent to it. Platform staff and plain store staff pass straight through.
+        Subclasses that override should call ``super()`` first."""
+        gate = self._onboarding_redirect(request)
+        if gate is not None:
+            return gate
         return None
+
+    def _onboarding_redirect(self, request):
+        from apps.accounts.permissions import OWNER_MANAGER, has_store_role, is_platform_staff
+        from apps.projects.verticals import is_onboarded
+
+        match = getattr(request, "resolver_match", None)
+        if match is not None and match.url_name in _ONBOARDING_EXEMPT:
+            return None
+        user = request.user
+        if is_platform_staff(user) or is_onboarded(self.active_project):
+            return None
+        if not has_store_role(user, self.active_project, OWNER_MANAGER):
+            return None
+        return redirect("control:onboarding")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

@@ -26,6 +26,7 @@ _SECTIONS = [
     ]),
     ("store", "Store", "▦", [
         ("dashboard", "Dashboard", "▦"),
+        ("onboarding", "Setup guide", "\U0001f680"),
         ("order_list", "Orders", "\U0001f9fe"),
         ("customers", "Customers", "\U0001f9d1"),
     ]),
@@ -68,7 +69,7 @@ _SECTIONS = [
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users", "partner_applications"}
 # Items only shown to a store owner / manager (not plain staff).
-_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "store_plan"}
+_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "store_plan", "onboarding"}
 
 
 @lru_cache(maxsize=1)

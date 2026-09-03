@@ -1,0 +1,53 @@
+{# Variant selector for the product form.
+   - variant_options (Size / Colour axes): one button row per axis, resolves the
+     pick to a variant pk via a JS map. Injects <input name="variant">.
+   - otherwise: the flat variant list (swatches up to 6, else a <select>).
+   Included inside the add-to-cart <form>. #}
+{% if variant_options and variant_options.axes %}
+<div x-data="{
+       sel: { {% for ax in variant_options.axes %}'{{ ax.name }}': '{{ ax.options[0] }}'{{ ',' if not loop.last }}{% endfor %} },
+       map: {{ variant_options.map | tojson }},
+       get k() { return (this.sel['Size'] || '') + '|||' + (this.sel['Color'] || ''); },
+       get cur() { return this.map[this.k] || null; }
+     }"
+     class="space-y-4">
+  <input type="hidden" name="variant" :value="cur ? cur.pk : ''">
+  {% for ax in variant_options.axes %}
+  <div>
+    <span class="mb-2 block text-[11px] font-semibold uppercase tracking-luxe text-mute">{{ ax.name }}</span>
+    <div class="flex flex-wrap gap-2">
+      {% for val in ax.options %}
+      <button type="button" @click="sel['{{ ax.name }}'] = '{{ val }}'"
+              class="border px-4 py-2 text-sm transition-colors"
+              :class="sel['{{ ax.name }}'] === '{{ val }}' ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink'">
+        {{ val }}
+      </button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  <p x-show="cur && cur.stock > 0 && cur.stock <= 5" x-cloak class="text-xs font-medium text-rose-600"
+     x-text="'Only ' + (cur ? cur.stock : 0) + ' left in this option'"></p>
+  <p x-show="!cur" x-cloak class="text-xs font-medium text-mute">This combination isn't available right now.</p>
+</div>
+{% elif variants %}
+<div>
+  <span class="mb-2 block text-[11px] font-semibold uppercase tracking-luxe text-mute">Option</span>
+  {% if variants | length <= 6 %}
+  <div class="flex flex-wrap gap-2" x-data="{ v: '{{ variants[0].pk }}' }">
+    <input type="hidden" name="variant" :value="v">
+    {% for vr in variants %}
+    <button type="button" @click="v = '{{ vr.pk }}'"
+            class="border px-4 py-2 text-sm transition-colors"
+            :class="v === '{{ vr.pk }}' ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink'">
+      {{ vr.name or vr.sku }}
+    </button>
+    {% endfor %}
+  </div>
+  {% else %}
+  <select name="variant" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+    {% for vr in variants %}<option value="{{ vr.pk }}">{{ vr.name or vr.sku }} — {{ vr.effective_price | money }}</option>{% endfor %}
+  </select>
+  {% endif %}
+</div>
+{% endif %}

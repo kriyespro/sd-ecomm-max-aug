@@ -22,6 +22,7 @@ from .render import render, render_to_string
 
 from apps.cart import services as cart_svc
 from apps.catalog.models import Product, ProductImage, Variant
+from apps.catalog.variants import storefront_axes as variant_axes
 from apps.categories.models import Category
 from apps.checkout import services as checkout_svc
 from apps.cms.models import Page
@@ -185,7 +186,9 @@ class ProductView(View):
 
         project = current_project(request)
         product = get_object_or_404(
-            Product.objects.select_related("brand", "category").prefetch_related("images", "variants"),
+            Product.objects.select_related("brand", "category").prefetch_related(
+                "images", "variants__attribute_values__attribute"
+            ),
             project=project, slug=slug, status="active",
         )
         related = list(
@@ -228,11 +231,13 @@ class ProductView(View):
         reviews_qs = product.reviews.filter(status=ReviewStatus.APPROVED)
         breakdown, review_total = _rating_breakdown(reviews_qs)
 
+        active_variants = [v for v in product.variants.all() if v.is_active]
         ctx = base_context(
             request, project,
             product=product,
             # reuse the prefetched variants instead of re-querying
-            variants=[v for v in product.variants.all() if v.is_active],
+            variants=active_variants,
+            variant_options=variant_axes(active_variants),
             reviews=reviews_qs,
             rating_breakdown=breakdown,
             review_total=review_total,
