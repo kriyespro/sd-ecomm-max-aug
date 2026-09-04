@@ -18,6 +18,7 @@ from apps.projects.models import Project
 from apps.projects.services import projects_for_user
 
 from . import store_services
+from .forms import StoreManagerAssignForm
 from .mixins import ACTIVE_PROJECT_SESSION_KEY
 
 User = get_user_model()
@@ -138,6 +139,8 @@ class StoreDetailView(_StoreScope, DetailView):
         return self.get_store(self.kwargs["pk"])
 
     def get_context_data(self, **kwargs):
+        from apps.core.middleware import trusted_base_url
+
         ctx = super().get_context_data(**kwargs)
         store = ctx["store"]
         ctx["members"] = (
@@ -148,7 +151,37 @@ class StoreDetailView(_StoreScope, DetailView):
         ctx["role_choices"] = [
             (StoreRole.OWNER, "Owner"), (StoreRole.MANAGER, "Manager"), (StoreRole.STAFF, "Staff"),
         ]
+        ctx["is_admin"] = is_platform_admin(self.request.user)
+        if ctx["is_admin"]:
+            ctx["manager_form"] = StoreManagerAssignForm(
+                initial={"manager": getattr(ctx["subscription"], "manager_id", None)}
+            )
+        ctx["owner_membership"] = (
+            store.memberships.filter(role=StoreRole.OWNER, is_active=True)
+            .select_related("user").first()
+        )
+        ctx["store_url"] = trusted_base_url(self.request, store)
+        ctx["control_login_url"] = self.request.build_absolute_uri(reverse("control:dashboard"))
         return ctx
+
+
+class StoreManagerAssignView(_StoreScope, View):
+    def post(self, request, pk, *args, **kwargs):
+        store = self.get_store(pk)
+        form = StoreManagerAssignForm(request.POST)
+        if form.is_valid():
+            try:
+                store_services.set_store_manager(
+                    project=store, manager=form.cleaned_data.get("manager"),
+                    actor=request.user, request=request,
+                )
+            except (ValidationError, PermissionDenied) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                messages.success(request, f"Manager updated for {store.name}.")
+        else:
+            messages.error(request, "Pick a valid DGC account.")
+        return redirect("control:store_detail", pk=pk)
 
 
 class StoreMemberAddView(_StoreScope, View):

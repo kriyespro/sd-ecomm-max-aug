@@ -103,6 +103,35 @@ def create_platform_user(*, actor, email, raw_password, first_name="",
     return user
 
 
+def set_platform_role(*, actor, target, platform_role, request=None):
+    """Platform-admin grants/changes/revokes another account's platform role
+    (e.g. promotes an existing user to Digital Growth Consultant). Only a
+    superuser may grant or remove the Platform Owner role, same rule as
+    ``create_platform_user``."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can change platform roles.")
+    if platform_role not in dict(PlatformRole.choices):
+        raise ValidationError("Unknown platform role.")
+    profile = target.profile
+    if PlatformRole.OWNER in (platform_role, profile.platform_role) and not actor.is_superuser:
+        raise PermissionDenied("Only a superuser can grant or remove a Platform Owner.")
+    if profile.platform_role == platform_role:
+        return target
+
+    old = profile.platform_role
+    profile.platform_role = platform_role
+    profile.save(update_fields=["platform_role", "updated_at"])
+
+    from apps.accounts.team import _sync_staff_flag
+
+    _sync_staff_flag(target)
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=target,
+        changes={"platform_role": [old, platform_role]}, request=request,
+    )
+    return target
+
+
 def set_user_password(*, actor, target, raw_password, request=None):
     """Platform-admin password reset for another account. Strength validation
     happens in the form; this enforces authority and writes the audit row."""

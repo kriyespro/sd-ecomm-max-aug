@@ -476,6 +476,28 @@ class PlatformUserCreateForm(forms.Form):
         return cleaned
 
 
+class UserRoleChangeForm(forms.Form):
+    """Platform admin promotes/demotes an existing account's platform role."""
+
+    platform_role = forms.ChoiceField(
+        choices=PlatformRole.choices, label="Platform role",
+        help_text="Digital Growth Consultant (DGC) can create stores and earn "
+                  "commission on the ones assigned to them.",
+    )
+
+
+class StoreManagerAssignForm(forms.Form):
+    """Platform admin (re)assigns which DGC a store's commission credits to."""
+
+    manager = forms.ModelChoiceField(
+        required=False, label="DGC / marketing partner",
+        queryset=get_user_model().objects.filter(
+            profile__platform_role=PlatformRole.MANAGER, is_active=True
+        ).order_by("email"),
+        help_text="Leave blank for a direct signup with no DGC credited.",
+    )
+
+
 class AdminSetPasswordForm(SetPasswordForm):
     """Platform admin sets a new password for another user. Django's
     SetPasswordForm runs the configured password validators."""

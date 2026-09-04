@@ -2,11 +2,12 @@
 subscription. Used by the Mission Control "New store" flow (platform staff)."""
 
 from django.contrib.auth import get_user_model
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 
 from apps.accounts import team as team_svc
-from apps.accounts.models import Membership, Profile, StoreRole
+from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
+from apps.accounts.permissions import is_platform_admin
 from apps.billing.models import BillingPeriod
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
@@ -118,3 +119,30 @@ def add_member(*, project, email, name, role, actor, request=None, password=None
     return team_svc.add_member(
         actor=actor, project=project, email=email, role=role, request=request,
     )
+
+
+def set_store_manager(*, project, manager, actor, request=None):
+    """Assign (or clear, ``manager=None``) the DGC credited/commissioned for
+    this store. Platform-admin only — a store can be reassigned between DGCs
+    at any time, independent of who created it."""
+    if not is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can reassign a store's manager.")
+    sub = getattr(project, "subscription", None)
+    if sub is None:
+        raise ValidationError("This store has no subscription to assign.")
+    if manager is not None and getattr(manager.profile, "platform_role", None) != PlatformRole.MANAGER:
+        raise ValidationError("Choose a Digital Growth Consultant (DGC) account.")
+
+    old_manager = sub.manager
+    if old_manager == manager:
+        return sub
+    sub.manager = manager
+    sub.save(update_fields=["manager", "updated_at"])
+    record_audit(
+        actor=actor, project=project, action=AuditLog.Action.UPDATE, target=sub,
+        changes={"manager": [
+            old_manager.email if old_manager else None,
+            manager.email if manager else None,
+        ]}, request=request,
+    )
+    return sub

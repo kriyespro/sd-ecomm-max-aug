@@ -1,4 +1,5 @@
 {% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
 {% block page_title %}{{ store.name }}{% endblock %}
 
 {% block content %}
@@ -29,6 +30,38 @@
       {% if subscription.manager_id %} · manager {{ subscription.manager.email }}{% endif %}
     </p>
     {% else %}<p class="mt-1 text-sm text-slate-400">No subscription.</p>{% endif %}
+    {% if is_admin and manager_form %}
+    <form method="post" action="{{ url('control:store_manager_assign', kwargs={'pk': store.pk}) }}"
+          class="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+      {{ csrf_input }}
+      <div class="w-64">{{ render_form(manager_form) }}</div>
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Assign</button>
+    </form>
+    {% endif %}
+  </div>
+
+  {# details to relay to the owner #}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Share with the owner</p>
+    <dl class="mt-2 grid gap-x-4 gap-y-1 text-sm sm:grid-cols-3">
+      <dt class="text-slate-400">Store URL</dt>
+      <dd class="sm:col-span-2 break-all">{{ store_url }}</dd>
+      <dt class="text-slate-400">Mission Control</dt>
+      <dd class="sm:col-span-2 break-all">{{ control_login_url }}</dd>
+      <dt class="text-slate-400">Owner login</dt>
+      <dd class="sm:col-span-2 break-all">
+        {% if owner_membership %}
+          {{ owner_membership.user.email }}
+          {% if not owner_membership.user.has_usable_password() %}
+          — no password set yet,
+          <a href="{{ url('control:user_set_password', kwargs={'pk': owner_membership.user.pk}) }}" class="text-amber-600 underline">set one</a>
+          {% else %}
+          — their existing password
+          {% endif %}
+        {% else %}<span class="text-slate-400">No owner yet.</span>{% endif %}
+      </dd>
+    </dl>
+    <p class="mt-2 text-xs text-slate-400">Copy these to an email or chat message for the owner — nothing is sent automatically.</p>
   </div>
 
   {# members #}

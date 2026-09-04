@@ -58,6 +58,7 @@ urlpatterns = [
     path("partners/", views.PartnerApplicationListView.as_view(), name="partner_applications"),
     path("partners/<int:pk>/review/", views.PartnerApplicationReviewView.as_view(), name="partner_application_review"),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user_detail"),
+    path("users/<int:pk>/role/", views.UserRoleChangeView.as_view(), name="user_role_change"),
     path("users/<int:pk>/set-password/", views.UserSetPasswordView.as_view(), name="user_set_password"),
     path("users/<int:pk>/ban/", views.UserBanView.as_view(), name="user_ban"),
     path("users/<int:pk>/unban/", views.UserUnbanView.as_view(), name="user_unban"),
@@ -240,6 +241,7 @@ urlpatterns = [
     path("stores/new/", storev.StoreCreateView.as_view(), name="store_create"),
     path("stores/<int:pk>/", storev.StoreDetailView.as_view(), name="store_detail"),
     path("stores/<int:pk>/members/add/", storev.StoreMemberAddView.as_view(), name="store_member_add"),
+    path("stores/<int:pk>/manager/", storev.StoreManagerAssignView.as_view(), name="store_manager_assign"),
     path("stores/<int:pk>/switch/", storev.StoreSwitchView.as_view(), name="store_switch"),
 
     # Platform billing (super admin)

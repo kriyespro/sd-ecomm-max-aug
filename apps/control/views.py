@@ -18,7 +18,7 @@ from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
 from . import services
-from .forms import AdminSetPasswordForm, PlatformUserCreateForm
+from .forms import AdminSetPasswordForm, PlatformUserCreateForm, UserRoleChangeForm
 from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 
 User = get_user_model()
@@ -178,6 +178,34 @@ class UserDetailView(PlatformAdminRequiredMixin, DetailView):
     template_name = "control/user_detail.jinja"
     context_object_name = "target"
     queryset = User.objects.select_related("profile")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["role_form"] = UserRoleChangeForm(
+            initial={"platform_role": self.object.profile.platform_role}
+        )
+        return ctx
+
+
+class UserRoleChangeView(PlatformAdminRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk, *args, **kwargs):
+        target = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+        form = UserRoleChangeForm(request.POST)
+        if form.is_valid():
+            try:
+                services.set_platform_role(
+                    actor=request.user, target=target,
+                    platform_role=form.cleaned_data["platform_role"], request=request,
+                )
+            except (ValidationError, PermissionDenied) as exc:
+                messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            else:
+                messages.success(request, f"Platform role updated for {target.get_username()}.")
+        else:
+            messages.error(request, "Pick a valid platform role.")
+        return redirect("control:user_detail", pk=target.pk)
 
 
 class UserSetPasswordView(PlatformAdminRequiredMixin, TemplateResponseMixin, View):
