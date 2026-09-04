@@ -146,3 +146,56 @@ def set_store_manager(*, project, manager, actor, request=None):
         ]}, request=request,
     )
     return sub
+
+
+def _require_superuser(actor):
+    if not actor.is_superuser:
+        raise PermissionDenied("Only a superadmin can do that.")
+
+
+def archive_store(*, project, actor, request=None):
+    """Take a store offline (storefront closes; Mission Control stays open for
+    the owner). Reversible via ``unarchive_store``. Superadmin only."""
+    _require_superuser(actor)
+    if project.status == Project.Status.ARCHIVED:
+        return project
+    old = project.status
+    project.status = Project.Status.ARCHIVED
+    project.save(update_fields=["status", "updated_at"])
+    record_audit(
+        actor=actor, project=project, action=AuditLog.Action.UPDATE, target=project,
+        changes={"status": [old, project.status]}, request=request,
+    )
+    return project
+
+
+def unarchive_store(*, project, actor, request=None):
+    """Reopen an archived store."""
+    _require_superuser(actor)
+    if project.status != Project.Status.ARCHIVED:
+        return project
+    project.status = Project.Status.ACTIVE
+    project.save(update_fields=["status", "updated_at"])
+    record_audit(
+        actor=actor, project=project, action=AuditLog.Action.UPDATE, target=project,
+        changes={"status": [Project.Status.ARCHIVED, project.status]}, request=request,
+    )
+    return project
+
+
+def delete_store(*, project, actor, confirm_name, request=None):
+    """Permanently delete a store and every row that belongs to it (products,
+    orders, customers, ... — everything hangs off ``Project`` by FK cascade).
+    There is no undo. Superadmin only, and the caller must retype the store's
+    exact name so a stray click can't wipe a tenant."""
+    _require_superuser(actor)
+    if (confirm_name or "").strip() != project.name:
+        raise ValidationError("Type the store's exact name to confirm deletion.")
+
+    name, pk = project.name, project.pk
+    # AuditLog.project is SET_NULL, so this row outlives the project it names.
+    record_audit(
+        actor=actor, project=None, action=AuditLog.Action.DELETE, target=None,
+        changes={"deleted_store": name, "project_id": pk}, request=request,
+    )
+    project.delete()

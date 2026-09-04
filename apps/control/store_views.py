@@ -152,6 +152,7 @@ class StoreDetailView(_StoreScope, DetailView):
             (StoreRole.OWNER, "Owner"), (StoreRole.MANAGER, "Manager"), (StoreRole.STAFF, "Staff"),
         ]
         ctx["is_admin"] = is_platform_admin(self.request.user)
+        ctx["is_superuser"] = self.request.user.is_superuser
         if ctx["is_admin"]:
             ctx["manager_form"] = StoreManagerAssignForm(
                 initial={"manager": getattr(ctx["subscription"], "manager_id", None)}
@@ -202,6 +203,46 @@ class StoreMemberAddView(_StoreScope, View):
         except Exception as exc:  # team_svc.TeamError etc.
             messages.error(request, str(exc))
         return redirect("control:store_detail", pk=pk)
+
+
+class StoreArchiveView(_StoreScope, View):
+    def post(self, request, pk, *args, **kwargs):
+        store = self.get_store(pk)
+        try:
+            store_services.archive_store(project=store, actor=request.user, request=request)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"{store.name} archived — its storefront is now offline.")
+        return redirect("control:store_detail", pk=pk)
+
+
+class StoreUnarchiveView(_StoreScope, View):
+    def post(self, request, pk, *args, **kwargs):
+        store = self.get_store(pk)
+        try:
+            store_services.unarchive_store(project=store, actor=request.user, request=request)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"{store.name} reopened.")
+        return redirect("control:store_detail", pk=pk)
+
+
+class StoreDeleteView(_StoreScope, View):
+    def post(self, request, pk, *args, **kwargs):
+        store = self.get_store(pk)
+        name = store.name
+        try:
+            store_services.delete_store(
+                project=store, actor=request.user,
+                confirm_name=request.POST.get("confirm_name", ""), request=request,
+            )
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            return redirect("control:store_detail", pk=pk)
+        messages.success(request, f"{name} was permanently deleted.")
+        return redirect("control:stores")
 
 
 class StoreSwitchView(_StoreScope, View):

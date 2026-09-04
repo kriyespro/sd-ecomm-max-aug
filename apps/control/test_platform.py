@@ -124,3 +124,99 @@ class PlatformScreensTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Share with the owner")
         self.assertContains(resp, "own@t.test")
+
+
+class ArchiveAndDeleteStoreTests(TestCase):
+    """Superadmin-only: archive/unarchive (reversible) and hard delete."""
+
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="root@t.test", email="root@t.test", password="pw"
+        )
+        self.owner_admin = User.objects.create_user(
+            username="oa@t.test", email="oa@t.test", password="pw", is_staff=True
+        )
+        Profile.objects.filter(user=self.owner_admin).update(platform_role=PlatformRole.OWNER)
+        self.owner_admin.refresh_from_db()
+        self.project = Project.objects.create(name="ArchiveCo", status="active")
+
+    def test_superuser_archives_and_unarchives(self):
+        store_services.archive_store(project=self.project, actor=self.superuser)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, Project.Status.ARCHIVED)
+
+        store_services.unarchive_store(project=self.project, actor=self.superuser)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, Project.Status.ACTIVE)
+
+    def test_platform_owner_cannot_archive(self):
+        with self.assertRaises(PermissionDenied):
+            store_services.archive_store(project=self.project, actor=self.owner_admin)
+
+    def test_delete_requires_exact_name(self):
+        with self.assertRaises(ValidationError):
+            store_services.delete_store(
+                project=self.project, actor=self.superuser, confirm_name="wrong name",
+            )
+        self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+    def test_superuser_deletes_store(self):
+        pk = self.project.pk
+        store_services.delete_store(
+            project=self.project, actor=self.superuser, confirm_name="ArchiveCo",
+        )
+        self.assertFalse(Project.objects.filter(pk=pk).exists())
+
+    def test_platform_owner_cannot_delete(self):
+        with self.assertRaises(PermissionDenied):
+            store_services.delete_store(
+                project=self.project, actor=self.owner_admin, confirm_name="ArchiveCo",
+            )
+        self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+
+class ArchiveAndDeleteScreensTests(TestCase):
+    def setUp(self):
+        self.superuser = User.objects.create_superuser(
+            username="root2@t.test", email="root2@t.test", password="pw"
+        )
+        self.client.force_login(self.superuser)
+        self.project = Project.objects.create(name="ScreenArchiveCo", status="active")
+
+    def test_archive_view_then_unarchive_view(self):
+        resp = self.client.post(f"/admin/stores/{self.project.pk}/archive/", follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, Project.Status.ARCHIVED)
+
+        resp = self.client.post(f"/admin/stores/{self.project.pk}/unarchive/", follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.project.refresh_from_db()
+        self.assertEqual(self.project.status, Project.Status.ACTIVE)
+
+    def test_delete_view_wrong_name_keeps_store(self):
+        resp = self.client.post(
+            f"/admin/stores/{self.project.pk}/delete/",
+            {"confirm_name": "not it"}, follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
+
+    def test_delete_view_correct_name_deletes(self):
+        pk = self.project.pk
+        resp = self.client.post(
+            f"/admin/stores/{pk}/delete/",
+            {"confirm_name": "ScreenArchiveCo"}, follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Project.objects.filter(pk=pk).exists())
+
+    def test_non_superuser_gets_no_danger_zone(self):
+        admin = User.objects.create_user(
+            username="oa2@t.test", email="oa2@t.test", password="pw", is_staff=True
+        )
+        Profile.objects.filter(user=admin).update(platform_role=PlatformRole.OWNER)
+        self.client.force_login(admin)
+        resp = self.client.get(f"/admin/stores/{self.project.pk}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Danger zone")

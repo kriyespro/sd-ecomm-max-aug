@@ -1,4 +1,5 @@
-"""Take a store's storefront offline when its subscription is suspended.
+"""Take a store's storefront offline when suspended (unpaid) or archived (a
+platform admin shelved it).
 
 Only the public storefronts (``/app/``, ``/demo/``, ``/shop/``) are gated — the
 owner must still reach Mission Control to pay the outstanding invoice.
@@ -19,6 +20,13 @@ _SUSPENDED_HTML = (
     "<p>Please check back soon.</p></body></html>"
 )
 
+_ARCHIVED_HTML = (
+    "<!doctype html><html><head><title>Store unavailable</title></head>"
+    "<body style='font-family:system-ui;text-align:center;padding:15vh 1rem'>"
+    "<h1>This store is no longer available</h1>"
+    "</body></html>"
+)
+
 
 class SubscriptionGateMiddleware:
     def __init__(self, get_response):
@@ -31,6 +39,9 @@ class SubscriptionGateMiddleware:
         if gated and not request.path.startswith(_EXEMPT_PREFIXES):
             project = getattr(request, "project", None)
             if project is not None:
+                if project.status == "archived":
+                    return HttpResponse(_ARCHIVED_HTML, status=410,
+                                        content_type="text/html")
                 sub = getattr(project, "subscription", None)
                 if sub is not None and sub.status == "suspended":
                     return HttpResponse(_SUSPENDED_HTML, status=503,

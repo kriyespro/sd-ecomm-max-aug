@@ -27,9 +27,9 @@
           <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ s.primary_domain or '—' }}</td>
           <td class="px-4 py-2 text-xs">{{ s.subscription.plan.name if s.subscription else '—' }}</td>
           <td class="px-4 py-2">
-            {% set st = s.subscription.status if s.subscription else s.status %}
+            {% set st = 'archived' if s.status == 'archived' else (s.subscription.status if s.subscription else s.status) %}
             <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
-              {{ 'bg-emerald-100 text-emerald-700' if st in ('active','trialing') else 'bg-amber-100 text-amber-800' if st == 'past_due' else 'bg-red-100 text-red-700' if st == 'suspended' else 'bg-slate-100 text-slate-600' }}">{{ st }}</span>
+              {{ 'bg-emerald-100 text-emerald-700' if st in ('active','trialing') else 'bg-amber-100 text-amber-800' if st == 'past_due' else 'bg-red-100 text-red-700' if st == 'suspended' else 'bg-slate-200 text-slate-500' if st == 'archived' else 'bg-slate-100 text-slate-600' }}">{{ st }}</span>
           </td>
           <td class="px-4 py-2 text-right">
             <form method="post" action="{{ url('control:store_switch', kwargs={'pk': s.pk}) }}" class="inline">

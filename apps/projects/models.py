@@ -32,6 +32,7 @@ class Project(TimeStampedModel):
         DRAFT = "draft", "Draft"
         ACTIVE = "active", "Active"
         SUSPENDED = "suspended", "Suspended"
+        ARCHIVED = "archived", "Archived"
 
     name = models.CharField(max_length=120, validators=[MinLengthValidator(2)])
     slug = models.SlugField(max_length=140, unique=True, blank=True)

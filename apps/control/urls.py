@@ -242,6 +242,9 @@ urlpatterns = [
     path("stores/<int:pk>/", storev.StoreDetailView.as_view(), name="store_detail"),
     path("stores/<int:pk>/members/add/", storev.StoreMemberAddView.as_view(), name="store_member_add"),
     path("stores/<int:pk>/manager/", storev.StoreManagerAssignView.as_view(), name="store_manager_assign"),
+    path("stores/<int:pk>/archive/", storev.StoreArchiveView.as_view(), name="store_archive"),
+    path("stores/<int:pk>/unarchive/", storev.StoreUnarchiveView.as_view(), name="store_unarchive"),
+    path("stores/<int:pk>/delete/", storev.StoreDeleteView.as_view(), name="store_delete"),
     path("stores/<int:pk>/switch/", storev.StoreSwitchView.as_view(), name="store_switch"),
 
     # Platform billing (super admin)
