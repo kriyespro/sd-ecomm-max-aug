@@ -4,8 +4,14 @@
     <a href="{{ url('control:user_detail', kwargs={'pk': u.pk}) }}" class="font-medium text-slate-900 hover:underline">
       {{ u.get_username() }}
     </a>
-    {% if u.is_superuser %}<span class="ml-1 rounded bg-slate-900 px-1.5 py-0.5 text-[10px] text-white">super</span>
-    {% elif u.is_staff %}<span class="ml-1 rounded bg-slate-200 px-1.5 py-0.5 text-[10px]">staff</span>{% endif %}
+  </td>
+  <td class="px-4 py-2">
+    {% set prole = u.profile.platform_role %}
+    {% if u.is_superuser %}<span class="rounded bg-slate-900 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">Superadmin</span>
+    {% elif prole == 'platform_owner' %}<span class="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-800">Platform Owner</span>
+    {% elif prole == 'platform_manager' %}<span class="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-sky-800">DGC</span>
+    {% elif u.is_staff %}<span class="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Store staff</span>
+    {% else %}<span class="text-xs text-slate-300">—</span>{% endif %}
   </td>
   <td class="px-4 py-2 text-slate-500">{{ u.email or "—" }}</td>
   <td class="px-4 py-2 text-slate-500">{{ u.date_joined.strftime("%b %d, %Y") }}</td>
