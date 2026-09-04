@@ -48,6 +48,11 @@ class AnalyticsView(ActiveProjectMixin, TemplateView):
 class ReportsView(ActiveProjectMixin, TemplateView):
     template_name = "control/analytics/reports.jinja"
 
+    # On-screen only — a wide date range on a busy store can return thousands
+    # of rows. The full set is still available via "Export CSV"
+    # (ReportExportView below), which doesn't go through this cap.
+    MAX_DISPLAY_ROWS = 500
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["kinds"] = analytics.REPORT_KINDS
@@ -65,7 +70,9 @@ class ReportsView(ActiveProjectMixin, TemplateView):
                 rows = analytics.report(self.active_project, kind, self._parsed(params))
             except ValueError:
                 rows = []
-            ctx["rows"] = rows
+            ctx["row_count"] = len(rows)
+            ctx["truncated"] = len(rows) > self.MAX_DISPLAY_ROWS
+            ctx["rows"] = rows[: self.MAX_DISPLAY_ROWS]
             ctx["columns"] = list(rows[0].keys()) if rows else []
         return ctx
 

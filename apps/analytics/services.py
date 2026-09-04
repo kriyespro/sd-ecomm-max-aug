@@ -133,12 +133,13 @@ def _customer_stats(project):
 
 
 def _out_of_stock(project):
+    from django.db.models import F
+
     from apps.inventory.models import InventoryItem
 
-    return sum(
-        1 for i in InventoryItem.objects.filter(warehouse__project=project)
-        if i.available <= 0
-    )
+    return InventoryItem.objects.filter(
+        warehouse__project=project, quantity__lte=F("reserved")
+    ).count()
 
 
 def _revenue_series(project, *, days=30):
@@ -215,13 +216,21 @@ def _product_report(project, params):
 
 
 def _customer_report(project, params):
+    """Customers who ordered within the picked range (defaults to the last 30
+    days, matching every other report). Was ignoring ``params`` entirely and
+    returning the store's whole customer list regardless of the date filter
+    shown on screen."""
     from apps.customers.models import Customer
 
+    start, end = _range(params)
+    qs = Customer.objects.filter(
+        project=project, last_order_at__date__gte=start, last_order_at__date__lte=end,
+    )
     return [
         {"email": c.email, "name": c.full_name, "segment": c.segment,
          "orders": c.orders_count, "total_spent": str(c.total_spent),
          "last_order": c.last_order_at.date().isoformat() if c.last_order_at else ""}
-        for c in Customer.objects.filter(project=project).order_by("-total_spent")
+        for c in qs.order_by("-total_spent")
     ]
 
 

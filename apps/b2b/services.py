@@ -8,12 +8,12 @@ defense-in-depth pattern used by ``apps.accounts.team``.
 from decimal import Decimal, InvalidOperation
 
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from apps.accounts.models import StoreRole
 from apps.accounts.permissions import assert_store_role
-from apps.catalog.models import Product, ProductImage, ProductStatus
+from apps.catalog.models import Product, ProductImage, ProductKind, ProductStatus
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
@@ -95,7 +95,7 @@ def marketplace_listings(*, exclude_project=None):
     """Active listings from every B2B-enabled seller, newest first."""
     qs = (
         B2BListing.objects.filter(is_active=True, seller_project__is_b2b_seller=True)
-        .select_related("product", "seller_project")
+        .select_related("product", "product__category", "seller_project")
         .prefetch_related("product__images")
     )
     if exclude_project is not None:
@@ -122,7 +122,7 @@ def import_listing(*, listing, buyer_project, actor, markup_pct, request=None):
     delete signal on it), so two projects can safely reference the same file.
     """
     _require_owner(actor, buyer_project)
-    if not listing.is_active:
+    if not listing.is_active or not listing.seller_project.is_b2b_seller:
         raise B2BError("This listing is no longer available.")
     if listing.seller_project_id == buyer_project.pk:
         raise B2BError("You can't import your own listing.")
@@ -139,32 +139,38 @@ def import_listing(*, listing, buyer_project, actor, markup_pct, request=None):
     price = (listing.wholesale_price * (Decimal("1") + markup_pct / Decimal("100"))).quantize(
         Decimal("0.01")
     )
-    local = Product.objects.create(
-        project=buyer_project,
-        title=source.title,
-        short_description=source.short_description,
-        description=source.description,
-        kind=source.kind,
-        price=price,
-        status=ProductStatus.DRAFT,
-        weight=source.weight, length=source.length, width=source.width, height=source.height,
-    )
-    for img in source.images.all():
-        ProductImage.objects.create(
-            product=local,
-            image=img.image.name,
-            original=img.original.name if img.original else "",
-            alt=img.alt, order=img.order, is_primary=img.is_primary,
-            width=img.width, height=img.height, bytes=img.bytes,
-            renditions=img.renditions, optimized_at=img.optimized_at,
-        )
+    try:
+        with transaction.atomic():
+            # Variants (options like size/color) aren't copied yet — land as a
+            # simple product so it's never sellable-but-optionless.
+            local = Product.objects.create(
+                project=buyer_project,
+                title=source.title,
+                short_description=source.short_description,
+                description=source.description,
+                kind=ProductKind.SIMPLE,
+                price=price,
+                status=ProductStatus.DRAFT,
+                weight=source.weight, length=source.length, width=source.width, height=source.height,
+            )
+            for img in source.images.all():
+                ProductImage.objects.create(
+                    product=local,
+                    image=img.image.name,
+                    original=img.original.name if img.original else "",
+                    alt=img.alt, order=img.order, is_primary=img.is_primary,
+                    width=img.width, height=img.height, bytes=img.bytes,
+                    renditions=img.renditions, optimized_at=img.optimized_at,
+                )
 
-    b2b_import = B2BImport.objects.create(
-        listing=listing, seller_project=listing.seller_project, buyer_project=buyer_project,
-        local_product=local, source_project_name=listing.seller_project.name,
-        source_product_title=source.title, wholesale_price_at_import=listing.wholesale_price,
-        markup_pct=markup_pct,
-    )
+            b2b_import = B2BImport.objects.create(
+                listing=listing, seller_project=listing.seller_project, buyer_project=buyer_project,
+                local_product=local, source_project_name=listing.seller_project.name,
+                source_product_title=source.title, wholesale_price_at_import=listing.wholesale_price,
+                markup_pct=markup_pct,
+            )
+    except IntegrityError:
+        raise B2BError("You've already imported this product.")
     record_audit(
         actor=actor, project=buyer_project, action=AuditLog.Action.CREATE, target=local,
         changes={"b2b_imported_from": listing.seller_project.name}, request=request,

@@ -16,6 +16,7 @@ from apps.core.events import Events, emit
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.inventory import services as inv
+from apps.inventory.models import InventoryItem
 
 from .models import (
     FulfillmentStatus,
@@ -76,15 +77,20 @@ def _log_event(order, *, kind, from_value="", to_value="", note="", actor=None):
 
 
 def _item_inventory(order, order_item):
-    """Inventory row backing this order line at the order's warehouse (or default)."""
+    """Inventory row backing this order line at the order's warehouse (or
+    default) — ``None`` if the merchant never stocked this product/variant.
+    Deliberately non-creating: a missing row means untracked/unlimited stock
+    (same convention the storefront's own "in stock" display uses), not
+    "create one now with quantity=0" — that would permanently stock-out a
+    product the moment it's first ordered."""
     if order_item.product_id is None:
         return None
     warehouse = order.warehouse or inv.default_warehouse(order.project)
     if warehouse is None:
         return None
-    return inv.get_or_create_item(
+    return InventoryItem.objects.filter(
         warehouse=warehouse, product=order_item.product, variant=order_item.variant
-    )
+    ).first()
 
 
 @transaction.atomic
@@ -94,7 +100,10 @@ def _reserve_stock(order, *, actor=None):
     for oi in order.items.select_related("product", "variant"):
         item = _item_inventory(order, oi)
         if item is not None:
-            inv.reserve(item=item, quantity=oi.quantity, reference=f"order#{order.number}", actor=actor)
+            try:
+                inv.reserve(item=item, quantity=oi.quantity, reference=f"order#{order.number}", actor=actor)
+            except inv.InsufficientStockError as exc:
+                raise OrderError(str(exc)) from exc
     order.stock_reserved = True
     order.save(update_fields=["stock_reserved", "updated_at"])
 
@@ -118,6 +127,13 @@ def place_order(
     phone="", customer_note="", warehouse=None, actor=None, user=None,
 ):
     """Turn a cart into a PENDING order and reserve stock. Deactivates the cart."""
+    # Lock the cart row first: a double-click or a client retry firing two
+    # concurrent place_order calls for the same cart must not both pass this
+    # check and each create their own order + stock reservation.
+    cart = type(cart).objects.select_for_update().get(pk=cart.pk)
+    if not cart.is_active:
+        raise OrderError("This cart has already been checked out.")
+
     items = list(cart.items.select_related("product", "variant"))
     if not items:
         raise OrderError("Cart is empty.")

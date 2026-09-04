@@ -3,7 +3,6 @@
 from apps.accounts.models import StoreRole
 from apps.accounts.permissions import (
     OWNER_MANAGER,
-    has_store_role,
     is_platform_admin,
     is_platform_staff,
     store_role,
@@ -57,15 +56,26 @@ def control(request):
         return {}
     active = get_active_project(request)
     available = projects_for_user(user)
-    can_manage = has_store_role(user, active, OWNER_MANAGER)
-    can_manage_owner = has_store_role(user, active, frozenset({StoreRole.OWNER}))
-    upload_on = bool(active and (active.feature_flags or {}).get("skin_upload"))
+
+    # can_manage/can_manage_owner mirror has_store_role()'s own bypass rules
+    # (platform admin, or the DGC who manages this store) but computed once
+    # instead of has_store_role() re-running the membership-role query for
+    # every allowed-role set it's asked about.
+    admin = is_platform_admin(user)
     platform_staff = is_platform_staff(user)
+    managed_by_user = bool(
+        active is not None and platform_staff and not admin
+        and active.__class__.objects.filter(pk=active.pk, subscription__manager=user).exists()
+    )
+    role = store_role(user, active)
+    can_manage = admin or managed_by_user or role in OWNER_MANAGER
+    can_manage_owner = admin or managed_by_user or role == StoreRole.OWNER
+
+    upload_on = bool(active and (active.feature_flags or {}).get("skin_upload"))
     platform_scope = platform_staff and not _is_store_scoped_view(
         request, default=active is not None
     )
-    role = store_role(user, active)
-    can_upload = can_manage and (upload_on or is_platform_admin(user))
+    can_upload = can_manage and (upload_on or admin)
 
     # A DGC-managed store's own team never sees plan & pricing — the partner
     # owns that relationship. Platform staff always see it.
@@ -76,7 +86,7 @@ def control(request):
 
     nav = build_nav(
         platform_staff=platform_staff,
-        platform_admin=is_platform_admin(user),
+        platform_admin=admin,
         active_project=active,
         can_manage=can_manage,
         can_upload_skin=can_upload,
@@ -108,7 +118,7 @@ def control(request):
         "control_nav_active_url": nav_active_url,
         "control_available_projects": available,
         "control_available_count": available.count(),
-        "control_is_platform_admin": is_platform_admin(user),
+        "control_is_platform_admin": admin,
         "control_is_platform_staff": platform_staff,
         "control_platform_scope": platform_scope,
         "control_chrome_theme": _chrome_theme(user, role, platform_scope),

@@ -16,7 +16,7 @@
       <tr class="hover:bg-slate-50">
         <td class="px-4 py-2"><a href="{{ url('control:cms_menu_detail', kwargs={'pk': m.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ m.name }}</a></td>
         <td class="px-4 py-2 text-slate-500">{{ m.get_location_display() }}</td>
-        <td class="px-4 py-2 text-slate-500">{{ m.items.count() }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ m.item_count }}</td>
         <td class="px-4 py-2 text-slate-500">{{ "yes" if m.is_active else "no" }}</td>
         <td class="px-4 py-2 text-right">
           <a href="{{ url('control:cms_menu_detail', kwargs={'pk': m.pk}) }}" class="text-slate-600 hover:underline">Items</a>

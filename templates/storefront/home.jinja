@@ -40,4 +40,15 @@
   <p class="col-span-full py-16 text-center text-slate-400">No products found.</p>
   {% endfor %}
 </div>
+{% if page_obj and page_obj.paginator.num_pages > 1 %}
+<div class="mt-6 flex justify-center gap-4 text-sm">
+  {% if page_obj.has_previous() %}
+  <a href="?page={{ page_obj.previous_page_number() }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="underline">← Previous</a>
+  {% endif %}
+  <span class="text-slate-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next() %}
+  <a href="?page={{ page_obj.next_page_number() }}{% if query %}&q={{ query }}{% endif %}{% if active_category %}&category={{ active_category }}{% endif %}" class="underline">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
 {% endblock %}

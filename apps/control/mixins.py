@@ -13,13 +13,32 @@ ACTIVE_PROJECT_SESSION_KEY = "active_project_id"
 _ONBOARDING_EXEMPT = {"onboarding", "onboarding_skip", "project_picker", "set_project"}
 
 
+_UNSET = object()
+
+
 def get_active_project(request):
     """Resolve the project the staff user is currently operating on.
 
     Order: the store's own domain -> explicit session choice -> the request's
     resolved project -> the user's sole accessible project. Returns ``None``
     when the user must pick one.
+
+    Memoized on the request: ``ActiveProjectMixin.dispatch`` and the
+    ``apps.control.context_processors.control`` context processor each
+    resolve this independently on every ``/admin/`` request (the latter on
+    HTMX polls too) — without caching that's ``projects_for_user`` plus up to
+    three more queries run twice per page load for no reason.
     """
+    cached = getattr(request, "_control_active_project", _UNSET)
+    if cached is not _UNSET:
+        return cached
+
+    result = _resolve_active_project(request)
+    request._control_active_project = result
+    return result
+
+
+def _resolve_active_project(request):
     available = projects_for_user(request.user)
     resolved = getattr(request, "project", None)
 

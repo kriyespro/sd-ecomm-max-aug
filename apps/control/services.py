@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.utils import timezone
@@ -25,10 +26,22 @@ IMPERSONATE_SESSION_KEY = "impersonate_original_user_id"
 
 # --- Dashboard ---------------------------------------------------------
 
+# The platform dashboard polls this every 30s (StatsCardsView); a short cache
+# just below that interval means the poll almost always hits cache instead of
+# re-running 5 full-table counts, while staying about as fresh as the poll
+# itself already implies.
+_DASHBOARD_STATS_CACHE_KEY = "control:dashboard_stats"
+_DASHBOARD_STATS_TTL = 25
+
+
 def dashboard_stats():
+    cached = cache.get(_DASHBOARD_STATS_CACHE_KEY)
+    if cached is not None:
+        return cached
+
     now = timezone.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    return {
+    stats = {
         "total_users": User.objects.count(),
         "signups_today": User.objects.filter(date_joined__gte=today).count(),
         "active_users_7d": User.objects.filter(last_login__gte=now - timedelta(days=7)).count(),
@@ -37,6 +50,8 @@ def dashboard_stats():
         # Revenue wiring lands with the orders app (Phase 5).
         "revenue_today": 0,
     }
+    cache.set(_DASHBOARD_STATS_CACHE_KEY, stats, _DASHBOARD_STATS_TTL)
+    return stats
 
 
 def recent_activity(limit=20):

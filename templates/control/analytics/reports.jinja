@@ -39,6 +39,9 @@
       </tbody>
     </table>
   </div>
-  <p class="text-xs text-slate-400">{{ rows|length }} row(s). Excel / PDF export planned; CSV available now.</p>
+  <p class="text-xs text-slate-400">
+    {% if truncated %}Showing the first {{ rows|length }} of {{ row_count }} rows — narrow the date range or use{% else %}{{ rows|length }} row(s). Excel / PDF export planned; use{% endif %}
+    <a href="{{ url('control:report_export') }}?kind={{ kind }}&from={{ date_from }}&to={{ date_to }}" class="underline">Download CSV</a> for the full result.
+  </p>
 </div>
 {% endblock %}

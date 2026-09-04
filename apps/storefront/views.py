@@ -6,6 +6,7 @@ only; customer accounts stay on the API side.
 """
 
 from django.contrib import messages
+from django.core.paginator import Paginator
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views import View
@@ -24,6 +25,8 @@ from .services import base_context, current_project, get_cart
 
 
 class HomeView(View):
+    per_page = 24
+
     def get(self, request):
         project = current_project(request)
         ctx = base_context(request, project)
@@ -37,8 +40,12 @@ class HomeView(View):
         q = request.GET.get("q", "").strip()
         if q:
             products = products.filter(title__icontains=q)
+        page = Paginator(products.order_by("-created_at"), self.per_page).get_page(
+            request.GET.get("page")
+        )
         ctx.update({
-            "products": products,
+            "products": page.object_list,
+            "page_obj": page,
             "categories": Category.objects.filter(project=project, is_active=True),
             "active_category": category,
             "query": q,

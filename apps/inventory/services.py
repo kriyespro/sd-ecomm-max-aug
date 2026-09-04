@@ -9,6 +9,15 @@ from apps.core.events import Events, emit
 from .models import InventoryItem, InventoryTransfer, StockMovement, Warehouse
 
 
+class InsufficientStockError(Exception):
+    """Raised by ``reserve()`` when the requested quantity would push
+    ``reserved`` past ``quantity`` for a product that *has* an ``InventoryItem``
+    row. A product with no row at all is untracked — treated as unlimited
+    stock everywhere else in this codebase (the storefront's own "in stock"
+    check does the same) — so this only ever fires for merchants who
+    opted in by stocking the item."""
+
+
 def default_warehouse(project):
     return (
         Warehouse.objects.filter(project=project, is_active=True)
@@ -33,8 +42,13 @@ def record_movement(*, item, reason, quantity_delta=0, reserved_delta=0, referen
     under concurrency.
     """
     locked = InventoryItem.objects.select_for_update().get(pk=item.pk)
+    new_reserved = locked.reserved + reserved_delta
+    if reserved_delta > 0 and new_reserved > locked.quantity:
+        raise InsufficientStockError(
+            f"Only {locked.available} of {locked.product.title} left in stock."
+        )
     locked.quantity = locked.quantity + quantity_delta
-    locked.reserved = locked.reserved + reserved_delta
+    locked.reserved = new_reserved
     locked.save(update_fields=["quantity", "reserved", "updated_at"])
 
     movement = StockMovement.objects.create(
@@ -125,19 +139,27 @@ def consume_sale(*, item, quantity, reference="", actor=None):
     )
 
 
-def low_stock_items(project, *, warehouse=None):
+def _low_stock_qs(project, *, warehouse=None):
+    from django.db.models import F
+
     qs = (
-        InventoryItem.objects.filter(warehouse__project=project, low_stock_threshold__gt=0)
+        InventoryItem.objects.filter(
+            warehouse__project=project, low_stock_threshold__gt=0,
+            quantity__lte=F("reserved") + F("low_stock_threshold"),
+        )
         .select_related("warehouse", "product", "variant")
     )
     if warehouse is not None:
         qs = qs.filter(warehouse=warehouse)
-    # available = quantity - reserved <= threshold
-    return [i for i in qs if i.available <= i.low_stock_threshold]
+    return qs
+
+
+def low_stock_items(project, *, warehouse=None):
+    return list(_low_stock_qs(project, warehouse=warehouse))
 
 
 def low_stock_count(project):
-    return len(low_stock_items(project))
+    return _low_stock_qs(project).count()
 
 
 @transaction.atomic

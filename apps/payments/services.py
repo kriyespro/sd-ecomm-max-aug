@@ -66,8 +66,14 @@ def _log(payment, *, kind, project, provider="", signature_valid=None, payload=N
 
 # --- initiate ----------------------------------------------------
 
-@transaction.atomic
 def initiate_payment(*, order, provider_key, actor=None, context=None):
+    """Not wrapped in one big ``transaction.atomic()``: ``provider.start()`` is
+    a live network call to the gateway (up to ~15s for Razorpay), and this is
+    the highest-traffic payment entry point (every checkout attempt). Holding
+    a DB transaction open for that long under real load risks exhausting the
+    connection pool. Nothing here settles the order, so there's no
+    double-settlement race to protect by keeping it atomic — only
+    ``verify_payment``/``handle_webhook`` do that, and those stay atomic."""
     if order.payment_status == "paid":
         raise PaymentError("Order is already paid.")
 
@@ -85,17 +91,19 @@ def initiate_payment(*, order, provider_key, actor=None, context=None):
     try:
         client_params = provider.start(payment, order, context=context)
     except ProviderError as exc:
-        payment.status = PaymentStatus.FAILED
-        payment.error_message = str(exc)[:255]
-        payment.failed_at = timezone.now()
-        payment.save(update_fields=["status", "error_message", "failed_at", "updated_at"])
-        _log(payment, kind=PaymentEvent.Kind.ERROR, project=order.project, note=str(exc))
+        with transaction.atomic():
+            payment.status = PaymentStatus.FAILED
+            payment.error_message = str(exc)[:255]
+            payment.failed_at = timezone.now()
+            payment.save(update_fields=["status", "error_message", "failed_at", "updated_at"])
+            _log(payment, kind=PaymentEvent.Kind.ERROR, project=order.project, note=str(exc))
         raise PaymentError(str(exc)) from exc
 
-    payment.status = PaymentStatus.PENDING
-    payment.save(update_fields=["status", "updated_at"])
-    _log(payment, kind=PaymentEvent.Kind.INITIATE, project=order.project, payload=client_params)
-    record_audit(actor=actor, project=order.project, action=AuditLog.Action.CREATE, target=payment)
+    with transaction.atomic():
+        payment.status = PaymentStatus.PENDING
+        payment.save(update_fields=["status", "updated_at"])
+        _log(payment, kind=PaymentEvent.Kind.INITIATE, project=order.project, payload=client_params)
+        record_audit(actor=actor, project=order.project, action=AuditLog.Action.CREATE, target=payment)
     return payment, client_params
 
 
@@ -185,13 +193,16 @@ def handle_webhook(*, project, provider_key, headers, body: bytes):
         raise PaymentError("Provider not configured.")
     result = provider_class(config).parse_webhook(headers, body)
 
+    # Locked for the rest of this (already-atomic) function: two near-
+    # simultaneous deliveries of the same event must not both pass the
+    # `status != PAID` check below and double-settle.
     payment = None
     if result.provider_payment_id:
-        payment = Payment.objects.filter(
+        payment = Payment.objects.select_for_update().filter(
             project=project, provider_payment_id=result.provider_payment_id
         ).first()
     if payment is None and result.provider_order_id:
-        payment = Payment.objects.filter(
+        payment = Payment.objects.select_for_update().filter(
             project=project, provider_order_id=result.provider_order_id
         ).first()
 
@@ -259,6 +270,13 @@ def _apply_refund_totals(payment):
 
 @transaction.atomic
 def refund_payment(*, payment, amount=None, reason="", actor=None):
+    # Locked for the whole function (including the gateway call below): two
+    # concurrent refund requests on the same payment must not both read the
+    # same stale refundable_amount and both issue a real refund at the
+    # provider. Refunds are a low-frequency staff action, not a request-per-
+    # customer hot path, so holding the transaction during the network call
+    # is an acceptable trade-off for closing that race.
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
     if not payment.is_settled:
         raise PaymentError("Only a settled payment can be refunded.")
     amount = Decimal(amount) if amount is not None else payment.refundable_amount

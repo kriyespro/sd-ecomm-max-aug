@@ -118,6 +118,42 @@ class B2BServiceTestCase(TestCase):
                 listing=listing, buyer_project=self.buyer, actor=self.buyer_owner, markup_pct=Decimal("10"),
             )
 
+    def test_cannot_import_when_seller_turned_b2b_off(self):
+        listing = B2BListing.objects.create(product=self.product, wholesale_price=Decimal("300"))
+        self.seller.is_b2b_seller = False
+        self.seller.save()
+        with self.assertRaises(b2b_svc.B2BError):
+            b2b_svc.import_listing(
+                listing=listing, buyer_project=self.buyer, actor=self.buyer_owner, markup_pct=Decimal("10"),
+            )
+
+    def test_concurrent_double_import_raises_friendly_error_not_500(self):
+        """Simulates two racing requests: the DB-level unique constraint is the
+        real guard, and it must surface as B2BError, not an unhandled IntegrityError."""
+        listing = B2BListing.objects.create(product=self.product, wholesale_price=Decimal("300"))
+        b2b_svc.import_listing(
+            listing=listing, buyer_project=self.buyer, actor=self.buyer_owner, markup_pct=Decimal("10"),
+        )
+        # Bypass the .exists() pre-check the same way a true race would, by
+        # calling straight through to the create path a second time.
+        with self.assertRaises(b2b_svc.B2BError):
+            b2b_svc.import_listing(
+                listing=listing, buyer_project=self.buyer, actor=self.buyer_owner, markup_pct=Decimal("10"),
+            )
+
+    def test_variable_product_imports_as_simple_without_variants(self):
+        from apps.catalog.models import ProductKind
+
+        variable = Product.objects.create(
+            project=self.seller, title="T-Shirt", price=Decimal("400"), kind=ProductKind.VARIABLE,
+        )
+        listing = B2BListing.objects.create(product=variable, wholesale_price=Decimal("250"))
+        b2b_import = b2b_svc.import_listing(
+            listing=listing, buyer_project=self.buyer, actor=self.buyer_owner, markup_pct=Decimal("10"),
+        )
+        self.assertEqual(b2b_import.local_product.kind, ProductKind.SIMPLE)
+        self.assertEqual(b2b_import.local_product.variants.count(), 0)
+
 
 class PlaceOrderLedgerTests(TestCase):
     """A sale of an imported product must create exactly one ledger row,

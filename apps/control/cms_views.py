@@ -199,6 +199,11 @@ class MenuListView(_ScopedList):
     template_name = "control/cms/menu_list.jinja"
     context_object_name = "menus"
 
+    def get_queryset(self):
+        from django.db.models import Count
+
+        return super().get_queryset().annotate(item_count=Count("items"))
+
 
 class _MenuForm(_ScopedForm):
     model = Menu

@@ -108,6 +108,12 @@ def apply_to_order(*, order, code, actor=None):
         project=order.project, code=code, subtotal=order.subtotal,
         customer_email=order.email, customer=customer, is_first_order=is_first,
     )
+    # Re-check under a row lock right before committing usage: two concurrent
+    # checkouts both validating with the last redemption available must not
+    # both pass and push used_count over usage_limit.
+    coupon = Coupon.objects.select_for_update().get(pk=coupon.pk)
+    if coupon.is_exhausted:
+        raise CouponError("This coupon has reached its usage limit.")
     discount = quote_discount(
         coupon, order_items=items, subtotal=order.subtotal, shipping_total=order.shipping_total,
     )

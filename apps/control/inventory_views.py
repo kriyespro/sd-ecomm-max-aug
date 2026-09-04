@@ -5,6 +5,7 @@ so the movement ledger stays complete. GET never mutates.
 """
 
 from django.contrib import messages
+from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
@@ -95,8 +96,12 @@ class InventoryListView(ActiveProjectMixin, ListView):
         if q:
             qs = qs.filter(product__title__icontains=q)
         if self.request.GET.get("low") == "1":
-            ids = [i.pk for i in qs if i.is_low]
-            qs = qs.filter(pk__in=ids)
+            # available (quantity - reserved) <= low_stock_threshold, in SQL —
+            # was materializing the whole (unpaginated) queryset in Python.
+            qs = qs.filter(
+                low_stock_threshold__gt=0,
+                quantity__lte=F("reserved") + F("low_stock_threshold"),
+            )
         return qs
 
     def get_template_names(self):

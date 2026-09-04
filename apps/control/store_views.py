@@ -75,6 +75,7 @@ class StoreCreateForm(forms.Form):
 class StoreListView(_StoreScope, ListView):
     template_name = "control/stores/list.jinja"
     context_object_name = "stores"
+    paginate_by = 50
 
     def get_queryset(self):
         return self.accessible().order_by("name")

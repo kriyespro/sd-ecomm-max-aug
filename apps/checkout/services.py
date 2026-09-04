@@ -67,18 +67,21 @@ def complete_checkout(
         billing_address=billing_address,
     )
     _validate_payment_method(project, payment_method)
-    order = orders.place_order(
-        project=project,
-        cart=cart,
-        email=email,
-        phone=phone,
-        billing_address=billing_address or shipping_address,
-        shipping_address=shipping_address,
-        customer_note=customer_note,
-        warehouse=warehouse,
-        actor=actor,
-        user=user,
-    )
+    try:
+        order = orders.place_order(
+            project=project,
+            cart=cart,
+            email=email,
+            phone=phone,
+            billing_address=billing_address or shipping_address,
+            shipping_address=shipping_address,
+            customer_note=customer_note,
+            warehouse=warehouse,
+            actor=actor,
+            user=user,
+        )
+    except orders.OrderError as exc:
+        raise CheckoutError(str(exc)) from exc
 
     # Link/refresh the customer record (imported here to keep orders decoupled).
     from apps.customers import services as customers

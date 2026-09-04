@@ -21,9 +21,10 @@ from .mixins import ActiveProjectMixin
 class CouponListView(ActiveProjectMixin, ListView):
     template_name = "control/coupons/coupon_list.jinja"
     context_object_name = "coupons"
+    paginate_by = 50
 
     def get_queryset(self):
-        return Coupon.objects.filter(project=self.active_project)
+        return Coupon.objects.filter(project=self.active_project).order_by("-created_at")
 
 
 class _CouponForm(ActiveProjectMixin):

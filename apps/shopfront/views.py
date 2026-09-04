@@ -254,7 +254,7 @@ class QuickView(View):
     def get(self, request, slug):
         project = current_project(request)
         product = get_object_or_404(
-            Product.objects.select_related("category").prefetch_related("images", "variants"),
+            Product.objects.select_related("category", "brand").prefetch_related("images", "variants"),
             project=project, slug=slug, status="active",
         )
         return render(request, "shopfront/partials/_quickview.jinja", base_context(
@@ -510,7 +510,6 @@ class AccountView(View):
 
 class LoginView(View):
     def post(self, request):
-        project = current_project(request)
         email = request.POST.get("email", "").strip()
         if login_ratelimit.is_locked(request, email):
             messages.error(request, login_ratelimit.LOCK_MESSAGE)
