@@ -16,6 +16,7 @@ Mission Control for their store. Rules enforced here — views stay thin:
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.utils.crypto import get_random_string
 
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
@@ -53,8 +54,6 @@ def _actor_caps(actor, project):
     if has_store_role(actor, project, {StoreRole.OWNER}):
         return True, set(TEAM_ROLES)
     role = store_role(actor, project)
-    if role == StoreRole.MANAGER:
-        return False, {StoreRole.STAFF}
     if role == StoreRole.MANAGER:
         return False, {StoreRole.STAFF}
     raise PermissionDenied("You cannot manage this store's team.")
@@ -107,26 +106,20 @@ def _sync_staff_flag(user):
         user.save(update_fields=["is_staff"])
 
 
-@transaction.atomic
-def add_member(*, actor, project, email, role, request=None):
-    role = _clean_role(role)
-    _, assignable = _actor_caps(actor, project)
-    if role not in assignable:
-        raise PermissionDenied("You can only add staff members.")
+def _split_name(name):
+    first, _, last = (name or "").strip().partition(" ")
+    return first, last
 
-    email = (email or "").strip().lower()
-    if not email:
-        raise TeamError("Enter an email address.")
-    user = User.objects.filter(email__iexact=email).first()
-    if user is None:
-        raise TeamError(
-            "No account with that email. Ask them to register on the store "
-            "first, then add them here."
-        )
 
+def _attach_member(*, actor, project, user, role, request=None):
+    """Give ``user`` the ``role`` team membership on ``project`` (reactivating a
+    dormant row if there is one), enforce the plan seat cap on a net add, sync
+    ``is_staff`` and write the audit row. Returns the ``Membership``."""
     existing = Membership.objects.filter(project=project, user=user).first()
-    if not (existing and existing.is_active and existing.role in TEAM_ROLES):
-        # not already on the team -> this is a net add; check the plan limit
+    already_on_team = bool(existing and existing.is_active and existing.role in TEAM_ROLES)
+
+    if not already_on_team:
+        # net add -> check the plan's team-size limit
         try:
             from apps.billing.limits import check_can_add_staff
 
@@ -134,8 +127,8 @@ def add_member(*, actor, project, email, role, request=None):
         except ImportError:
             pass
 
-    if existing and existing.is_active and existing.role in TEAM_ROLES:
-        raise TeamError(f"{email} is already on the team.")
+    if already_on_team:
+        raise TeamError(f"{user.email} is already on the team.")
 
     if existing is not None:
         existing.role = role
@@ -150,9 +143,77 @@ def add_member(*, actor, project, email, role, request=None):
     _sync_staff_flag(user)
     record_audit(
         actor=actor, project=project, action=AuditLog.Action.CREATE,
-        target=membership, changes={"email": email, "role": role}, request=request,
+        target=membership, changes={"email": user.email, "role": role},
+        request=request,
     )
     return membership
+
+
+@transaction.atomic
+def add_member(*, actor, project, email, role, request=None):
+    """Add someone who already has an account to the team."""
+    role = _clean_role(role)
+    _, assignable = _actor_caps(actor, project)
+    if role not in assignable:
+        raise PermissionDenied("You can only add staff members.")
+
+    email = (email or "").strip().lower()
+    if not email:
+        raise TeamError("Enter an email address.")
+    user = User.objects.filter(email__iexact=email).first()
+    if user is None:
+        raise TeamError(
+            "No account with that email. Ask them to register on the store "
+            "first, then add them here."
+        )
+    return _attach_member(
+        actor=actor, project=project, user=user, role=role, request=request
+    )
+
+
+@transaction.atomic
+def provision_member(*, actor, project, email, role, name="", request=None):
+    """Add a team member, creating their login if they don't have one yet.
+
+    The owner (or a manager, for staff) enters a name, email and role. If no
+    account exists we create one with a one-time password and return it so the
+    owner can pass it on; the person changes it after first sign-in. If the
+    account already exists we just attach the membership (no password change,
+    ``temp_password`` is ``None``).
+
+    Returns ``(membership, temp_password | None)``.
+    """
+    role = _clean_role(role)
+    _, assignable = _actor_caps(actor, project)
+    if role not in assignable:
+        raise PermissionDenied(
+            "You can only add staff members." if StoreRole.STAFF in assignable
+            else "You cannot assign that role."
+        )
+
+    email = (email or "").strip().lower()
+    if not email:
+        raise TeamError("Enter an email address.")
+    if "@" not in email:
+        raise TeamError("Enter a valid email address.")
+
+    user = User.objects.filter(email__iexact=email).first()
+    temp_password = None
+    if user is None:
+        first, last = _split_name(name)
+        user = User.objects.create_user(
+            username=email[:150], email=email,
+            first_name=first, last_name=last,
+        )
+        temp_password = get_random_string(12)
+        user.set_password(temp_password)
+        user.is_active = True
+        user.save(update_fields=["password", "is_active"])
+
+    membership = _attach_member(
+        actor=actor, project=project, user=user, role=role, request=request
+    )
+    return membership, temp_password
 
 
 @transaction.atomic

@@ -20,23 +20,45 @@
   <div>
     <h2 class="text-sm font-semibold text-slate-700">Team · {{ active_project.name }}</h2>
     <p class="mt-1 text-xs text-slate-500">
-      People who can sign into Mission Control for this store. They must already
-      have an account on the storefront.
+      People who can sign into Mission Control for this store. Add someone by
+      email — if they don't have a login yet, one is created and you're shown a
+      one-time password to pass on.
       {% if not can_grant_privileged %}
       As a manager you can add and manage <span class="font-medium">staff</span> only.
       {% endif %}
     </p>
+    {% if seat_cap is not none %}
+    <p class="mt-1 text-xs {{ 'text-red-600' if seat_full else 'text-slate-400' }}">
+      Team seats: {{ seat_used }} / {{ seat_cap }} used{% if seat_full %} — upgrade under Plan &amp; billing to add more{% endif %}.
+    </p>
+    {% endif %}
+  </div>
+
+  {# --- what each role can do (reference) ------------------------------- #}
+  <div class="grid gap-3 sm:grid-cols-3">
+    {% for r in role_access %}
+    <div class="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+      <div class="text-xs font-semibold uppercase tracking-wide text-slate-700">{{ r.label }}</div>
+      <p class="mt-0.5 text-[11px] text-slate-500">{{ r.summary }}</p>
+      <ul class="mt-2 space-y-1 text-[11px] text-slate-600">
+        {% for c in r.can %}<li class="flex gap-1"><span class="text-emerald-500">✔</span><span>{{ c }}</span></li>{% endfor %}
+        {% for c in r.cannot %}<li class="flex gap-1 text-slate-400"><span>✕</span><span>{{ c }}</span></li>{% endfor %}
+      </ul>
+    </div>
+    {% endfor %}
   </div>
 
   <form method="post" action="{{ url('control:team_add') }}"
         class="flex flex-wrap gap-2 rounded-xl bg-white p-4 ring-1 ring-slate-200">
     {{ csrf_input }}
+    <input name="name" type="text" placeholder="Full name (optional)"
+           class="min-w-[12rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
     <input name="email" type="email" required placeholder="person@email.com"
-           class="min-w-[16rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+           class="min-w-[14rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
     <select name="role" class="rounded-lg border border-slate-300 px-2 py-2 text-sm">
       {{ role_options('staff', can_grant_privileged) }}
     </select>
-    <button class="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add to team</button>
+    <button class="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add member</button>
   </form>
 
   <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">

@@ -11,9 +11,11 @@ from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import TemplateView, View
 
+from apps.accounts import capabilities as caps
 from apps.accounts import team as team_svc
 from apps.accounts.models import Membership
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
+from apps.billing import limits as billing_limits
 
 from .mixins import ActiveProjectMixin
 
@@ -40,22 +42,38 @@ class TeamListView(_TeamBase, TemplateView):
             self.request.user, self.active_project
         )
         ctx["me_id"] = self.request.user.pk
+        ctx["role_access"] = caps.TEAM_ROLE_ACCESS
+        used, cap = billing_limits.usage(self.active_project)["staff"]
+        ctx["seat_used"] = used
+        ctx["seat_cap"] = cap
+        ctx["seat_full"] = cap is not None and used >= cap
         return ctx
 
 
 class TeamAddView(_TeamBase, View):
     def post(self, request, *args, **kwargs):
         try:
-            m = team_svc.add_member(
+            m, temp_password = team_svc.provision_member(
                 actor=request.user, project=self.active_project,
                 email=request.POST.get("email", ""),
+                name=request.POST.get("name", ""),
                 role=request.POST.get("role", ""), request=request,
-            )
-            messages.success(
-                request, f"Added {m.user.email} as {m.get_role_display()}."
             )
         except (team_svc.TeamError, PermissionDenied) as exc:
             messages.error(request, str(exc))
+            return redirect("control:team")
+
+        if temp_password:
+            messages.success(
+                request,
+                f"Created an account for {m.user.email} as {m.get_role_display()}. "
+                f"One-time password: {temp_password} — share it with them now; "
+                f"they should change it after signing in.",
+            )
+        else:
+            messages.success(
+                request, f"Added {m.user.email} as {m.get_role_display()}."
+            )
         return redirect("control:team")
 
 
