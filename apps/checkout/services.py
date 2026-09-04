@@ -9,9 +9,29 @@ from apps.orders import services as orders
 
 REQUIRED_ADDRESS_FIELDS = ("name", "line1", "city", "postal_code", "country")
 
+# Payment methods a shopper is never allowed to pick at checkout, whatever the
+# store has configured. ``manual`` settles an order as paid with no gateway
+# round-trip, so it must only ever be triggered by an authenticated staff
+# capture in Mission Control — never from a public checkout POST.
+CUSTOMER_BLOCKED_PAYMENT_METHODS = frozenset({"manual"})
+
 
 class CheckoutError(Exception):
     pass
+
+
+def _validate_payment_method(project, payment_method):
+    """A shopper may only select a method the store has explicitly enabled, and
+    never a staff-only one. Raises ``CheckoutError`` otherwise."""
+    if not payment_method:
+        return
+    if payment_method in CUSTOMER_BLOCKED_PAYMENT_METHODS:
+        raise CheckoutError("That payment method is not available.")
+    from apps.payments import services as payments
+
+    enabled = {c.provider for c in payments.enabled_provider_configs(project)}
+    if payment_method not in enabled:
+        raise CheckoutError("That payment method is not available.")
 
 
 def _validate_address(address, label):
@@ -46,6 +66,7 @@ def complete_checkout(
         cart=cart, email=email, shipping_address=shipping_address,
         billing_address=billing_address,
     )
+    _validate_payment_method(project, payment_method)
     order = orders.place_order(
         project=project,
         cart=cart,

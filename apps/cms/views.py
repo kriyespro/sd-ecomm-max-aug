@@ -11,6 +11,8 @@ from django.views import View
 
 from apps.seo import services as seo
 
+from apps.core.middleware import trusted_base_url
+
 from . import services
 from .models import Page
 
@@ -60,8 +62,7 @@ class SitemapView(View):
         if settings_obj is not None and not settings_obj.sitemap_enabled:
             return HttpResponse(status=404)
 
-        scheme = "https" if request.is_secure() else "http"
-        base = f"{scheme}://{request.get_host()}"
+        base = trusted_base_url(request, project)
         rows = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
                 "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">"]
         for entry in seo.sitemap_entries(project):
@@ -79,9 +80,7 @@ class SitemapView(View):
 class RobotsView(View):
     def get(self, request):
         project = _project_or_404(request)
-        scheme = "https" if request.is_secure() else "http"
-        base = f"{scheme}://{request.get_host()}"
         lines = ["User-agent: *", "Allow: /"]
         if project is not None:
-            lines.append(f"Sitemap: {base}/sitemap.xml")
+            lines.append(f"Sitemap: {trusted_base_url(request, project)}/sitemap.xml")
         return HttpResponse("\n".join(lines) + "\n", content_type="text/plain")

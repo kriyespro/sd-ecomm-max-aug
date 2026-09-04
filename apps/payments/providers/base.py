@@ -15,13 +15,16 @@ class ProviderError(Exception):
 
 class WebhookResult:
     def __init__(self, *, event_type="", provider_payment_id="", provider_order_id="",
-                 provider_refund_id="", signature_valid=False, raw=None):
+                 provider_refund_id="", signature_valid=False, raw=None, amount_minor=None):
         self.event_type = event_type
         self.provider_payment_id = provider_payment_id
         self.provider_order_id = provider_order_id
         self.provider_refund_id = provider_refund_id
         self.signature_valid = signature_valid
         self.raw = raw or {}
+        #: Settled amount in the currency's minor unit (paise/cents) as reported
+        #: by the gateway, or ``None`` when the event carries no amount.
+        self.amount_minor = amount_minor
 
 
 class PaymentProvider:

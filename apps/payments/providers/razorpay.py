@@ -118,6 +118,13 @@ class RazorpayProvider(PaymentProvider):
             data.get("payload", {}).get("payment", {}).get("entity", {})
             or data.get("payload", {}).get("refund", {}).get("entity", {})
         )
+        amount_minor = None
+        if event_type.startswith("payment"):
+            try:
+                amount_minor = int(entity.get("amount"))
+            except (TypeError, ValueError):
+                amount_minor = None
+
         return WebhookResult(
             event_type=event_type,
             provider_payment_id=entity.get("id", "") if event_type.startswith("payment") else entity.get("payment_id", ""),
@@ -125,6 +132,7 @@ class RazorpayProvider(PaymentProvider):
             provider_refund_id=entity.get("id", "") if event_type.startswith("refund") else "",
             signature_valid=valid,
             raw=data,
+            amount_minor=amount_minor,
         )
 
     def refund(self, payment, amount: Decimal, *, reason=""):

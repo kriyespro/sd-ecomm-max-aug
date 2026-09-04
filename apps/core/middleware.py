@@ -24,13 +24,21 @@ class RealClientIPMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         self.enabled = getattr(settings, "TRUST_PROXY_HEADERS", False)
+        self.hops = max(1, getattr(settings, "XFF_TRUSTED_HOPS", 1))
 
     def __call__(self, request):
         if self.enabled:
-            real = (
-                request.META.get("HTTP_CF_CONNECTING_IP")
-                or request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip()
-            )
+            real = request.META.get("HTTP_CF_CONNECTING_IP", "").strip()
+            if not real:
+                chain = [
+                    p.strip()
+                    for p in request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")
+                    if p.strip()
+                ]
+                # The leftmost entry is client-controlled; trust only the Nth
+                # value counted from the proxy end.
+                if len(chain) >= self.hops:
+                    real = chain[-self.hops]
             if real:
                 request.META["REMOTE_ADDR"] = real
         return self.get_response(request)
@@ -81,6 +89,59 @@ class ProjectResolverMiddleware:
     def __call__(self, request):
         request.project = SimpleLazyObject(lambda: _resolve_project(request))
         return self.get_response(request)
+
+
+def _host_is_known(host: str) -> bool:
+    """True when ``host`` (already normalised, no port / www) belongs to the
+    platform or to a store we actually serve."""
+    if not host:
+        return False
+    platform = getattr(settings, "PLATFORM_HOSTS", ()) or ()
+    if host in platform:
+        return True
+    base = getattr(settings, "PLATFORM_BASE_DOMAIN", "") or ""
+    if base and (host == base or host.endswith("." + base)):
+        return True
+    from .store_resolver import binding_for_host
+
+    return binding_for_host(host)[0] is not None
+
+
+def trusted_base_url(request, project=None) -> str:
+    """A ``scheme://host`` safe to embed in generated content (sitemap, robots,
+    e-mail links). ``ALLOWED_HOSTS = ['*']`` lets a forged Host reach the app;
+    reflecting ``request.get_host()`` into a cacheable document would let it
+    poison that document for every visitor. Prefer a host tied to the store,
+    then the platform, and only fall back to the request host when it checks
+    out.
+
+    Always HTTPS unless we're plainly in local/dev.
+    """
+    scheme = "https" if request.is_secure() else "http"
+    req_host = normalize_host(request.get_host())
+
+    project = project or getattr(request, "project", None)
+    host = ""
+    if project is not None:
+        host = normalize_host(getattr(project, "primary_domain", "") or "")
+        if not host:
+            from apps.projects.models import Domain
+
+            host = normalize_host(
+                Domain.objects.filter(project=project, is_verified=True)
+                .values_list("host", flat=True)
+                .first()
+                or ""
+            )
+    if not host and _host_is_known(req_host):
+        host = req_host
+    if not host:
+        host = (
+            getattr(settings, "PLATFORM_BASE_DOMAIN", "")
+            or (getattr(settings, "PLATFORM_HOSTS", ()) or [""])[0]
+            or req_host
+        )
+    return f"{scheme}://{host}"
 
 
 class StorefrontHostMiddleware:

@@ -72,7 +72,16 @@ SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", HTTPS)
 SECURE_HSTS_SECONDS = 31536000 if HTTPS else 0
 SECURE_HSTS_INCLUDE_SUBDOMAINS = HTTPS
 SECURE_HSTS_PRELOAD = HTTPS
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# The proxy's proto header is trusted by default (TLS terminates at the edge).
+# Set DJANGO_TRUST_PROXY_PROTO=false when the origin is reachable directly on
+# plain HTTP — otherwise a client can forge X-Forwarded-Proto: https and defeat
+# SECURE_SSL_REDIRECT / secure-cookie enforcement. Pair "false" with a firewall
+# that only admits the proxy.
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if env_bool("DJANGO_TRUST_PROXY_PROTO", True)
+    else None
+)
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_SECURE = HTTPS
 CSRF_COOKIE_SECURE = HTTPS

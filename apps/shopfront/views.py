@@ -29,6 +29,7 @@ from apps.cms.models import Page
 from apps.coupons import services as coupons_svc
 from apps.customers import services as customers_svc
 from apps.orders.models import Order
+from apps.accounts import ratelimit as login_ratelimit
 from apps.reviews import services as reviews_svc
 from apps.reviews.models import ReviewStatus
 from apps.shipping import services as ship_svc
@@ -511,28 +512,49 @@ class LoginView(View):
     def post(self, request):
         project = current_project(request)
         email = request.POST.get("email", "").strip()
+        if login_ratelimit.is_locked(request, email):
+            messages.error(request, login_ratelimit.LOCK_MESSAGE)
+            return redirect(request.POST.get("next") or "shopfront:account")
         user = authenticate(request, username=email, password=request.POST.get("password", ""))
         if user is None:
+            login_ratelimit.record_failure(request, email)
             messages.error(request, "Invalid email or password.")
         else:
+            login_ratelimit.clear(request, email)
             login(request, user)
             messages.success(request, "Signed in.")
         return redirect(request.POST.get("next") or "shopfront:account")
 
 
 class RegisterView(View):
+    # Neutral copy on every path so the form can't be used to probe which email
+    # addresses already have an account.
+    _NEUTRAL = ("Check your inbox — if that address is new you can sign in now; "
+                "otherwise use your existing password.")
+
     def post(self, request):
         project = current_project(request)
         email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password", "")
-        if User.objects.filter(username__iexact=email).exists() or User.objects.filter(email__iexact=email).exists():
-            messages.error(request, "An account with this email already exists.")
+        if login_ratelimit.is_locked(request, email):
+            messages.error(request, login_ratelimit.LOCK_MESSAGE)
             return redirect("shopfront:account")
+
         try:
             validate_password(password)
         except ValidationError as exc:
             messages.error(request, " ".join(exc.messages))
             return redirect("shopfront:account")
+
+        taken = (User.objects.filter(username__iexact=email).exists()
+                 or User.objects.filter(email__iexact=email).exists())
+        if taken:
+            # Don't confirm or deny — and cost an attempt so bulk probing trips
+            # the same brake as password guessing.
+            login_ratelimit.record_failure(request, email)
+            messages.success(request, self._NEUTRAL)
+            return redirect("shopfront:account")
+
         user = User.objects.create_user(
             username=email, email=email, password=password,
             first_name=request.POST.get("first_name", "").strip(),
