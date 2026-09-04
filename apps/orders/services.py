@@ -146,9 +146,11 @@ def place_order(
     if order is None:
         raise OrderError("Could not allocate an order number, try again.")
 
+    from apps.b2b.services import record_b2b_sale
+
     for ci in items:
         unit = ci.unit_price
-        OrderItem.objects.create(
+        order_item = OrderItem.objects.create(
             order=order,
             product=ci.product,
             variant=ci.variant,
@@ -159,6 +161,7 @@ def place_order(
             quantity=ci.quantity,
             line_total=unit * ci.quantity,
         )
+        record_b2b_sale(order_item)
 
     order.recalc_totals()
     _reserve_stock(order, actor=actor)

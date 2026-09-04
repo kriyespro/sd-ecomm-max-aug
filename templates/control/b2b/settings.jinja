@@ -1,0 +1,74 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Sell B2B{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-700">Sell wholesale to other stores</h2>
+        <p class="mt-1 text-xs text-slate-500">
+          Turn this on to list your products for other store owners to import and
+          resell. You keep shipping the product yourself (dropship) — the reseller's
+          customer never sees your store. What they owe you shows up under
+          <span class="font-medium">Orders to fulfill</span>; you settle it between
+          yourselves, the platform just keeps score.
+        </p>
+      </div>
+      {% if active_project.is_b2b_seller %}
+      <form method="post" action="{{ url('control:b2b_seller_disable') }}">
+        {{ csrf_input }}
+        <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Turn off</button>
+      </form>
+      {% else %}
+      <form method="post" action="{{ url('control:b2b_seller_enable') }}">
+        {{ csrf_input }}
+        <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">Turn on</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if active_project.is_b2b_seller %}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">List a product</h3>
+    <form method="post" action="{{ url('control:b2b_listing_create') }}" class="mt-3 flex flex-wrap items-end gap-3">
+      {{ csrf_input }}
+      <div class="w-64">{{ render_form(form) }}</div>
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">List for B2B</button>
+    </form>
+  </div>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Your B2B listings</div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[32rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Product</th><th class="px-4 py-2">Wholesale price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for l in listings %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium text-slate-800">{{ l.product.title }}</td>
+          <td class="px-4 py-2">{{ l.wholesale_price }}</td>
+          <td class="px-4 py-2">
+            {% if l.is_active %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Listed</span>
+            {% else %}<span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Paused</span>{% endif %}
+          </td>
+          <td class="px-4 py-2 text-right">
+            <form method="post" action="{{ url('control:b2b_listing_toggle', kwargs={'pk': l.pk}) }}">
+              {{ csrf_input }}
+              <input type="hidden" name="active" value="{{ '0' if l.is_active else '1' }}">
+              <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50">{{ "Pause" if l.is_active else "Resume" }}</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Nothing listed yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

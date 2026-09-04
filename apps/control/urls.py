@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import b2b_views as b2bv
 from . import billing_views as billv
 from . import catalog_views as cat
 from . import onboarding_views as onbv
@@ -230,6 +231,19 @@ urlpatterns = [
     path("cms/demo-content/import/", cmsv.DemoContentImportView.as_view(), name="demo_import"),
 
     # Domains
+    # B2B / dropship marketplace (owner only)
+    path("b2b/settings/", b2bv.B2BSettingsView.as_view(), name="b2b_settings"),
+    path("b2b/settings/enable/", b2bv.B2BSellerEnableView.as_view(), name="b2b_seller_enable"),
+    path("b2b/settings/disable/", b2bv.B2BSellerDisableView.as_view(), name="b2b_seller_disable"),
+    path("b2b/listings/new/", b2bv.B2BListingCreateView.as_view(), name="b2b_listing_create"),
+    path("b2b/listings/<int:pk>/toggle/", b2bv.B2BListingToggleView.as_view(), name="b2b_listing_toggle"),
+    path("b2b/marketplace/", b2bv.B2BMarketplaceView.as_view(), name="b2b_marketplace"),
+    path("b2b/marketplace/<int:pk>/import/", b2bv.B2BImportView.as_view(), name="b2b_import"),
+    path("b2b/orders/", b2bv.B2BOrdersToFulfillView.as_view(), name="b2b_orders"),
+    path("b2b/orders/<int:pk>/ship/", b2bv.B2BMarkShippedView.as_view(), name="b2b_mark_shipped"),
+    path("b2b/payables/", b2bv.B2BPayablesView.as_view(), name="b2b_payables"),
+    path("b2b/ledger/<int:pk>/paid/", b2bv.B2BMarkPaidView.as_view(), name="b2b_mark_paid"),
+
     # Store plan & billing (owner / manager)
     path("plan/", planv.PlanView.as_view(), name="store_plan"),
     path("plan/change/", planv.PlanChangeView.as_view(), name="store_plan_change"),

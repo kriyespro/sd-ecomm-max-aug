@@ -64,12 +64,20 @@ _SECTIONS = [
         ("team", "Team", "\U0001f465"),
         ("store_plan", "Plan & billing", "\U0001f4a0"),
     ]),
+    ("b2b", "B2B / Wholesale", "\U0001f91d", [
+        ("b2b_settings", "Sell B2B", "\U0001f4e6"),
+        ("b2b_marketplace", "Marketplace", "\U0001f6d2"),
+        ("b2b_orders", "Orders to fulfill", "\U0001f69a"),
+        ("b2b_payables", "What you owe", "\U0001f4b8"),
+    ]),
 ]
 
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users", "partner_applications"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
+# Owner only — not even a manager. B2B/wholesale moves money between stores.
+_OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 
@@ -104,7 +112,7 @@ def dashboard_url():
 
 
 def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
-              can_upload_skin, can_manage_billing=True):
+              can_upload_skin, can_manage_billing=True, can_manage_owner=False):
     """Permission-filtered sidebar tree (URLs come pre-resolved and cached)."""
     nav = []
     for key, label, icon, resolved_items in _resolved_sections():
@@ -117,6 +125,7 @@ def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
             it for it in resolved_items
             if not (it["name"] in _PLATFORM_ADMIN_ONLY and not platform_admin)
             and not (it["name"] in _STORE_MANAGE_ONLY and not can_manage)
+            and not (it["name"] in _OWNER_ONLY and not can_manage_owner)
             and not (it["name"] in _BILLING_ONLY and not can_manage_billing)
             and not (it["name"] == "skin_upload" and not can_upload_skin)
         ]

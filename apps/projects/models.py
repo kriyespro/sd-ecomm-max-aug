@@ -49,6 +49,10 @@ class Project(TimeStampedModel):
         max_length=253, unique=True, null=True, blank=True, db_index=True
     )
 
+    # Opted in to sell wholesale/dropship to other stores on the platform
+    # (apps.b2b). Owner-only toggle; reversible, independent of ``status``.
+    is_b2b_seller = models.BooleanField(default=False)
+
     # Storefront skins this store is allowed to use. Empty = every active skin
     # is allowed. Managed by a platform manager; the store owner picks one of
     # these on the Theme screen.

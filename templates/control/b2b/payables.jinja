@@ -1,0 +1,53 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}What you owe{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">What you owe B2B sellers</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Wholesale cost for products you've imported and sold. Pay the seller directly,
+      then mark it paid — the platform doesn't move this money for you.
+    </p>
+  </div>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[40rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Product</th>
+          <th class="px-4 py-2">Seller</th>
+          <th class="px-4 py-2">Shipping</th>
+          <th class="px-4 py-2">You owe</th>
+          <th class="px-4 py-2 text-right">Payment</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in ledger_rows %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium text-slate-800">{{ row.quantity }}× {{ row.product_title }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ row.seller_project.name if row.seller_project else "—" }}</td>
+          <td class="px-4 py-2">
+            {% if row.ship_status == 'pending' %}<span class="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800">Awaiting shipment</span>
+            {% else %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">{{ row.get_ship_status_display() }}{% if row.tracking_number %} · {{ row.tracking_number }}{% endif %}</span>{% endif %}
+          </td>
+          <td class="px-4 py-2">{{ row.amount_owed }}</td>
+          <td class="px-4 py-2 text-right">
+            {% if row.status == 'paid' %}
+            <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Paid</span>
+            {% else %}
+            <form method="post" action="{{ url('control:b2b_mark_paid', kwargs={'pk': row.pk}) }}">
+              {{ csrf_input }}
+              <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">Mark paid</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Nothing owed — you haven't sold an imported product yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

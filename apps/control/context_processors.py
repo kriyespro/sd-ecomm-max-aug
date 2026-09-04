@@ -1,5 +1,6 @@
 """Template context for the control panel topbar (store switcher)."""
 
+from apps.accounts.models import StoreRole
 from apps.accounts.permissions import (
     OWNER_MANAGER,
     has_store_role,
@@ -57,6 +58,7 @@ def control(request):
     active = get_active_project(request)
     available = projects_for_user(user)
     can_manage = has_store_role(user, active, OWNER_MANAGER)
+    can_manage_owner = has_store_role(user, active, frozenset({StoreRole.OWNER}))
     upload_on = bool(active and (active.feature_flags or {}).get("skin_upload"))
     platform_staff = is_platform_staff(user)
     platform_scope = platform_staff and not _is_store_scoped_view(
@@ -79,6 +81,7 @@ def control(request):
         can_manage=can_manage,
         can_upload_skin=can_upload,
         can_manage_billing=can_manage_billing,
+        can_manage_owner=can_manage_owner,
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 

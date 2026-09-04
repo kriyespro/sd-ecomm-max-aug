@@ -1,0 +1,62 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}B2B marketplace{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Wholesale products from other stores</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Import one into your own catalog at a markup you choose. The seller ships it
+      directly to your customer (dropship) — you never hold the stock.
+    </p>
+  </div>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[48rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Product</th>
+          <th class="px-4 py-2">Category</th>
+          <th class="px-4 py-2">Seller</th>
+          <th class="px-4 py-2">Wholesale price</th>
+          <th class="px-4 py-2 text-right">Import</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for l in listings %}
+        {% set img = l.product.images.all() | first %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">
+            <div class="flex items-center gap-3">
+              {% if img %}
+              <img src="{{ img.image.url }}" alt="" class="h-10 w-10 rounded object-cover ring-1 ring-slate-200">
+              {% else %}
+              <div class="flex h-10 w-10 items-center justify-center rounded bg-slate-100 text-xs text-slate-400 ring-1 ring-slate-200">{{ l.product.title[:1] }}</div>
+              {% endif %}
+              <span class="font-medium text-slate-800">{{ l.product.title }}</span>
+            </div>
+          </td>
+          <td class="px-4 py-2 text-slate-500">{{ l.product.category.name if l.product.category else "—" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ l.seller_project.name }}</td>
+          <td class="px-4 py-2">{{ l.wholesale_price }}</td>
+          <td class="px-4 py-2 text-right">
+            {% if l.pk in imported_ids %}
+            <span class="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Imported</span>
+            {% else %}
+            <form method="post" action="{{ url('control:b2b_import', kwargs={'pk': l.pk}) }}" class="inline-flex items-end gap-2">
+              {{ csrf_input }}
+              <div class="w-28">{{ render_form(form) }}</div>
+              <button class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">Import</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No B2B listings yet. Check back once other stores start selling wholesale.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}

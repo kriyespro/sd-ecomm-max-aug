@@ -9,6 +9,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import SetPasswordForm
 from django.contrib.auth.password_validation import validate_password
 
+from decimal import Decimal
+
 from apps.accounts.models import PlatformRole
 from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
 from apps.categories.models import Category
@@ -652,6 +654,39 @@ class NotificationTemplateForm(ProjectScopedForm):
         model = NotificationTemplate
         fields = ["event", "channel", "subject", "body", "is_active"]
         widgets = {"body": forms.Textarea(attrs={"rows": 8, "class": TEXT})}
+
+
+class B2BListingForm(forms.Form):
+    product = forms.ModelChoiceField(queryset=Product.objects.none())
+    wholesale_price = forms.DecimalField(
+        min_value=Decimal("0.01"), max_digits=12, decimal_places=2,
+        label="Wholesale price", help_text="What a reseller pays you per unit.",
+    )
+
+    def __init__(self, *args, project=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if project is not None:
+            self.fields["product"].queryset = Product.objects.filter(project=project).order_by("title")
+
+
+class B2BImportForm(forms.Form):
+    markup_pct = forms.DecimalField(
+        min_value=Decimal("0"), max_digits=6, decimal_places=2, initial=Decimal("20"),
+        label="Your markup %",
+        help_text="Your selling price = wholesale price + this markup.",
+    )
+
+
+class B2BShipForm(forms.Form):
+    tracking_number = forms.CharField(required=False, max_length=120)
+    courier = forms.CharField(required=False, max_length=120)
+
+
+class B2BMarkPaidForm(forms.Form):
+    payout_ref = forms.CharField(
+        required=False, max_length=120, label="Reference / note",
+        help_text="e.g. a UPI/bank transfer reference, for your own records.",
+    )
 
 
 class MediaUploadForm(forms.Form):

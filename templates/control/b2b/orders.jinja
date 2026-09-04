@@ -1,0 +1,73 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}B2B orders to fulfill{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Orders to fulfill</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Dropship orders from stores that imported your B2B listings. Ship directly to
+      the customer below, then mark it shipped. What they owe you settles outside
+      the platform — mark it paid once you've been paid.
+    </p>
+  </div>
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[56rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Product</th>
+          <th class="px-4 py-2">Reseller</th>
+          <th class="px-4 py-2">Ship to</th>
+          <th class="px-4 py-2">You're owed</th>
+          <th class="px-4 py-2">Shipping</th>
+          <th class="px-4 py-2 text-right">Payment</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in ledger_rows %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">
+            <div class="font-medium text-slate-800">{{ row.quantity }}× {{ row.product_title }}</div>
+          </td>
+          <td class="px-4 py-2 text-slate-500">{{ row.buyer_project.name if row.buyer_project else "—" }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">
+            {{ row.ship_to_name }}<br>
+            {{ row.ship_to_address.get('line1', '') }} {{ row.ship_to_address.get('city', '') }} {{ row.ship_to_address.get('postal_code', '') }}<br>
+            {{ row.ship_to_phone }}
+          </td>
+          <td class="px-4 py-2">{{ row.amount_owed }}</td>
+          <td class="px-4 py-2">
+            {% if row.ship_status == 'shipped' %}
+            <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Shipped{% if row.tracking_number %} · {{ row.tracking_number }}{% endif %}</span>
+            {% elif row.ship_status == 'delivered' %}
+            <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Delivered</span>
+            {% else %}
+            <form method="post" action="{{ url('control:b2b_mark_shipped', kwargs={'pk': row.pk}) }}" class="flex flex-wrap items-end gap-1">
+              {{ csrf_input }}
+              <input name="tracking_number" placeholder="Tracking #" class="w-28 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+              <input name="courier" placeholder="Courier" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+              <button class="rounded-lg bg-slate-900 px-2 py-1 text-xs text-white hover:bg-slate-800">Mark shipped</button>
+            </form>
+            {% endif %}
+          </td>
+          <td class="px-4 py-2 text-right">
+            {% if row.status == 'paid' %}
+            <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Paid</span>
+            {% else %}
+            <form method="post" action="{{ url('control:b2b_mark_paid', kwargs={'pk': row.pk}) }}" class="inline-flex items-center gap-1">
+              {{ csrf_input }}
+              <button class="rounded-lg border border-slate-300 px-2 py-1 text-xs hover:bg-slate-50">Mark paid</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">No dropship orders yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
