@@ -599,6 +599,16 @@ class WebhookEndpointForm(ProjectScopedForm):
         if self.instance.pk:
             self.fields["events_text"].initial = "\n".join(self.instance.events or [])
 
+    def clean_url(self):
+        from apps.webhooks.services import WebhookURLError, validate_endpoint_url
+
+        url = self.cleaned_data["url"]
+        try:
+            validate_endpoint_url(url)
+        except WebhookURLError as exc:
+            raise forms.ValidationError(str(exc))
+        return url
+
     def save(self, commit=True):
         obj = super().save(commit=False)
         raw = self.cleaned_data.get("events_text", "")

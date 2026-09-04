@@ -57,9 +57,38 @@ MAX_SIZE = 15 * 1024 * 1024  # 15 MB
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"}
 THUMBNAIL_SIZES = {"sm": 200, "md": 600, "lg": 1200}
 
+# Extension allowlist. The uploaded content-type is attacker-controlled, so the
+# file extension is what decides how a browser renders it off the media domain —
+# an .svg / .html served same-origin is stored XSS.
+ALLOWED_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif", ".bmp", ".tiff",
+    ".mp4", ".webm", ".mov", ".m4v",
+    ".pdf", ".txt", ".csv",
+}
+_EXT_CONTENT_TYPE = {
+    ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
+    ".webp": "image/webp", ".gif": "image/gif", ".avif": "image/avif",
+    ".bmp": "image/bmp", ".tiff": "image/tiff",
+    ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime",
+    ".m4v": "video/x-m4v",
+    ".pdf": "application/pdf", ".txt": "text/plain", ".csv": "text/csv",
+}
+
 
 class MediaError(Exception):
     pass
+
+
+def _safe_extension(name):
+    import posixpath as _pp
+
+    ext = _pp.splitext((name or "").lower())[1]
+    if ext not in ALLOWED_EXTENSIONS:
+        raise MediaError(
+            "That file type can't be uploaded. Allowed: images, video, PDF, "
+            "and plain-text/CSV."
+        )
+    return ext
 
 
 def _kind_for(content_type):
@@ -76,6 +105,8 @@ def store_upload(*, project, upload: UploadedFile, uploaded_by=None, folder="", 
     if upload.size and upload.size > MAX_SIZE:
         raise MediaError(f"File exceeds the {MAX_SIZE // (1024 * 1024)}MB limit.")
 
+    ext = _safe_extension(upload.name)
+
     raw = upload.read()
     digest = sha256(raw).hexdigest()
 
@@ -83,8 +114,22 @@ def store_upload(*, project, upload: UploadedFile, uploaded_by=None, folder="", 
     if existing is not None:
         return existing
 
-    content_type = getattr(upload, "content_type", "") or "application/octet-stream"
+    # Trust the extension, not the client-supplied content-type.
+    content_type = _EXT_CONTENT_TYPE.get(ext, "application/octet-stream")
     kind = _kind_for(content_type)
+
+    # An image extension whose bytes don't decode as an image is a smuggling
+    # attempt (polyglot) — reject it.
+    if kind == AssetKind.IMAGE:
+        try:
+            from PIL import Image
+
+            with Image.open(io.BytesIO(raw)) as _im:
+                _im.verify()
+        except ImportError:
+            pass
+        except Exception as exc:
+            raise MediaError("That image file is corrupt or not a real image.") from exc
 
     asset = MediaAsset(
         project=project, kind=kind, original_name=upload.name or "",

@@ -4,6 +4,8 @@
 ``/readyz/``   — DB + cache reachable. Use for readiness / load-balancer.
 """
 
+import hmac
+
 from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
@@ -13,7 +15,8 @@ from django.http import HttpResponse, JsonResponse
 def metrics(request):
     """Prometheus exposition — gated by a shared token so it isn't public."""
     token = getattr(settings, "METRICS_TOKEN", "")
-    if not token or request.headers.get("X-Metrics-Token") != token:
+    presented = request.headers.get("X-Metrics-Token", "")
+    if not token or not hmac.compare_digest(presented, token):
         return HttpResponse(status=404)
     from django_prometheus.exports import ExportToDjangoView
 

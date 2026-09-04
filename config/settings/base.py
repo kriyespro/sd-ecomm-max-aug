@@ -210,6 +210,12 @@ USE_TZ = True
 # only ones that can reach the origin.
 TRUST_PROXY_HEADERS = env_bool("DJANGO_TRUST_PROXY_HEADERS", False)
 
+# X-Forwarded-For is a client-appendable list; the leftmost entry is spoofable.
+# Trust only the Nth value from the right (1 = the IP the trusted proxy saw).
+# Ignored unless TRUST_PROXY_HEADERS is on. CF-Connecting-IP, when present, wins.
+XFF_TRUSTED_HOPS = int(env("DJANGO_XFF_TRUSTED_HOPS", "1"))
+
+
 
 # --- Celery ---------------------------------------------------------
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", env("REDIS_URL", "redis://localhost:6379/0"))

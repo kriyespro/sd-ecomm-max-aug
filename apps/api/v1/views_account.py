@@ -12,6 +12,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts import ratelimit as login_ratelimit
 from apps.catalog.models import Product, Variant
 from apps.customers import services as customers_svc
 from apps.orders.models import Order
@@ -58,12 +59,20 @@ class LoginView(APIView):
     def post(self, request):
         s = LoginSerializer(data=request.data)
         s.is_valid(raise_exception=True)
-        user = authenticate(username=s.validated_data["email"], password=s.validated_data["password"])
+        email = s.validated_data["email"]
+        if login_ratelimit.is_locked(request, email):
+            return Response(
+                {"error": {"code": "too_many_attempts", "message": login_ratelimit.LOCK_MESSAGE}},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
+        user = authenticate(username=email, password=s.validated_data["password"])
         if user is None:
+            login_ratelimit.record_failure(request, email)
             return Response(
                 {"error": {"code": "authentication_failed", "message": "Invalid email or password."}},
                 status=status.HTTP_401_UNAUTHORIZED,
             )
+        login_ratelimit.clear(request, email)
         if not user.is_active:
             return Response(
                 {"error": {"code": "account_disabled", "message": "This account is disabled."}},

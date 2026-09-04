@@ -27,10 +27,25 @@ MAX_TOTAL_UNCOMPRESSED = 30 * 1024 * 1024   # decompression-bomb guard
 MAX_COMPRESSION_RATIO = 120                  # per-file zip-bomb guard
 
 # SVG can carry <script>/on*= handlers — strip them (media may be same-origin).
+# Regex scrubbing is a blunt instrument, not a parser: it is one layer behind the
+# mandatory platform-admin review and the recommendation to serve media from a
+# separate origin.
 _SVG_SCRIPT = re.compile(r"<script[\s\S]*?</script\s*>", re.I)
 _SVG_EVENT = re.compile(r"\son[a-z]+\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
-_SVG_HREF_JS = re.compile(r"(href|xlink:href)\s*=\s*(?:\"|')?\s*javascript:[^\"'>]*", re.I)
+_SVG_HREF_JS = re.compile(
+    r"(?:xlink:)?href\s*=\s*(?:\"|')?\s*"
+    r"(?:javascript:|vbscript:|data:text/html|data:image/svg)[^\"'>]*",
+    re.I,
+)
 _SVG_FOREIGN = re.compile(r"<foreignObject[\s\S]*?</foreignObject\s*>", re.I)
+# Active/embedding elements that have no place in a static skin asset.
+_SVG_EMBED = re.compile(
+    r"<\s*(script|iframe|object|embed|handler|set|audio|video|animate|"
+    r"animateTransform|animateMotion)\b[\s\S]*?"
+    r"(?:</\s*\1\s*>|/?>)",
+    re.I,
+)
+_SVG_STYLE_EXPR = re.compile(r"style\s*=\s*(\"[^\"]*\"|'[^']*')", re.I)
 
 TEMPLATE_EXT = {".jinja"}
 ASSET_EXT = {
@@ -175,8 +190,13 @@ def _sanitise_svg(raw: bytes) -> bytes:
         text = raw.decode("utf-8")
     except UnicodeDecodeError:
         return raw
-    for pat in (_SVG_SCRIPT, _SVG_FOREIGN, _SVG_EVENT, _SVG_HREF_JS):
+    for pat in (_SVG_SCRIPT, _SVG_FOREIGN, _SVG_EMBED, _SVG_EVENT, _SVG_HREF_JS):
         text = pat.sub("", text)
+    # Drop any style="" that smuggles a script URL or CSS expression().
+    text = _SVG_STYLE_EXPR.sub(
+        lambda m: "" if re.search(r"expression\s*\(|url\s*\(\s*[\"']?\s*(?:javascript|data):", m.group(1), re.I) else m.group(0),
+        text,
+    )
     return text.encode("utf-8")
 
 

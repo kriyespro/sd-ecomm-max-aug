@@ -10,7 +10,7 @@ from django.views.generic import FormView, TemplateView
 
 from apps.billing.models import Plan
 
-from . import google_oauth
+from . import google_oauth, ratelimit
 from .signup import self_signup
 
 User = get_user_model()
@@ -31,6 +31,22 @@ class LoginView(auth_views.LoginView):
         ctx = super().get_context_data(**kwargs)
         ctx["google_enabled"] = google_oauth.is_enabled()
         return ctx
+
+    def post(self, request, *args, **kwargs):
+        username = request.POST.get("username", "")
+        if ratelimit.is_locked(request, username):
+            form = self.get_form()
+            form.add_error(None, ratelimit.LOCK_MESSAGE)
+            return self.render_to_response(self.get_context_data(form=form))
+        return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        ratelimit.clear(self.request, form.get_user().get_username())
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        ratelimit.record_failure(self.request, self.request.POST.get("username", ""))
+        return super().form_invalid(form)
 
 
 class LogoutView(auth_views.LogoutView):

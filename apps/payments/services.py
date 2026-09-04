@@ -208,6 +208,11 @@ def handle_webhook(*, project, provider_key, headers, body: bytes):
     etype = result.event_type
     if etype in {"payment.captured", "payment.authorized", "order.paid"}:
         if payment.status != PaymentStatus.PAID:
+            expected_minor = int((payment.amount * 100).to_integral_value())
+            if result.amount_minor is not None and result.amount_minor < expected_minor:
+                _log(payment, kind=PaymentEvent.Kind.ERROR, project=project, provider=provider_key,
+                     note=f"amount mismatch: paid {result.amount_minor} < due {expected_minor}")
+                raise PaymentError("Webhook amount does not match the order total.")
             if result.provider_payment_id:
                 payment.provider_payment_id = result.provider_payment_id
             _settle(payment, reference=f"webhook:{etype}", event_kind=PaymentEvent.Kind.CAPTURE)
