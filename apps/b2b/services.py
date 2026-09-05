@@ -14,6 +14,7 @@ from django.utils import timezone
 from apps.accounts.models import StoreRole
 from apps.accounts.permissions import assert_store_role
 from apps.catalog.models import Product, ProductImage, ProductKind, ProductStatus
+from apps.categories.models import Category
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
@@ -116,8 +117,10 @@ def imported_listing_ids(buyer_project):
 @transaction.atomic
 def import_listing(*, listing, buyer_project, actor, markup_pct, request=None):
     """Copy a seller's listed product into the buyer's own catalog as a new,
-    independent ``Product`` (draft, uncategorized — the buyer's category tree
-    is their own). Images are shared by storage path, not re-uploaded:
+    independent ``Product`` — published immediately, with the source's
+    top-level category matched/created by name in the buyer's own category
+    tree (the buyer's tree is independent, so this is a name match, not a
+    shared row). Images are shared by storage path, not re-uploaded:
     ``ProductImage`` deletion never touches the underlying file (there is no
     delete signal on it), so two projects can safely reference the same file.
     """
@@ -139,6 +142,12 @@ def import_listing(*, listing, buyer_project, actor, markup_pct, request=None):
     price = (listing.wholesale_price * (Decimal("1") + markup_pct / Decimal("100"))).quantize(
         Decimal("0.01")
     )
+    category = None
+    if source.category is not None:
+        category, _ = Category.objects.get_or_create(
+            project=buyer_project, name__iexact=source.category.name,
+            defaults={"name": source.category.name},
+        )
     try:
         with transaction.atomic():
             # Variants (options like size/color) aren't copied yet — land as a
@@ -150,7 +159,8 @@ def import_listing(*, listing, buyer_project, actor, markup_pct, request=None):
                 description=source.description,
                 kind=ProductKind.SIMPLE,
                 price=price,
-                status=ProductStatus.DRAFT,
+                status=ProductStatus.ACTIVE,
+                category=category,
                 weight=source.weight, length=source.length, width=source.width, height=source.height,
             )
             for img in source.images.all():
@@ -245,6 +255,20 @@ def mark_shipped(*, ledger, tracking_number, courier, actor, request=None):
     record_audit(
         actor=actor, project=ledger.seller_project, action=AuditLog.Action.UPDATE,
         target=ledger, changes={"ship_status": "shipped"}, request=request,
+    )
+    # Surface the update on the buyer's own order — the seller and buyer are
+    # different tenants with no shared Order row, so this was previously
+    # invisible on the B2C dashboard: the ledger updated, nothing read it.
+    from apps.orders.models import OrderStatusEvent
+
+    detail = f"Shipped by {ledger.seller_project.name}"
+    if ledger.courier:
+        detail += f" via {ledger.courier}"
+    if ledger.tracking_number:
+        detail += f" — tracking {ledger.tracking_number}"
+    OrderStatusEvent.objects.create(
+        order=ledger.order_item.order, kind=OrderStatusEvent.Kind.FULFILLMENT,
+        note=f"{ledger.product_title}: {detail}",
     )
     return ledger
 

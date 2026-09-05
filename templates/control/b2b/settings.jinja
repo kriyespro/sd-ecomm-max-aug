@@ -1,5 +1,4 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
 {% block page_title %}Sell B2B{% endblock %}
 
 {% block content %}
@@ -31,40 +30,54 @@
   </div>
 
   {% if active_project.is_b2b_seller %}
-  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    <h3 class="text-sm font-semibold text-slate-700">List a product</h3>
-    <form method="post" action="{{ url('control:b2b_listing_create') }}" class="mt-3 flex flex-wrap items-end gap-3">
-      {{ csrf_input }}
-      <div class="w-64">{{ render_form(form) }}</div>
-      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">List for B2B</button>
-    </form>
-  </div>
-
   <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Your B2B listings</div>
-    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[32rem]">
+    <div class="border-b border-slate-200 p-4">
+      <h3 class="text-sm font-semibold text-slate-700">List a product</h3>
+      <p class="mt-1 text-xs text-slate-500">Set a wholesale price and hit Save to list it — edit the price any time.</p>
+    </div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-2">Product</th><th class="px-4 py-2">Wholesale price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right"></th></tr>
+        <tr>
+          <th class="px-4 py-2">Product</th>
+          <th class="px-4 py-2">Your price</th>
+          <th class="px-4 py-2">Wholesale price</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2 text-right"></th>
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
-        {% for l in listings %}
+        {% for p in products %}
         <tr class="hover:bg-slate-50">
-          <td class="px-4 py-2 font-medium text-slate-800">{{ l.product.title }}</td>
-          <td class="px-4 py-2">{{ l.wholesale_price }}</td>
+          <td class="px-4 py-2 font-medium text-slate-800">{{ p.title }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ p.price }}</td>
           <td class="px-4 py-2">
-            {% if l.is_active %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Listed</span>
-            {% else %}<span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Paused</span>{% endif %}
+            <form method="post" action="{{ url('control:b2b_listing_create') }}" class="flex items-center gap-2">
+              {{ csrf_input }}
+              <input type="hidden" name="product_id" value="{{ p.pk }}">
+              <input type="number" step="0.01" min="0.01" name="wholesale_price"
+                     value="{{ p.b2b_listing.wholesale_price if p.b2b_listing else '' }}"
+                     placeholder="0.00"
+                     class="w-28 rounded-lg border border-slate-300 px-2 py-1 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500">
+              <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs font-medium hover:bg-slate-50">Save</button>
+            </form>
+          </td>
+          <td class="px-4 py-2">
+            {% if p.b2b_listing and p.b2b_listing.is_active %}<span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Listed</span>
+            {% elif p.b2b_listing %}<span class="rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Paused</span>
+            {% else %}<span class="text-xs text-slate-400">Not listed</span>{% endif %}
           </td>
           <td class="px-4 py-2 text-right">
-            <form method="post" action="{{ url('control:b2b_listing_toggle', kwargs={'pk': l.pk}) }}">
+            {% if p.b2b_listing %}
+            <form method="post" action="{{ url('control:b2b_listing_toggle', kwargs={'pk': p.b2b_listing.pk}) }}">
               {{ csrf_input }}
-              <input type="hidden" name="active" value="{{ '0' if l.is_active else '1' }}">
-              <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50">{{ "Pause" if l.is_active else "Resume" }}</button>
+              <input type="hidden" name="active" value="{{ '0' if p.b2b_listing.is_active else '1' }}">
+              <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs hover:bg-slate-50">{{ "Pause" if p.b2b_listing.is_active else "Resume" }}</button>
             </form>
+            {% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Nothing listed yet.</td></tr>
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No active products to list yet.</td></tr>
         {% endfor %}
       </tbody>
     </table></div>

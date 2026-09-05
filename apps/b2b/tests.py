@@ -281,7 +281,7 @@ class B2BScreenTests(TestCase):
 
         resp = self.client.post(
             "/admin/b2b/listings/new/",
-            {"product": self.product.pk, "wholesale_price": "500"}, follow=True,
+            {"product_id": self.product.pk, "wholesale_price": "500"}, follow=True,
         )
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(B2BListing.objects.filter(product=self.product).exists())

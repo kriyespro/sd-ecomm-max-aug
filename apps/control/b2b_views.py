@@ -11,8 +11,9 @@ from apps.accounts.models import StoreRole
 from apps.accounts.permissions import StoreRoleRequiredMixin
 from apps.b2b import services as b2b_svc
 from apps.b2b.models import B2BListing, B2BOrderLedger
+from apps.catalog.models import Product, ProductStatus
 
-from .forms import B2BImportForm, B2BListingForm, B2BMarkPaidForm, B2BShipForm
+from .forms import B2BImportForm, B2BMarkPaidForm, B2BShipForm
 from .mixins import ActiveProjectMixin
 
 
@@ -26,8 +27,11 @@ class B2BSettingsView(_B2BBase, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["listings"] = b2b_svc.my_listings(self.active_project)
-        ctx["form"] = B2BListingForm(project=self.active_project)
+        ctx["products"] = (
+            Product.objects.filter(project=self.active_project, status=ProductStatus.ACTIVE)
+            .select_related("b2b_listing")
+            .order_by("title")
+        )
         return ctx
 
 
@@ -50,21 +54,21 @@ class B2BSellerDisableView(_B2BBase, View):
 
 
 class B2BListingCreateView(_B2BBase, View):
+    """Inline price edit from the product table on the settings screen — one
+    row's form posts here with its own product id and price."""
+
     def post(self, request, *args, **kwargs):
-        form = B2BListingForm(request.POST, project=self.active_project)
-        if form.is_valid():
-            try:
-                b2b_svc.create_or_update_listing(
-                    project=self.active_project, actor=request.user,
-                    product=form.cleaned_data["product"],
-                    wholesale_price=form.cleaned_data["wholesale_price"], request=request,
-                )
-            except b2b_svc.B2BError as exc:
-                messages.error(request, str(exc))
-            else:
-                messages.success(request, "Listed for B2B.")
+        product = get_object_or_404(Product, pk=request.POST.get("product_id"), project=self.active_project)
+        try:
+            b2b_svc.create_or_update_listing(
+                project=self.active_project, actor=request.user,
+                product=product, wholesale_price=request.POST.get("wholesale_price"),
+                request=request,
+            )
+        except b2b_svc.B2BError as exc:
+            messages.error(request, str(exc))
         else:
-            messages.error(request, "Pick a product and a valid wholesale price.")
+            messages.success(request, f"{product.title} listed for B2B.")
         return redirect("control:b2b_settings")
 
 
