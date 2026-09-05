@@ -35,10 +35,13 @@
       <h3 class="text-sm font-semibold text-slate-700">List a product</h3>
       <p class="mt-1 text-xs text-slate-500">Set a wholesale price and hit Save to list it — edit the price any time.</p>
     </div>
-    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[52rem]">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
         <tr>
+          <th class="px-4 py-2"></th>
           <th class="px-4 py-2">Product</th>
+          <th class="px-4 py-2">Category</th>
+          <th class="px-4 py-2">Cost price</th>
           <th class="px-4 py-2">Your price</th>
           <th class="px-4 py-2">Wholesale price</th>
           <th class="px-4 py-2">Status</th>
@@ -47,8 +50,16 @@
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for p in products %}
+        {% set imgs = p.images.all() %}
+        {% set img = imgs[0] if imgs else none %}
         <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">
+            <img src="{{ (img.image if img else none) | media_src(64, 64, p.title) }}" alt=""
+                 class="h-10 w-10 rounded-md object-cover ring-1 ring-slate-200">
+          </td>
           <td class="px-4 py-2 font-medium text-slate-800">{{ p.title }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ p.category.name if p.category else "—" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ p.cost_price if p.cost_price else "—" }}</td>
           <td class="px-4 py-2 text-slate-500">{{ p.price }}</td>
           <td class="px-4 py-2">
             <form method="post" action="{{ url('control:b2b_listing_create') }}" class="flex items-center gap-2">
@@ -77,7 +88,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No active products to list yet.</td></tr>
+        <tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No active products to list yet.</td></tr>
         {% endfor %}
       </tbody>
     </table></div>

@@ -29,7 +29,8 @@ class B2BSettingsView(_B2BBase, TemplateView):
         ctx = super().get_context_data(**kwargs)
         ctx["products"] = (
             Product.objects.filter(project=self.active_project, status=ProductStatus.ACTIVE)
-            .select_related("b2b_listing")
+            .select_related("b2b_listing", "category")
+            .prefetch_related("images")
             .order_by("title")
         )
         return ctx
