@@ -4,12 +4,12 @@
    - otherwise: the flat variant list (swatches up to 6, else a <select>).
    Included inside the add-to-cart <form>. #}
 {% if variant_options and variant_options.axes %}
-<div x-data="{
-       sel: { {% for ax in variant_options.axes %}'{{ ax.name }}': '{{ ax.options[0] }}'{{ ',' if not loop.last }}{% endfor %} },
+<div x-data='{
+       sel: { {% for ax in variant_options.axes %}"{{ ax.name }}": {{ ax.options[0] | tojson }}{{ "," if not loop.last }}{% endfor %} },
        map: {{ variant_options.map | tojson }},
-       get k() { return (this.sel['Size'] || '') + '|||' + (this.sel['Color'] || ''); },
+       get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
        get cur() { return this.map[this.k] || null; }
-     }"
+     }'
      class="space-y-4">
   <input type="hidden" name="variant" :value="cur ? cur.pk : ''">
   {% for ax in variant_options.axes %}
@@ -17,9 +17,9 @@
     <span class="mb-2 block text-[11px] font-semibold uppercase tracking-luxe text-mute">{{ ax.name }}</span>
     <div class="flex flex-wrap gap-2">
       {% for val in ax.options %}
-      <button type="button" @click="sel['{{ ax.name }}'] = '{{ val }}'"
+      <button type="button" @click='sel["{{ ax.name }}"] = {{ val | tojson }}'
               class="border px-4 py-2 text-sm transition-colors"
-              :class="sel['{{ ax.name }}'] === '{{ val }}' ? 'border-ink bg-ink text-paper' : 'border-line hover:border-ink'">
+              :class='sel["{{ ax.name }}"] === {{ val | tojson }} ? "border-ink bg-ink text-paper" : "border-line hover:border-ink"'>
         {{ val }}
       </button>
       {% endfor %}
