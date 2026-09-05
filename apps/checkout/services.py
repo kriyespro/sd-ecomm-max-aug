@@ -28,6 +28,17 @@ def _validate_payment_method(project, payment_method):
     if payment_method in CUSTOMER_BLOCKED_PAYMENT_METHODS:
         raise CheckoutError("That payment method is not available.")
     from apps.payments import services as payments
+    from apps.payments.models import PaymentProviderConfig, Provider
+
+    if payment_method == Provider.COD:
+        # COD needs no gateway, so it's the default fallback: allowed unless a
+        # store explicitly disabled it with a config row.
+        disabled = PaymentProviderConfig.objects.filter(
+            project=project, provider=Provider.COD, is_enabled=False,
+        ).exists()
+        if disabled:
+            raise CheckoutError("That payment method is not available.")
+        return
 
     enabled = {c.provider for c in payments.enabled_provider_configs(project)}
     if payment_method not in enabled:

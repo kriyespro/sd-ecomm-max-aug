@@ -46,7 +46,12 @@ def get_provider(project, provider_key):
     try:
         config = PaymentProviderConfig.objects.get(project=project, provider=provider_key)
     except PaymentProviderConfig.DoesNotExist:
-        raise PaymentError(f"{provider_key} is not configured for this store.")
+        if provider_key == Provider.COD:
+            # COD needs no gateway credentials, so it's on by default until a
+            # store explicitly adds a (disabled) config row to turn it off.
+            config = PaymentProviderConfig(project=project, provider=Provider.COD, is_enabled=True)
+        else:
+            raise PaymentError(f"{provider_key} is not configured for this store.")
     if not config.is_enabled:
         raise PaymentError(f"{provider_key} is disabled for this store.")
     return get_provider_class(provider_key)(config), config
