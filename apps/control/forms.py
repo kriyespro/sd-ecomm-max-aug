@@ -110,17 +110,26 @@ class TagForm(ProjectScopedForm):
 
 
 class ProductForm(ProjectScopedForm):
+    # Plain comma list instead of Product.tags' auto-generated
+    # ModelMultipleChoiceField: a native <select multiple> over an
+    # always-empty-at-first queryset (Tag rows only exist via a separate,
+    # unlinked /admin/tags/ screen) made this field look unfillable — nobody
+    # had ever created a Tag anywhere. Typed names are get_or_create'd on save,
+    # same pattern as the Size/Colour quick builder.
+    tags = forms.CharField(
+        required=False,
+        help_text="Comma separated — new tags are created automatically.",
+    )
+
     class Meta:
         model = Product
         fields = [
-            "title", "slug", "kind", "price", "status",
+            "title", "slug", "kind", "price", "sale_price", "cost_price", "status",
             "type", "brand", "category",
             "sku", "barcode", "hsn_sac", "tax_class",
             "short_description", "description",
-            "sale_price", "cost_price",
             "weight", "length", "width", "height",
             "is_featured", "is_new_arrival", "is_bestseller", "search_indexed",
-            "tags",
             "seo_title", "seo_description", "seo_keywords",
         ]
         widgets = {
@@ -141,9 +150,35 @@ class ProductForm(ProjectScopedForm):
         self.fields["type"].queryset = ProductType.objects.filter(project=self.project)
         self.fields["brand"].queryset = Brand.objects.filter(project=self.project)
         self.fields["category"].queryset = Category.objects.filter(project=self.project)
-        self.fields["tags"].queryset = Tag.objects.filter(project=self.project)
         for f in ("type", "brand", "category"):
             self.fields[f].required = False
+        # "tags" is declared on the class (not in Meta.fields, so Django's
+        # auto _save_m2m leaves it alone) which puts it last; move it back
+        # next to the other flags where it used to sit.
+        order = [name for name in self.fields if name != "tags"]
+        order.insert(order.index("search_indexed") + 1, "tags")
+        self.order_fields(order)
+        if self.instance.pk:
+            self.fields["tags"].initial = ", ".join(
+                self.instance.tags.order_by("name").values_list("name", flat=True)
+            )
+
+    def save(self, commit=True):
+        obj = super().save(commit=commit)
+        names = [n.strip() for n in self.cleaned_data.get("tags", "").split(",") if n.strip()]
+
+        def _sync():
+            tags = [
+                Tag.objects.get_or_create(project=self.project, name__iexact=name, defaults={"name": name})[0]
+                for name in dict.fromkeys(names)  # de-dupe, keep order
+            ]
+            obj.tags.set(tags)
+
+        if commit:
+            _sync()
+        else:
+            self.save_m2m = _sync
+        return obj
 
 
 class WarehouseForm(ProjectScopedForm):

@@ -155,5 +155,5 @@ class StorefrontPickerRenderTests(TestCase):
         body = resp.content.decode()
         self.assertIn(">Size<", body)
         self.assertIn(">Color<", body)
-        self.assertIn("sel['Size'] = 'S'", body)  # axis button
+        self.assertIn('sel["Size"] = "S"', body)  # axis button
         self.assertIn(combo_key("M", "White"), body)  # variant map key
