@@ -37,9 +37,20 @@ class PaymentError(Exception):
 # --- provider selection ------------------------------------------
 
 def enabled_provider_configs(project):
-    return list(
+    configs = list(
         PaymentProviderConfig.objects.filter(project=project, is_enabled=True).order_by("priority", "provider")
     )
+    if not any(c.provider == Provider.COD for c in configs):
+        # COD needs no gateway credentials, so it's on by default until a store
+        # explicitly adds a (disabled) config row to turn it off — same rule as
+        # get_provider(). Keeps this list consistent with what checkout accepts.
+        disabled = PaymentProviderConfig.objects.filter(
+            project=project, provider=Provider.COD, is_enabled=False,
+        ).exists()
+        if not disabled:
+            configs.append(PaymentProviderConfig(project=project, provider=Provider.COD, is_enabled=True))
+            configs.sort(key=lambda c: (c.priority, c.provider))
+    return configs
 
 
 def get_provider(project, provider_key):
