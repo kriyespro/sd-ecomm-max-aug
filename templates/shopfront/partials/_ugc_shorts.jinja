@@ -1,0 +1,30 @@
+{# Shared across every skin — {% include "shopfront/partials/_ugc_shorts.jinja" %}
+   from a skin's home.jinja. Reads ``ugc_videos`` from the chrome context
+   (apps/core/store_resolver.py -> apps/shopfront/context.py). Deliberately
+   uses plain Tailwind color classes (black/white/neutral), not a skin's own
+   custom tokens (e.g. default's "ink"/"paper") — this partial is included by
+   skins with different token sets and must render sanely in all of them. #}
+{% if ugc_videos %}
+<section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  <h2 class="mb-6 text-2xl font-semibold">Shorts</h2>
+  <div class="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 lg:mx-0 lg:px-0">
+    {% for v in ugc_videos %}
+    <div class="relative aspect-[9/16] w-[200px] shrink-0 snap-start overflow-hidden rounded-2xl bg-black sm:w-[240px]">
+      {% if v.embed_url %}
+      <iframe src="{{ v.embed_url }}" class="h-full w-full" loading="lazy" frameborder="0"
+              allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen title="{{ v.caption or 'Short video' }}"></iframe>
+      {% elif v.file %}
+      <video src="{{ v.file.url }}" class="h-full w-full object-cover" controls playsinline muted loop preload="metadata"></video>
+      {% endif %}
+      {% if v.caption or v.link_url %}
+      <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
+        {% if v.caption %}<p class="text-xs font-medium text-white">{{ v.caption }}</p>{% endif %}
+        {% if v.link_url %}<a href="{{ v.link_url }}" class="pointer-events-auto mt-1 inline-block text-[11px] font-semibold uppercase tracking-wide text-white underline">Shop this</a>{% endif %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}

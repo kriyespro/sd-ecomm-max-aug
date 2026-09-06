@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Banner, ContentBlock, FAQ, Menu, MenuItem, Page, Skin, ThemeSettings
+from .models import Banner, ContentBlock, FAQ, Menu, MenuItem, Page, Skin, ThemeSettings, UGCVideo
 
 
 @admin.register(Skin)
@@ -30,6 +30,12 @@ class ContentBlockAdmin(admin.ModelAdmin):
 class BannerAdmin(admin.ModelAdmin):
     list_display = ["name", "project", "placement", "priority", "is_active", "starts_at", "ends_at"]
     list_filter = ["project", "placement", "is_active"]
+
+
+@admin.register(UGCVideo)
+class UGCVideoAdmin(admin.ModelAdmin):
+    list_display = ["caption", "project", "source", "priority", "is_active", "added_by"]
+    list_filter = ["project", "source", "is_active"]
 
 
 @admin.register(FAQ)

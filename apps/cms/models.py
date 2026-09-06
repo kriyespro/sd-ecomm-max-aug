@@ -7,7 +7,11 @@ list of section dicts for a block-based page builder — the frontend decides ho
 to render each ``type``.
 """
 
+import re
+
 from django.conf import settings
+from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -15,6 +19,15 @@ from django.utils.text import slugify
 
 from apps.core.html import sanitize_html
 from apps.core.models import SeoFieldsModel, TenantScopedModel, TimeStampedModel
+
+_YOUTUBE_ID_RE = re.compile(
+    r"(?:youtube(?:-nocookie)?\.com/(?:shorts/|watch\?v=|embed/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+)
+
+
+def _extract_youtube_id(url):
+    match = _YOUTUBE_ID_RE.search(url or "")
+    return match.group(1) if match else ""
 
 
 class PublishStatus(models.TextChoices):
@@ -156,6 +169,85 @@ class Banner(TenantScopedModel):
         if self.ends_at and now > self.ends_at:
             return False
         return True
+
+
+def _validate_video_size(f):
+    max_bytes = UGCVideo.MAX_UPLOAD_BYTES
+    if f.size > max_bytes:
+        raise ValidationError(f"Video must be under {max_bytes // (1024 * 1024)} MB.")
+
+
+class UGCVideoSource(models.TextChoices):
+    UPLOAD = "upload", "Uploaded video"
+    YOUTUBE = "youtube", "YouTube Shorts link"
+
+
+class UGCVideo(TenantScopedModel):
+    """A short, vertical (portrait) video for the storefront's "Shorts" reel —
+    either an uploaded clip or a YouTube (Shorts) link. Owner, manager and
+    staff can all add these (plain ``ActiveProjectMixin`` scoping, same as
+    Banner — no extra role gate)."""
+
+    MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB — short vertical clips only.
+
+    source = models.CharField(
+        max_length=10, choices=UGCVideoSource.choices, default=UGCVideoSource.YOUTUBE,
+    )
+    file = models.FileField(
+        upload_to="ugc_videos/", blank=True,
+        validators=[
+            FileExtensionValidator(["mp4", "webm", "mov", "m4v"]),
+            _validate_video_size,
+        ],
+    )
+    youtube_url = models.URLField(
+        blank=True, max_length=300,
+        help_text="A YouTube Shorts (or any YouTube video) link.",
+    )
+    youtube_id = models.CharField(max_length=20, blank=True, editable=False)
+    caption = models.CharField(max_length=200, blank=True)
+    link_url = models.CharField(
+        max_length=300, blank=True,
+        help_text="Optional — where tapping the video sends a shopper, e.g. a product page.",
+    )
+    priority = models.PositiveIntegerField(default=100)
+    is_active = models.BooleanField(default=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+
+    class Meta:
+        ordering = ["priority", "id"]
+        verbose_name = "UGC / Shorts video"
+
+    def __str__(self):
+        return self.caption or f"Short video #{self.pk}"
+
+    def clean(self):
+        if self.source == UGCVideoSource.YOUTUBE and not self.youtube_url:
+            raise ValidationError({"youtube_url": "Enter a YouTube link."})
+        if self.source == UGCVideoSource.UPLOAD and not self.file:
+            raise ValidationError({"file": "Upload a video file."})
+
+    def save(self, *args, **kwargs):
+        self.youtube_id = (
+            _extract_youtube_id(self.youtube_url)
+            if self.source == UGCVideoSource.YOUTUBE else ""
+        )
+        super().save(*args, **kwargs)
+
+    @property
+    def embed_url(self):
+        if self.youtube_id:
+            return f"https://www.youtube.com/embed/{self.youtube_id}?playsinline=1&modestbranding=1&rel=0"
+        return ""
+
+    @property
+    def thumbnail_url(self):
+        if self.youtube_id:
+            return f"https://i.ytimg.com/vi/{self.youtube_id}/hqdefault.jpg"
+        return ""
 
 
 class FAQ(TenantScopedModel):

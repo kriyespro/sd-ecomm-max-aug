@@ -224,6 +224,11 @@ def _store(request, project, ctx, theme):
                   "cta_label": getattr(hero, "cta_label", ""),
                   "cta_url": getattr(hero, "cta_url", "")}
                  if hero else None),
+        "shorts": [
+            {"embed_url": v.embed_url, "video_url": (v.file.url if v.file else ""),
+             "caption": v.caption, "link_url": v.link_url}
+            for v in ctx.get("ugc_videos", [])
+        ],
         "social": {},
         "tracking": {},
     }

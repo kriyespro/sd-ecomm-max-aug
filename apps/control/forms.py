@@ -25,6 +25,7 @@ from apps.cms.models import (
     Skin,
     StoreProfile,
     ThemeSettings,
+    UGCVideo,
 )
 from apps.coupons.models import Coupon
 from apps.customers.models import Customer, CustomerGroup
@@ -394,6 +395,29 @@ class BannerForm(ProjectScopedForm):
         cleaned = super().clean()
         if cleaned.get("placement") == BannerPlacement.CATEGORY and not cleaned.get("category"):
             self.add_error("category", "Choose a category for a category-placement banner.")
+        return cleaned
+
+
+class UGCVideoForm(ProjectScopedForm):
+    class Meta:
+        model = UGCVideo
+        fields = ["source", "file", "youtube_url", "caption", "link_url", "priority", "is_active"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["file"].required = False
+        self.fields["youtube_url"].required = False
+        self.fields["source"].help_text = (
+            "Upload a short vertical clip, or paste a YouTube (Shorts) link — pick one."
+        )
+
+    def clean(self):
+        cleaned = super().clean()
+        source = cleaned.get("source")
+        if source == "youtube" and not cleaned.get("youtube_url"):
+            self.add_error("youtube_url", "Enter a YouTube link.")
+        if source == "upload" and not cleaned.get("file") and not (self.instance and self.instance.file):
+            self.add_error("file", "Upload a video file.")
         return cleaned
 
 

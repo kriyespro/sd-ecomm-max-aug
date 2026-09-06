@@ -47,6 +47,7 @@ _SECTIONS = [
         ("cms_store_profile", "Store profile", "\U0001f3ea"),
         ("cms_pages", "Pages", "\U0001f4c4"),
         ("cms_banners", "Banners", "\U0001f5bc"),
+        ("cms_ugc_videos", "Shorts / videos", "\U0001f3ac"),
         ("cms_menus", "Menus", "\U0001f9ed"),
         ("cms_theme", "Theme", "\U0001f3a8"),
         ("seo_settings", "SEO", "\U0001f50d"),

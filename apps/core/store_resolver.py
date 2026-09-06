@@ -164,6 +164,9 @@ def _build_chrome(project):
         "category_banners": category_banners,
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),
+        "ugc_videos": list(
+            project.ugcvideos.filter(is_active=True).order_by("priority", "id")
+        ),
         "free_ship_over": ShippingMethod.objects.filter(
             project=project, is_active=True, free_over__isnull=False
         ).aggregate(m=Min("free_over"))["m"],

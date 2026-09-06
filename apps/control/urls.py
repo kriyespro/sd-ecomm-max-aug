@@ -210,6 +210,10 @@ urlpatterns = [
     path("cms/banners/new/", cmsv.BannerCreateView.as_view(), name="cms_banner_create"),
     path("cms/banners/<int:pk>/", cmsv.BannerUpdateView.as_view(), name="cms_banner_edit"),
     path("cms/banners/<int:pk>/delete/", cmsv.BannerDeleteView.as_view(), name="cms_banner_delete"),
+    path("cms/ugc-videos/", cmsv.UGCVideoListView.as_view(), name="cms_ugc_videos"),
+    path("cms/ugc-videos/new/", cmsv.UGCVideoCreateView.as_view(), name="cms_ugc_video_create"),
+    path("cms/ugc-videos/<int:pk>/", cmsv.UGCVideoUpdateView.as_view(), name="cms_ugc_video_edit"),
+    path("cms/ugc-videos/<int:pk>/delete/", cmsv.UGCVideoDeleteView.as_view(), name="cms_ugc_video_delete"),
     # CMS — FAQs
     path("cms/faqs/", cmsv.FAQListView.as_view(), name="cms_faqs"),
     path("cms/faqs/new/", cmsv.FAQCreateView.as_view(), name="cms_faq_create"),

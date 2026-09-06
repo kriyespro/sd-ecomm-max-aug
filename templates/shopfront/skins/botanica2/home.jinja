@@ -184,6 +184,8 @@
 </section>
 
 {# ============ POPUP BANNER — placement "popup"; once per visitor ============ #}
+{% include "shopfront/partials/_ugc_shorts.jinja" %}
+
 {% if popup_banner %}
 <div x-data="{ open: false }"
      x-init="setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200)"

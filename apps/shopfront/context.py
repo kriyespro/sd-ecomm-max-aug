@@ -76,6 +76,7 @@ def base_context(request, project, **extra):
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],
         "popup_banner": chrome["popup_banner"],
+        "ugc_videos": chrome["ugc_videos"],
         "user": request.user,
     }
     ctx.update(extra)

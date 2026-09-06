@@ -26,6 +26,7 @@ from apps.cms.models import (
     Page,
     StoreProfile,
     ThemeSettings,
+    UGCVideo,
 )
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
@@ -39,6 +40,7 @@ from .forms import (
     PageForm,
     StoreProfileForm,
     ThemeSettingsForm,
+    UGCVideoForm,
 )
 from .mixins import ActiveProjectMixin
 
@@ -134,6 +136,39 @@ class BannerUpdateView(_BannerForm, UpdateView):
 class BannerDeleteView(_ScopedDelete):
     model = Banner
     success_url = reverse_lazy("control:cms_banners")
+
+
+# --- UGC / Shorts videos -------------------------------------------
+
+class UGCVideoListView(_ScopedList):
+    model = UGCVideo
+    template_name = "control/cms/ugc_video_list.jinja"
+    context_object_name = "videos"
+
+
+class _UGCVideoForm(_ScopedForm):
+    model = UGCVideo
+    form_class = UGCVideoForm
+    template_name = "control/_object_form.jinja"
+    success_url = reverse_lazy("control:cms_ugc_videos")
+
+    def form_valid(self, form):
+        if not form.instance.pk:
+            form.instance.added_by = self.request.user
+        return super().form_valid(form)
+
+
+class UGCVideoCreateView(_UGCVideoForm, CreateView):
+    pass
+
+
+class UGCVideoUpdateView(_UGCVideoForm, UpdateView):
+    pass
+
+
+class UGCVideoDeleteView(_ScopedDelete):
+    model = UGCVideo
+    success_url = reverse_lazy("control:cms_ugc_videos")
 
 
 # --- FAQs --------------------------------------------------------
