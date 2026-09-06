@@ -14,7 +14,8 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
-from apps.accounts.models import PartnerApplication, PlatformRole
+from apps.accounts.models import PartnerApplication, PlatformRole, StoreRole
+from apps.accounts.permissions import assert_store_role
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.projects.models import Project
@@ -283,3 +284,70 @@ def review_partner_application(*, actor, application, decision, note="", request
         changes={"decision": decision, "email": application.email}, request=request,
     )
     return temp_password
+
+
+# --- "Live stores" home-page showcase -----------------------------------
+
+def submit_project_for_showcase(*, project, actor, request=None):
+    """Store owner (or the DGC who manages this store) asks to appear on the
+    public home page's "Live stores" section. A platform admin decides."""
+    assert_store_role(
+        actor, project, frozenset({StoreRole.OWNER}),
+        "Only the store owner can submit the store for listing.",
+    )
+    if project.showcase_status == Project.ShowcaseStatus.PENDING:
+        raise ValidationError("Already submitted — waiting on review.")
+    if not (project.primary_domain or "").strip():
+        raise ValidationError("Set up a domain before submitting your store for listing.")
+
+    project.showcase_status = Project.ShowcaseStatus.PENDING
+    project.showcase_submitted_at = timezone.now()
+    project.showcase_reviewed_by = None
+    project.showcase_reviewed_at = None
+    project.showcase_review_note = ""
+    project.save(update_fields=[
+        "showcase_status", "showcase_submitted_at", "showcase_reviewed_by",
+        "showcase_reviewed_at", "showcase_review_note", "updated_at",
+    ])
+    record_audit(
+        actor=actor, project=project, action=AuditLog.Action.UPDATE, target=project,
+        changes={"showcase_status": "pending"}, request=request,
+    )
+    return project
+
+
+def list_showcase_submissions(status=""):
+    qs = Project.objects.select_related("showcase_reviewed_by")
+    status = (status or "").strip()
+    if status:
+        qs = qs.filter(showcase_status=status)
+    else:
+        qs = qs.exclude(showcase_status=Project.ShowcaseStatus.NOT_SUBMITTED)
+    return qs.order_by("-showcase_submitted_at")
+
+
+def review_showcase_submission(*, actor, project, decision, note="", request=None):
+    """Platform admin approves or rejects a store's showcase submission."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can review showcase submissions.")
+    if project.showcase_status != Project.ShowcaseStatus.PENDING:
+        raise ValidationError("This submission has already been reviewed.")
+    if decision not in ("approve", "reject"):
+        raise ValidationError("Unknown decision.")
+
+    project.showcase_status = (
+        Project.ShowcaseStatus.APPROVED if decision == "approve"
+        else Project.ShowcaseStatus.REJECTED
+    )
+    project.showcase_reviewed_by = actor
+    project.showcase_reviewed_at = timezone.now()
+    project.showcase_review_note = (note or "")[:300]
+    project.save(update_fields=[
+        "showcase_status", "showcase_reviewed_by", "showcase_reviewed_at",
+        "showcase_review_note", "updated_at",
+    ])
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=project,
+        changes={"decision": decision, "project": project.name}, request=request,
+    )
+    return project

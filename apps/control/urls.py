@@ -16,6 +16,7 @@ from . import plan_views as planv
 from . import review_views as revv
 from . import seo_views as seov
 from . import shipping_views as shipv
+from . import showcase_views as showv
 from . import skin_views as skinv
 from . import store_views as storev
 from . import team_views as teamv
@@ -58,6 +59,10 @@ urlpatterns = [
     path("users/new/", views.UserCreateView.as_view(), name="user_create"),
     path("partners/", views.PartnerApplicationListView.as_view(), name="partner_applications"),
     path("partners/<int:pk>/review/", views.PartnerApplicationReviewView.as_view(), name="partner_application_review"),
+
+    # "Live stores" home-page showcase
+    path("showcase/", showv.ShowcaseListView.as_view(), name="showcase_list"),
+    path("showcase/<int:pk>/review/", showv.ShowcaseReviewView.as_view(), name="showcase_review"),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user_detail"),
     path("users/<int:pk>/role/", views.UserRoleChangeView.as_view(), name="user_role_change"),
     path("users/<int:pk>/set-password/", views.UserSetPasswordView.as_view(), name="user_set_password"),
@@ -275,6 +280,9 @@ urlpatterns = [
     path("domains/<int:pk>/verify/", domv.DomainVerifyView.as_view(), name="domain_verify"),
     path("domains/<int:pk>/primary/", domv.DomainPrimaryView.as_view(), name="domain_primary"),
     path("domains/<int:pk>/delete/", domv.DomainDeleteView.as_view(), name="domain_delete"),
+
+    path("showcase/settings/", showv.StoreShowcaseView.as_view(), name="store_showcase"),
+    path("showcase/settings/submit/", showv.StoreShowcaseSubmitView.as_view(), name="store_showcase_submit"),
 
     # SEO
     path("seo/", seov.SeoSettingsView.as_view(), name="seo_settings"),

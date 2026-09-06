@@ -1,0 +1,53 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Live store listing{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-700">Get featured on the "Live stores" home page</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Submit your store to appear in the "Live stores" section on the platform's
+      home page, with a link to your site. A platform admin reviews every
+      submission before it goes live.
+    </p>
+
+    <div class="mt-4 flex items-center gap-2">
+      <span class="text-xs font-medium text-slate-500">Status:</span>
+      {% set s = active_project.showcase_status %}
+      <span class="rounded-full px-2 py-0.5 text-xs font-semibold
+        {% if s == 'approved' %}bg-emerald-50 text-emerald-700
+        {% elif s == 'pending' %}bg-amber-50 text-amber-700
+        {% elif s == 'rejected' %}bg-rose-50 text-rose-700
+        {% else %}bg-slate-100 text-slate-500{% endif %}">
+        {{ active_project.get_showcase_status_display() }}
+      </span>
+    </div>
+
+    {% if active_project.showcase_status == 'approved' %}
+    <p class="mt-3 text-sm text-slate-600">
+      Your store is live on the home page{% if active_project.public_url %} and links to
+      <a href="{{ active_project.public_url }}" target="_blank" rel="noopener" class="underline">{{ active_project.primary_domain }}</a>{% endif %}.
+    </p>
+    {% elif active_project.showcase_status == 'pending' %}
+    <p class="mt-3 text-sm text-slate-600">Submitted {{ active_project.showcase_submitted_at.strftime('%d %b %Y') }} — waiting on review.</p>
+    {% else %}
+    {% if active_project.showcase_status == 'rejected' %}
+    <p class="mt-3 text-sm text-rose-600">
+      Not approved{% if active_project.showcase_review_note %}: {{ active_project.showcase_review_note }}{% endif %}.
+      You can submit again.
+    </p>
+    {% endif %}
+    <form method="post" action="{{ url('control:store_showcase_submit') }}" class="mt-4">
+      {{ csrf_input }}
+      {% if not active_project.primary_domain %}
+      <p class="mb-2 text-xs text-amber-600">Set up a <a href="{{ url('control:domains') }}" class="underline">domain</a> first — a listing needs somewhere to link to.</p>
+      {% endif %}
+      <button {% if not active_project.primary_domain %}disabled{% endif %}
+              class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+        Submit for listing
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

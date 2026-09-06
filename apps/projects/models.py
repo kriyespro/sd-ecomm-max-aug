@@ -7,6 +7,7 @@ new Django install.
 
 import re
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MinLengthValidator
 from django.db import models
@@ -52,6 +53,27 @@ class Project(TimeStampedModel):
     # Opted in to sell wholesale/dropship to other stores on the platform
     # (apps.b2b). Owner-only toggle; reversible, independent of ``status``.
     is_b2b_seller = models.BooleanField(default=False)
+
+    class ShowcaseStatus(models.TextChoices):
+        NOT_SUBMITTED = "not_submitted", "Not submitted"
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    # "Live stores" home-page showcase. A store owner (or the DGC who manages
+    # this store) submits; a platform admin decides whether it appears on the
+    # public marketing home page.
+    showcase_status = models.CharField(
+        max_length=20, choices=ShowcaseStatus.choices,
+        default=ShowcaseStatus.NOT_SUBMITTED, db_index=True,
+    )
+    showcase_submitted_at = models.DateTimeField(null=True, blank=True)
+    showcase_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_showcase_submissions",
+    )
+    showcase_reviewed_at = models.DateTimeField(null=True, blank=True)
+    showcase_review_note = models.CharField(max_length=300, blank=True)
 
     # Storefront skins this store is allowed to use. Empty = every active skin
     # is allowed. Managed by a platform manager; the store owner picks one of
@@ -99,6 +121,12 @@ class Project(TimeStampedModel):
     @property
     def is_live(self):
         return self.status == self.Status.ACTIVE
+
+    @property
+    def public_url(self):
+        """The store's own live site, or ``None`` if it has no domain yet."""
+        host = (self.primary_domain or "").strip()
+        return f"https://{host}/" if host else None
 
     def feature_enabled(self, key, default=False):
         return bool(self.feature_flags.get(key, default))

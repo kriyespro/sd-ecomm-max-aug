@@ -50,6 +50,7 @@ def _landing_context():
         "popular_code": popular_code,
         "stats": _landing_stats(),
         "skins": _landing_skins(),
+        "live_stores": _landing_live_stores(),
         "now_year": timezone.now().year,
     }
 
@@ -75,6 +76,23 @@ def _skin_count():
         return Skin.objects.filter(is_active=True).count() or len(_BUILTIN_SKINS)
     except Exception:  # noqa: BLE001
         return len(_BUILTIN_SKINS)
+
+
+def _landing_live_stores(limit=12):
+    try:
+        from apps.projects.models import Project
+
+        return list(
+            Project.objects.filter(
+                showcase_status=Project.ShowcaseStatus.APPROVED,
+                status=Project.Status.ACTIVE,
+            )
+            .exclude(primary_domain__isnull=True)
+            .exclude(primary_domain="")
+            .order_by("-showcase_reviewed_at")[:limit]
+        )
+    except Exception:  # noqa: BLE001 — the landing page must never 500 over this
+        return []
 
 
 def _landing_skins():

@@ -319,6 +319,34 @@
   <div class="pt-28"></div>
   {% endif %}
 
+  {# ================= LIVE STORES ================= #}
+  {% if live_stores %}
+  <section id="live-stores" class="mx-auto max-w-5xl px-5 py-20">
+    <div class="reveal mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Live stores</h2>
+      <p class="mt-4 text-slate-600">Real stores built on the platform, live right now.</p>
+    </div>
+    <div class="mt-14 grid gap-6 sm:grid-cols-2">
+      {% for store in live_stores %}
+      <a href="{{ store.public_url }}" target="_blank" rel="noopener"
+         class="reveal group flex items-center gap-4 rounded-2xl border border-slate-200 p-5 transition hover:-translate-y-1 hover:border-brand-300 hover:shadow-lg hover:shadow-slate-200/60">
+        {% if store.logo %}
+        <img src="{{ store.logo.url }}" alt="" class="h-12 w-12 shrink-0 rounded-xl object-cover ring-1 ring-slate-200">
+        {% else %}
+        <div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 text-white">
+          <span class="h-5 w-5">{{ icon('globe') }}</span>
+        </div>
+        {% endif %}
+        <div class="min-w-0">
+          <h3 class="truncate font-600 text-slate-900">{{ store.name }}</h3>
+          <p class="truncate text-sm text-slate-500">{{ store.primary_domain }}</p>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
   {# ================= FEATURES ================= #}
   <section id="features" class="mx-auto max-w-6xl px-5 py-20">
     <div class="reveal mx-auto max-w-2xl text-center">
