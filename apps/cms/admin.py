@@ -34,8 +34,8 @@ class BannerAdmin(admin.ModelAdmin):
 
 @admin.register(UGCVideo)
 class UGCVideoAdmin(admin.ModelAdmin):
-    list_display = ["caption", "project", "source", "priority", "is_active", "added_by"]
-    list_filter = ["project", "source", "is_active"]
+    list_display = ["caption", "project", "priority", "is_active", "added_by"]
+    list_filter = ["project", "is_active"]
 
 
 @admin.register(FAQ)

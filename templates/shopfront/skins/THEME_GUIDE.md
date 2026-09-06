@@ -99,10 +99,8 @@ outside the contract below is unavailable and will fail validation.
 > `font_body`, `font_heading`, `custom_css`, `menu` (`[{label, url, children:[…]}]`),
 > `footer_links` (`[{title, url}]`), `announcement` (`{text, url}` or none),
 > `hero` (`{heading, subheading, image_url, cta_label, cta_url}` or none),
-> `shorts` (`[{embed_url, video_url, caption, link_url}]` — vertical UGC/YouTube
-> Shorts videos, `embed_url` set for a YouTube link, `video_url` for an uploaded
-> file, never both), `social` (`{instagram, facebook, …}`),
-> `tracking` (`{ga4, meta_pixel}` or empty).
+> `shorts` (`[{embed_url, caption, link_url}]` — vertical YouTube Shorts videos),
+> `social` (`{instagram, facebook, …}`), `tracking` (`{ga4, meta_pixel}` or empty).
 >
 > **`cart`** — `item_count`, `subtotal`, `currency`, `free_ship_over`,
 > `free_ship_remaining`, `items`: `[{item_id, title, url, image_url,

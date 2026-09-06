@@ -10,13 +10,9 @@
   <div class="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 lg:mx-0 lg:px-0">
     {% for v in ugc_videos %}
     <div class="relative aspect-[9/16] w-[200px] shrink-0 snap-start overflow-hidden rounded-2xl bg-black sm:w-[240px]">
-      {% if v.embed_url %}
       <iframe src="{{ v.embed_url }}" class="h-full w-full" loading="lazy" frameborder="0"
               allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen title="{{ v.caption or 'Short video' }}"></iframe>
-      {% elif v.file %}
-      <video src="{{ v.file.url }}" class="h-full w-full object-cover" controls playsinline muted loop preload="metadata"></video>
-      {% endif %}
       {% if v.caption or v.link_url %}
       <div class="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-3">
         {% if v.caption %}<p class="text-xs font-medium text-white">{{ v.caption }}</p>{% endif %}

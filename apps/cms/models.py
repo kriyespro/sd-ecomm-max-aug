@@ -11,7 +11,6 @@ import re
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -171,38 +170,14 @@ class Banner(TenantScopedModel):
         return True
 
 
-def _validate_video_size(f):
-    max_bytes = UGCVideo.MAX_UPLOAD_BYTES
-    if f.size > max_bytes:
-        raise ValidationError(f"Video must be under {max_bytes // (1024 * 1024)} MB.")
-
-
-class UGCVideoSource(models.TextChoices):
-    UPLOAD = "upload", "Uploaded video"
-    YOUTUBE = "youtube", "YouTube Shorts link"
-
-
 class UGCVideo(TenantScopedModel):
-    """A short, vertical (portrait) video for the storefront's "Shorts" reel —
-    either an uploaded clip or a YouTube (Shorts) link. Owner, manager and
-    staff can all add these (plain ``ActiveProjectMixin`` scoping, same as
-    Banner — no extra role gate)."""
+    """A short, vertical (portrait) YouTube (Shorts) video for the
+    storefront's "Shorts" reel. Owner, manager and staff (and any DGC
+    managing this store) can all add these (plain ``ActiveProjectMixin``
+    scoping, same as Banner — no extra role gate)."""
 
-    MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB — short vertical clips only.
-
-    source = models.CharField(
-        max_length=10, choices=UGCVideoSource.choices, default=UGCVideoSource.YOUTUBE,
-    )
-    file = models.FileField(
-        upload_to="ugc_videos/", blank=True,
-        validators=[
-            FileExtensionValidator(["mp4", "webm", "mov", "m4v"]),
-            _validate_video_size,
-        ],
-    )
     youtube_url = models.URLField(
-        blank=True, max_length=300,
-        help_text="A YouTube Shorts (or any YouTube video) link.",
+        max_length=300, help_text="A YouTube Shorts (or any YouTube video) link.",
     )
     youtube_id = models.CharField(max_length=20, blank=True, editable=False)
     caption = models.CharField(max_length=200, blank=True)
@@ -225,16 +200,11 @@ class UGCVideo(TenantScopedModel):
         return self.caption or f"Short video #{self.pk}"
 
     def clean(self):
-        if self.source == UGCVideoSource.YOUTUBE and not self.youtube_url:
-            raise ValidationError({"youtube_url": "Enter a YouTube link."})
-        if self.source == UGCVideoSource.UPLOAD and not self.file:
-            raise ValidationError({"file": "Upload a video file."})
+        if not _extract_youtube_id(self.youtube_url):
+            raise ValidationError({"youtube_url": "Enter a valid YouTube link."})
 
     def save(self, *args, **kwargs):
-        self.youtube_id = (
-            _extract_youtube_id(self.youtube_url)
-            if self.source == UGCVideoSource.YOUTUBE else ""
-        )
+        self.youtube_id = _extract_youtube_id(self.youtube_url)
         super().save(*args, **kwargs)
 
     @property

@@ -401,24 +401,9 @@ class BannerForm(ProjectScopedForm):
 class UGCVideoForm(ProjectScopedForm):
     class Meta:
         model = UGCVideo
-        fields = ["source", "file", "youtube_url", "caption", "link_url", "priority", "is_active"]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields["file"].required = False
-        self.fields["youtube_url"].required = False
-        self.fields["source"].help_text = (
-            "Upload a short vertical clip, or paste a YouTube (Shorts) link — pick one."
-        )
-
-    def clean(self):
-        cleaned = super().clean()
-        source = cleaned.get("source")
-        if source == "youtube" and not cleaned.get("youtube_url"):
-            self.add_error("youtube_url", "Enter a YouTube link.")
-        if source == "upload" and not cleaned.get("file") and not (self.instance and self.instance.file):
-            self.add_error("file", "Upload a video file.")
-        return cleaned
+        fields = ["youtube_url", "caption", "link_url", "priority", "is_active"]
+        # Bad-URL validation lives on UGCVideo.clean() (invalid links can't
+        # yield a youtube_id) — ModelForm._post_clean() runs it automatically.
 
 
 class FAQForm(ProjectScopedForm):
