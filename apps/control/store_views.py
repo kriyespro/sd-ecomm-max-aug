@@ -76,8 +76,8 @@ class StoreCreateForm(forms.Form):
         base = subdomains.base_domain()
         if base and "subdomain" in self.fields:
             self.fields["subdomain"].help_text = (
-                f"The storefront goes live at <slug>.{base} right away. "
-                f"Auto-filled from the store name — edit if you like."
+                "Auto-filled from the store name — edit if you like. "
+                "The storefront is live here straight away."
             )
         else:
             self.fields.pop("subdomain", None)
