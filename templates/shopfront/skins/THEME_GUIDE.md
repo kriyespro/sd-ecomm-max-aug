@@ -99,7 +99,9 @@ outside the contract below is unavailable and will fail validation.
 > `font_body`, `font_heading`, `custom_css`, `menu` (`[{label, url, children:[…]}]`),
 > `footer_links` (`[{title, url}]`), `announcement` (`{text, url}` or none),
 > `hero` (`{heading, subheading, image_url, cta_label, cta_url}` or none),
-> `shorts` (`[{embed_url, caption, link_url}]` — vertical YouTube Shorts videos),
+> `shorts` (`[{embed_url, caption, link_url}]` — vertical YouTube Shorts videos;
+> give the `<iframe>` `referrerpolicy="strict-origin-when-cross-origin"` or the
+> player errors out with "Video unavailable"),
 > `social` (`{instagram, facebook, …}`), `tracking` (`{ga4, meta_pixel}` or empty).
 >
 > **`cart`** — `item_count`, `subtotal`, `currency`, `free_ship_over`,

@@ -10,7 +10,11 @@
   <div class="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 lg:mx-0 lg:px-0">
     {% for v in ugc_videos if v.embed_url %}
     <div class="relative aspect-[9/16] w-[200px] shrink-0 snap-start overflow-hidden rounded-2xl bg-black sm:w-[240px]">
+      {# referrerpolicy: send the origin to YouTube even if the page's own
+         Referrer-Policy is stricter — the player needs it to allow playback
+         (else "Video unavailable" / error 153). #}
       <iframe src="{{ v.embed_url }}" class="h-full w-full" loading="lazy" frameborder="0"
+              referrerpolicy="strict-origin-when-cross-origin"
               allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
               allowfullscreen title="{{ v.caption or 'Short video' }}"></iframe>
       {% if v.caption or v.link_url %}

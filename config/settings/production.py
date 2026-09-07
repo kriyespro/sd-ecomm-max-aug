@@ -83,6 +83,13 @@ SECURE_PROXY_SSL_HEADER = (
     else None
 )
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# Django's default here is "same-origin", which strips the Referer entirely on
+# cross-origin subresource loads. The YouTube player validates the embedding
+# site from that header — with no Referer it refuses to play ("Video
+# unavailable", player error 153) in the storefront Shorts reel. The modern
+# browser default sends just the origin (no path) cross-origin, which is enough
+# for YouTube and leaks nothing sensitive.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 SESSION_COOKIE_SECURE = HTTPS
 CSRF_COOKIE_SECURE = HTTPS
 CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", [])
