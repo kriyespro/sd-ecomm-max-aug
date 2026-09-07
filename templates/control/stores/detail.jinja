@@ -38,6 +38,41 @@
       <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Assign</button>
     </form>
     {% endif %}
+
+    {% if is_admin and subscription %}
+    <form method="post" action="{{ url('control:store_billing_adjust', kwargs={'pk': store.pk}) }}"
+          class="mt-3 flex flex-wrap items-end gap-2 border-t border-slate-100 pt-3">
+      {{ csrf_input }}
+      <label class="text-xs text-slate-500">Plan
+        <select name="plan" class="mt-1 block rounded-lg border border-slate-300 px-2 py-2 text-sm">
+          {% for p in billing_plans %}
+          <option value="{{ p.pk }}" {{ 'selected' if p.pk == subscription.plan_id }}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="text-xs text-slate-500">Period
+        <select name="period" class="mt-1 block rounded-lg border border-slate-300 px-2 py-2 text-sm">
+          {% for val, lbl in billing_periods %}
+          <option value="{{ val }}" {{ 'selected' if val == subscription.period }}>{{ lbl }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label class="flex items-center gap-1.5 text-xs text-slate-600">
+        <input type="checkbox" name="comp" {{ 'checked' if subscription.is_comp }}
+               class="h-4 w-4 rounded border-slate-300">
+        Gift (free — no invoices, never suspended)
+      </label>
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save plan</button>
+    </form>
+    <form method="post" action="{{ url('control:store_billing_mark_paid', kwargs={'pk': store.pk}) }}"
+          class="mt-2">
+      {{ csrf_input }}
+      <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        {% if open_invoice %}Mark invoice {{ open_invoice.number }} paid{% else %}Record payment / renew period{% endif %}
+      </button>
+      <span class="ml-1 text-xs text-slate-400">out-of-band payment, no charge taken</span>
+    </form>
+    {% endif %}
   </div>
 
   {# details to relay to the owner #}

@@ -151,6 +151,13 @@ class Subscription(TimeStampedModel):
     # Optional per-store price override (deal pricing). Null = use the plan price.
     override_price = models.DecimalField(**_MONEY, null=True, blank=True)
 
+    # Platform gift: no renewal invoices are issued and the store is never
+    # suspended for non-payment. Set by a super admin on the store screen.
+    is_comp = models.BooleanField(
+        default=False,
+        help_text="Gifted store — free, no invoices, never suspended.",
+    )
+
     def __str__(self):
         return f"{self.project} · {self.plan.name} ({self.period})"
 

@@ -212,6 +212,7 @@ def issue_due_invoices(within_days=3):
         status__in=[SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING],
         current_period_end__lte=cutoff,
         cancel_at_period_end=False,
+        is_comp=False,
     ).exclude(invoices__status=InvoiceStatus.OPEN)
     return [issue_invoice(s) for s in due]
 
@@ -222,11 +223,95 @@ def suspend_overdue():
     hit = []
     for inv in overdue:
         sub = inv.subscription
+        if sub.is_comp:
+            continue
         if sub.status != SubscriptionStatus.SUSPENDED:
             sub.status = SubscriptionStatus.SUSPENDED
             sub.save(update_fields=["status", "updated_at"])
             hit.append(sub)
     return hit
+
+
+# --- platform-admin overrides ---------------------------------------
+
+@transaction.atomic
+def admin_adjust(subscription, *, plan=None, period=None, comp=None, actor=None):
+    """Super-admin override of a store's subscription — no invoice, no charge.
+
+    ``comp=True`` gifts the store: free, active, no renewal invoices, never
+    suspended. ``comp=False`` ends the gift and puts it back on normal billing
+    from the next cycle.
+    """
+    fields = set()
+    if plan is not None:
+        subscription.plan = plan
+        fields.add("plan")
+    if period in (BillingPeriod.MONTHLY, BillingPeriod.YEARLY):
+        subscription.period = period
+        fields.add("period")
+
+    if comp is True:
+        subscription.is_comp = True
+        subscription.override_price = Decimal("0")
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.cancel_at_period_end = False
+        subscription.current_period_start = timezone.now()
+        subscription.current_period_end = timezone.now() + timedelta(days=3650)
+        fields.update({"is_comp", "override_price", "status",
+                       "cancel_at_period_end", "current_period_start",
+                       "current_period_end"})
+        subscription.invoices.filter(status=InvoiceStatus.OPEN).update(
+            status=InvoiceStatus.VOID
+        )
+    elif comp is False:
+        subscription.is_comp = False
+        subscription.override_price = None
+        fields.update({"is_comp", "override_price"})
+
+    if fields:
+        fields.add("updated_at")
+        subscription.save(update_fields=list(fields))
+
+    if actor is not None:
+        from apps.core.models import AuditLog
+        from apps.core.services import record_audit
+
+        record_audit(
+            actor=actor, project=subscription.project,
+            action=AuditLog.Action.UPDATE, target=subscription,
+            changes={"admin_adjust": {
+                "plan": subscription.plan.code, "period": subscription.period,
+                "comp": subscription.is_comp,
+            }},
+        )
+    return subscription
+
+
+@transaction.atomic
+def admin_mark_paid(subscription, *, actor=None):
+    """Record an out-of-band payment for a store: settle its open invoice, or
+    roll the paid period forward one cycle if there is none."""
+    inv = _open_invoice(subscription)
+    if inv is not None:
+        mark_invoice_paid(inv, provider_payment_id="manual")
+    else:
+        now = timezone.now()
+        start = max(subscription.current_period_end, now)
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.current_period_start = now
+        subscription.current_period_end = _period_end(start, subscription.period)
+        subscription.save(update_fields=["status", "current_period_start",
+                                         "current_period_end", "updated_at"])
+    if actor is not None:
+        from apps.core.models import AuditLog
+        from apps.core.services import record_audit
+
+        record_audit(
+            actor=actor, project=subscription.project,
+            action=AuditLog.Action.UPDATE, target=subscription,
+            changes={"admin_mark_paid": True},
+        )
+    return subscription
 
 
 # --- dashboards -----------------------------------------------

@@ -60,7 +60,7 @@ class StoreCreateForm(forms.Form):
     )
 
     plan = forms.ModelChoiceField(queryset=Plan.objects.filter(is_active=True).order_by("sort_order"))
-    period = forms.ChoiceField(choices=BillingPeriod.choices, initial=BillingPeriod.MONTHLY)
+    period = forms.ChoiceField(choices=BillingPeriod.choices, initial=BillingPeriod.YEARLY)
     manager = forms.ModelChoiceField(
         required=False, label="DGC / marketing partner (commission credited here)",
         queryset=User.objects.filter(profile__platform_role=PlatformRole.MANAGER, is_active=True),
@@ -72,6 +72,13 @@ class StoreCreateForm(forms.Form):
         # A Platform Manager can only sign a store up under their own name.
         if actor is not None and not is_platform_admin(actor):
             self.fields.pop("manager", None)
+
+        # Default the plan picker to "growth" (falls back to the first plan).
+        if not self.is_bound and self.fields["plan"].initial is None:
+            self.fields["plan"].initial = (
+                self.fields["plan"].queryset.filter(code="growth").first()
+                or self.fields["plan"].queryset.first()
+            )
 
         base = subdomains.base_domain()
         if base and "subdomain" in self.fields:
@@ -192,6 +199,12 @@ class StoreDetailView(_StoreScope, DetailView):
             ctx["manager_form"] = StoreManagerAssignForm(
                 initial={"manager": getattr(ctx["subscription"], "manager_id", None)}
             )
+            ctx["billing_plans"] = Plan.objects.filter(is_active=True).order_by("sort_order")
+            ctx["billing_periods"] = BillingPeriod.choices
+            ctx["open_invoice"] = (
+                ctx["subscription"].invoices.filter(status="open").first()
+                if ctx["subscription"] else None
+            )
         ctx["owner_membership"] = (
             store.memberships.filter(role=StoreRole.OWNER, is_active=True)
             .select_related("user").first()
@@ -199,6 +212,52 @@ class StoreDetailView(_StoreScope, DetailView):
         ctx["store_url"] = trusted_base_url(self.request, store)
         ctx["control_login_url"] = self.request.build_absolute_uri(reverse("control:dashboard"))
         return ctx
+
+
+class StoreBillingAdjustView(_StoreScope, View):
+    """Super-admin: change a store's plan / period, or gift it (comp)."""
+
+    def post(self, request, pk, *args, **kwargs):
+        from apps.billing import services as billing_svc
+
+        store = self.get_store(pk)
+        if not is_platform_admin(request.user):
+            raise PermissionDenied
+        sub = getattr(store, "subscription", None)
+        if sub is None:
+            messages.error(request, "This store has no subscription.")
+            return redirect("control:store_detail", pk=pk)
+
+        plan = Plan.objects.filter(pk=request.POST.get("plan"), is_active=True).first()
+        period = request.POST.get("period")
+        comp = request.POST.get("comp") == "on"
+        billing_svc.admin_adjust(
+            sub, plan=plan, period=period, comp=comp, actor=request.user,
+        )
+        messages.success(
+            request,
+            f"{store.name}: now on {sub.plan.name} ({sub.period})"
+            + (" — gifted (free)." if sub.is_comp else "."),
+        )
+        return redirect("control:store_detail", pk=pk)
+
+
+class StoreBillingMarkPaidView(_StoreScope, View):
+    """Super-admin: record an out-of-band payment (settle open invoice / renew)."""
+
+    def post(self, request, pk, *args, **kwargs):
+        from apps.billing import services as billing_svc
+
+        store = self.get_store(pk)
+        if not is_platform_admin(request.user):
+            raise PermissionDenied
+        sub = getattr(store, "subscription", None)
+        if sub is None:
+            messages.error(request, "This store has no subscription.")
+            return redirect("control:store_detail", pk=pk)
+        billing_svc.admin_mark_paid(sub, actor=request.user)
+        messages.success(request, f"{store.name}: recorded as paid — subscription active.")
+        return redirect("control:store_detail", pk=pk)
 
 
 class StoreManagerAssignView(_StoreScope, View):
