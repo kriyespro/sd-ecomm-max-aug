@@ -19,4 +19,23 @@
     <a href="{{ url('control:stores') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
   </div>
 </form>
+
+{% if base_domain %}
+<script>
+(function () {
+  var name = document.getElementById("id_name");
+  var sub = document.getElementById("id_subdomain");
+  if (!name || !sub) return;
+  var edited = false;
+  sub.addEventListener("input", function () { edited = true; });
+  function slugify(v) {
+    return (v || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-")
+      .replace(/-{2,}/g, "-").replace(/^-|-$/g, "").slice(0, {{ form.fields.subdomain.max_length }});
+  }
+  name.addEventListener("input", function () {
+    if (!edited) sub.value = slugify(name.value);
+  });
+})();
+</script>
+{% endif %}
 {% endblock %}

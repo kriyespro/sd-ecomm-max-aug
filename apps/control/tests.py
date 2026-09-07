@@ -274,6 +274,64 @@ class StoreCreateOwnerPasswordTests(TestCase):
         self.assertFalse(get_user_model().objects.filter(email="owner@fresh.test").exists())
 
 
+@override_settings(PLATFORM_HOSTS=["mnxstore.com"], PLATFORM_BASE_DOMAIN="mnxstore.com")
+class StoreCreateSubdomainTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        self.client.force_login(self.admin)
+
+    def _payload(self, **over):
+        data = {
+            "name": "Fresh Store", "subdomain": "", "primary_domain": "",
+            "currency": "INR", "country": "IN",
+            "owner_email": "owner@fresh.test", "owner_name": "Ola Owner",
+            "plan": self.plan.pk, "period": "monthly",
+        }
+        data.update(over)
+        return data
+
+    def test_typed_subdomain_is_assigned(self):
+        resp = self.client.post("/admin/stores/new/", self._payload(subdomain="FreshPicks"))
+        self.assertEqual(resp.status_code, 302)
+        p = Project.objects.get(name="Fresh Store")
+        self.assertEqual(p.primary_domain, "freshpicks.mnxstore.com")
+        self.assertTrue(
+            Domain.objects.filter(project=p, host="freshpicks.mnxstore.com",
+                                  is_verified=True, is_primary=True).exists()
+        )
+
+    def test_blank_subdomain_falls_back_to_owner_email(self):
+        resp = self.client.post("/admin/stores/new/", self._payload())
+        self.assertEqual(resp.status_code, 302)
+        p = Project.objects.get(name="Fresh Store")
+        self.assertEqual(p.primary_domain, "owner.mnxstore.com")
+
+    def test_taken_subdomain_is_rejected(self):
+        other = Project.objects.create(name="Other")
+        Domain.objects.create(project=other, host="taken.mnxstore.com",
+                              is_verified=True, is_primary=True)
+        resp = self.client.post("/admin/stores/new/", self._payload(subdomain="taken"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "taken")
+        self.assertFalse(Project.objects.filter(name="Fresh Store").exists())
+
+    def test_custom_domain_wins_over_subdomain(self):
+        resp = self.client.post(
+            "/admin/stores/new/",
+            self._payload(subdomain="ignored", primary_domain="shop.brand.com"),
+        )
+        self.assertEqual(resp.status_code, 302)
+        p = Project.objects.get(name="Fresh Store")
+        self.assertEqual(p.primary_domain, "shop.brand.com")
+        self.assertFalse(Domain.objects.filter(project=p, host__endswith=".mnxstore.com").exists())
+
+
 class UserSetPasswordTests(TestCase):
     def setUp(self):
         User = get_user_model()

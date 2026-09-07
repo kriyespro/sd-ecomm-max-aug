@@ -42,7 +42,7 @@ def _get_or_create_staff_user(email, name="", password=None):
 def create_store(*, name, owner_email, plan, actor, request=None,
                  primary_domain="", currency="INR", country="IN",
                  owner_name="", period=BillingPeriod.MONTHLY, manager=None,
-                 owner_password=None):
+                 owner_password=None, subdomain=""):
     name = (name or "").strip()
     if not name:
         raise ValidationError("Store name is required.")
@@ -75,12 +75,20 @@ def create_store(*, name, owner_email, plan, actor, request=None,
 
     # No custom domain given -> hand the store a platform subdomain so it's
     # reachable straight away (the owner can rename it in the setup wizard).
+    # A subdomain typed on the create form wins; otherwise derive one from the
+    # owner email / store name, same as public self-signup.
     if not domain:
         try:
             from apps.projects import subdomains
 
             if subdomains.base_domain():
-                slug = subdomains.unique_slug(owner_email.split("@")[0] or name)
+                wanted = subdomains.slugify(subdomain)
+                if wanted and subdomains.is_available(wanted):
+                    slug = wanted
+                else:
+                    slug = subdomains.unique_slug(
+                        wanted or owner_email.split("@")[0] or name
+                    )
                 subdomains.assign(project, slug)
         except Exception:  # noqa: BLE001
             import logging

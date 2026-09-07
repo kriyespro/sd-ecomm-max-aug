@@ -14,6 +14,7 @@ from apps.accounts.models import PlatformRole, StoreRole
 from apps.accounts.permissions import is_platform_admin
 from apps.billing.models import BillingPeriod, Plan
 from apps.core.mixins import PlatformStaffRequiredMixin
+from apps.projects import subdomains
 from apps.projects.models import Project
 from apps.projects.services import projects_for_user
 
@@ -37,8 +38,15 @@ class _StoreScope(PlatformStaffRequiredMixin):
 
 class StoreCreateForm(forms.Form):
     name = forms.CharField(max_length=120, label="Store name")
-    primary_domain = forms.CharField(required=False, label="Primary domain",
-                                     help_text="Optional. e.g. shop.brand.com")
+    subdomain = forms.CharField(
+        required=False, label="Store web address", max_length=subdomains.MAX_LEN,
+        widget=forms.TextInput(attrs={"autocapitalize": "none", "autocomplete": "off",
+                                      "pattern": "[a-zA-Z0-9-]+", "data-subdomain": "1"}),
+    )
+    primary_domain = forms.CharField(required=False, label="Custom domain",
+                                     help_text="Optional. A domain the owner already "
+                                               "owns, e.g. shop.brand.com. Overrides "
+                                               "the web address above.")
     currency = forms.CharField(max_length=3, initial="INR")
     country = forms.CharField(max_length=2, initial="IN")
 
@@ -64,6 +72,26 @@ class StoreCreateForm(forms.Form):
         # A Platform Manager can only sign a store up under their own name.
         if actor is not None and not is_platform_admin(actor):
             self.fields.pop("manager", None)
+
+        base = subdomains.base_domain()
+        if base and "subdomain" in self.fields:
+            self.fields["subdomain"].help_text = (
+                f"The storefront goes live at <slug>.{base} right away. "
+                f"Auto-filled from the store name — edit if you like."
+            )
+        else:
+            self.fields.pop("subdomain", None)
+
+    def clean_subdomain(self):
+        raw = (self.cleaned_data.get("subdomain") or "").strip()
+        if not raw:
+            return ""
+        slug = subdomains.slugify(raw)
+        if len(slug) < 2:
+            raise forms.ValidationError("Use at least 2 letters or numbers.")
+        if not subdomains.is_available(slug):
+            raise forms.ValidationError("That address is taken — try another.")
+        return slug
 
     def clean_owner_password(self):
         pw = self.cleaned_data.get("owner_password") or ""
@@ -95,6 +123,11 @@ class StoreCreateView(_StoreScope, FormView):
         kw["actor"] = self.request.user
         return kw
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["base_domain"] = subdomains.base_domain()
+        return ctx
+
     def form_valid(self, form):
         actor = self.request.user
         manager = form.cleaned_data.get("manager")
@@ -104,6 +137,7 @@ class StoreCreateView(_StoreScope, FormView):
         try:
             project, owner, created = store_services.create_store(
                 name=form.cleaned_data["name"],
+                subdomain=form.cleaned_data.get("subdomain", ""),
                 primary_domain=form.cleaned_data["primary_domain"],
                 currency=form.cleaned_data["currency"],
                 country=form.cleaned_data["country"],
