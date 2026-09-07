@@ -227,6 +227,7 @@ def _store(request, project, ctx, theme):
         "shorts": [
             {"embed_url": v.embed_url, "caption": v.caption, "link_url": v.link_url}
             for v in ctx.get("ugc_videos", [])
+            if v.embed_url
         ],
         "social": {},
         "tracking": {},

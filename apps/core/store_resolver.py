@@ -165,7 +165,9 @@ def _build_chrome(project):
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),
         "ugc_videos": list(
-            project.ugcvideos.filter(is_active=True).order_by("priority", "id")
+            project.ugcvideos.filter(is_active=True)
+            .exclude(youtube_id="")
+            .order_by("priority", "id")
         ),
         "free_ship_over": ShippingMethod.objects.filter(
             project=project, is_active=True, free_over__isnull=False

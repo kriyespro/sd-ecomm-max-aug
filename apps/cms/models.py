@@ -20,7 +20,8 @@ from apps.core.html import sanitize_html
 from apps.core.models import SeoFieldsModel, TenantScopedModel, TimeStampedModel
 
 _YOUTUBE_ID_RE = re.compile(
-    r"(?:youtube(?:-nocookie)?\.com/(?:shorts/|watch\?v=|embed/)|youtu\.be/)([A-Za-z0-9_-]{11})"
+    r"(?:youtube(?:-nocookie)?\.com/(?:shorts/|live/|embed/|watch\?(?:\S*&)?v=)"
+    r"|youtu\.be/)([A-Za-z0-9_-]{11})"
 )
 
 
