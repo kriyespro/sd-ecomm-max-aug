@@ -15,10 +15,11 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from apps.accounts.models import PartnerApplication, PlatformRole, StoreRole
-from apps.accounts.permissions import assert_store_role
+from apps.accounts.permissions import assert_store_role, is_platform_admin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.projects.models import Project
+from apps.projects.services import projects_for_user
 
 User = get_user_model()
 
@@ -35,30 +36,46 @@ _DASHBOARD_STATS_CACHE_KEY = "control:dashboard_stats"
 _DASHBOARD_STATS_TTL = 25
 
 
-def dashboard_stats():
-    cached = cache.get(_DASHBOARD_STATS_CACHE_KEY)
+def dashboard_stats(user):
+    """Platform-wide counts for a platform admin; scoped to the caller's own
+    stores otherwise (a DGC/store user must never see another tenant's
+    numbers)."""
+    admin = is_platform_admin(user)
+    cache_key = _DASHBOARD_STATS_CACHE_KEY if admin else f"{_DASHBOARD_STATS_CACHE_KEY}:{user.pk}"
+    cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
     now = timezone.now()
     today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if admin:
+        user_qs = User.objects.all()
+        projects = Project.objects.all()
+    else:
+        projects = projects_for_user(user)
+        user_qs = User.objects.filter(
+            memberships__project__in=projects, memberships__is_active=True
+        ).distinct()
     stats = {
-        "total_users": User.objects.count(),
-        "signups_today": User.objects.filter(date_joined__gte=today).count(),
-        "active_users_7d": User.objects.filter(last_login__gte=now - timedelta(days=7)).count(),
-        "total_projects": Project.objects.count(),
-        "active_projects": Project.objects.filter(status=Project.Status.ACTIVE).count(),
+        "total_users": user_qs.count(),
+        "signups_today": user_qs.filter(date_joined__gte=today).count(),
+        "active_users_7d": user_qs.filter(last_login__gte=now - timedelta(days=7)).count(),
+        "total_projects": projects.count(),
+        "active_projects": projects.filter(status=Project.Status.ACTIVE).count(),
         # Revenue wiring lands with the orders app (Phase 5).
         "revenue_today": 0,
     }
-    cache.set(_DASHBOARD_STATS_CACHE_KEY, stats, _DASHBOARD_STATS_TTL)
+    cache.set(cache_key, stats, _DASHBOARD_STATS_TTL)
     return stats
 
 
-def recent_activity(limit=20):
-    return (
-        AuditLog.objects.select_related("actor", "project").all()[:limit]
-    )
+def recent_activity(user, limit=20):
+    """Audit rows visible to ``user`` — every store for a platform admin,
+    only their own store(s) otherwise."""
+    qs = AuditLog.objects.select_related("actor", "project")
+    if not is_platform_admin(user):
+        qs = qs.filter(project__in=projects_for_user(user))
+    return qs[:limit]
 
 
 # --- User manager -----------------------------------------------------

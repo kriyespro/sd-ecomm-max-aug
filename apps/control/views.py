@@ -42,8 +42,8 @@ class DashboardView(ControlAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["stats"] = services.dashboard_stats()
-        ctx["activity"] = services.recent_activity()
+        ctx["stats"] = services.dashboard_stats(self.request.user)
+        ctx["activity"] = services.recent_activity(self.request.user)
         return ctx
 
 
@@ -76,7 +76,7 @@ class StatsCardsView(ControlAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["stats"] = services.dashboard_stats()
+        ctx["stats"] = services.dashboard_stats(self.request.user)
         return ctx
 
 
@@ -87,7 +87,7 @@ class ActivityFeedView(ControlAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["activity"] = services.recent_activity()
+        ctx["activity"] = services.recent_activity(self.request.user)
         return ctx
 
 
