@@ -106,6 +106,8 @@ class Project(TimeStampedModel):
         return self.name
 
     def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
         if not self.slug:
             base = slugify(self.name)[:130] or "store"
             slug = base
@@ -116,6 +118,9 @@ class Project(TimeStampedModel):
             self.slug = slug
         if self.primary_domain:
             self.primary_domain = self.primary_domain.lower().strip()
+        # favicon is intentionally left untouched — WebP favicon support is
+        # inconsistent across browsers, unlike the ImageField uploads below.
+        shrink_image_field(self.logo, target_kb=40, max_edge=512)
         super().save(*args, **kwargs)
 
     @property

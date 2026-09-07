@@ -39,6 +39,8 @@ class Category(TenantScopedModel, SeoFieldsModel):
         return self.path
 
     def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
         if not self.slug:
             base = slugify(self.name)[:150] or "category"
             slug = base
@@ -48,6 +50,9 @@ class Category(TenantScopedModel, SeoFieldsModel):
                 slug = f"{base}-{i}"
                 i += 1
             self.slug = slug
+        shrink_image_field(self.image, target_kb=120, max_edge=1200)
+        shrink_image_field(self.banner, target_kb=170, max_edge=1920)
+        shrink_image_field(self.icon, target_kb=20, max_edge=256)
         super().save(*args, **kwargs)
 
     @property

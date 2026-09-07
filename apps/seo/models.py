@@ -25,6 +25,12 @@ class SeoSettings(TenantScopedModel):
         verbose_name = "SEO settings"
         verbose_name_plural = "SEO settings"
 
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.default_og_image, target_kb=150, max_edge=1200)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"SEO<{self.project_id}>"
 
@@ -47,6 +53,12 @@ class SeoMeta(TenantScopedModel):
         constraints = [
             models.UniqueConstraint(fields=["project", "path"], name="uniq_seometa_path"),
         ]
+
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.og_image, target_kb=150, max_edge=1200)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.path

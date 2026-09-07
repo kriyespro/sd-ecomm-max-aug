@@ -38,6 +38,12 @@ class Profile(TimeStampedModel):
     )
     is_banned = models.BooleanField(default=False)
 
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.avatar, target_kb=40, max_edge=512)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"Profile<{self.user}>"
 

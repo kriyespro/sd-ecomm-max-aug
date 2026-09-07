@@ -74,8 +74,11 @@ class Brand(TenantScopedModel):
         return self.name
 
     def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
         if not self.slug:
             self.slug = _unique_slug(Brand, self.project, self.name, instance_pk=self.pk)
+        shrink_image_field(self.logo, target_kb=40, max_edge=512)
         super().save(*args, **kwargs)
 
 

@@ -365,6 +365,12 @@ class Skin(TimeStampedModel):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.preview_image, target_kb=80, max_edge=800)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.label
 
@@ -407,6 +413,13 @@ class SkinAsset(TimeStampedModel):
             models.UniqueConstraint(fields=["skin", "path"], name="uniq_skinasset_path"),
         ]
         ordering = ["path"]
+
+    # No auto-shrink here: _skin_asset_path() derives the storage name from
+    # instance.path (not the filename passed to .save()), so re-saving under
+    # a different extension (as shrink_image_field always does — .webp) would
+    # collide with the existing path and land WebP bytes under a randomised
+    # name that still ends in the original extension — a broken content type.
+    # Asset bundles are expected to arrive pre-optimized from the theme author.
 
     def __str__(self):
         return f"{self.skin.slug}:{self.path}"
