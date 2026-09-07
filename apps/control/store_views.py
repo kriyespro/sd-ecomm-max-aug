@@ -255,8 +255,16 @@ class StoreBillingMarkPaidView(_StoreScope, View):
         if sub is None:
             messages.error(request, "This store has no subscription.")
             return redirect("control:store_detail", pk=pk)
-        billing_svc.admin_mark_paid(sub, actor=request.user)
-        messages.success(request, f"{store.name}: recorded as paid — subscription active.")
+        term = request.POST.get("term") or None
+        if term not in (BillingPeriod.MONTHLY, BillingPeriod.YEARLY):
+            term = None
+        billing_svc.admin_mark_paid(sub, term=term, actor=request.user)
+        sub.refresh_from_db()
+        messages.success(
+            request,
+            f"{store.name}: recorded as paid — active until "
+            f"{sub.current_period_end:%d %b %Y}.",
+        )
         return redirect("control:store_detail", pk=pk)
 
 

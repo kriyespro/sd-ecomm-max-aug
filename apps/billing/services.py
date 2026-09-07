@@ -288,20 +288,47 @@ def admin_adjust(subscription, *, plan=None, period=None, comp=None, actor=None)
 
 
 @transaction.atomic
-def admin_mark_paid(subscription, *, actor=None):
-    """Record an out-of-band payment for a store: settle its open invoice, or
-    roll the paid period forward one cycle if there is none."""
-    inv = _open_invoice(subscription)
-    if inv is not None:
+def admin_mark_paid(subscription, *, term=None, actor=None):
+    """Record an out-of-band payment for a store.
+
+    ``term`` = ``"monthly"`` / ``"yearly"`` bills that whole term from today
+    (voiding any open invoice first) — use it to log "paid 1 year". A paid
+    invoice is written so DGC commission still accrues. ``term=None`` just
+    settles the existing open invoice, or rolls one cycle of the current
+    period forward when there is none.
+    """
+    cfg = BillingSettings.load()
+    now = timezone.now()
+
+    if term in (BillingPeriod.MONTHLY, BillingPeriod.YEARLY):
+        subscription.invoices.filter(status=InvoiceStatus.OPEN).update(
+            status=InvoiceStatus.VOID
+        )
+        if subscription.period != term:
+            subscription.period = term
+            subscription.save(update_fields=["period", "updated_at"])
+        inv = Invoice.objects.create(
+            subscription=subscription,
+            number=_next_invoice_number(cfg.invoice_prefix),
+            period_start=now, period_end=_period_end(now, term),
+            description=f"{subscription.plan.name} — "
+                        f"{subscription.get_period_display()} (recorded manually)",
+            amount=subscription.current_price(), currency=cfg.currency,
+            due_at=now,
+        )
         mark_invoice_paid(inv, provider_payment_id="manual")
     else:
-        now = timezone.now()
-        start = max(subscription.current_period_end, now)
-        subscription.status = SubscriptionStatus.ACTIVE
-        subscription.current_period_start = now
-        subscription.current_period_end = _period_end(start, subscription.period)
-        subscription.save(update_fields=["status", "current_period_start",
-                                         "current_period_end", "updated_at"])
+        inv = _open_invoice(subscription)
+        if inv is not None:
+            mark_invoice_paid(inv, provider_payment_id="manual")
+        else:
+            start = max(subscription.current_period_end, now)
+            subscription.status = SubscriptionStatus.ACTIVE
+            subscription.current_period_start = now
+            subscription.current_period_end = _period_end(start, subscription.period)
+            subscription.save(update_fields=["status", "current_period_start",
+                                             "current_period_end", "updated_at"])
+
     if actor is not None:
         from apps.core.models import AuditLog
         from apps.core.services import record_audit
@@ -309,7 +336,7 @@ def admin_mark_paid(subscription, *, actor=None):
         record_audit(
             actor=actor, project=subscription.project,
             action=AuditLog.Action.UPDATE, target=subscription,
-            changes={"admin_mark_paid": True},
+            changes={"admin_mark_paid": term or "current"},
         )
     return subscription
 

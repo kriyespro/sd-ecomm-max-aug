@@ -85,6 +85,20 @@ class AdminAdjustTests(TestCase):
         self.assertEqual(self.sub.status, SubscriptionStatus.ACTIVE)
         self.assertEqual(self.sub.invoices.get().status, InvoiceStatus.PAID)
 
+    def test_mark_paid_one_year_bills_full_term(self):
+        billing_svc.admin_adjust(self.sub, plan=self.growth, period=BillingPeriod.MONTHLY)
+        billing_svc.issue_invoice(self.sub)  # a stale open monthly invoice
+
+        billing_svc.admin_mark_paid(self.sub, term=BillingPeriod.YEARLY)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.period, BillingPeriod.YEARLY)
+        self.assertEqual(self.sub.status, SubscriptionStatus.ACTIVE)
+        span = (self.sub.current_period_end - timezone.now()).days
+        self.assertGreater(span, 350)
+        paid = self.sub.invoices.filter(status=InvoiceStatus.PAID).get()
+        self.assertEqual(paid.amount, self.growth.price_yearly)
+        self.assertFalse(self.sub.invoices.filter(status=InvoiceStatus.OPEN).exists())
+
 
 @override_settings(PLATFORM_HOSTS=["shopinaday.com"], PLATFORM_BASE_DOMAIN="shopinaday.com")
 class StoreCreateDefaultsTests(TestCase):
@@ -124,3 +138,15 @@ class StoreCreateDefaultsTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         p.subscription.refresh_from_db()
         self.assertTrue(p.subscription.is_comp)
+
+    def test_admin_can_mark_paid_one_year_from_store_screen(self):
+        p = Project.objects.create(name="Yearly Co")
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/mark-paid/", {"term": "yearly"}
+        )
+        self.assertEqual(resp.status_code, 302)
+        sub = p.subscription
+        sub.refresh_from_db()
+        self.assertEqual(sub.period, BillingPeriod.YEARLY)
+        self.assertEqual(sub.status, SubscriptionStatus.ACTIVE)
+        self.assertGreater((sub.current_period_end - timezone.now()).days, 350)

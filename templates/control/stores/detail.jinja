@@ -65,12 +65,17 @@
       <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save plan</button>
     </form>
     <form method="post" action="{{ url('control:store_billing_mark_paid', kwargs={'pk': store.pk}) }}"
-          class="mt-2">
+          class="mt-2 flex flex-wrap items-center gap-2">
       {{ csrf_input }}
+      <select name="term" class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        <option value="">{% if open_invoice %}Settle invoice {{ open_invoice.number }}{% else %}Current period{% endif %}</option>
+        <option value="monthly">Paid — 1 month</option>
+        <option value="yearly" selected>Paid — 1 year</option>
+      </select>
       <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-        {% if open_invoice %}Mark invoice {{ open_invoice.number }} paid{% else %}Record payment / renew period{% endif %}
+        Record payment
       </button>
-      <span class="ml-1 text-xs text-slate-400">out-of-band payment, no charge taken</span>
+      <span class="text-xs text-slate-400">out-of-band, no charge taken; a paid invoice is written so commission accrues</span>
     </form>
     {% endif %}
   </div>
