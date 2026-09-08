@@ -68,15 +68,18 @@ class HomeView(View):
         featured = _rail(base.filter(is_featured=True))
         new_arrivals = _rail(base.filter(is_new_arrival=True))
 
-        # tile grid: up to 6 active categories that have a live product, each
-        # with one representative image
-        tiles = []
+        # tile grid: active categories with a live product, each with one
+        # representative image. ``home_row`` buckets each into the below-hero
+        # row (default), the above-hero row, both, or neither.
+        tiles = []          # below the hero — used by every skin
+        tiles_top = []      # above the hero — Botanica 3.0
         for cat in (
             Category.objects.filter(
                 project=project, is_active=True,
                 products__status="active", products__search_indexed=True,
             )
-            .distinct().order_by("order", "name")[:8]
+            .exclude(home_row="none")
+            .distinct().order_by("order", "name")[:16]
         ):
             # The category's own image wins; otherwise borrow a product photo;
             # the skin falls back to a sized placeholder when neither exists.
@@ -92,7 +95,12 @@ class HomeView(View):
                     .first()
                 )
                 tile_img = pi.image.url if pi else None
-            tiles.append({"category": cat, "image": tile_img})
+            tile = {"category": cat, "image": tile_img}
+            if cat.home_row in ("below", "both"):
+                tiles.append(tile)
+            if cat.home_row in ("top", "both"):
+                tiles_top.append(tile)
+        tiles, tiles_top = tiles[:8], tiles_top[:8]
 
         testimonials = list(
             Review.objects.filter(project=project, status=ReviewStatus.APPROVED)
@@ -103,7 +111,7 @@ class HomeView(View):
         ctx = base_context(
             request, project,
             featured=featured, new_arrivals=new_arrivals,
-            cat_tiles=tiles, testimonials=testimonials,
+            cat_tiles=tiles, cat_tiles_top=tiles_top, testimonials=testimonials,
         )
         return render(request, "shopfront/home.jinja", ctx)
 

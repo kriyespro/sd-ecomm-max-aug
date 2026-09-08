@@ -26,6 +26,18 @@ class Category(TenantScopedModel, SeoFieldsModel):
     is_featured = models.BooleanField(default=False)
     order = models.PositiveIntegerField(default=0)
 
+    class HomeRow(models.TextChoices):
+        BELOW = "below", "In the row below the hero"
+        TOP = "top", "In the row above the hero"
+        BOTH = "both", "Both rows"
+        NONE = "none", "Not on the home page"
+
+    home_row = models.CharField(
+        max_length=10, choices=HomeRow.choices, default=HomeRow.BELOW,
+        help_text="Where this category tile shows in the home-page category "
+                  "rows (the top row needs a skin that supports it, e.g. Botanica 3.0).",
+    )
+
     class Meta:
         verbose_name_plural = "categories"
         ordering = ["order", "name"]

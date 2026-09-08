@@ -71,11 +71,14 @@ class CategoryForm(ProjectScopedForm):
         fields = [
             "parent", "name", "slug", "description",
             "image", "banner", "icon",
-            "is_active", "is_featured", "order",
+            "is_active", "is_featured", "order", "home_row",
             "seo_title", "seo_description", "seo_keywords",
         ]
         help_texts = {"slug": "Leave blank to auto-generate from the name."}
-        widgets = {"slug": forms.TextInput(attrs={"placeholder": "auto from name"})}
+        widgets = {
+            "slug": forms.TextInput(attrs={"placeholder": "auto from name"}),
+            "home_row": forms.Select(attrs={"class": TEXT}),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

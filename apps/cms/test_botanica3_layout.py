@@ -100,6 +100,41 @@ class Botanica3LayoutRenderTests(TestCase):
         self.assertEqual(body.count("Oils"), body.count("Oils"))  # both rows list it
         self.assertGreaterEqual(body.count(">Oils<"), 2)
 
+    def test_category_home_row_controls_which_row_a_tile_shows_in(self):
+        from apps.categories.models import Category
+        from apps.catalog.models import Product
+
+        def cat_with_product(name, home_row):
+            c = Category.objects.create(project=self.project, name=name,
+                                        is_active=True, home_row=home_row)
+            Product.objects.create(project=self.project, title=f"{name} item",
+                                   category=c, status="active", search_indexed=True,
+                                   price=Decimal("10"))
+            return c
+
+        cat_with_product("TopOnly", "top")
+        cat_with_product("Hidden", "none")
+        cat_with_product("BothRows", "both")
+
+        body = self._get().content.decode()
+        self.assertIn("Browse the shop", body)
+        self.assertIn("Shop by category", body)
+
+        # the two category rows, each bounded to its own <section>
+        top = body[body.index("Browse the shop"):body.index("Shop by category")]
+        b_start = body.index("Shop by category")
+        below = body[b_start:body.index("Best sellers", b_start)]
+
+        def tile(name):  # a category *tile* renders the name in a <p>
+            return f">{name}</p>"
+
+        self.assertIn(tile("TopOnly"), top)
+        self.assertNotIn(tile("TopOnly"), below)
+        self.assertIn(tile("BothRows"), top)
+        self.assertIn(tile("BothRows"), below)
+        self.assertNotIn(tile("Hidden"), top)
+        self.assertNotIn(tile("Hidden"), below)
+
     def test_second_promo_banner_moves_below_instagram(self):
         _banner(self.project, name="p1", placement="promo", priority=1, heading="PROMO ONE")
         _banner(self.project, name="p2", placement="promo", priority=2, heading="PROMO TWO")

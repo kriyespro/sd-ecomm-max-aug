@@ -16,15 +16,16 @@
   ('Clean formulas',   'No nasties, ever'),
 ] %}
 
-{% macro category_row(heading='Shop by category') %}
-{% if cat_tiles %}
+{% macro category_row(heading='Shop by category', tiles=none) %}
+{% set rows = tiles if tiles is not none else cat_tiles %}
+{% if rows %}
 <section class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
   <div class="mb-8 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="font-display text-2xl sm:text-3xl">{{ heading }}</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
   <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8">
-    {% for t in cat_tiles[:8] %}
+    {% for t in rows[:8] %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center">
       <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
         <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
@@ -56,8 +57,12 @@
 </section>
 {% endmacro %}
 
-{# ============ CATEGORY — optional row ABOVE the hero ============ #}
-{% if category_above_hero %}{{ category_row('Browse the shop') }}{% endif %}
+{# ============ CATEGORY — row ABOVE the hero ============ #}
+{# Shows when the Theme toggle is on, or whenever a category is set to the
+   top row. Uses the top-row categories if any, else all of them. #}
+{% if category_above_hero or cat_tiles_top %}
+{{ category_row('Browse the shop', cat_tiles_top or cat_tiles) }}
+{% endif %}
 
 {# ============ HERO — slider (all live hero banners); height cut ~30% ============ #}
 {% set slides = hero_slides %}
