@@ -250,23 +250,19 @@ class PaymentProviderForm(ProjectScopedForm):
     pack/unpack them here. ``config`` is unused by any provider today — dropped
     from the form entirely (model keeps its ``{}`` default)."""
 
-    # Razorpay is the only gateway with a real integration; its three keys.
-    _CRED_FIELDS = ("key_id", "key_secret", "webhook_secret")
+    # Razorpay's only two store-owner-facing keys. ``webhook_secret`` (if a
+    # store ever needs one) is left in the ``credentials`` blob untouched.
+    _CRED_FIELDS = ("key_id", "key_secret")
 
     key_id = forms.CharField(
         required=False, label="Key ID",
         widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false"}),
-        help_text="Razorpay: the Key ID from Settings → API Keys (starts with rzp_).",
+        help_text="Razorpay: Key ID from Settings → API Keys (starts with rzp_).",
     )
     key_secret = forms.CharField(
         required=False, label="Key secret", strip=False,
         widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password"}),
-        help_text="Shown once by Razorpay when you generate the key.",
-    )
-    webhook_secret = forms.CharField(
-        required=False, label="Webhook secret", strip=False,
-        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password"}),
-        help_text="Optional. Set the same value in the Razorpay webhook config.",
+        help_text="Shown once by Razorpay when you generate the key pair.",
     )
 
     class Meta:

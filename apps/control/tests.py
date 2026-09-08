@@ -489,7 +489,6 @@ class PaymentProviderFormTests(TestCase):
             "provider": "razorpay", "display_name": "Razorpay",
             "priority": "100", "is_test_mode": "on",
             "key_id": "rzp_test_abc", "key_secret": "s3cr3t",
-            "webhook_secret": "whsec",
         }
         data.update(extra)
         return self.client.post("/admin/payments/providers/new/", data)
@@ -499,7 +498,7 @@ class PaymentProviderFormTests(TestCase):
         fields = set(PaymentProviderForm.base_fields)
         self.assertIn("key_id", fields)
         self.assertIn("key_secret", fields)
-        self.assertIn("webhook_secret", fields)
+        self.assertNotIn("webhook_secret", fields)
         self.assertNotIn("credentials", fields)
         self.assertNotIn("config", fields)
 
@@ -508,10 +507,24 @@ class PaymentProviderFormTests(TestCase):
         resp = self._post()
         self.assertEqual(resp.status_code, 302)
         cfg = PaymentProviderConfig.objects.get(project=self.project, provider="razorpay")
-        self.assertEqual(cfg.credentials, {
-            "key_id": "rzp_test_abc", "key_secret": "s3cr3t", "webhook_secret": "whsec",
-        })
+        self.assertEqual(cfg.credentials, {"key_id": "rzp_test_abc", "key_secret": "s3cr3t"})
         self.assertEqual(cfg.config, {})
+
+    def test_existing_webhook_secret_is_preserved(self):
+        from apps.payments.models import PaymentProviderConfig
+        cfg = PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay",
+            credentials={"key_id": "old", "key_secret": "old", "webhook_secret": "keep"},
+        )
+        resp = self.client.post(f"/admin/payments/providers/{cfg.pk}/", {
+            "provider": "razorpay", "display_name": "Razorpay", "priority": "100",
+            "is_test_mode": "on", "key_id": "new_id", "key_secret": "new_secret",
+        })
+        self.assertEqual(resp.status_code, 302)
+        cfg.refresh_from_db()
+        self.assertEqual(cfg.credentials, {
+            "key_id": "new_id", "key_secret": "new_secret", "webhook_secret": "keep",
+        })
 
     def test_duplicate_provider_is_a_form_error_not_500(self):
         from apps.payments.models import PaymentProviderConfig
@@ -532,7 +545,7 @@ class PaymentProviderFormTests(TestCase):
         from apps.payments.models import PaymentProviderConfig
         cfg = PaymentProviderConfig.objects.create(
             project=self.project, provider="razorpay",
-            credentials={"key_id": "rzp_live_x", "key_secret": "s", "webhook_secret": "w"},
+            credentials={"key_id": "rzp_live_x", "key_secret": "s"},
         )
         resp = self.client.get(f"/admin/payments/providers/{cfg.pk}/")
         self.assertEqual(resp.status_code, 200)
