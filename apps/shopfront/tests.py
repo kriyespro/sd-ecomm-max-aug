@@ -206,18 +206,20 @@ class CheckoutRazorpayTests(TestCase):
                                 unit_price=self.product.price)
         return cart
 
-    def test_providers_helper_lists_razorpay_and_cod_not_manual(self):
+    def test_providers_helper_orders_razorpay_before_cod_and_drops_manual(self):
         from apps.shopfront.views import _checkout_payment_providers
-        keys = {p["key"] for p in _checkout_payment_providers(self.project)}
-        self.assertIn("razorpay", keys)
-        self.assertIn("cod", keys)
+        keys = [p["key"] for p in _checkout_payment_providers(self.project)]
+        self.assertEqual(keys, ["razorpay", "cod"])
         self.assertNotIn("manual", keys)
 
-    def test_checkout_page_offers_razorpay(self):
+    def test_checkout_page_offers_razorpay_first_with_branding(self):
         self._add_to_cart()
         resp = self.client.get("/checkout/", HTTP_HOST="pay.shop.test")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'value="razorpay"')
+        self.assertContains(resp, "Pay with Razorpay")
+        body = resp.content.decode()
+        self.assertLess(body.index('value="razorpay"'), body.index('value="cod"'))
 
     def test_razorpay_checkout_renders_pay_page_and_places_order(self):
         from apps.orders.models import Order

@@ -404,6 +404,8 @@ def _checkout_payment_providers(project):
         if cfg.provider == "manual":
             continue
         out.append({"key": cfg.provider, "label": cfg.label})
+    # Online gateways first, Cash on delivery last.
+    out.sort(key=lambda p: p["key"] == "cod")
     return out
 
 

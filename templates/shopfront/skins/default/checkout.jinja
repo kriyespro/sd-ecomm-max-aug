@@ -40,10 +40,19 @@
         <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Payment</h2>
         <div class="space-y-2">
           {% for p in payment_providers %}
-          <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
+          <label class="flex flex-wrap items-center gap-x-3 gap-y-1 border px-4 py-3 text-sm {{ 'border-accent bg-accent/5' if loop.first else 'border-line' }}">
             <input type="radio" name="payment_method" value="{{ p.key }}" {{ 'checked' if loop.first }}
                    hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
-            {% if p.key == 'cod' %}Cash on delivery{% elif p.key == 'razorpay' %}Card / UPI / Netbanking{% else %}{{ p.label }}{% endif %}
+            {% if p.key == 'razorpay' %}
+            <span class="flex items-center gap-1.5 font-semibold" style="color:#072654">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" aria-hidden="true">
+                <path fill="#3395FF" d="M13.6 2 5 15.7h5.3L7.4 22 19 8.4h-6.2z"/>
+              </svg>
+              Pay with Razorpay
+            </span>
+            <span class="text-xs text-mute">Card · UPI · Netbanking · Wallet</span>
+            {% elif p.key == 'cod' %}Cash on delivery
+            {% else %}{{ p.label }}{% endif %}
           </label>
           {% else %}
           <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
