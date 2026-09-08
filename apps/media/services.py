@@ -35,8 +35,16 @@ def shrink_image_field(field_file, *, target_kb, max_edge, marker=".sd"):
         logger.warning("shrink_image_field: cannot read %s: %s", name, exc)
         return
     finally:
+        # Leave the field's file the way we found it. A freshly-assigned upload
+        # (``_committed`` is False) is re-read by Django's ``FileField.pre_save``
+        # right after this — closing it there raises "I/O operation on closed
+        # file" and 500s the save. Only release a file that's already committed
+        # to storage; for an unsaved upload just rewind it.
         try:
-            field_file.close()
+            if getattr(field_file, "_committed", True):
+                field_file.close()
+            else:
+                field_file.seek(0)
         except Exception:  # noqa: BLE001
             pass
     try:

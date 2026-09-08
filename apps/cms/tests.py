@@ -1,7 +1,7 @@
 import io
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 
 from apps.cms.models import Banner, StoreProfile
 from apps.projects.models import Project
@@ -96,3 +96,19 @@ class SkinTailwindHelpersTests(TestCase):
             )
             self.assertIn("skin_css_href(skin_slug)", text, base.parent.name)
             self.assertRegex(text, r"--accent: \{\{ \(accent or '#[0-9a-fA-F]+'\)")
+
+
+@override_settings(ALLOWED_HOSTS=['*'])
+class SitemapRobotsUnknownHostTests(TestCase):
+    """Bots hit /sitemap.xml and /robots.txt on hosts that resolve to no
+    store (a bare IP, an unconfigured domain). request.project is then a lazy
+    object wrapping None; the views must treat that as 'no store', not 500."""
+
+    def test_sitemap_on_unknown_host_is_404_not_500(self):
+        resp = self.client.get('/sitemap.xml', HTTP_HOST='no-such-store.example')
+        self.assertEqual(resp.status_code, 404)
+
+    def test_robots_on_unknown_host_is_200_without_sitemap_line(self):
+        resp = self.client.get('/robots.txt', HTTP_HOST='no-such-store.example')
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn(b'Sitemap:', resp.content)

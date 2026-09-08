@@ -37,7 +37,9 @@ class SubscriptionGateMiddleware:
             request, "storefront_host", False
         )
         if gated and not request.path.startswith(_EXEMPT_PREFIXES):
-            project = getattr(request, "project", None)
+            # request.project is a lazy object that may wrap None (unknown Host);
+            # ``or None`` forces it so ``.status`` below can't hit None.
+            project = getattr(request, "project", None) or None
             if project is not None:
                 if project.status == "archived":
                     return HttpResponse(_ARCHIVED_HTML, status=410,

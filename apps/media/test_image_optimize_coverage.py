@@ -27,6 +27,15 @@ def _png(width=2000, height=500):
     return buf.getvalue()
 
 
+def _small_jpeg(width=48, height=48):
+    """A tiny JPEG (web format, no alpha) that process() reports as 'skipped'."""
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (width, height), (180, 140, 87)).save(buf, format="JPEG", quality=70)
+    return buf.getvalue()
+
+
 class ImageOptimizeCoverageTests(TestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Optimize Co", status="active")
@@ -87,3 +96,20 @@ class ImageOptimizeCoverageTests(TestCase):
         meta.og_image.save("og2.png", SimpleUploadedFile("og2.png", raw), save=False)
         meta.save()
         self.assertTrue(meta.og_image.name.endswith(".sd.webp"))
+
+    def test_small_already_optimized_upload_saves_without_closed_file_error(self):
+        """Regression: shrink_image_field closed the uploaded file in its
+        ``finally`` block. On the 'already small, skip re-encode' path it then
+        returned without re-saving, so Django's FileField.pre_save re-read a
+        closed file -> 'I/O operation on closed file' -> 500 on every
+        category/brand/budget-band create with a small JPEG/WebP image."""
+        raw = _small_jpeg()
+        cat = Category(project=self.project, name="Tiny Icon")
+        # Assign an uncommitted upload straight onto the field, exactly as a
+        # ModelForm does (``_committed`` is False) — not via ``field.save()``.
+        cat.icon = SimpleUploadedFile("icon.jpg", raw, content_type="image/jpeg")
+        cat.save()  # must not raise ValueError: I/O operation on closed file
+        cat.refresh_from_db()
+        self.assertTrue(cat.icon.name)
+        self.assertFalse(cat.icon.name.endswith(".sd.webp"))  # skip path taken
+        self.assertEqual(cat.icon.size, len(raw))  # stored untouched

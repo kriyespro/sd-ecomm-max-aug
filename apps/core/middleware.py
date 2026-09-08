@@ -120,7 +120,10 @@ def trusted_base_url(request, project=None) -> str:
     scheme = "https" if request.is_secure() else "http"
     req_host = normalize_host(request.get_host())
 
-    project = project or getattr(request, "project", None)
+    # ``request.project`` is a lazy object that can wrap None; the trailing
+    # ``or None`` forces it and collapses that case so the DB query below is
+    # never handed a None-valued lazy (which raises deep in the ORM).
+    project = (project or getattr(request, "project", None)) or None
     host = ""
     if project is not None:
         host = normalize_host(getattr(project, "primary_domain", "") or "")

@@ -18,8 +18,11 @@ from .models import Page
 
 
 def _project_or_404(request):
-    project = getattr(request, "project", None)
-    return project
+    # ``request.project`` is a SimpleLazyObject; an unresolved Host header (bots
+    # hitting a bare IP, /sitemap.xml on an unknown domain) leaves it wrapping
+    # ``None``. ``or None`` forces evaluation and collapses that to a real None
+    # so the callers' ``is None`` guards actually fire.
+    return getattr(request, "project", None) or None
 
 
 class StoreConfigView(View):
