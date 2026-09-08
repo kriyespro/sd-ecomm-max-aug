@@ -9,7 +9,7 @@ import os
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
-from django.http import Http404, JsonResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 from django.views import View
@@ -21,13 +21,21 @@ from django.views.generic import (
     UpdateView,
 )
 
+from apps.catalog import importer as product_importer
 from apps.catalog.models import Brand, Product, ProductImage, ProductType, Tag
 from apps.categories.models import Category
 from apps.core.events import Events, emit
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
-from .forms import BrandForm, CategoryForm, ProductForm, ProductTypeForm, TagForm
+from .forms import (
+    BrandForm,
+    CategoryForm,
+    ProductForm,
+    ProductImportForm,
+    ProductTypeForm,
+    TagForm,
+)
 from .mixins import ActiveProjectMixin
 
 
@@ -272,6 +280,93 @@ class _ProductSizeColorMixin:
                 matrix=matrix_from_post(post),
             )
         return response
+
+
+class ProductImportSampleView(ActiveProjectMixin, View):
+    """Download a ready-to-fill sample CSV."""
+
+    def get(self, request, *args, **kwargs):
+        resp = HttpResponse(product_importer.sample_csv(), content_type="text/csv")
+        resp["Content-Disposition"] = 'attachment; filename="product-import-sample.csv"'
+        return resp
+
+
+class ProductImportView(ActiveProjectMixin, View):
+    template_name = "control/catalog/product_import.jinja"
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name, {
+            "form": ProductImportForm(),
+            "active_project": self.active_project,
+            "headers": product_importer.TEMPLATE_HEADERS,
+        })
+
+    def post(self, request, *args, **kwargs):
+        from apps.billing import limits
+
+        form = ProductImportForm(request.POST, request.FILES)
+        ctx = {
+            "form": form, "active_project": self.active_project,
+            "headers": product_importer.TEMPLATE_HEADERS,
+        }
+        if not form.is_valid():
+            return render(request, self.template_name, ctx)
+
+        upload = form.cleaned_data["file"]
+        try:
+            rows = product_importer.read_table(upload, upload.name)
+            result = product_importer.run_import(
+                self.active_project, rows, actor=request.user,
+                default_status=form.cleaned_data["default_status"],
+            )
+        except product_importer.ProductImportError as exc:
+            messages.error(request, str(exc))
+            return render(request, self.template_name, ctx)
+
+        try:
+            limits.check_can_add_product(self.active_project)
+        except Exception:  # noqa: BLE001 — over the plan cap: report, don't 500
+            messages.warning(
+                request,
+                "You are at or over your plan's product limit — some imported "
+                "products may be hidden until you upgrade.",
+            )
+
+        record_audit(
+            actor=request.user, project=self.active_project,
+            action=AuditLog.Action.CREATE, target=self.active_project,
+            changes={"product_import": {
+                "created": result.created, "updated": result.updated,
+                "errors": len(result.errors),
+            }}, request=request,
+        )
+        if result.ok_rows:
+            emit(Events.PRODUCT_UPDATED, project=self.active_project,
+                 payload={"bulk": True, "count": result.ok_rows})
+
+        parts = []
+        if result.created:
+            parts.append(f"{result.created} created")
+        if result.updated:
+            parts.append(f"{result.updated} updated")
+        if result.images_attached:
+            parts.append(f"{result.images_attached} images attached")
+        if parts:
+            messages.success(request, "Import done — " + ", ".join(parts) + ".")
+        if result.missing_images:
+            messages.warning(
+                request,
+                "Not found in Media, skipped: "
+                + ", ".join(sorted(result.missing_images)[:12])
+                + ". Upload them under Catalog → Media, then re-run.",
+            )
+        if result.errors:
+            ctx["errors"] = result.errors
+            ctx["result"] = result
+            return render(request, self.template_name, ctx)
+        if not parts:
+            messages.info(request, "Nothing to import — the file had no usable rows.")
+        return redirect("control:product_list")
 
 
 class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):

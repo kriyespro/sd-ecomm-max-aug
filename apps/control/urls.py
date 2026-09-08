@@ -98,6 +98,8 @@ urlpatterns = [
 
     # Products
     path("products/", cat.ProductListView.as_view(), name="product_list"),
+    path("products/import/", cat.ProductImportView.as_view(), name="product_import"),
+    path("products/import/sample.csv", cat.ProductImportSampleView.as_view(), name="product_import_sample"),
     path("products/new/", cat.ProductCreateView.as_view(), name="product_create"),
     path("products/<int:pk>/", cat.ProductUpdateView.as_view(), name="product_edit"),
     path("products/<int:pk>/delete/", cat.ProductDeleteView.as_view(), name="product_delete"),

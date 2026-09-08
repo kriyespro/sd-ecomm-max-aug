@@ -5,6 +5,7 @@ Jinja2==3.1.6
 python-dotenv==1.2.3
 Pillow==12.3.0
 nh3==0.3.7  # HTML sanitiser (Ammonia bindings) for staff-authored rich text
+openpyxl==3.1.5  # read .xlsx for the bulk product import (CSV works without it)
 
 # DRF OpenAPI schema generation (/api/v1/schema/)
 inflection==0.5.1

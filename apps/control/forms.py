@@ -725,3 +725,27 @@ class MediaUploadForm(forms.Form):
     folder = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))
     alt = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))
     title = forms.CharField(required=False, widget=forms.TextInput(attrs={"class": TEXT}))
+
+
+class ProductImportForm(forms.Form):
+    file = forms.FileField(
+        label="CSV or Excel file",
+        help_text="A .csv (also from Google Sheets: File → Download → CSV) or .xlsx file.",
+        widget=forms.ClearableFileInput(attrs={"accept": ".csv,.xlsx,.xlsm,text/csv"}),
+    )
+    default_status = forms.ChoiceField(
+        label="Status for new products",
+        choices=[("draft", "Draft — review before publishing"),
+                 ("active", "Active — publish immediately")],
+        initial="draft",
+        widget=forms.Select(attrs={"class": TEXT}),
+    )
+
+    def clean_file(self):
+        f = self.cleaned_data["file"]
+        name = (f.name or "").lower()
+        if not name.endswith((".csv", ".xlsx", ".xlsm", ".tsv", ".txt")):
+            raise forms.ValidationError("Upload a .csv or .xlsx file.")
+        if f.size and f.size > 10 * 1024 * 1024:
+            raise forms.ValidationError("File is larger than 10 MB.")
+        return f

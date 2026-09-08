@@ -29,6 +29,7 @@
         <option value="active" {{ 'selected' if status == 'active' }}>Active</option>
         <option value="archived" {{ 'selected' if status == 'archived' }}>Archived</option>
       </select>
+      <a href="{{ url('control:product_import') }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Import</a>
       <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
     </div>
   </div>

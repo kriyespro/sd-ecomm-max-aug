@@ -33,6 +33,8 @@ _SECTIONS = [
     ]),
     ("catalog", "Catalog", "\U0001f4e6", [
         ("product_list", "Products", "\U0001f4e6"),
+        ("product_import", "Import products", "\U0001f4e5"),
+        ("media", "Media", "\U0001f5c4"),
         ("category_list", "Categories", "\U0001f5c2"),
         ("brand_list", "Brands", "\U0001f3f7"),
         ("inventory_list", "Inventory", "\U0001f4ca"),
@@ -51,7 +53,6 @@ _SECTIONS = [
         ("cms_menus", "Menus", "\U0001f9ed"),
         ("cms_theme", "Theme", "\U0001f3a8"),
         ("seo_settings", "SEO", "\U0001f50d"),
-        ("media", "Media", "\U0001f5c4"),
         ("skin_upload", "Skin upload", "⬆️"),
     ]),
     ("insights", "Insights", "\U0001f4c8", [

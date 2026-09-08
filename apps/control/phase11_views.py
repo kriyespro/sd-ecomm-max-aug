@@ -261,19 +261,30 @@ class MediaLibraryView(ActiveProjectMixin, ListView):
 
 class MediaUploadView(ActiveProjectMixin, View):
     def post(self, request, *args, **kwargs):
-        form = MediaUploadForm(request.POST, request.FILES)
-        if not form.is_valid():
-            messages.error(request, "Choose a file to upload.")
+        files = request.FILES.getlist("files") or request.FILES.getlist("file")
+        if not files:
+            messages.error(request, "Choose at least one file to upload.")
             return redirect("control:media")
-        try:
-            media_svc.store_upload(
-                project=self.active_project, upload=form.cleaned_data["file"],
-                uploaded_by=request.user, folder=form.cleaned_data.get("folder", ""),
-                alt=form.cleaned_data.get("alt", ""), title=form.cleaned_data.get("title", ""),
-            )
-            messages.success(request, "Uploaded.")
-        except media_svc.MediaError as exc:
-            messages.error(request, str(exc))
+
+        folder = (request.POST.get("folder") or "").strip()
+        alt = (request.POST.get("alt") or "").strip()
+        title = (request.POST.get("title") or "").strip()
+
+        ok, failed = 0, []
+        for f in files:
+            try:
+                media_svc.store_upload(
+                    project=self.active_project, upload=f, uploaded_by=request.user,
+                    folder=folder, alt=alt, title=title,
+                )
+                ok += 1
+            except media_svc.MediaError as exc:
+                failed.append(f"{f.name}: {exc}")
+
+        if ok:
+            messages.success(request, f"Uploaded {ok} file(s).")
+        for msg in failed[:8]:
+            messages.error(request, msg)
         return redirect("control:media")
 
 

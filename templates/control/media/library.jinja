@@ -1,14 +1,26 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
 {% block page_title %}Media{% endblock %}
 
 {% block content %}
 <div class="space-y-4">
   <form method="post" action="{{ url('control:media_upload') }}" enctype="multipart/form-data"
-        class="flex flex-wrap items-end gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+        class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
     {{ csrf_input }}
-    {{ render_form(form) }}
-    <button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
+    <div>
+      <label class="block text-sm font-medium text-slate-700">Upload images</label>
+      <input type="file" name="files" multiple accept="image/*,application/pdf"
+             class="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200">
+      <p class="mt-1 text-xs text-slate-400">Select many files at once — hold ⌘/Ctrl or Shift, or drag a folder in. Bulk-upload product photos here, then reference their file names in the product import sheet.</p>
+    </div>
+    <div class="flex flex-wrap items-end gap-3">
+      <label class="text-xs text-slate-500">Folder
+        <input name="folder" class="mt-1 block w-40 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </label>
+      <label class="text-xs text-slate-500">Alt text (optional)
+        <input name="alt" class="mt-1 block w-56 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </label>
+      <button class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Upload</button>
+    </div>
   </form>
 
   <form method="get" class="flex items-center gap-2">
