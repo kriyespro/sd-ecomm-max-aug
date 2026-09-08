@@ -81,8 +81,19 @@
 
       <nav class="hidden items-center gap-8 text-[13px] font-medium lg:flex">
         <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop All</a>
-        {% for c in categories[:5] %}
-        <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="hover:text-accent">{{ c.name }}</a>
+        {% for it in primary_nav %}
+        {% if it.children %}
+        <div class="relative group">
+          <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="hover:text-accent">{{ it.label }}</a>
+          <div class="invisible absolute left-0 top-full z-40 min-w-44 rounded-lg border border-line bg-paper p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
+            {% for c in it.children %}
+            <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block rounded px-2 py-1.5 hover:bg-panel hover:text-accent">{{ c.label }}</a>
+            {% endfor %}
+          </div>
+        </div>
+        {% else %}
+        <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="hover:text-accent">{{ it.label }}</a>
+        {% endif %}
         {% endfor %}
       </nav>
 
@@ -123,8 +134,11 @@
     <nav class="absolute left-0 top-0 h-full w-72 bg-panel p-6" x-transition:enter-start="-translate-x-full" x-transition:enter="transition duration-300">
       <button @click="menuOpen=false" class="mb-6 text-mute">✕</button>
       <a href="{{ url('shopfront:shop') }}" class="block py-2 text-sm font-medium">Shop All</a>
-      {% for c in categories %}
-      <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="block py-2 text-sm">{{ c.name }}</a>
+      {% for it in primary_nav %}
+      <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-2 text-sm">{{ it.label }}</a>
+      {% for c in it.children %}
+      <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-1.5 pl-4 text-sm text-mute">{{ c.label }}</a>
+      {% endfor %}
       {% endfor %}
       <a href="{{ url('shopfront:account') }}" class="mt-4 block border-t border-line py-3 text-sm">Account</a>
     </nav>

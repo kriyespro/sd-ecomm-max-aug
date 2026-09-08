@@ -206,6 +206,11 @@ def _store(request, project, ctx, theme):
         "font_heading": (theme.font_heading if theme else ""),
         "custom_css": _CSS_STRIP.sub("", (theme.custom_css if theme else "") or ""),
         "menu": [
+            {"label": m["label"], "url": m["url"],
+             "children": [{"label": c["label"], "url": c["url"]}
+                          for c in m.get("children", [])]}
+            for m in ctx.get("primary_nav", [])
+        ] or [
             {"label": c.name,
              "url": reverse("shopfront:shop") + f"?category={c.slug}",
              "children": []}

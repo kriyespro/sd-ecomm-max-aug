@@ -109,12 +109,51 @@ def store_chrome(project):
     return val
 
 
+def _serialize_menu_items(menu):
+    """The active MAIN menu as a nested list of plain dicts (URL-resolution is
+    deferred to request time in ``apps.shopfront.context``). ``None`` when the
+    store has no usable main menu — the storefront then falls back to
+    categories."""
+    if menu is None:
+        return None
+    items = list(menu.items.all())  # prefetched: is_active, ordered
+    by_parent = {}
+    for it in items:
+        by_parent.setdefault(it.parent_id, []).append(it)
+
+    def node(it):
+        d = {"label": it.label, "link_type": it.link_type,
+             "url": it.url or "", "slug": "", "new_tab": it.open_in_new_tab,
+             "children": [node(c) for c in by_parent.get(it.id, [])]}
+        if it.link_type == "page" and it.page_id:
+            d["slug"] = it.page.slug
+        elif it.link_type == "category" and it.category_id:
+            d["slug"] = it.category.slug
+        return d
+
+    top = [node(it) for it in by_parent.get(None, [])]
+    return top or None
+
+
 def _build_chrome(project):
-    from django.db.models import Min
+    from django.db.models import Min, Prefetch
 
     from apps.categories.models import Category
-    from apps.cms.models import Page, StoreProfile, ThemeSettings
+    from apps.cms.models import Menu, MenuItem, Page, StoreProfile, ThemeSettings
     from apps.shipping.models import ShippingMethod
+
+    main_menu = (
+        Menu.objects.filter(project=project, location="main", is_active=True)
+        .prefetch_related(
+            Prefetch(
+                "items",
+                queryset=MenuItem.objects.filter(is_active=True)
+                .select_related("page", "category")
+                .order_by("order", "id"),
+            )
+        )
+        .first()
+    )
 
     theme = (
         ThemeSettings.objects.filter(project=project)
@@ -151,6 +190,7 @@ def _build_chrome(project):
         "categories": list(
             Category.objects.filter(project=project, is_active=True)[:10]
         ),
+        "main_menu": _serialize_menu_items(main_menu),
         "footer_pages": [
             p
             for p in Page.objects.filter(project=project).only(

@@ -8,8 +8,45 @@ from decimal import Decimal
 
 from django.http import Http404
 
+from django.urls import reverse
+
 from apps.cart import services as cart_svc
 from apps.core.store_resolver import store_chrome
+
+
+def _menu_href(node):
+    """Resolve a serialized main-menu node (see
+    ``apps.core.store_resolver._serialize_menu_items``) to a storefront URL."""
+    lt = node.get("link_type")
+    slug = node.get("slug")
+    if lt == "page" and slug:
+        return reverse("shopfront:page", kwargs={"slug": slug})
+    if lt == "category" and slug:
+        return f"{reverse('shopfront:shop')}?category={slug}"
+    return node.get("url") or "#"
+
+
+def _nav_node(node):
+    return {
+        "label": node["label"],
+        "url": _menu_href(node),
+        "new_tab": node.get("new_tab", False),
+        "children": [_nav_node(c) for c in node.get("children", [])],
+    }
+
+
+def primary_nav(chrome):
+    """The storefront's main menu: the store's active MAIN CMS menu when it has
+    items, otherwise its active categories (keeps existing stores unchanged)."""
+    menu = (chrome or {}).get("main_menu")
+    if menu:
+        return [_nav_node(n) for n in menu]
+    shop = reverse("shopfront:shop")
+    return [
+        {"label": c.name, "url": f"{shop}?category={c.slug}",
+         "new_tab": False, "children": []}
+        for c in (chrome or {}).get("categories", [])[:8]
+    ]
 
 
 def current_project(request):
@@ -64,6 +101,7 @@ def base_context(request, project, **extra):
         "store_profile": chrome["profile"],
         "store_logo": chrome["store_logo"],
         "categories": chrome["categories"],
+        "primary_nav": primary_nav(chrome),
         "footer_pages": chrome["footer_pages"],
         "store_is_demo": chrome.get("demo", False),
         "cart": cart,

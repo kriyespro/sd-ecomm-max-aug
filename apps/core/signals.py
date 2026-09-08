@@ -7,7 +7,16 @@ from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
 from apps.categories.models import Category
-from apps.cms.models import Banner, Page, Skin, StoreProfile, ThemeSettings, UGCVideo
+from apps.cms.models import (
+    Banner,
+    Menu,
+    MenuItem,
+    Page,
+    Skin,
+    StoreProfile,
+    ThemeSettings,
+    UGCVideo,
+)
 from apps.projects.models import Domain, Project
 from apps.shipping.models import ShippingMethod
 
@@ -41,6 +50,8 @@ def _bust_on_theme(sender, instance, **kwargs):
 @receiver(post_delete, sender=Page, dispatch_uid="core_bust_page_delete")
 @receiver(post_save, sender=Banner, dispatch_uid="core_bust_banner_save")
 @receiver(post_delete, sender=Banner, dispatch_uid="core_bust_banner_delete")
+@receiver(post_save, sender=Menu, dispatch_uid="core_bust_menu_save")
+@receiver(post_delete, sender=Menu, dispatch_uid="core_bust_menu_delete")
 @receiver(post_save, sender=UGCVideo, dispatch_uid="core_bust_ugcvideo_save")
 @receiver(post_delete, sender=UGCVideo, dispatch_uid="core_bust_ugcvideo_delete")
 @receiver(post_save, sender=ShippingMethod, dispatch_uid="core_bust_ship_save")
@@ -59,6 +70,14 @@ def _bust_on_skin(sender, instance, **kwargs):
     # let the rest lapse.
     if instance.project_id:
         bust_project_skin(instance.project_id)
+
+
+@receiver(post_save, sender=MenuItem, dispatch_uid="core_bust_menuitem_save")
+@receiver(post_delete, sender=MenuItem, dispatch_uid="core_bust_menuitem_delete")
+def _bust_chrome_on_menuitem(sender, instance, **kwargs):
+    menu = getattr(instance, "menu", None)
+    if menu is not None and menu.project_id:
+        bust_project_chrome(menu.project_id)
 
 
 @receiver(m2m_changed, sender=Project.allowed_skins.through,

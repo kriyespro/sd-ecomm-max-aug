@@ -287,10 +287,13 @@ class MenuItem(TimeStampedModel):
         return self.label
 
     def resolved_url(self):
+        # Storefront-relative (served at "/" on a store's own domain). The
+        # rendered nav resolves these through reverse() — see
+        # apps.shopfront.context._menu_href — this is the admin-preview value.
         if self.link_type == MenuLinkType.PAGE and self.page_id:
-            return f"/{self.page.slug}/"
+            return f"/page/{self.page.slug}/"
         if self.link_type == MenuLinkType.CATEGORY and self.category_id:
-            return f"/category/{self.category.slug}/"
+            return f"/shop/?category={self.category.slug}"
         return self.url
 
 
