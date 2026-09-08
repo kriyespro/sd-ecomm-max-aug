@@ -16,12 +16,12 @@
   ('Clean formulas',   'No nasties, ever'),
 ] %}
 
-{% macro category_row(heading='Shop by category', tiles=none) %}
+{% macro category_row(heading='Shop by category', tiles=none, pad='py-6') %}
 {% set rows = tiles if tiles is not none else cat_tiles %}
 {% if rows %}
-<section class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
+<section class="mx-auto max-w-7xl px-5 {{ pad }} lg:px-8">
   {% if show_category_headings %}
-  <div class="mb-8 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+  <div class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="font-display text-2xl sm:text-3xl">{{ heading }}</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
@@ -63,7 +63,7 @@
 {# Shows when the Theme toggle is on, or whenever a category is set to the
    top row. Uses the top-row categories if any, else all of them. #}
 {% if category_above_hero or cat_tiles_top %}
-{{ category_row('Browse the shop', cat_tiles_top or cat_tiles) }}
+{{ category_row('Browse the shop', cat_tiles_top or cat_tiles, pad='pt-2 pb-4') }}
 {% endif %}
 
 {# ============ HERO — slider (all live hero banners); height cut ~30% ============ #}
