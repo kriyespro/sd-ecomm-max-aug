@@ -126,7 +126,7 @@ PRESETS = [
 
     # Converted from kapiva-clone — Ayurveda / wellness storefront: warm cream,
     # deep forest green, gold, Fraunces + Outfit, pill buttons, radial glow.
-    ("kapiva", "Botanica",
+    ("kapiva", "Kapiva",
      "Wellness & Ayurveda — cream + forest green + gold, Fraunces over Outfit.",
      "Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Outfit:wght@400;500;600;700",
      '\'Fraunces\', \'Georgia\', \'serif\'',
