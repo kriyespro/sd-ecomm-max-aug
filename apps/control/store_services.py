@@ -8,6 +8,7 @@ from django.db import transaction
 from apps.accounts import team as team_svc
 from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.accounts.permissions import is_platform_admin
+from apps.billing import services as billing_svc
 from apps.billing.models import BillingPeriod
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
@@ -59,9 +60,11 @@ def create_store(*, name, owner_email, plan, actor, request=None,
         status=Project.Status.ACTIVE,
     )
 
-    # A trial subscription was just created by the post_save signal — point it
-    # at the chosen plan / manager.
-    sub = project.subscription
+    # The post_save signal already tried to give the new store a trial
+    # subscription, but it swallows its own errors (e.g. no public plan), so the
+    # row may not exist. Create it here with the chosen plan — never assume it's
+    # there — then apply the requested period / manager.
+    sub = billing_svc.ensure_subscription(project, plan=plan, manager=manager)
     sub.plan = plan
     sub.period = period if period in dict(BillingPeriod.choices) else BillingPeriod.MONTHLY
     sub.manager = manager

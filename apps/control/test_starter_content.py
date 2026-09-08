@@ -219,6 +219,27 @@ class CreateStoreSeedsDemoTests(TestCase):
         self.assertTrue(is_seeded(project))
         self.assertEqual(Product.objects.filter(project=project).count(), 8)
 
+    def test_create_store_survives_no_public_plan(self):
+        """The trial-subscription signal swallows its errors, so store creation
+        must not assume the row exists — it re-creates it with the chosen plan.
+        Regression: a DGC provisioning a store 500'd when no plan was public."""
+        from apps.billing.models import BillingPeriod, Plan
+        from apps.control.store_services import create_store
+
+        Plan.objects.update(is_public=False)
+        plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        actor = get_user_model().objects.create_superuser("root2", "root2@t.test", "pw")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            project, _owner, _created = create_store(
+                name="No Public Plan Store", owner_email="o@npp.test", plan=plan,
+                actor=actor, period=BillingPeriod.YEARLY,
+            )
+
+        sub = project.subscription
+        self.assertEqual(sub.plan_id, plan.pk)
+        self.assertEqual(sub.period, BillingPeriod.YEARLY)
+
 
 class PlaceholderHelperTests(TestCase):
     def test_svg_placeholder_is_a_valid_data_uri(self):
