@@ -216,6 +216,17 @@ urlpatterns = [
     path("cms/ugc-videos/new/", cmsv.UGCVideoCreateView.as_view(), name="cms_ugc_video_create"),
     path("cms/ugc-videos/<int:pk>/", cmsv.UGCVideoUpdateView.as_view(), name="cms_ugc_video_edit"),
     path("cms/ugc-videos/<int:pk>/delete/", cmsv.UGCVideoDeleteView.as_view(), name="cms_ugc_video_delete"),
+    # CMS — budget bands ("Shop by budget")
+    path("cms/budget-bands/", cmsv.BudgetBandListView.as_view(), name="cms_budget_bands"),
+    path("cms/budget-bands/new/", cmsv.BudgetBandCreateView.as_view(), name="cms_budget_band_create"),
+    path("cms/budget-bands/<int:pk>/", cmsv.BudgetBandUpdateView.as_view(), name="cms_budget_band_edit"),
+    path("cms/budget-bands/<int:pk>/delete/", cmsv.BudgetBandDeleteView.as_view(), name="cms_budget_band_delete"),
+    # CMS — Instagram feed
+    path("cms/instagram/", cmsv.InstagramListView.as_view(), name="cms_instagram"),
+    path("cms/instagram/fetch/", cmsv.InstagramFetchView.as_view(), name="cms_instagram_fetch"),
+    path("cms/instagram/new/", cmsv.InstagramCreateView.as_view(), name="cms_instagram_create"),
+    path("cms/instagram/<int:pk>/", cmsv.InstagramUpdateView.as_view(), name="cms_instagram_edit"),
+    path("cms/instagram/<int:pk>/delete/", cmsv.InstagramDeleteView.as_view(), name="cms_instagram_delete"),
     # CMS — FAQs
     path("cms/faqs/", cmsv.FAQListView.as_view(), name="cms_faqs"),
     path("cms/faqs/new/", cmsv.FAQCreateView.as_view(), name="cms_faq_create"),

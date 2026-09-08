@@ -221,6 +221,87 @@ class UGCVideo(TenantScopedModel):
         return ""
 
 
+class BudgetBand(TenantScopedModel):
+    """A "Shop by budget" tile — a price band the storefront links to as a
+    filtered listing (``/shop/?min=&max=``). Owner-managed, same shape as a
+    category tile."""
+
+    label = models.CharField(max_length=80, help_text='e.g. "Under ₹499"')
+    image = models.ImageField(upload_to="budget_bands/", blank=True)
+    min_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Lowest price in this band. Leave blank for no lower bound.",
+    )
+    max_price = models.DecimalField(
+        max_digits=12, decimal_places=2, null=True, blank=True,
+        help_text="Highest price in this band. Leave blank for no upper bound.",
+    )
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "budget band"
+
+    def __str__(self):
+        return self.label
+
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.image, target_kb=120, max_edge=900)
+        super().save(*args, **kwargs)
+
+    @property
+    def query(self):
+        parts = []
+        if self.min_price is not None:
+            parts.append(f"min={self.min_price:.0f}")
+        if self.max_price is not None:
+            parts.append(f"max={self.max_price:.0f}")
+        return "&".join(parts)
+
+
+class InstagramItem(TenantScopedModel):
+    """One image pulled from (or uploaded for) the store's Instagram feed
+    section. ``source_url`` is the public post link the image came from —
+    ``apps.cms.instagram.fetch_post_image`` populates ``image`` from its
+    ``og:image``."""
+
+    image = models.ImageField(upload_to="instagram/", blank=True)
+    source_url = models.URLField(
+        max_length=400, blank=True, help_text="The public Instagram post URL.",
+    )
+    caption = models.CharField(max_length=200, blank=True)
+    link_url = models.CharField(
+        max_length=400, blank=True,
+        help_text="Where a tap sends a shopper. Defaults to the post URL.",
+    )
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    added_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "Instagram item"
+
+    def __str__(self):
+        return self.caption or f"Instagram #{self.pk}"
+
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.image, target_kb=110, max_edge=1080)
+        super().save(*args, **kwargs)
+
+    @property
+    def href(self):
+        return self.link_url or self.source_url or ""
+
+
 class FAQ(TenantScopedModel):
     group = models.CharField(max_length=80, blank=True, help_text="Optional grouping heading.")
     question = models.CharField(max_length=300)

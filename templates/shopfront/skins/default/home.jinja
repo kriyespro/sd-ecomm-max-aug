@@ -60,7 +60,7 @@
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-8 font-display text-3xl">Shop by category</h2>
   <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
-    {% for t in cat_tiles %}
+    {% for t in cat_tiles[:6] %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group relative block aspect-[3/2] overflow-hidden bg-line/40">
       <img src="{{ t.image | media_src(900, 600, 'Category') }}" alt="{{ t.category.name }}" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
       <div class="absolute inset-0 bg-ink/25 transition-colors group-hover:bg-ink/35"></div>

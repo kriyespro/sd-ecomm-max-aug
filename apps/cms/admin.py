@@ -1,6 +1,30 @@
 from django.contrib import admin
 
-from .models import Banner, ContentBlock, FAQ, Menu, MenuItem, Page, Skin, ThemeSettings, UGCVideo
+from .models import (
+    Banner,
+    BudgetBand,
+    ContentBlock,
+    FAQ,
+    InstagramItem,
+    Menu,
+    MenuItem,
+    Page,
+    Skin,
+    ThemeSettings,
+    UGCVideo,
+)
+
+
+@admin.register(BudgetBand)
+class BudgetBandAdmin(admin.ModelAdmin):
+    list_display = ["label", "project", "min_price", "max_price", "order", "is_active"]
+    list_filter = ["project", "is_active"]
+
+
+@admin.register(InstagramItem)
+class InstagramItemAdmin(admin.ModelAdmin):
+    list_display = ["__str__", "project", "order", "is_active", "added_by"]
+    list_filter = ["project", "is_active"]
 
 
 @admin.register(Skin)

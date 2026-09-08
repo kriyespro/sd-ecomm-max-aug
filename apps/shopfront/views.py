@@ -76,7 +76,7 @@ class HomeView(View):
                 project=project, is_active=True,
                 products__status="active", products__search_indexed=True,
             )
-            .distinct().order_by("order", "name")[:6]
+            .distinct().order_by("order", "name")[:8]
         ):
             # The category's own image wins; otherwise borrow a product photo;
             # the skin falls back to a sized placeholder when neither exists.

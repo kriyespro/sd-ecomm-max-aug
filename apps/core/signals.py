@@ -9,6 +9,8 @@ from django.dispatch import receiver
 from apps.categories.models import Category
 from apps.cms.models import (
     Banner,
+    BudgetBand,
+    InstagramItem,
     Menu,
     MenuItem,
     Page,
@@ -52,6 +54,10 @@ def _bust_on_theme(sender, instance, **kwargs):
 @receiver(post_delete, sender=Banner, dispatch_uid="core_bust_banner_delete")
 @receiver(post_save, sender=Menu, dispatch_uid="core_bust_menu_save")
 @receiver(post_delete, sender=Menu, dispatch_uid="core_bust_menu_delete")
+@receiver(post_save, sender=BudgetBand, dispatch_uid="core_bust_budgetband_save")
+@receiver(post_delete, sender=BudgetBand, dispatch_uid="core_bust_budgetband_delete")
+@receiver(post_save, sender=InstagramItem, dispatch_uid="core_bust_instagram_save")
+@receiver(post_delete, sender=InstagramItem, dispatch_uid="core_bust_instagram_delete")
 @receiver(post_save, sender=UGCVideo, dispatch_uid="core_bust_ugcvideo_save")
 @receiver(post_delete, sender=UGCVideo, dispatch_uid="core_bust_ugcvideo_delete")
 @receiver(post_save, sender=ShippingMethod, dispatch_uid="core_bust_ship_save")

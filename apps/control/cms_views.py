@@ -20,7 +20,9 @@ from django.views.generic import (
 from apps.cms.models import (
     FAQ,
     Banner,
+    BudgetBand,
     ContentBlock,
+    InstagramItem,
     Menu,
     MenuItem,
     Page,
@@ -34,8 +36,11 @@ from apps.core.services import record_audit
 
 from .forms import (
     BannerForm,
+    BudgetBandForm,
     ContentBlockForm,
     FAQForm,
+    InstagramFetchForm,
+    InstagramItemForm,
     MenuForm,
     MenuItemEditForm,
     PageForm,
@@ -170,6 +175,123 @@ class UGCVideoUpdateView(_UGCVideoForm, UpdateView):
 class UGCVideoDeleteView(_ScopedDelete):
     model = UGCVideo
     success_url = reverse_lazy("control:cms_ugc_videos")
+
+
+# --- Budget bands ("Shop by budget") ------------------------------
+
+class BudgetBandListView(_ScopedList):
+    model = BudgetBand
+    template_name = "control/cms/budget_band_list.jinja"
+    context_object_name = "bands"
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("order", "id")
+
+
+class _BudgetBandForm(_ScopedForm):
+    model = BudgetBand
+    form_class = BudgetBandForm
+    template_name = "control/_object_form.jinja"
+    success_url = reverse_lazy("control:cms_budget_bands")
+
+
+class BudgetBandCreateView(_BudgetBandForm, CreateView):
+    pass
+
+
+class BudgetBandUpdateView(_BudgetBandForm, UpdateView):
+    pass
+
+
+class BudgetBandDeleteView(_ScopedDelete):
+    model = BudgetBand
+    success_url = reverse_lazy("control:cms_budget_bands")
+
+
+# --- Instagram feed --------------------------------------------
+
+class InstagramListView(_ScopedList):
+    model = InstagramItem
+    template_name = "control/cms/instagram_list.jinja"
+    context_object_name = "items"
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("order", "id")
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["fetch_form"] = InstagramFetchForm()
+        return ctx
+
+
+class _InstagramForm(_ScopedForm):
+    model = InstagramItem
+    form_class = InstagramItemForm
+    template_name = "control/_object_form.jinja"
+    success_url = reverse_lazy("control:cms_instagram")
+
+    def form_valid(self, form):
+        if not form.instance.pk:
+            form.instance.added_by = self.request.user
+        return super().form_valid(form)
+
+
+class InstagramCreateView(_InstagramForm, CreateView):
+    pass
+
+
+class InstagramUpdateView(_InstagramForm, UpdateView):
+    pass
+
+
+class InstagramDeleteView(_ScopedDelete):
+    model = InstagramItem
+    success_url = reverse_lazy("control:cms_instagram")
+
+
+class InstagramFetchView(ActiveProjectMixin, View):
+    """Pull images from pasted public Instagram post URLs."""
+
+    def post(self, request, *args, **kwargs):
+        from apps.cms import instagram as ig
+
+        form = InstagramFetchForm(request.POST)
+        if not form.is_valid():
+            messages.error(request, form.errors.get("urls", ["Bad input."])[0])
+            return redirect("control:cms_instagram")
+
+        start = (
+            InstagramItem.objects.filter(project=self.active_project)
+            .order_by("-order").values_list("order", flat=True).first()
+        ) or 0
+        added, failed = 0, []
+        for i, url in enumerate(form.cleaned_data["urls"], start=1):
+            if InstagramItem.objects.filter(
+                project=self.active_project, source_url__icontains=url.rstrip("/").rsplit("/", 1)[-1]
+            ).exists():
+                continue
+            try:
+                content, source = ig.fetch_post_image(url)
+            except ig.InstagramError as exc:
+                failed.append(f"{url} — {exc}")
+                continue
+            item = InstagramItem(
+                project=self.active_project, source_url=source,
+                order=start + i, added_by=request.user,
+            )
+            item.image.save(content.name, content, save=True)
+            added += 1
+
+        if added:
+            record_audit(actor=request.user, project=self.active_project,
+                         action=AuditLog.Action.UPDATE, target=self.active_project,
+                         changes={"instagram_fetched": added}, request=request)
+            messages.success(request, f"Pulled {added} image(s) from Instagram.")
+        for msg in failed[:8]:
+            messages.warning(request, f"Skipped: {msg}")
+        if not added and not failed:
+            messages.info(request, "Those posts are already in your feed.")
+        return redirect("control:cms_instagram")
 
 
 # --- FAQs --------------------------------------------------------

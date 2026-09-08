@@ -1,0 +1,31 @@
+<span id="result-count" hx-swap-oob="true">{{ result_count }} product{{ 's' if result_count != 1 }}</span>
+
+{% if products %}
+<div class="grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 lg:grid-cols-4">
+  {% for p in products %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+</div>
+
+{% if page_obj.has_other_pages() %}
+<div class="mt-14 flex items-center justify-center gap-4 text-sm">
+  {% if page_obj.has_previous() %}
+  <a href="?page={{ page_obj.previous_page_number() }}&category={{ active_category }}&q={{ query }}&sort={{ sort }}&min={{ price_min }}&max={{ price_max }}"
+     hx-get="{{ url('shopfront:shop') }}?page={{ page_obj.previous_page_number() }}&category={{ active_category }}&q={{ query }}&sort={{ sort }}&min={{ price_min }}&max={{ price_max }}"
+     hx-target="#grid" hx-push-url="true"
+     class="rounded-full border border-line bg-panel px-5 py-2 text-[12px] font-semibold uppercase tracking-luxe text-accent hover:border-accent">← Prev</a>
+  {% endif %}
+  <span class="text-mute">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+  {% if page_obj.has_next() %}
+  <a href="?page={{ page_obj.next_page_number() }}&category={{ active_category }}&q={{ query }}&sort={{ sort }}&min={{ price_min }}&max={{ price_max }}"
+     hx-get="{{ url('shopfront:shop') }}?page={{ page_obj.next_page_number() }}&category={{ active_category }}&q={{ query }}&sort={{ sort }}&min={{ price_min }}&max={{ price_max }}"
+     hx-target="#grid" hx-push-url="true"
+     class="rounded-full border border-line bg-panel px-5 py-2 text-[12px] font-semibold uppercase tracking-luxe text-accent hover:border-accent">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="py-24 text-center">
+  <p class="font-display text-2xl">Nothing matches those filters</p>
+  <a href="{{ url('shopfront:shop') }}" class="mt-3 inline-block text-[12px] font-semibold uppercase tracking-luxe text-accent">Clear all</a>
+</div>
+{% endif %}

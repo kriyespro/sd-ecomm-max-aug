@@ -18,7 +18,9 @@ from apps.cms.models import (
     FAQ,
     Banner,
     BannerPlacement,
+    BudgetBand,
     ContentBlock,
+    InstagramItem,
     Menu,
     MenuItem,
     Page,
@@ -404,6 +406,44 @@ class UGCVideoForm(ProjectScopedForm):
         fields = ["youtube_url", "caption", "link_url", "priority", "is_active"]
         # Bad-URL validation lives on UGCVideo.clean() (invalid links can't
         # yield a youtube_id) — ModelForm._post_clean() runs it automatically.
+
+
+class BudgetBandForm(ProjectScopedForm):
+    class Meta:
+        model = BudgetBand
+        fields = ["label", "image", "min_price", "max_price", "order", "is_active"]
+        help_texts = {
+            "min_price": "Leave blank for no lower bound (e.g. blank + 499 = “Under ₹499”).",
+            "max_price": "Leave blank for no upper bound (e.g. 5000 + blank = “₹5000 & above”).",
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        lo, hi = cleaned.get("min_price"), cleaned.get("max_price")
+        if lo is not None and hi is not None and lo > hi:
+            self.add_error("max_price", "Highest price must be above the lowest.")
+        return cleaned
+
+
+class InstagramItemForm(ProjectScopedForm):
+    class Meta:
+        model = InstagramItem
+        fields = ["image", "source_url", "caption", "link_url", "order", "is_active"]
+
+
+class InstagramFetchForm(forms.Form):
+    urls = forms.CharField(
+        label="Instagram post URLs",
+        widget=forms.Textarea(attrs={"class": TEXT, "rows": 5,
+                                     "placeholder": "https://www.instagram.com/p/XXXXXXXXXXX/\nhttps://www.instagram.com/p/YYYYYYYYYYY/"}),
+        help_text="One public post URL per line. We pull each post's image.",
+    )
+
+    def clean_urls(self):
+        lines = [u.strip() for u in (self.cleaned_data["urls"] or "").splitlines() if u.strip()]
+        if not lines:
+            raise forms.ValidationError("Paste at least one URL.")
+        return lines[:20]
 
 
 class FAQForm(ProjectScopedForm):

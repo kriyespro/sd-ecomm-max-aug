@@ -139,7 +139,15 @@ def _build_chrome(project):
     from django.db.models import Min, Prefetch
 
     from apps.categories.models import Category
-    from apps.cms.models import Menu, MenuItem, Page, StoreProfile, ThemeSettings
+    from apps.cms.models import (
+        BudgetBand,
+        InstagramItem,
+        Menu,
+        MenuItem,
+        Page,
+        StoreProfile,
+        ThemeSettings,
+    )
     from apps.shipping.models import ShippingMethod
 
     main_menu = (
@@ -191,6 +199,15 @@ def _build_chrome(project):
             Category.objects.filter(project=project, is_active=True)[:10]
         ),
         "main_menu": _serialize_menu_items(main_menu),
+        "budget_bands": list(
+            BudgetBand.objects.filter(project=project, is_active=True)
+            .order_by("order", "id")[:8]
+        ),
+        "instagram_items": list(
+            InstagramItem.objects.filter(project=project, is_active=True)
+            .exclude(image="")
+            .order_by("order", "id")[:12]
+        ),
         "footer_pages": [
             p
             for p in Page.objects.filter(project=project).only(

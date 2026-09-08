@@ -102,6 +102,8 @@ def base_context(request, project, **extra):
         "store_logo": chrome["store_logo"],
         "categories": chrome["categories"],
         "primary_nav": primary_nav(chrome),
+        "budget_bands": chrome.get("budget_bands", []),
+        "instagram_items": chrome.get("instagram_items", []),
         "footer_pages": chrome["footer_pages"],
         "store_is_demo": chrome.get("demo", False),
         "cart": cart,

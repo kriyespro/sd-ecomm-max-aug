@@ -50,6 +50,8 @@ _SECTIONS = [
         ("cms_pages", "Pages", "\U0001f4c4"),
         ("cms_banners", "Banners", "\U0001f5bc"),
         ("cms_ugc_videos", "Shorts / videos", "\U0001f3ac"),
+        ("cms_budget_bands", "Shop by budget", "\U0001f4b0"),
+        ("cms_instagram", "Instagram feed", "\U0001f4f8"),
         ("cms_menus", "Menus", "\U0001f9ed"),
         ("cms_theme", "Theme", "\U0001f3a8"),
         ("seo_settings", "SEO", "\U0001f50d"),

@@ -1,0 +1,48 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Shop by budget{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex items-center justify-between border-b border-slate-200 p-4">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Shop by budget · {{ active_project.name }}</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        Price-band tiles for the storefront home page (Botanica 3.0 shows the first 5).
+        Each links to a filtered product listing.
+      </p>
+    </div>
+    <a href="{{ url('control:cms_budget_band_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New band</a>
+  </div>
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr><th class="px-4 py-2"></th><th class="px-4 py-2">Label</th><th class="px-4 py-2">Range</th><th class="px-4 py-2">Order</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for b in bands %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2">
+          {% if b.image %}
+          <img src="{{ b.image.url }}" alt="" class="h-10 w-10 rounded object-cover ring-1 ring-slate-200">
+          {% else %}
+          <div class="grid h-10 w-10 place-items-center rounded bg-slate-100 text-slate-400">₹</div>
+          {% endif %}
+        </td>
+        <td class="px-4 py-2"><a href="{{ url('control:cms_budget_band_edit', kwargs={'pk': b.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ b.label }}</a></td>
+        <td class="px-4 py-2 text-slate-500">
+          {{ ('₹' ~ b.min_price|int) if b.min_price is not none else '₹0' }} –
+          {{ ('₹' ~ b.max_price|int) if b.max_price is not none else '∞' }}
+        </td>
+        <td class="px-4 py-2 text-slate-500">{{ b.order }}</td>
+        <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if b.is_active else 'bg-slate-200 text-slate-600' }}">{{ 'yes' if b.is_active else 'no' }}</span></td>
+        <td class="px-4 py-2 text-right">
+          <a href="{{ url('control:cms_budget_band_edit', kwargs={'pk': b.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+          <a href="{{ url('control:cms_budget_band_delete', kwargs={'pk': b.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No bands yet — add 5 like “Under ₹499”, “₹500–₹999”, …</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
