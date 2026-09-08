@@ -1,44 +1,146 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
 {% block page_title %}{{ menu.name }}{% endblock %}
 
-{% block content %}
-<div class="space-y-4">
-  <a href="{{ url('control:cms_menus') }}" class="text-sm text-slate-500 hover:underline">← Menus</a>
-  <h2 class="text-sm font-semibold text-slate-700">{{ menu.name }} <span class="text-slate-400">({{ menu.get_location_display() }})</span></h2>
+{% macro parent_picker() %}
+{% if top_items %}
+<label class="block text-xs text-slate-500">Place under
+  <select name="parent" class="mt-1 rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+    <option value="">Top level</option>
+    {% for t in top_items %}<option value="{{ t.pk }}">{{ t.label }} (dropdown)</option>{% endfor %}
+  </select>
+</label>
+{% endif %}
+{% endmacro %}
 
-  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-2">Label</th><th class="px-4 py-2">Target</th><th class="px-4 py-2">Parent</th><th class="px-4 py-2">Order</th><th class="px-4 py-2"></th></tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for it in items %}
-        <tr>
-          <td class="px-4 py-2 font-medium text-slate-800">{{ it.label }}</td>
-          <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ it.resolved_url() or "—" }}</td>
-          <td class="px-4 py-2 text-slate-500">{{ it.parent.label if it.parent else "—" }}</td>
-          <td class="px-4 py-2 text-slate-500">{{ it.order }}</td>
-          <td class="px-4 py-2 text-right">
-            <form method="post" action="{{ url('control:cms_menu_item_delete', kwargs={'pk': menu.pk, 'item_pk': it.pk}) }}" class="inline">
-              {{ csrf_input }}
-              <button class="text-red-600 hover:underline">Remove</button>
-            </form>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No items.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+{% macro move_btn(item, action, label) %}
+<form method="post" action="{{ url('control:cms_menu_item_move', kwargs={'pk': menu.pk, 'item_pk': item.pk}) }}" class="inline">
+  {{ csrf_input }}<input type="hidden" name="action" value="{{ action }}">
+  <button class="rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800" title="{{ label }}">{{ label }}</button>
+</form>
+{% endmacro %}
+
+{% macro item_row(item, is_child) %}
+<div class="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 {{ 'ml-6 border-l-2 border-slate-200' if is_child }}">
+  <span class="font-medium text-slate-800">{{ item.label }}</span>
+  <span class="font-mono text-[11px] text-slate-400">{{ item.resolved_url() or '—' }}</span>
+  {% if not item.is_active %}<span class="rounded bg-slate-200 px-1.5 text-[10px] uppercase text-slate-600">hidden</span>{% endif %}
+  {% if item.open_in_new_tab %}<span class="text-[11px] text-slate-400">↗ new tab</span>{% endif %}
+  {% if not is_child and item.child_items %}<span class="rounded bg-indigo-100 px-1.5 text-[10px] uppercase text-indigo-700">dropdown</span>{% endif %}
+
+  <span class="ml-auto flex items-center gap-0.5">
+    {{ move_btn(item, 'up', '↑') }}
+    {{ move_btn(item, 'down', '↓') }}
+    {% if is_child %}
+      {{ move_btn(item, 'outdent', '⤴ move out') }}
+    {% else %}
+      {{ move_btn(item, 'indent', '⤵ nest') }}
+    {% endif %}
+    <details class="relative">
+      <summary class="cursor-pointer list-none rounded px-1.5 py-0.5 text-xs text-slate-500 hover:bg-slate-100">Edit</summary>
+      <form method="post" action="{{ url('control:cms_menu_item_edit', kwargs={'pk': menu.pk, 'item_pk': item.pk}) }}"
+            class="absolute right-0 z-10 mt-1 w-64 space-y-2 rounded-lg border border-slate-200 bg-white p-3 shadow-lg">
+        {{ csrf_input }}
+        <label class="block text-xs text-slate-500">Label
+          <input name="label" value="{{ item.label }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+        </label>
+        <label class="block text-xs text-slate-500">URL <span class="text-slate-400">(custom links only)</span>
+          <input name="url" value="{{ item.url }}" class="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 text-sm">
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-600">
+          <input type="checkbox" name="open_in_new_tab" {{ 'checked' if item.open_in_new_tab }} class="h-4 w-4 rounded border-slate-300"> Open in a new tab
+        </label>
+        <label class="flex items-center gap-2 text-xs text-slate-600">
+          <input type="checkbox" name="is_active" {{ 'checked' if item.is_active }} class="h-4 w-4 rounded border-slate-300"> Visible
+        </label>
+        <button class="w-full rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+      </form>
+    </details>
+    <form method="post" action="{{ url('control:cms_menu_item_delete', kwargs={'pk': menu.pk, 'item_pk': item.pk}) }}" class="inline"
+          onsubmit="return confirm('Remove “{{ item.label }}”{{ ' and its dropdown items' if item.child_items and not is_child }}?');">
+      {{ csrf_input }}
+      <button class="rounded px-1.5 py-0.5 text-xs text-red-600 hover:bg-red-50">Remove</button>
+    </form>
+  </span>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-5">
+  <div>
+    <a href="{{ url('control:cms_menus') }}" class="text-xs text-slate-400 hover:underline">← Menus</a>
+    <h2 class="text-lg font-semibold text-slate-900">{{ menu.name }}
+      <span class="text-sm font-normal text-slate-400">({{ menu.get_location_display() }})</span></h2>
+    <p class="text-xs text-slate-500">Reorder with ↑ ↓. Use <strong>⤵ nest</strong> to tuck an item under the one above it — that item becomes a dropdown.</p>
   </div>
 
+  {# structure #}
+  <div class="divide-y divide-slate-100 rounded-xl bg-white ring-1 ring-slate-200">
+    {% for item in tree %}
+      {{ item_row(item, false) }}
+      {% for child in item.child_items %}
+        {{ item_row(child, true) }}
+      {% endfor %}
+    {% else %}
+      <p class="px-4 py-8 text-center text-sm text-slate-400">No items yet — add pages, categories or a link below.</p>
+    {% endfor %}
+  </div>
+
+  {# add: pages #}
+  {% if pages %}
   <form method="post" action="{{ url('control:cms_menu_item_add', kwargs={'pk': menu.pk}) }}"
-        class="max-w-lg space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    {{ csrf_input }}
-    <h3 class="text-sm font-semibold text-slate-700">Add item</h3>
-    {{ render_form(form) }}
-    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add</button>
+        class="space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}<input type="hidden" name="kind" value="pages">
+    <h3 class="text-sm font-semibold text-slate-700">Add pages</h3>
+    <div class="grid gap-1.5 sm:grid-cols-2">
+      {% for p in pages %}
+      <label class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+        <input type="checkbox" name="page_ids" value="{{ p.pk }}" class="h-4 w-4 rounded border-slate-300">
+        {{ p.title }}
+      </label>
+      {% endfor %}
+    </div>
+    {{ parent_picker() }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add selected pages</button>
+  </form>
+  {% endif %}
+
+  {# add: categories #}
+  {% if categories %}
+  <form method="post" action="{{ url('control:cms_menu_item_add', kwargs={'pk': menu.pk}) }}"
+        class="space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}<input type="hidden" name="kind" value="categories">
+    <h3 class="text-sm font-semibold text-slate-700">Add categories</h3>
+    <div class="grid gap-1.5 sm:grid-cols-2">
+      {% for c in categories %}
+      <label class="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm hover:bg-slate-50">
+        <input type="checkbox" name="category_ids" value="{{ c.pk }}" class="h-4 w-4 rounded border-slate-300">
+        {{ c.name }}
+      </label>
+      {% endfor %}
+    </div>
+    {{ parent_picker() }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add selected categories</button>
+  </form>
+  {% endif %}
+
+  {# add: custom link #}
+  <form method="post" action="{{ url('control:cms_menu_item_add', kwargs={'pk': menu.pk}) }}"
+        class="space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}<input type="hidden" name="kind" value="link">
+    <h3 class="text-sm font-semibold text-slate-700">Add a custom link</h3>
+    <div class="grid gap-3 sm:grid-cols-2">
+      <label class="block text-xs text-slate-500">Label
+        <input name="label" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="Sale">
+      </label>
+      <label class="block text-xs text-slate-500">URL
+        <input name="url" required class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm" placeholder="/shop/?sort=discount or https://…">
+      </label>
+    </div>
+    <label class="flex items-center gap-2 text-xs text-slate-600">
+      <input type="checkbox" name="open_in_new_tab" class="h-4 w-4 rounded border-slate-300"> Open in a new tab
+    </label>
+    {{ parent_picker() }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add link</button>
   </form>
 </div>
 {% endblock %}

@@ -28,6 +28,7 @@ from apps.cms.models import (
     ThemeSettings,
     UGCVideo,
 )
+from apps.categories.models import Category
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
@@ -36,7 +37,7 @@ from .forms import (
     ContentBlockForm,
     FAQForm,
     MenuForm,
-    MenuItemForm,
+    MenuItemEditForm,
     PageForm,
     StoreProfileForm,
     ThemeSettingsForm,
@@ -260,56 +261,191 @@ class MenuDeleteView(_ScopedDelete):
     success_url = reverse_lazy("control:cms_menus")
 
 
-class MenuDetailView(ActiveProjectMixin, TemplateView):
-    template_name = "control/cms/menu_detail.jinja"
-
+class _MenuScopedView(ActiveProjectMixin, View):
     def _menu(self):
         menu = get_object_or_404(Menu, pk=self.kwargs["pk"])
         if menu.project_id != self.active_project.pk:
             raise Http404
         return menu
 
+    def _item(self, menu):
+        return get_object_or_404(MenuItem, pk=self.kwargs["item_pk"], menu=menu)
+
+    def _next_order(self, menu, parent_id):
+        last = (
+            menu.items.filter(parent_id=parent_id)
+            .order_by("-order", "-id").values_list("order", flat=True).first()
+        )
+        return (last or 0) + 1
+
+
+def _renumber(menu, parent_id):
+    """Rewrite ``order`` to 1..n for one sibling group so up/down stays sane."""
+    sibs = list(menu.items.filter(parent_id=parent_id).order_by("order", "id"))
+    for i, s in enumerate(sibs, start=1):
+        if s.order != i:
+            MenuItem.objects.filter(pk=s.pk).update(order=i)
+
+
+class MenuDetailView(ActiveProjectMixin, TemplateView):
+    template_name = "control/cms/menu_detail.jinja"
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        menu = self._menu()
+        menu = get_object_or_404(Menu, pk=self.kwargs["pk"], project=self.active_project)
+
+        items = list(
+            menu.items.select_related("page", "category").order_by("order", "id")
+        )
+        by_parent = {}
+        for it in items:
+            by_parent.setdefault(it.parent_id, []).append(it)
+        for it in items:
+            it.child_items = by_parent.get(it.id, [])
+
+        used_pages = {it.page_id for it in items if it.page_id}
+        used_cats = {it.category_id for it in items if it.category_id}
+
         ctx["menu"] = menu
-        ctx["items"] = menu.items.select_related("page", "category").order_by("order", "id")
-        ctx["form"] = MenuItemForm(menu=menu)
+        ctx["tree"] = by_parent.get(None, [])
+        ctx["top_items"] = by_parent.get(None, [])
+        ctx["pages"] = [
+            p for p in Page.objects.filter(project=self.active_project)
+            .only("title", "slug", "status", "published_at", "kind")
+            if p.is_live and p.id not in used_pages
+        ]
+        ctx["categories"] = [
+            c for c in Category.objects.filter(project=self.active_project, is_active=True)
+            if c.id not in used_cats
+        ]
+        ctx["edit_form"] = MenuItemEditForm()
         return ctx
 
 
-class MenuItemCreateView(ActiveProjectMixin, View):
+class MenuQuickAddView(_MenuScopedView):
+    """Add one or more items in a single click — pages, categories or a link."""
+
     def post(self, request, *args, **kwargs):
-        menu = get_object_or_404(Menu, pk=kwargs["pk"], project=self.active_project)
-        form = MenuItemForm(request.POST, menu=menu)
-        if form.is_valid():
-            form.save()
+        menu = self._menu()
+        kind = request.POST.get("kind", "")
+        parent_id = request.POST.get("parent") or None
+        if parent_id:
+            parent = MenuItem.objects.filter(
+                pk=parent_id, menu=menu, parent__isnull=True
+            ).first()
+            parent_id = parent.pk if parent else None
+
+        added = 0
+        order = self._next_order(menu, parent_id)
+
+        if kind == "pages":
+            pages = Page.objects.filter(
+                project=self.active_project, pk__in=request.POST.getlist("page_ids"),
+            )
+            for p in pages:
+                MenuItem.objects.create(
+                    menu=menu, parent_id=parent_id, label=p.title,
+                    link_type="page", page=p, order=order,
+                )
+                order += 1
+                added += 1
+        elif kind == "categories":
+            cats = Category.objects.filter(
+                project=self.active_project, pk__in=request.POST.getlist("category_ids"),
+            )
+            for c in cats:
+                MenuItem.objects.create(
+                    menu=menu, parent_id=parent_id, label=c.name,
+                    link_type="category", category=c, order=order,
+                )
+                order += 1
+                added += 1
+        elif kind == "link":
+            label = (request.POST.get("label") or "").strip()
+            url = (request.POST.get("url") or "").strip()
+            if label and url:
+                MenuItem.objects.create(
+                    menu=menu, parent_id=parent_id, label=label,
+                    link_type="external" if url.startswith("http") else "url",
+                    url=url, open_in_new_tab=bool(request.POST.get("open_in_new_tab")),
+                    order=order,
+                )
+                added = 1
+            else:
+                messages.error(request, "A link needs both a label and a URL.")
+
+        if added:
             record_audit(actor=request.user, project=self.active_project,
                          action=AuditLog.Action.UPDATE, target=menu, request=request)
-            messages.success(request, "Menu item added.")
-        else:
-            messages.error(request, "; ".join(f"{k}: {v[0]}" for k, v in form.errors.items()))
+            messages.success(request, f"Added {added} item(s).")
         return redirect("control:cms_menu_detail", pk=menu.pk)
 
 
-class MenuItemUpdateView(ActiveProjectMixin, View):
+class MenuItemUpdateView(_MenuScopedView):
     def post(self, request, *args, **kwargs):
-        menu = get_object_or_404(Menu, pk=kwargs["pk"], project=self.active_project)
-        item = get_object_or_404(MenuItem, pk=kwargs["item_pk"], menu=menu)
-        form = MenuItemForm(request.POST, instance=item, menu=menu)
+        menu = self._menu()
+        item = self._item(menu)
+        form = MenuItemEditForm(request.POST, instance=item)
         if form.is_valid():
             form.save()
-            messages.success(request, "Menu item updated.")
+            messages.success(request, "Saved.")
         else:
             messages.error(request, "; ".join(f"{k}: {v[0]}" for k, v in form.errors.items()))
         return redirect("control:cms_menu_detail", pk=menu.pk)
 
 
-class MenuItemDeleteView(ActiveProjectMixin, View):
+class MenuItemMoveView(_MenuScopedView):
+    """Reorder / (un)nest an item — this is how a merchant builds a dropdown."""
+
     def post(self, request, *args, **kwargs):
-        menu = get_object_or_404(Menu, pk=kwargs["pk"], project=self.active_project)
+        menu = self._menu()
+        item = self._item(menu)
+        action = request.POST.get("action", "")
+
+        sibs = list(
+            menu.items.filter(parent_id=item.parent_id).order_by("order", "id")
+        )
+        idx = next((i for i, s in enumerate(sibs) if s.pk == item.pk), 0)
+
+        if action in ("up", "down"):
+            swap_with = sibs[idx - 1] if action == "up" and idx > 0 else (
+                sibs[idx + 1] if action == "down" and idx < len(sibs) - 1 else None
+            )
+            if swap_with is not None:
+                item.order, swap_with.order = swap_with.order, item.order
+                MenuItem.objects.bulk_update([item, swap_with], ["order"])
+        elif action == "indent":
+            # Nest under the sibling directly above — one level only.
+            if item.parent_id is None and idx > 0:
+                new_parent = sibs[idx - 1]
+                item.parent = new_parent
+                item.order = self._next_order(menu, new_parent.pk)
+                # its own children can't go two deep — lift them to top level
+                item.children.update(parent=None)
+                item.save(update_fields=["parent", "order", "updated_at"])
+                _renumber(menu, None)
+        elif action == "outdent":
+            if item.parent_id is not None:
+                grandparent_id = item.parent.parent_id  # always None (1 level)
+                old_parent_order = item.parent.order
+                item.parent_id = grandparent_id
+                item.save(update_fields=["parent", "updated_at"])
+                _renumber(menu, grandparent_id)
+                # drop it just after its old parent
+                MenuItem.objects.filter(pk=item.pk).update(order=old_parent_order)
+                _renumber(menu, grandparent_id)
+
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=menu, request=request)
+        return redirect("control:cms_menu_detail", pk=menu.pk)
+
+
+class MenuItemDeleteView(_MenuScopedView):
+    def post(self, request, *args, **kwargs):
+        menu = self._menu()
         MenuItem.objects.filter(pk=kwargs["item_pk"], menu=menu).delete()
-        messages.success(request, "Menu item removed.")
+        _renumber(menu, None)
+        messages.success(request, "Item removed.")
         return redirect("control:cms_menu_detail", pk=menu.pk)
 
 

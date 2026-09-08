@@ -425,38 +425,22 @@ class MenuForm(ProjectScopedForm):
         fields = ["name", "location", "is_active"]
 
 
-class MenuItemForm(forms.ModelForm):
+class MenuItemEditForm(forms.ModelForm):
+    """Slim inline edit — the link target is chosen when the item is added; here
+    the merchant just tweaks the label / URL / new-tab flag."""
+
     class Meta:
         model = MenuItem
-        fields = [
-            "label", "link_type", "url", "page", "category",
-            "parent", "open_in_new_tab", "order", "is_active",
-        ]
+        fields = ["label", "url", "open_in_new_tab", "is_active"]
+        widgets = {
+            "label": forms.TextInput(attrs={"class": TEXT}),
+            "url": forms.TextInput(attrs={"class": TEXT, "placeholder": "https://…"}),
+            "open_in_new_tab": forms.CheckboxInput(attrs={"class": CHECK}),
+            "is_active": forms.CheckboxInput(attrs={"class": CHECK}),
+        }
 
-    def __init__(self, *args, menu=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.menu = menu
-        project = menu.project
-        self.fields["page"].queryset = Page.objects.filter(project=project)
-        self.fields["category"].queryset = Category.objects.filter(project=project)
-        self.fields["parent"].queryset = MenuItem.objects.filter(menu=menu, parent__isnull=True)
-        if self.instance.pk:
-            self.fields["parent"].queryset = self.fields["parent"].queryset.exclude(pk=self.instance.pk)
-        for f in ("page", "category", "parent"):
-            self.fields[f].required = False
-        for name, field in self.fields.items():
-            widget = field.widget
-            if isinstance(widget, forms.CheckboxInput):
-                widget.attrs.setdefault("class", CHECK)
-            else:
-                widget.attrs.setdefault("class", TEXT)
-
-    def save(self, commit=True):
-        obj = super().save(commit=False)
-        obj.menu = self.menu
-        if commit:
-            obj.save()
-        return obj
+    def clean_url(self):
+        return (self.cleaned_data.get("url") or "").strip()
 
 
 class ThemeSettingsForm(ProjectScopedForm):

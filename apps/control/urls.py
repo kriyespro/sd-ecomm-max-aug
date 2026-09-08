@@ -232,8 +232,9 @@ urlpatterns = [
     path("cms/menus/<int:pk>/edit/", cmsv.MenuUpdateView.as_view(), name="cms_menu_edit"),
     path("cms/menus/<int:pk>/delete/", cmsv.MenuDeleteView.as_view(), name="cms_menu_delete"),
     path("cms/menus/<int:pk>/", cmsv.MenuDetailView.as_view(), name="cms_menu_detail"),
-    path("cms/menus/<int:pk>/items/add/", cmsv.MenuItemCreateView.as_view(), name="cms_menu_item_add"),
+    path("cms/menus/<int:pk>/items/add/", cmsv.MenuQuickAddView.as_view(), name="cms_menu_item_add"),
     path("cms/menus/<int:pk>/items/<int:item_pk>/edit/", cmsv.MenuItemUpdateView.as_view(), name="cms_menu_item_edit"),
+    path("cms/menus/<int:pk>/items/<int:item_pk>/move/", cmsv.MenuItemMoveView.as_view(), name="cms_menu_item_move"),
     path("cms/menus/<int:pk>/items/<int:item_pk>/delete/", cmsv.MenuItemDeleteView.as_view(), name="cms_menu_item_delete"),
     # CMS — theme
     path("cms/theme/", cmsv.ThemeSettingsView.as_view(), name="cms_theme"),
