@@ -12,6 +12,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, get_user_model, login, logout
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
@@ -71,30 +72,39 @@ class HomeView(View):
         # tile grid: active categories with a live product, each with one
         # representative image. ``home_row`` buckets each into the below-hero
         # row (default), the above-hero row, both, or neither.
-        tiles = []          # below the hero — used by every skin
-        tiles_top = []      # above the hero — Botanica 3.0
-        for cat in (
+        cats = list(
             Category.objects.filter(
                 project=project, is_active=True,
                 products__status="active", products__search_indexed=True,
             )
             .exclude(home_row="none")
-            .distinct().order_by("order", "name")[:16]
-        ):
-            # The category's own image wins; otherwise borrow a product photo;
-            # the skin falls back to a sized placeholder when neither exists.
+            .only("id", "name", "slug", "image", "home_row")
+            .distinct().order_by("order", "name")[:12]
+        )
+        # One query for a representative photo per image-less category, instead
+        # of one query per tile.
+        need_img = [c.id for c in cats if not c.image]
+        borrowed = {}
+        if need_img:
+            for cid, img in (
+                ProductImage.objects.filter(
+                    product__project=project, product__category_id__in=need_img,
+                    product__status="active", product__search_indexed=True,
+                )
+                .order_by("product__category_id", "-is_primary", "-product__created_at")
+                .values_list("product__category_id", "image")
+            ):
+                borrowed.setdefault(cid, img)
+
+        tiles = []          # below the hero — used by every skin
+        tiles_top = []      # above the hero — Botanica 3.0
+        for cat in cats:
             if cat.image:
                 tile_img = cat.image.url
+            elif borrowed.get(cat.id):
+                tile_img = default_storage.url(borrowed[cat.id])
             else:
-                pi = (
-                    ProductImage.objects.filter(
-                        product__project=project, product__category=cat,
-                        product__status="active", product__search_indexed=True,
-                    )
-                    .order_by("-is_primary", "-product__created_at")
-                    .first()
-                )
-                tile_img = pi.image.url if pi else None
+                tile_img = None
             tile = {"category": cat, "image": tile_img}
             if cat.home_row in ("below", "both"):
                 tiles.append(tile)

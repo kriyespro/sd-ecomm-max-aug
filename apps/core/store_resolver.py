@@ -211,7 +211,6 @@ def _build_chrome(project):
         ),
         "instagram_items": list(
             InstagramItem.objects.filter(project=project, is_active=True)
-            .exclude(image="")
             .order_by("order", "id")[:12]
         ),
         "footer_pages": [

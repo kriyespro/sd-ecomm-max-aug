@@ -26,13 +26,14 @@ _REF = "demo_content"
 
 # --- content ---------------------------------------------------------------
 
+# name, description, home_row (Botanica 3.0 category-row placement)
 CATEGORIES = [
-    ("New Arrivals", "The latest additions — restocked every week."),
-    ("Home & Living", "Considered pieces for a calmer, warmer home."),
-    ("Kitchen & Dining", "Tools and tableware made to be used every day."),
-    ("Outdoor", "Built for the balcony, the garden and the trail."),
-    ("Gifting", "Ready-to-give favourites for every occasion."),
-    ("Sale", "Last-chance pricing on a rotating edit."),
+    ("New Arrivals", "The latest additions — restocked every week.", "both"),
+    ("Home & Living", "Considered pieces for a calmer, warmer home.", "both"),
+    ("Kitchen & Dining", "Tools and tableware made to be used every day.", "both"),
+    ("Outdoor", "Built for the balcony, the garden and the trail.", "below"),
+    ("Gifting", "Ready-to-give favourites for every occasion.", "below"),
+    ("Sale", "Last-chance pricing on a rotating edit.", "below"),
 ]
 
 # title, price, sale_price, category, short description, long description,
@@ -84,6 +85,9 @@ BANNERS = [
     ("hero", "hero", "New season, warmer home",
      "Considered homeware, made to be used",
      "Shop new arrivals", "/shop/?sort=new", None),
+    ("hero2", "hero", "Made to be used",
+     "Textures and objects you will reach for every day",
+     "Shop best sellers", "/shop/?sort=rating", None),
     ("promo1", "promo", "The table edit",
      "Plates, linen and glass that go with everything",
      "Shop kitchen & dining", "/shop/?category=kitchen-dining", None),
@@ -97,6 +101,23 @@ BANNERS = [
      "Sign me up", "/shop/", None),
     ("cat-living", "category", "Home & Living",
      "A calmer, warmer home", "", "", "Home & Living"),
+]
+
+# "Shop by budget" bands (Botanica 3.0). (label, min_price, max_price)
+BUDGET_BANDS = [
+    ("Under ₹499", None, 499),
+    ("₹500 – ₹999", 500, 999),
+    ("₹1,000 – ₹1,999", 1000, 1999),
+    ("₹2,000 – ₹4,999", 2000, 4999),
+    ("₹5,000 & above", 5000, None),
+]
+
+# Instagram feed placeholders (Botanica 3.0). No images — the storefront
+# renders a sized placeholder until the owner pastes real post links.
+INSTAGRAM_CAPTIONS = [
+    "Paste an Instagram post link on the Instagram screen to replace this",
+    "Your feed shows here", "Behind the scenes", "New in", "Styled by you",
+    "Tag us to be featured",
 ]
 
 # kind -> (title, body html)
@@ -158,7 +179,15 @@ def seed_starter_content(project, *, force: bool = False) -> dict:
     ``force``). Returns the map of created PKs."""
     from apps.categories.models import Category
     from apps.catalog.models import Product
-    from apps.cms.models import Banner, Page, PublishStatus, StoreProfile, ThemeSettings
+    from apps.cms.models import (
+        Banner,
+        BudgetBand,
+        InstagramItem,
+        Page,
+        PublishStatus,
+        StoreProfile,
+        ThemeSettings,
+    )
     from apps.reviews.models import Review, ReviewStatus
     from apps.reviews.services import refresh_product_rating
 
@@ -167,13 +196,15 @@ def seed_starter_content(project, *, force: bool = False) -> dict:
 
     ref: dict[str, list[int]] = {
         "categories": [], "products": [], "banners": [], "pages": [], "reviews": [],
+        "budget_bands": [], "instagram": [],
     }
 
     cats: dict[str, Category] = {}
-    for order, (name, desc) in enumerate(CATEGORIES):
+    for order, (name, desc, home_row) in enumerate(CATEGORIES):
         cat, _ = Category.objects.get_or_create(
             project=project, name=name,
-            defaults={"description": desc, "order": order, "is_active": True},
+            defaults={"description": desc, "order": order, "is_active": True,
+                      "home_row": home_row},
         )
         cats[name] = cat
         ref["categories"].append(cat.pk)
@@ -202,6 +233,20 @@ def seed_starter_content(project, *, force: bool = False) -> dict:
             priority=90 if placement in ("hero", "announcement", "popup") else 100,
         )
         ref["banners"].append(b.pk)
+
+    for order, (label, lo, hi) in enumerate(BUDGET_BANDS):
+        band = BudgetBand.objects.create(
+            project=project, label=label, order=order, is_active=True,
+            min_price=Decimal(str(lo)) if lo is not None else None,
+            max_price=Decimal(str(hi)) if hi is not None else None,
+        )
+        ref["budget_bands"].append(band.pk)
+
+    for order, caption in enumerate(INSTAGRAM_CAPTIONS):
+        item = InstagramItem.objects.create(
+            project=project, caption=caption, order=order, is_active=True,
+        )
+        ref["instagram"].append(item.pk)
 
     for kind, title, body in PAGES:
         pg, created = Page.objects.get_or_create(
@@ -242,7 +287,7 @@ def remove_starter_content(project) -> None:
     the flag. Rows the owner added are untouched."""
     from apps.categories.models import Category
     from apps.catalog.models import Product
-    from apps.cms.models import Banner, Page
+    from apps.cms.models import Banner, BudgetBand, InstagramItem, Page
     from apps.reviews.models import Review
 
     ref = project.feature_flags.get(_REF) or {}
@@ -251,6 +296,8 @@ def remove_starter_content(project) -> None:
     Banner.objects.filter(project=project, pk__in=ref.get("banners", [])).delete()
     Page.objects.filter(project=project, pk__in=ref.get("pages", [])).delete()
     Category.objects.filter(project=project, pk__in=ref.get("categories", [])).delete()
+    BudgetBand.objects.filter(project=project, pk__in=ref.get("budget_bands", [])).delete()
+    InstagramItem.objects.filter(project=project, pk__in=ref.get("instagram", [])).delete()
 
     project.feature_flags.pop(_FLAG, None)
     project.feature_flags.pop(_REF, None)

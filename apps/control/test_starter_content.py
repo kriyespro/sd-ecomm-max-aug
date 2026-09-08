@@ -32,15 +32,21 @@ class SeedStarterContentTests(TestCase):
         p = _project()
         ref = seed_starter_content(p)
 
+        from apps.cms.models import BudgetBand, InstagramItem
+
         self.assertEqual(Category.objects.filter(project=p).count(), 6)
         self.assertEqual(Product.objects.filter(project=p, status="active").count(), 8)
-        self.assertEqual(Banner.objects.filter(project=p).count(), 6)
+        self.assertEqual(Banner.objects.filter(project=p).count(), 7)
+        self.assertEqual(Banner.objects.filter(project=p, placement="hero").count(), 2)
         self.assertEqual(Page.objects.filter(project=p).count(), 5)
         self.assertTrue(Review.objects.filter(project=p).exists())
+        self.assertEqual(BudgetBand.objects.filter(project=p).count(), 5)
+        self.assertEqual(InstagramItem.objects.filter(project=p).count(), 6)
 
         p.refresh_from_db()
         self.assertTrue(is_seeded(p))
-        self.assertEqual(set(ref), {"categories", "products", "banners", "pages", "reviews"})
+        self.assertEqual(set(ref), {"categories", "products", "banners", "pages",
+                                    "reviews", "budget_bands", "instagram"})
 
     def test_products_have_text_but_no_images(self):
         p = _project()
@@ -50,7 +56,7 @@ class SeedStarterContentTests(TestCase):
             self.assertTrue(prod.description)
             self.assertFalse(prod.images.exists())
         # a hero banner with copy, no image file
-        hero = Banner.objects.get(project=p, placement="hero")
+        hero = Banner.objects.filter(project=p, placement="hero").first()
         self.assertTrue(hero.heading)
         self.assertFalse(hero.image)
 
