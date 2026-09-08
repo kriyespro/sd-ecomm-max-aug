@@ -126,6 +126,20 @@ class WipeAndResetTests(TestCase):
         self.assertIsNone(order.items.first().product_id)  # link nulled, snapshot stays
         self.assertEqual(order.items.first().product_title, prod.title)
 
+    def test_wipe_clears_budget_bands_instagram_and_shorts(self):
+        from apps.cms.models import BudgetBand, InstagramItem, UGCVideo
+
+        p = _project()
+        BudgetBand.objects.create(project=p, label="Under 499")
+        InstagramItem.objects.create(project=p, source_url="https://instagram.com/p/x/")
+        UGCVideo.objects.create(project=p, youtube_url="https://youtu.be/dQw4w9WgXcQ")
+
+        wipe_storefront_content(p)
+
+        self.assertFalse(BudgetBand.objects.filter(project=p).exists())
+        self.assertFalse(InstagramItem.objects.filter(project=p).exists())
+        self.assertFalse(UGCVideo.objects.filter(project=p).exists())
+
     def test_wipe_releases_carts_that_protect_products(self):
         from apps.cart.models import Cart, CartItem
 

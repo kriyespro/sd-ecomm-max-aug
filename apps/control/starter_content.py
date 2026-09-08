@@ -265,15 +265,25 @@ def wipe_storefront_content(project) -> dict:
     its place. Destructive — used only behind a type-"DELETE" confirmation.
 
     Removes: products (+ images / inventory / wishlist entries), categories,
-    brands, banners, pages, FAQs, menus, content blocks, reviews, and every
-    shopping cart (cart lines PROTECT products). Leaves orders, customers,
-    coupons, shipping, payments, domains, team and theme untouched — order
-    lines keep their snapshot and just lose the product link.
+    brands, banners, pages, FAQs, menus, content blocks, reviews, budget
+    bands, Instagram items, Shorts videos, and every shopping cart (cart
+    lines PROTECT products). Leaves orders, customers, coupons, shipping,
+    payments, domains, team and theme untouched — order lines keep their
+    snapshot and just lose the product link.
     """
     from apps.cart.models import Cart
     from apps.catalog.models import Brand, Product
     from apps.categories.models import Category
-    from apps.cms.models import Banner, ContentBlock, FAQ, Menu, Page
+    from apps.cms.models import (
+        Banner,
+        BudgetBand,
+        ContentBlock,
+        FAQ,
+        InstagramItem,
+        Menu,
+        Page,
+        UGCVideo,
+    )
     from apps.reviews.models import Review
 
     counts = {}
@@ -283,6 +293,8 @@ def wipe_storefront_content(project) -> dict:
         ("reviews", Review), ("products", Product), ("brands", Brand),
         ("categories", Category), ("banners", Banner), ("pages", Page),
         ("faqs", FAQ), ("menus", Menu), ("blocks", ContentBlock),
+        ("budget_bands", BudgetBand), ("instagram", InstagramItem),
+        ("shorts", UGCVideo),
     ):
         counts[key] = model.objects.filter(project=project).delete()[0]
     project.feature_flags.pop(_FLAG, None)

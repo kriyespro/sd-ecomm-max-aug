@@ -35,9 +35,11 @@
       {% include "shopfront/partials/_wishlist_btn.jinja" %}
     </div>
 
+    {# quick view — always tappable on touch, hover-reveal on desktop #}
     <button hx-get="{{ url('shopfront:quickview', kwargs={'slug': p.slug}) }}" hx-target="#quickview-body" hx-swap="innerHTML"
             @click="$dispatch('open-quick')" title="Quick view"
-            class="absolute right-2.5 top-[3.25rem] grid h-9 w-9 place-items-center rounded-full bg-paper/90 text-ink opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-paper">
+            class="absolute right-2.5 top-[3.25rem] hidden h-9 w-9 place-items-center rounded-full bg-paper/90 text-ink backdrop-blur transition-opacity hover:bg-accent hover:text-paper
+                   lg:grid lg:opacity-0 lg:group-hover:opacity-100">
       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   </div>

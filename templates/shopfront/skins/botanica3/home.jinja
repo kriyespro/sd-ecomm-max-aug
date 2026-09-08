@@ -70,11 +70,14 @@
 {% set slides = hero_slides %}
 {% if slides %}
 <section
-  x-data="{ i: 0, n: {{ slides | length }}, timer: null,
+  x-data="{ i: 0, n: {{ slides | length }}, timer: null, tx: 0,
             go(k){ this.i = (k + this.n) % this.n },
             play(){ if (this.n > 1) this.timer = setInterval(() => this.go(this.i + 1), 6500) },
-            stop(){ clearInterval(this.timer) } }"
+            stop(){ clearInterval(this.timer) },
+            swipe(dx){ if (Math.abs(dx) > 40) this.go(this.i + (dx < 0 ? 1 : -1)) } }"
   x-init="play()" @mouseenter="stop()" @mouseleave="play()"
+  @touchstart.passive="stop(); tx = $event.touches[0].clientX"
+  @touchend.passive="swipe($event.changedTouches[0].clientX - tx); play()"
   class="relative isolate overflow-hidden bg-ink">
   {% for b in slides %}
   <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
@@ -89,19 +92,19 @@
     <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
     {% if not b.text_hidden %}
-    <div class="mx-auto w-full max-w-7xl px-5 pb-10 pt-24 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
+    <div class="mx-auto w-full max-w-7xl px-5 pb-9 pt-16 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
       {% if b.subheading %}
-      <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
-        <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ b.subheading }}</span>
+      <p class="flex items-center gap-2.5 text-[10px] font-semibold uppercase tracking-luxe text-gold sm:gap-3 sm:text-[11px]">
+        <span class="h-px w-6 shrink-0 bg-gold sm:w-8"></span><span class="min-w-0">{{ b.subheading }}</span>
       </p>
       {% endif %}
       {% if b.heading %}
-      <h1 class="mt-4 max-w-3xl font-display text-[1.9rem] leading-[1.08] text-paper sm:text-5xl sm:leading-[1.05] lg:text-6xl">{{ b.heading }}</h1>
+      <h1 class="mt-3 max-w-3xl font-display text-[1.75rem] leading-[1.1] text-paper sm:mt-4 sm:text-5xl sm:leading-[1.05] lg:text-6xl">{{ b.heading }}</h1>
       {% endif %}
       {% if b.cta_label %}
-      <div class="mt-8">
+      <div class="mt-6 sm:mt-8">
         <a href="{{ b.cta_url or url('shopfront:shop') }}"
-           class="inline-block bg-paper px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper">
+           class="inline-block bg-paper px-6 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-8 sm:py-3.5">
           {{ b.cta_label }}
         </a>
       </div>
@@ -112,14 +115,15 @@
   {% endfor %}
 
   {% if slides | length > 1 %}
+  {# arrows: desktop only — mobile swipes and taps the dots #}
   <button type="button" @click="go(i - 1)" aria-label="Previous"
-          class="absolute left-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper">‹</button>
+          class="absolute left-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper sm:grid">‹</button>
   <button type="button" @click="go(i + 1)" aria-label="Next"
-          class="absolute right-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper">›</button>
-  <div class="absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2">
+          class="absolute right-3 top-1/2 z-10 hidden h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper sm:grid">›</button>
+  <div class="absolute inset-x-0 bottom-3.5 z-10 flex justify-center gap-2 sm:bottom-4">
     {% for b in slides %}
     <button type="button" @click="go({{ loop.index0 }})" aria-label="Slide {{ loop.index }}"
-            class="h-1.5 rounded-full bg-paper transition-all" :class="i === {{ loop.index0 }} ? 'w-6 opacity-100' : 'w-1.5 opacity-50'"></button>
+            class="h-2 rounded-full bg-paper transition-all sm:h-1.5" :class="i === {{ loop.index0 }} ? 'w-7 opacity-100 sm:w-6' : 'w-2 opacity-50 sm:w-1.5'"></button>
     {% endfor %}
   </div>
   {% endif %}
@@ -129,12 +133,12 @@
 {# no hero banner uploaded — default panel #}
 <section class="relative isolate flex min-h-[50vh] items-end overflow-hidden bg-ink sm:min-h-[56vh] lg:min-h-[62vh]">
   <div class="absolute inset-0 -z-10 bg-gradient-to-br from-accent/40 to-ink"></div>
-  <div class="mx-auto w-full max-w-7xl px-5 pb-10 pt-24 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
-    <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
-      <span class="h-px w-8 shrink-0 bg-gold"></span>Clean, plant-powered wellness
+  <div class="mx-auto w-full max-w-7xl px-5 pb-9 pt-16 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
+    <p class="flex items-center gap-2.5 text-[10px] font-semibold uppercase tracking-luxe text-gold sm:gap-3 sm:text-[11px]">
+      <span class="h-px w-6 shrink-0 bg-gold sm:w-8"></span>Clean, plant-powered wellness
     </p>
-    <h1 class="mt-4 max-w-3xl font-display text-[1.9rem] leading-[1.08] text-paper sm:text-5xl lg:text-6xl">Rooted in nature,<br>made for the everyday.</h1>
-    <div class="mt-8">
+    <h1 class="mt-3 max-w-3xl font-display text-[1.75rem] leading-[1.1] text-paper sm:mt-4 sm:text-5xl lg:text-6xl">Rooted in nature,<br>made for the everyday.</h1>
+    <div class="mt-6 sm:mt-8">
       <a href="{{ url('shopfront:shop') }}" class="inline-block bg-paper px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper">Shop the collection</a>
     </div>
   </div>
