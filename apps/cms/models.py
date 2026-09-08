@@ -537,6 +537,8 @@ class ThemeSettings(TenantScopedModel):
     custom_css = models.TextField(blank=True)
     # Botanica 3.0: also show the "Shop by category" row above the hero.
     category_above_hero = models.BooleanField(default=False)
+    # Botanica 3.0: show the text heading over the category rows (off = tiles only).
+    show_category_headings = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

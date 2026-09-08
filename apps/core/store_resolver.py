@@ -165,7 +165,8 @@ def _build_chrome(project):
 
     theme = (
         ThemeSettings.objects.filter(project=project)
-        .only("primary_color", "project_id", "category_above_hero")
+        .only("primary_color", "project_id", "category_above_hero",
+              "show_category_headings")
         .first()
     )
     profile = StoreProfile.objects.filter(project=project).first()
@@ -225,6 +226,7 @@ def _build_chrome(project):
         "hero_slides": hero_slides,
         "promo_banners": promo,
         "category_above_hero": bool(getattr(theme, "category_above_hero", False)),
+        "show_category_headings": bool(getattr(theme, "show_category_headings", False)),
         "category_banners": category_banners,
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),

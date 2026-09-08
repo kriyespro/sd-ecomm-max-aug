@@ -114,6 +114,7 @@ def base_context(request, project, **extra):
         "hero_banner": chrome["hero_banner"],
         "hero_slides": chrome.get("hero_slides", []),
         "category_above_hero": chrome.get("category_above_hero", False),
+        "show_category_headings": chrome.get("show_category_headings", False),
         "promo_banners": chrome["promo_banners"],
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],

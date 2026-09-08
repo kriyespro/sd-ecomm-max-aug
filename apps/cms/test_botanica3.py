@@ -107,7 +107,8 @@ class Botanica3RenderTests(TestCase):
 
         ThemeSettings.objects.update_or_create(
             project=self.project,
-            defaults={"skin": Skin.objects.get(slug="botanica3")},
+            defaults={"skin": Skin.objects.get(slug="botanica3"),
+                      "show_category_headings": True},
         )
         cat = Category.objects.create(project=self.project, name="Balms", is_active=True)
         p = Product.objects.create(project=self.project, title="Balm", category=cat,

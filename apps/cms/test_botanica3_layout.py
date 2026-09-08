@@ -55,6 +55,7 @@ class Botanica3LayoutRenderTests(TestCase):
         Domain.objects.create(project=self.project, host="b3l.test", is_verified=True)
         ThemeSettings.objects.create(
             project=self.project, skin=Skin.objects.get(slug="botanica3"),
+            show_category_headings=True,
         )
         cat = Category.objects.create(project=self.project, name="Oils", is_active=True)
         p = Product.objects.create(project=self.project, title="Oil", category=cat,
@@ -74,6 +75,15 @@ class Botanica3LayoutRenderTests(TestCase):
         self.assertIn("group-hover:opacity-100", body)   # 2nd image fade-in
         self.assertIn("group-hover:opacity-0", body)      # 1st image fade-out
         self.assertIn("/wishlist/toggle/", body)          # heart toggle on the card
+
+    def test_category_headings_hidden_by_default(self):
+        ThemeSettings.objects.filter(project=self.project).update(
+            show_category_headings=False
+        )
+        body = self._get().content.decode()
+        self.assertNotIn("Shop by category", body)
+        self.assertNotIn("Browse the shop", body)
+        self.assertIn(">Oils</p>", body)  # tiles still render
 
     def test_hero_slider_controls_appear_with_two_banners(self):
         _banner(self.project, name="h1", priority=1, heading="First hero")
