@@ -178,3 +178,64 @@ class StorefrontCartCsrfBypassTests(TestCase):
     def test_non_cart_path_not_bypassed(self):
         req = self._post(path="/checkout/", HTTP_ORIGIN="http://shop.edge.test")
         self.assertFalse(getattr(req, "csrf_processing_done", False))
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class CheckoutRazorpayTests(TestCase):
+    def setUp(self):
+        from apps.projects.models import Domain
+        from apps.payments.models import PaymentProviderConfig
+
+        self.project = Project.objects.create(name="PayShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="pay.shop.test", is_verified=True)
+        self.product = Product.objects.create(
+            project=self.project, title="Ring", price=Decimal("1000"),
+        )
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True, is_test_mode=True,
+            credentials={"key_id": "rzp_test_k", "key_secret": "sec"},
+        )
+        User = get_user_model()
+        self.user = User.objects.create_user("shopper", "s@buy.test", "pw")
+        self.client.force_login(self.user)
+
+    def _add_to_cart(self):
+        from apps.cart.services import get_or_create_cart
+        cart = get_or_create_cart(project=self.project, user=self.user)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=1,
+                                unit_price=self.product.price)
+        return cart
+
+    def test_providers_helper_lists_razorpay_and_cod_not_manual(self):
+        from apps.shopfront.views import _checkout_payment_providers
+        keys = {p["key"] for p in _checkout_payment_providers(self.project)}
+        self.assertIn("razorpay", keys)
+        self.assertIn("cod", keys)
+        self.assertNotIn("manual", keys)
+
+    def test_checkout_page_offers_razorpay(self):
+        self._add_to_cart()
+        resp = self.client.get("/checkout/", HTTP_HOST="pay.shop.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, 'value="razorpay"')
+
+    def test_razorpay_checkout_renders_pay_page_and_places_order(self):
+        from apps.orders.models import Order
+        from apps.payments.models import Payment
+
+        self._add_to_cart()
+        resp = self.client.post("/checkout/", {
+            "email": "s@buy.test", "name": "Shopper", "line1": "1 St",
+            "city": "Pune", "postal_code": "411001", "country": "IN", "phone": "9990001234",
+            "payment_method": "razorpay",
+        }, HTTP_HOST="pay.shop.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "checkout.razorpay.com/v1/checkout.js")
+        self.assertContains(resp, "rzp_test_k")
+        self.assertContains(resp, "Completing your payment")
+
+        order = Order.objects.get(project=self.project)
+        self.assertEqual(order.payment_status, "pending")
+        pmt = Payment.objects.get(order=order)
+        self.assertEqual(pmt.provider, "razorpay")
+        self.assertContains(resp, str(pmt.pk))

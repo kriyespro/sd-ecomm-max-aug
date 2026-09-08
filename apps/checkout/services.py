@@ -120,7 +120,9 @@ def complete_checkout(
         )
         return order, {}
 
-    _, client_params = payments.initiate_payment(
+    payment, client_params = payments.initiate_payment(
         order=order, provider_key=payment_method, actor=actor,
     )
-    return order, client_params
+    # The storefront needs the local Payment id to post back to /payments/verify/
+    # after the gateway handshake.
+    return order, {**client_params, "payment_id": payment.pk}

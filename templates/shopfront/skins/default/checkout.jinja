@@ -38,12 +38,21 @@
       {# payment #}
       <section>
         <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Payment</h2>
-        <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
-          <input type="radio" name="payment_method" value="cod" checked
-                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
-          Cash on delivery
-        </label>
-        <p class="mt-2 text-xs text-mute">Card / UPI via the gateway is handled by the API (see <code>/api/v1/checkout/</code>).</p>
+        <div class="space-y-2">
+          {% for p in payment_providers %}
+          <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
+            <input type="radio" name="payment_method" value="{{ p.key }}" {{ 'checked' if loop.first }}
+                   hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
+            {% if p.key == 'cod' %}Cash on delivery{% elif p.key == 'razorpay' %}Card / UPI / Netbanking{% else %}{{ p.label }}{% endif %}
+          </label>
+          {% else %}
+          <label class="flex items-center gap-3 border border-line px-4 py-3 text-sm">
+            <input type="radio" name="payment_method" value="cod" checked
+                   hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
+            Cash on delivery
+          </label>
+          {% endfor %}
+        </div>
       </section>
 
       <textarea name="customer_note" rows="2" placeholder="Order note (optional)" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent"></textarea>

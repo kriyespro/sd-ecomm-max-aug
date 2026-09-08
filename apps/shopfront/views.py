@@ -17,6 +17,7 @@ from django.core.paginator import Paginator
 from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.views import View
 
 from .render import render, render_to_string
@@ -392,12 +393,27 @@ def _address(post):
             ("name", "line1", "line2", "city", "state", "postal_code", "country", "phone")}
 
 
+def _checkout_payment_providers(project):
+    """Radio options for the checkout payment section: every gateway the store
+    has enabled, plus COD unless it was explicitly switched off. ``manual`` is
+    staff-only and never shown."""
+    from apps.payments import services as payments
+
+    out = []
+    for cfg in payments.enabled_provider_configs(project):
+        if cfg.provider == "manual":
+            continue
+        out.append({"key": cfg.provider, "label": cfg.label})
+    return out
+
+
 class CheckoutView(View):
     def get(self, request):
         project = current_project(request)
         ctx = base_context(request, project)
         if not ctx["cart"].items.exists():
             return redirect("shopfront:cart")
+        ctx["payment_providers"] = _checkout_payment_providers(project)
         return render(request, "shopfront/checkout.jinja", ctx)
 
     def post(self, request):
@@ -420,14 +436,20 @@ class CheckoutView(View):
                 messages.error(request, str(exc))
                 return redirect("shopfront:checkout")
 
+        method_key = (request.POST.get("payment_method") or "cod").strip()
+        # A gateway (Razorpay) needs the final amount — shipping included — before
+        # its remote order is created, so create the order first with no payment,
+        # price shipping onto it, then initiate the gateway payment.
+        gateway = method_key not in ("cod", "manual")
+
         try:
-            order, _payment = checkout_svc.complete_checkout(
+            order, payment_ctx = checkout_svc.complete_checkout(
                 project=project, cart=cart,
                 email=request.POST.get("email", "").strip(),
                 phone=address["phone"], shipping_address=address,
                 customer_note=request.POST.get("customer_note", "").strip(),
                 coupon_code=coupon or None,
-                payment_method=request.POST.get("payment_method") or "cod",
+                payment_method=None if gateway else method_key,
                 user=request.user if request.user.is_authenticated else None,
             )
         except checkout_svc.CheckoutError as exc:
@@ -448,6 +470,32 @@ class CheckoutView(View):
         placed = request.session.get("shopfront_orders", [])
         request.session["shopfront_orders"] = list({*placed, order.number})
         request.session.modified = True
+
+        if gateway:
+            from apps.payments import services as payments
+
+            order.refresh_from_db()
+            try:
+                payment, client_params = payments.initiate_payment(
+                    order=order, provider_key=method_key,
+                    actor=request.user if request.user.is_authenticated else None,
+                )
+            except payments.PaymentError as exc:
+                messages.error(
+                    request,
+                    f"{exc} Order {order.number} was placed — you can pay for it from the order page.",
+                )
+                return redirect("shopfront:order", number=order.number)
+            ctx = base_context(request, project)
+            ctx.update(
+                order=order,
+                pay=client_params,
+                payment_id=payment.pk,
+                order_url=reverse("shopfront:order", kwargs={"number": order.number}),
+                verify_url=reverse("payments:verify"),
+            )
+            return render(request, "shopfront/checkout_pay.jinja", ctx)
+
         return redirect("shopfront:order", number=order.number)
 
 
