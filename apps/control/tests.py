@@ -470,3 +470,70 @@ class ProductDuplicateTests(TestCase):
 
         order = list(ProductForm.base_fields)
         self.assertEqual(order.index("price"), order.index("kind") + 1)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PaymentProviderFormTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.user = User.objects.create_superuser("payboss", "pay@t.test", "pw")
+        self.project = Project.objects.create(name="PayStore", status="active",
+                                              feature_flags={"onboarded": True})
+        self.client.force_login(self.user)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+
+    def _post(self, **extra):
+        data = {
+            "provider": "razorpay", "display_name": "Razorpay",
+            "priority": "100", "is_test_mode": "on",
+            "key_id": "rzp_test_abc", "key_secret": "s3cr3t",
+            "webhook_secret": "whsec",
+        }
+        data.update(extra)
+        return self.client.post("/admin/payments/providers/new/", data)
+
+    def test_form_has_typed_key_fields_and_no_raw_json(self):
+        from apps.control.forms import PaymentProviderForm
+        fields = set(PaymentProviderForm.base_fields)
+        self.assertIn("key_id", fields)
+        self.assertIn("key_secret", fields)
+        self.assertIn("webhook_secret", fields)
+        self.assertNotIn("credentials", fields)
+        self.assertNotIn("config", fields)
+
+    def test_create_packs_keys_into_credentials(self):
+        from apps.payments.models import PaymentProviderConfig
+        resp = self._post()
+        self.assertEqual(resp.status_code, 302)
+        cfg = PaymentProviderConfig.objects.get(project=self.project, provider="razorpay")
+        self.assertEqual(cfg.credentials, {
+            "key_id": "rzp_test_abc", "key_secret": "s3cr3t", "webhook_secret": "whsec",
+        })
+        self.assertEqual(cfg.config, {})
+
+    def test_duplicate_provider_is_a_form_error_not_500(self):
+        from apps.payments.models import PaymentProviderConfig
+        PaymentProviderConfig.objects.create(project=self.project, provider="razorpay")
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "already set up")
+        self.assertEqual(
+            PaymentProviderConfig.objects.filter(project=self.project, provider="razorpay").count(), 1
+        )
+
+    def test_enable_without_keys_is_rejected(self):
+        resp = self._post(is_enabled="on", key_id="", key_secret="")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "before enabling Razorpay")
+
+    def test_edit_prefills_key_fields_from_credentials(self):
+        from apps.payments.models import PaymentProviderConfig
+        cfg = PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay",
+            credentials={"key_id": "rzp_live_x", "key_secret": "s", "webhook_secret": "w"},
+        )
+        resp = self.client.get(f"/admin/payments/providers/{cfg.pk}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "rzp_live_x")

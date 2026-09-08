@@ -245,25 +245,79 @@ class InventoryItemForm(ProjectScopedForm):
 
 
 class PaymentProviderForm(ProjectScopedForm):
+    """The gateway keys live in the model's ``credentials`` JSON blob, but a
+    store owner should never see raw JSON. Expose them as plain text fields and
+    pack/unpack them here. ``config`` is unused by any provider today — dropped
+    from the form entirely (model keeps its ``{}`` default)."""
+
+    # Razorpay is the only gateway with a real integration; its three keys.
+    _CRED_FIELDS = ("key_id", "key_secret", "webhook_secret")
+
+    key_id = forms.CharField(
+        required=False, label="Key ID",
+        widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false"}),
+        help_text="Razorpay: the Key ID from Settings → API Keys (starts with rzp_).",
+    )
+    key_secret = forms.CharField(
+        required=False, label="Key secret", strip=False,
+        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password"}),
+        help_text="Shown once by Razorpay when you generate the key.",
+    )
+    webhook_secret = forms.CharField(
+        required=False, label="Webhook secret", strip=False,
+        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password"}),
+        help_text="Optional. Set the same value in the Razorpay webhook config.",
+    )
+
     class Meta:
         model = PaymentProviderConfig
         fields = [
-            "provider", "display_name", "is_enabled", "is_test_mode",
-            "priority", "credentials", "config",
+            "provider", "display_name", "is_enabled", "is_test_mode", "priority",
         ]
-        widgets = {
-            "credentials": forms.Textarea(attrs={"rows": 4, "class": TEXT, "spellcheck": "false"}),
-            "config": forms.Textarea(attrs={"rows": 3, "class": TEXT, "spellcheck": "false"}),
-        }
-        help_texts = {
-            "credentials": 'JSON. Razorpay: {"key_id": "", "key_secret": "", "webhook_secret": ""}',
-        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # provider is fixed once created (it's half of the unique key).
         if self.instance.pk:
             self.fields["provider"].disabled = True
+        creds = self.instance.credentials or {}
+        for name in self._CRED_FIELDS:
+            self.fields[name].initial = creds.get(name, "")
+
+    def clean(self):
+        cleaned = super().clean()
+        provider = cleaned.get("provider")
+        if provider and not self.instance.pk and self.project is not None:
+            dup = PaymentProviderConfig.objects.filter(
+                project=self.project, provider=provider
+            ).exists()
+            if dup:
+                self.add_error(
+                    "provider",
+                    "This provider is already set up. Edit the existing entry instead.",
+                )
+        if cleaned.get("is_enabled") and provider == "razorpay" and not (
+            cleaned.get("key_id") and cleaned.get("key_secret")
+        ):
+            self.add_error(
+                "is_enabled",
+                "Add the Key ID and Key secret before enabling Razorpay.",
+            )
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        creds = dict(obj.credentials or {})
+        for name in self._CRED_FIELDS:
+            value = (self.cleaned_data.get(name) or "").strip()
+            if value:
+                creds[name] = value
+            else:
+                creds.pop(name, None)
+        obj.credentials = creds
+        if commit:
+            obj.save()
+        return obj
 
 
 class ShippingZoneForm(ProjectScopedForm):
