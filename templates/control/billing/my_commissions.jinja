@@ -1,0 +1,60 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}My earnings{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-4">
+
+  <div class="grid gap-3 sm:grid-cols-2">
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Outstanding</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900">₹{{ '{:,.0f}'.format(total_outstanding) }}</p>
+      <p class="text-xs text-slate-400">Accrued, not yet paid out.</p>
+    </div>
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Paid to date</p>
+      <p class="mt-1 text-2xl font-semibold text-slate-900">₹{{ '{:,.0f}'.format(total_paid) }}</p>
+    </div>
+  </div>
+
+  <div class="mb-1 flex gap-3 text-xs">
+    <a href="?" class="{{ 'font-semibold text-slate-900' if not request.GET.status }}">All</a>
+    <a href="?status=pending" class="{{ 'font-semibold text-slate-900' if request.GET.status == 'pending' }}">Pending</a>
+    <a href="?status=approved" class="{{ 'font-semibold text-slate-900' if request.GET.status == 'approved' }}">Approved</a>
+    <a href="?status=paid" class="{{ 'font-semibold text-slate-900' if request.GET.status == 'paid' }}">Paid</a>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">When</th><th class="px-4 py-2">Store</th>
+          <th class="px-4 py-2">Invoice</th><th class="px-4 py-2">Base</th><th class="px-4 py-2">Rate</th>
+          <th class="px-4 py-2">Commission</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Payout ref</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in rows %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.created_at.strftime('%d %b %Y') }}</td>
+          <td class="px-4 py-2">{{ r.subscription.project.name }}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{ r.invoice.number }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.base_amount) }}</td>
+          <td class="px-4 py-2 text-xs">{{ r.rate_pct }}%</td>
+          <td class="px-4 py-2 font-medium">₹{{ '{:,.0f}'.format(r.amount) }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if r.status == 'paid' else 'bg-amber-100 text-amber-800' }}">{{ r.get_status_display() }}</span>
+          </td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.payout_ref or '—' }}</td>
+        </tr>
+        {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="8">No commissions yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <div class="flex justify-between text-xs text-slate-500">
+    {% if page_obj.has_previous() %}<a href="?page={{ page_obj.previous_page_number() }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">← Newer</a>{% else %}<span></span>{% endif %}
+    {% if page_obj.has_next() %}<a href="?page={{ page_obj.next_page_number() }}{% if request.GET.status %}&status={{ request.GET.status }}{% endif %}">Older →</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

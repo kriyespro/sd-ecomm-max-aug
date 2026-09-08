@@ -140,7 +140,8 @@ class StoreCreateView(_StoreScope, FormView):
         manager = form.cleaned_data.get("manager")
         if not is_platform_admin(actor):
             # Manager signs the store up under themselves.
-            manager = actor if actor.profile.platform_role == PlatformRole.MANAGER else None
+            actor_role = getattr(getattr(actor, "profile", None), "platform_role", None)
+            manager = actor if actor_role == PlatformRole.MANAGER else None
         try:
             project, owner, created = store_services.create_store(
                 name=form.cleaned_data["name"],

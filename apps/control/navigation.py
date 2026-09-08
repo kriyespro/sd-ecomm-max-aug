@@ -18,6 +18,7 @@ MOUNT = "/admin/"
 _SECTIONS = [
     ("platform", "Platform", "◆", [
         ("stores", "Stores", "\U0001f3e2"),
+        ("my_commissions", "My earnings", "\U0001f4b5"),
         ("billing", "Billing", "\U0001f4b0"),
         ("billing_plans", "Plans & pricing", "\U0001f3f7"),
         ("skin_list", "Skins", "\U0001f3ad"),
@@ -80,6 +81,8 @@ _SECTIONS = [
 
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users", "partner_applications", "showcase_list"}
+# Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
+_DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
@@ -130,6 +133,7 @@ def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
         items = [
             it for it in resolved_items
             if not (it["name"] in _PLATFORM_ADMIN_ONLY and not platform_admin)
+            and not (it["name"] in _DGC_ONLY and platform_admin)
             and not (it["name"] in _STORE_MANAGE_ONLY and not can_manage)
             and not (it["name"] in _OWNER_ONLY and not can_manage_owner)
             and not (it["name"] in _BILLING_ONLY and not can_manage_billing)

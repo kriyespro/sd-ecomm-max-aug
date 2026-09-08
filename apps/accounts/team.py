@@ -22,7 +22,12 @@ from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
 from .models import Membership, StoreRole
-from .permissions import has_store_role, is_platform_staff, store_role
+from .permissions import (
+    has_store_role,
+    is_platform_admin,
+    is_platform_staff,
+    store_role,
+)
 
 User = get_user_model()
 
@@ -50,11 +55,17 @@ def _actor_caps(actor, project):
 
     Raises ``PermissionDenied`` if the actor may not manage the team at all.
     """
-    # Platform staff who administer this store manage its team like an owner.
-    if has_store_role(actor, project, {StoreRole.OWNER}):
+    # A platform admin, or a real owner membership, manages the whole team.
+    if is_platform_admin(actor) or store_role(actor, project) == StoreRole.OWNER:
         return True, set(TEAM_ROLES)
     role = store_role(actor, project)
     if role == StoreRole.MANAGER:
+        return False, {StoreRole.STAFF}
+    # A DGC (platform manager) who runs this store for a client can manage the
+    # client's *staff* — but not owner/manager roles, and never escalate
+    # themselves into a membership that outlives the engagement. Manager
+    # reassignment doesn't revoke memberships, so this cap is the guard.
+    if is_platform_staff(actor) and has_store_role(actor, project, {StoreRole.OWNER}):
         return False, {StoreRole.STAFF}
     raise PermissionDenied("You cannot manage this store's team.")
 

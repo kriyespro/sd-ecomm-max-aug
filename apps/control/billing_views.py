@@ -16,7 +16,7 @@ from apps.billing.models import (
     Plan,
     Subscription,
 )
-from apps.core.mixins import PlatformAdminRequiredMixin
+from apps.core.mixins import PlatformAdminRequiredMixin, PlatformStaffRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
@@ -134,6 +134,35 @@ class CommissionListView(PlatformAdminRequiredMixin, ListView):
                        .filter(status__in=[CommissionStatus.PENDING, CommissionStatus.APPROVED])
                        .values("manager__username", "manager__email")
                        .annotate(total=Sum("amount")).order_by("-total"))
+        return ctx
+
+
+class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
+    """A DGC's own commission ledger — read-only. Platform admins have the
+    full cross-DGC view at ``billing_commissions`` instead."""
+
+    template_name = "control/billing/my_commissions.jinja"
+    context_object_name = "rows"
+    paginate_by = 50
+
+    def get_queryset(self):
+        qs = (ManagerCommission.objects
+              .filter(manager=self.request.user)
+              .select_related("subscription__project", "invoice")
+              .order_by("-created_at"))
+        status = self.request.GET.get("status")
+        return qs.filter(status=status) if status else qs
+
+    def get_context_data(self, **kwargs):
+        from django.db.models import Sum
+        ctx = super().get_context_data(**kwargs)
+        mine = ManagerCommission.objects.filter(manager=self.request.user)
+        ctx["total_paid"] = (mine.filter(status=CommissionStatus.PAID)
+                             .aggregate(t=Sum("amount"))["t"] or 0)
+        ctx["total_outstanding"] = (
+            mine.filter(status__in=[CommissionStatus.PENDING, CommissionStatus.APPROVED])
+            .aggregate(t=Sum("amount"))["t"] or 0
+        )
         return ctx
 
 
