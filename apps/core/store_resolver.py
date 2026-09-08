@@ -165,15 +165,17 @@ def _build_chrome(project):
 
     theme = (
         ThemeSettings.objects.filter(project=project)
-        .only("primary_color", "project_id")
+        .only("primary_color", "project_id", "category_above_hero")
         .first()
     )
     profile = StoreProfile.objects.filter(project=project).first()
-    # All live banners, grouped by placement. "hero" / "announcement" / "popup"
-    # / "product" take the first live one; "promo" stacks; "category" is keyed
-    # by the category slug so a listing page can pick its own.
+    # All live banners, grouped by placement. "announcement" / "popup" /
+    # "product" take the first live one; "promo" stacks; "hero" keeps the first
+    # (other skins) *and* the full ordered list as ``hero_slides`` (a skin can
+    # run it as a slider); "category" is keyed by the category slug.
     singles = {}
     promo = []
+    hero_slides = []
     category_banners = {}
     for b in (
         project.banners.filter(is_active=True)
@@ -184,6 +186,9 @@ def _build_chrome(project):
             continue
         if b.placement == "promo":
             promo.append(b)
+        elif b.placement == "hero":
+            hero_slides.append(b)
+            singles.setdefault("hero", b)
         elif b.placement == "category":
             if b.category and b.category.slug not in category_banners:
                 category_banners[b.category.slug] = b
@@ -217,7 +222,9 @@ def _build_chrome(project):
         ],
         "announcement": banners.get("announcement"),
         "hero_banner": banners.get("hero"),
+        "hero_slides": hero_slides,
         "promo_banners": promo,
+        "category_above_hero": bool(getattr(theme, "category_above_hero", False)),
         "category_banners": category_banners,
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),

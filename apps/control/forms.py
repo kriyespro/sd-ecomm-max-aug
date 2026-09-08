@@ -372,7 +372,7 @@ class BannerForm(ProjectScopedForm):
         model = Banner
         fields = [
             "name", "placement", "image", "mobile_image",
-            "heading", "subheading", "cta_label", "cta_url",
+            "heading", "subheading", "cta_label", "cta_url", "text_hidden",
             "category", "starts_at", "ends_at", "priority", "is_active",
         ]
         widgets = {
@@ -491,16 +491,19 @@ class ThemeSettingsForm(ProjectScopedForm):
             "primary_color", "secondary_color", "accent_color",
             "font_body", "font_heading",
             "header_layout", "footer_layout", "button_style", "product_card_style",
+            "category_above_hero",
             "custom_css",
         ]
         widgets = {
             "primary_color": forms.TextInput(attrs={"type": "color"}),
             "secondary_color": forms.TextInput(attrs={"type": "color"}),
             "accent_color": forms.TextInput(attrs={"type": "color"}),
+            "category_above_hero": forms.CheckboxInput(attrs={"class": CHECK}),
             "custom_css": forms.Textarea(attrs={"rows": 6, "class": TEXT, "spellcheck": "false"}),
         }
         help_texts = {
             "skin": "The storefront template bundle. Ask an admin to unlock more.",
+            "category_above_hero": "Botanica 3.0 only — also show the “Shop by category” row above the hero.",
         }
 
     def __init__(self, *args, **kwargs):

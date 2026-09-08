@@ -112,6 +112,8 @@ def base_context(request, project, **extra):
         "free_ship_over": chrome["free_ship_over"],
         "announcement": chrome["announcement"],
         "hero_banner": chrome["hero_banner"],
+        "hero_slides": chrome.get("hero_slides", []),
+        "category_above_hero": chrome.get("category_above_hero", False),
         "promo_banners": chrome["promo_banners"],
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],

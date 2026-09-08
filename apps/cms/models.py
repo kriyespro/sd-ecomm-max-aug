@@ -145,6 +145,10 @@ class Banner(TenantScopedModel):
     ends_at = models.DateTimeField(null=True, blank=True)
     priority = models.PositiveIntegerField(default=100)
     is_active = models.BooleanField(default=True)
+    text_hidden = models.BooleanField(
+        default=False,
+        help_text="Show only the image — hide the heading, text and button.",
+    )
 
     class Meta:
         ordering = ["placement", "priority", "id"]
@@ -531,6 +535,8 @@ class ThemeSettings(TenantScopedModel):
     homepage_sections = models.JSONField(default=list, blank=True)
     tokens = models.JSONField(default=dict, blank=True)
     custom_css = models.TextField(blank=True)
+    # Botanica 3.0: also show the "Shop by category" row above the hero.
+    category_above_hero = models.BooleanField(default=False)
 
     class Meta:
         constraints = [

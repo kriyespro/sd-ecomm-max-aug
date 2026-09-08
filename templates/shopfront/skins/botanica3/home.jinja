@@ -7,8 +7,7 @@
   EDIT HOMEPAGE COPY HERE
   ══════════════════════════════════════════════════════════════════════
   trust_strip — the 4 badges just under the hero. Each row is
-  ('Headline', 'sub-line'). Add / remove / reword freely; keep 3–4 for
-  the layout to stay even.
+  ('Headline', 'sub-line').
 #}
 {% set trust_strip = [
   ('Free shipping',    'Orders over ₹999'),
@@ -17,39 +16,123 @@
   ('Clean formulas',   'No nasties, ever'),
 ] %}
 
-{# ============ HERO — full-bleed image with overlay ============ #}
-{% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
-                   else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
-<section class="relative isolate flex min-h-[72vh] items-end overflow-hidden bg-ink sm:min-h-[80vh] lg:min-h-[88vh]">
-  <picture>
-    {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
-    <img src="{{ hero_img | media_src(1600, 900, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
-  </picture>
-  <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
+{% macro category_row(heading='Shop by category') %}
+{% if cat_tiles %}
+<section class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
+  <div class="mb-8 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+    <h2 class="font-display text-2xl sm:text-3xl">{{ heading }}</h2>
+    <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
+  </div>
+  <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8">
+    {% for t in cat_tiles[:8] %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center">
+      <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
+        <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
+      </div>
+      <p class="mt-2.5 text-[12px] font-medium leading-tight text-ink group-hover:text-accent">{{ t.category.name }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
 
-  <div class="mx-auto w-full max-w-7xl px-5 pb-12 pt-28 sm:pb-14 sm:pt-40 lg:px-8 lg:pb-20">
+{% macro promo_card(b) %}
+<section class="mx-auto max-w-7xl px-5 pt-4 lg:px-8">
+  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block overflow-hidden rounded-3xl bg-ink">
+    <picture>
+      {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
+      <img src="{{ b.image | media_src(1600, 600, 'Promo banner') }}" alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
+           class="h-[280px] w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-[380px]">
+    </picture>
+    {% if not b.text_hidden and (b.heading or b.subheading or b.cta_label) %}
+    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-ink/30 p-6 sm:p-8 lg:p-14">
+      {% if b.subheading %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-paper/80">{{ b.subheading }}</p>{% endif %}
+      {% if b.heading %}<h2 class="max-w-xl font-display text-2xl text-paper sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
+      {% if b.cta_label %}<span class="mt-2 bg-paper px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors group-hover:bg-accent group-hover:text-paper">{{ b.cta_label }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+</section>
+{% endmacro %}
+
+{# ============ CATEGORY — optional row ABOVE the hero ============ #}
+{% if category_above_hero %}{{ category_row('Browse the shop') }}{% endif %}
+
+{# ============ HERO — slider (all live hero banners); height cut ~30% ============ #}
+{% set slides = hero_slides %}
+{% if slides %}
+<section
+  x-data="{ i: 0, n: {{ slides | length }}, timer: null,
+            go(k){ this.i = (k + this.n) % this.n },
+            play(){ if (this.n > 1) this.timer = setInterval(() => this.go(this.i + 1), 6500) },
+            stop(){ clearInterval(this.timer) } }"
+  x-init="play()" @mouseenter="stop()" @mouseleave="play()"
+  class="relative isolate overflow-hidden bg-ink">
+  {% for b in slides %}
+  <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
+       {% if not loop.first %}style="display:none"{% endif %}
+       class="relative flex min-h-[50vh] items-end sm:min-h-[56vh] lg:min-h-[62vh]">
+    <picture>
+      {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
+      <img src="{{ b.image | media_src(1600, 760, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
+           {{ 'fetchpriority=high' if loop.first }} decoding="async"
+           class="absolute inset-0 -z-10 h-full w-full object-cover">
+    </picture>
+    <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
+
+    {% if not b.text_hidden %}
+    <div class="mx-auto w-full max-w-7xl px-5 pb-10 pt-24 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
+      {% if b.subheading %}
+      <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
+        <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ b.subheading }}</span>
+      </p>
+      {% endif %}
+      {% if b.heading %}
+      <h1 class="mt-4 max-w-3xl font-display text-[1.9rem] leading-[1.08] text-paper sm:text-5xl sm:leading-[1.05] lg:text-6xl">{{ b.heading }}</h1>
+      {% endif %}
+      {% if b.cta_label %}
+      <div class="mt-8">
+        <a href="{{ b.cta_url or url('shopfront:shop') }}"
+           class="inline-block bg-paper px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper">
+          {{ b.cta_label }}
+        </a>
+      </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% if slides | length > 1 %}
+  <button type="button" @click="go(i - 1)" aria-label="Previous"
+          class="absolute left-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper">‹</button>
+  <button type="button" @click="go(i + 1)" aria-label="Next"
+          class="absolute right-3 top-1/2 z-10 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-paper/80 text-ink hover:bg-paper">›</button>
+  <div class="absolute inset-x-0 bottom-4 z-10 flex justify-center gap-2">
+    {% for b in slides %}
+    <button type="button" @click="go({{ loop.index0 }})" aria-label="Slide {{ loop.index }}"
+            class="h-1.5 rounded-full bg-paper transition-all" :class="i === {{ loop.index0 }} ? 'w-6 opacity-100' : 'w-1.5 opacity-50'"></button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+{% else %}
+{# no hero banner uploaded — default panel #}
+<section class="relative isolate flex min-h-[50vh] items-end overflow-hidden bg-ink sm:min-h-[56vh] lg:min-h-[62vh]">
+  <div class="absolute inset-0 -z-10 bg-gradient-to-br from-accent/40 to-ink"></div>
+  <div class="mx-auto w-full max-w-7xl px-5 pb-10 pt-24 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
     <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
-      <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}</span>
+      <span class="h-px w-8 shrink-0 bg-gold"></span>Clean, plant-powered wellness
     </p>
-    <h1 class="mt-4 max-w-3xl font-display text-[2rem] leading-[1.08] text-paper sm:text-6xl sm:leading-[1.05] lg:text-7xl">
-      {% if hero_banner and hero_banner.heading %}{{ hero_banner.heading }}{% else %}Rooted in nature,<br>made for the everyday.{% endif %}
-    </h1>
-    <p class="mt-5 max-w-md text-[15px] leading-relaxed text-paper/80">
-      A considered edit of botanicals, tonics and rituals — formulated with what
-      works, and nothing that doesn't.
-    </p>
-    <div class="mt-9 flex flex-wrap gap-3">
-      <a href="{{ hero_banner.cta_url if (hero_banner and hero_banner.cta_url) else url('shopfront:shop') }}"
-         class="bg-paper px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-9 sm:py-4">
-        {{ hero_banner.cta_label if (hero_banner and hero_banner.cta_label) else 'Shop the collection' }}
-      </a>
-      <a href="{{ url('shopfront:shop') }}?sort=rating"
-         class="border border-paper/60 px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink sm:px-9 sm:py-4">
-        Best rated
-      </a>
+    <h1 class="mt-4 max-w-3xl font-display text-[1.9rem] leading-[1.08] text-paper sm:text-5xl lg:text-6xl">Rooted in nature,<br>made for the everyday.</h1>
+    <div class="mt-8">
+      <a href="{{ url('shopfront:shop') }}" class="inline-block bg-paper px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper">Shop the collection</a>
     </div>
   </div>
 </section>
+{% endif %}
 
 {# ============ TRUST STRIP ============ #}
 <div class="border-y border-line bg-panel">
@@ -66,25 +149,8 @@
   </div>
 </div>
 
-{# ============ SHOP BY CATEGORY — one row, up to 8, squared 300×300 ============ #}
-{% if cat_tiles %}
-<section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-    <h2 class="font-display text-2xl sm:text-3xl">Shop by category</h2>
-    <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
-  </div>
-  <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8">
-    {% for t in cat_tiles[:8] %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center">
-      <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
-        <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
-      </div>
-      <p class="mt-2.5 text-[12px] font-medium leading-tight text-ink group-hover:text-accent">{{ t.category.name }}</p>
-    </a>
-    {% endfor %}
-  </div>
-</section>
-{% endif %}
+{# ============ SHOP BY CATEGORY — below the hero (always) ============ #}
+{{ category_row() }}
 
 {# ============ SHOP BY BUDGET — up to 5 price-band tiles ============ #}
 {% if budget_bands %}
@@ -105,25 +171,8 @@
 </section>
 {% endif %}
 
-{# ============ PROMO BANNERS — placement "promo" ============ #}
-{% for b in promo_banners %}
-<section class="mx-auto max-w-7xl px-5 pt-4 lg:px-8">
-  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block overflow-hidden rounded-3xl bg-ink">
-    <picture>
-      {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 600, 'Promo banner') }}" alt="{{ b.heading }}" loading="lazy" decoding="async"
-           class="h-[280px] w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-[380px]">
-    </picture>
-    {% if b.heading or b.subheading or b.cta_label %}
-    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-ink/30 p-6 sm:p-8 lg:p-14">
-      {% if b.subheading %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-paper/80">{{ b.subheading }}</p>{% endif %}
-      {% if b.heading %}<h2 class="max-w-xl font-display text-2xl text-paper sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
-      {% if b.cta_label %}<span class="mt-2 bg-paper px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors group-hover:bg-accent group-hover:text-paper">{{ b.cta_label }}</span>{% endif %}
-    </div>
-    {% endif %}
-  </a>
-</section>
-{% endfor %}
+{# ============ PROMO BANNER — first one here ============ #}
+{% for b in promo_banners[:1] %}{{ promo_card(b) }}{% endfor %}
 
 {# ============ FEATURED ============ #}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
@@ -224,9 +273,12 @@
 </section>
 {% endif %}
 
-{# ============ POPUP BANNER — placement "popup"; once per visitor ============ #}
+{# ============ PROMO BANNER — 2nd and later, just above the footer ============ #}
+{% for b in promo_banners[1:] %}{{ promo_card(b) }}{% endfor %}
+
 {% include "shopfront/partials/_ugc_shorts.jinja" %}
 
+{# ============ POPUP BANNER — placement "popup"; once per visitor ============ #}
 {% if popup_banner %}
 <div x-data="{ open: false }"
      x-init="setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200)"

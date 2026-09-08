@@ -1,15 +1,24 @@
-{# Botanica 2.0 product card — expects `p` (Product) #}
-{% set img = (p.images.all() | first) %}
+{# Botanica 3.0 product card — expects `p` (Product).
+   First photo cross-fades to the second one on hover; wishlist heart top-right. #}
+{% set _imgs = p.images.all() | list %}
+{% set img = _imgs[0] if _imgs else none %}
+{% set img2 = _imgs[1] if _imgs | length > 1 else none %}
 {% set pct = (((p.price - p.current_price) / p.price) * 100) | round | int if (p.on_sale and p.price) else 0 %}
 <article class="group relative flex flex-col rounded-2xl border border-line bg-panel p-3 b2-card b2-soft">
   <div class="relative">
     <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden rounded-xl bg-line/40">
-      <div class="aspect-[4/5] overflow-hidden">
+      <div class="relative aspect-[4/5] overflow-hidden">
         <img src="{{ (img.image if img else none) | media_src(1000, 1250, 'Product photo') }}"
              {% if img and img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
              {% if img and img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
              alt="{{ (img.alt if img else '') or p.title }}" loading="lazy" decoding="async"
-             class="b2-img h-full w-full object-cover">
+             class="b2-img h-full w-full object-cover transition-opacity duration-500 {{ 'group-hover:opacity-0' if img2 }}">
+        {% if img2 %}
+        <img src="{{ img2.image | media_src(1000, 1250, 'Product photo') }}"
+             {% if img2.width %}width="{{ img2.width }}" height="{{ img2.height }}"{% endif %}
+             alt="" loading="lazy" decoding="async"
+             class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+        {% endif %}
       </div>
     </a>
 
@@ -21,9 +30,14 @@
     <span class="absolute left-2.5 top-2.5 rounded-full bg-accent px-2.5 py-1 text-[10px] font-semibold uppercase tracking-luxe text-paper">New</span>
     {% endif %}
 
+    <div class="absolute right-2.5 top-2.5 z-10">
+      {% set wl_slug = p.slug %}{% set wl_active = false %}
+      {% include "shopfront/partials/_wishlist_btn.jinja" %}
+    </div>
+
     <button hx-get="{{ url('shopfront:quickview', kwargs={'slug': p.slug}) }}" hx-target="#quickview-body" hx-swap="innerHTML"
             @click="$dispatch('open-quick')" title="Quick view"
-            class="absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full bg-paper/90 text-ink opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-paper">
+            class="absolute right-2.5 top-[3.25rem] grid h-9 w-9 place-items-center rounded-full bg-paper/90 text-ink opacity-0 backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-paper">
       <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
     </button>
   </div>
