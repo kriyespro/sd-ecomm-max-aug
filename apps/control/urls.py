@@ -303,6 +303,7 @@ urlpatterns = [
 
     # Backup & restore centre (superadmin / platform owner)
     path("platform-backups/", views.PlatformBackupCenterView.as_view(), name="platform_backups"),
+    path("platform-backups/server/", views.ServerStatsView.as_view(), name="server_stats"),
     path("platform-backup/", views.PlatformBackupView.as_view(), name="platform_backup"),
     path("platform-restore/", views.PlatformRestoreView.as_view(), name="platform_restore"),
 

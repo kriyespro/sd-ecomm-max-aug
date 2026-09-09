@@ -287,3 +287,13 @@ class PlatformBackupTests(TestCase):
         Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
         self.client.force_login(User.objects.get(pk=dgc.pk))
         self.assertEqual(self.client.get("/admin/platform-backups/").status_code, 403)
+        self.assertEqual(self.client.get("/admin/platform-backups/server/").status_code, 403)
+
+    def test_server_stats_partial_renders_for_admin(self):
+        self.client.force_login(self.admin)
+        r = self.client.get("/admin/platform-backups/server/")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "CPU load")
+        self.assertContains(r, "Disk")
+        # the main screen embeds the same partial
+        self.assertContains(self.client.get("/admin/platform-backups/"), "auto-refresh 10s")

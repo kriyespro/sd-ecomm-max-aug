@@ -4,6 +4,17 @@
 {% block content %}
 <div class="mx-auto max-w-5xl space-y-5">
 
+  {# ---- server health ---- #}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700">Server</h2>
+      <span class="text-[11px] text-slate-400">auto-refresh 10s</span>
+    </div>
+    <div id="server-stats" hx-get="{{ url('control:server_stats') }}" hx-trigger="every 10s" hx-swap="innerHTML">
+      {% include "control/partials/_server_stats.jinja" %}
+    </div>
+  </div>
+
   {# ---- whole platform ---- #}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <h2 class="text-sm font-semibold text-slate-700">Whole platform</h2>

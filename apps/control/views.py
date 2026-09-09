@@ -54,6 +54,7 @@ class PlatformBackupCenterView(PlatformAdminRequiredMixin, TemplateView):
     template_name = "control/platform_backups.jinja"
 
     def get_context_data(self, **kwargs):
+        from apps.core.serverstats import server_stats
         from apps.projects.models import Project
 
         ctx = super().get_context_data(**kwargs)
@@ -61,6 +62,20 @@ class PlatformBackupCenterView(PlatformAdminRequiredMixin, TemplateView):
             Project.objects.select_related("subscription__plan")
             .order_by("name")
         )
+        ctx["server"] = server_stats()
+        return ctx
+
+
+class ServerStatsView(PlatformAdminRequiredMixin, TemplateView):
+    """HTMX partial — CPU / RAM / disk meters on the backup screen, polled."""
+
+    template_name = "control/partials/_server_stats.jinja"
+
+    def get_context_data(self, **kwargs):
+        from apps.core.serverstats import server_stats
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["server"] = server_stats()
         return ctx
 
 

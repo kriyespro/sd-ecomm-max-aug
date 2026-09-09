@@ -1,0 +1,67 @@
+{% macro gb(n) %}{{ '%.1f'|format((n or 0) / 1073741824) }} GB{% endmacro %}
+{% macro bar(pct) %}
+  <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+    <div class="h-full rounded-full {{ 'bg-emerald-500' if pct < 70 else 'bg-amber-500' if pct < 90 else 'bg-red-500' }}"
+         style="width: {{ [pct, 100]|min }}%"></div>
+  </div>
+{% endmacro %}
+
+<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+  {# CPU #}
+  <div>
+    <div class="flex items-baseline justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">CPU load</span>
+      <span class="text-sm font-semibold text-slate-800">{{ server.cpu.pct if server.cpu else '—' }}%</span>
+    </div>
+    {% if server.cpu %}
+      {{ bar(server.cpu.pct) }}
+      <p class="mt-1 text-[11px] text-slate-400">
+        load {{ server.cpu.load1 }} / {{ server.cpu.load5 }} / {{ server.cpu.load15 }} · {{ server.cpu.cores }} core{{ 's' if server.cpu.cores != 1 }}
+      </p>
+    {% else %}
+      <p class="mt-1 text-[11px] text-slate-400">unavailable</p>
+    {% endif %}
+  </div>
+
+  {# Memory #}
+  <div>
+    <div class="flex items-baseline justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Memory</span>
+      <span class="text-sm font-semibold text-slate-800">{{ server.memory.pct if server.memory else '—' }}%</span>
+    </div>
+    {% if server.memory %}
+      {{ bar(server.memory.pct) }}
+      <p class="mt-1 text-[11px] text-slate-400">{{ gb(server.memory.used) }} / {{ gb(server.memory.total) }} used</p>
+    {% else %}
+      <p class="mt-1 text-[11px] text-slate-400">unavailable</p>
+    {% endif %}
+  </div>
+
+  {# Disk (root) #}
+  <div>
+    <div class="flex items-baseline justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Disk</span>
+      <span class="text-sm font-semibold text-slate-800">{{ server.disk_root.pct if server.disk_root else '—' }}%</span>
+    </div>
+    {% if server.disk_root %}
+      {{ bar(server.disk_root.pct) }}
+      <p class="mt-1 text-[11px] text-slate-400">{{ gb(server.disk_root.free) }} free of {{ gb(server.disk_root.total) }}</p>
+    {% else %}
+      <p class="mt-1 text-[11px] text-slate-400">unavailable</p>
+    {% endif %}
+  </div>
+
+  {# Media storage #}
+  <div>
+    <div class="flex items-baseline justify-between">
+      <span class="text-xs font-semibold uppercase tracking-wide text-slate-400">Media storage</span>
+      <span class="text-sm font-semibold text-slate-800">{{ server.disk_media.pct if server.disk_media else '—' }}%</span>
+    </div>
+    {% if server.disk_media %}
+      {{ bar(server.disk_media.pct) }}
+      <p class="mt-1 text-[11px] text-slate-400">{{ gb(server.disk_media.free) }} free of {{ gb(server.disk_media.total) }}</p>
+    {% else %}
+      <p class="mt-1 text-[11px] text-slate-400">same volume as disk</p>
+    {% endif %}
+  </div>
+</div>
