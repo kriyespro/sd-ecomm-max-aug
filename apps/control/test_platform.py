@@ -220,3 +220,72 @@ class ArchiveAndDeleteScreensTests(TestCase):
         resp = self.client.get(f"/admin/stores/{self.project.pk}/")
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, "Danger zone")
+
+
+class StoreListFilterTests(TestCase):
+    def setUp(self):
+        from apps.billing import services as billing_svc
+        from apps.billing.models import Plan, SubscriptionStatus
+
+        self.admin = User.objects.create_user("root", "root@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=self.admin).update(platform_role=PlatformRole.OWNER)
+        self.client.force_login(self.admin)
+
+        self.dgc = User.objects.create_user("dgc", "dgc@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=self.dgc).update(platform_role=PlatformRole.MANAGER)
+
+        plans = list(Plan.objects.filter(is_active=True).order_by("sort_order"))
+        self.basic, self.growth = plans[0], plans[1]
+
+        self.active = Project.objects.create(name="AliveCo", status="active")
+        s = billing_svc.ensure_subscription(self.active)
+        s.plan = self.growth
+        s.status = SubscriptionStatus.ACTIVE
+        s.manager = self.dgc
+        s.save(update_fields=["plan", "status", "manager"])
+
+        self.trial = Project.objects.create(name="TrialCo", status="active")
+        t = billing_svc.ensure_subscription(self.trial)  # default TRIALING
+        t.plan = self.basic
+        t.save(update_fields=["plan"])
+
+    def test_status_filter_narrows_the_list(self):
+        r = self.client.get("/admin/stores/?status=active")
+        self.assertContains(r, "AliveCo")
+        self.assertNotContains(r, "TrialCo")
+        r = self.client.get("/admin/stores/?status=trialing")
+        self.assertContains(r, "TrialCo")
+        self.assertNotContains(r, "AliveCo")
+
+    def test_plan_filter(self):
+        r = self.client.get(f"/admin/stores/?plan={self.growth.code}")
+        self.assertContains(r, "AliveCo")
+        self.assertNotContains(r, "TrialCo")
+
+    def test_dgc_filter(self):
+        r = self.client.get(f"/admin/stores/?dgc={self.dgc.pk}")
+        self.assertContains(r, "AliveCo")
+        self.assertNotContains(r, "TrialCo")
+        r = self.client.get("/admin/stores/?dgc=none")
+        self.assertContains(r, "TrialCo")
+        self.assertNotContains(r, "AliveCo")
+
+    def test_start_date_filter(self):
+        from datetime import date, timedelta
+        future = (date.today() + timedelta(days=1)).isoformat()
+        r = self.client.get(f"/admin/stores/?start={future}")
+        self.assertNotContains(r, "AliveCo")
+        self.assertNotContains(r, "TrialCo")
+
+    def test_table_shows_start_end_and_status_colours(self):
+        r = self.client.get("/admin/stores/")
+        self.assertContains(r, ">Start<")
+        self.assertContains(r, ">End<")
+        self.assertContains(r, "bg-emerald-100 text-emerald-700")  # active = green
+        self.assertContains(r, "bg-amber-100 text-amber-800")      # trial = orange
+
+    def test_dgc_filter_hidden_for_non_admin(self):
+        self.client.force_login(self.dgc)
+        r = self.client.get("/admin/stores/")
+        self.assertEqual(r.status_code, 200)
+        self.assertNotContains(r, 'name="dgc"')

@@ -1,8 +1,23 @@
 {% extends "control/base_control.jinja" %}
 {% block page_title %}Stores{% endblock %}
 
+{% set _STATUS_CLS = {
+  'active':    'bg-emerald-100 text-emerald-700',
+  'trialing':  'bg-amber-100 text-amber-800',
+  'past_due':  'bg-orange-100 text-orange-800',
+  'suspended': 'bg-rose-100 text-rose-700',
+  'cancelled': 'bg-slate-100 text-slate-500',
+  'archived':  'bg-slate-200 text-slate-600',
+} %}
+{% set _STATUS_LABEL = {
+  'active': 'Active', 'trialing': 'Trial', 'past_due': 'Past due',
+  'suspended': 'Suspended', 'cancelled': 'Cancelled', 'archived': 'Archived',
+} %}
+{% set _colspan = 8 if is_admin else 7 %}
+{% set _SEL = "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-slate-900 focus:outline-none" %}
+
 {% block content %}
-<div class="mx-auto max-w-4xl space-y-4">
+<div class="mx-auto max-w-6xl space-y-4">
   <div class="flex items-center justify-between">
     <div>
       <h2 class="text-sm font-semibold text-slate-700">Stores</h2>
@@ -14,43 +29,104 @@
     <a href="{{ url('control:store_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New store</a>
   </div>
 
+  {# filters #}
+  <form method="get" class="flex flex-wrap items-end gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      Status
+      <select name="status" class="{{ _SEL }}">
+        <option value="">All</option>
+        {% for val, label in status_choices %}
+        <option value="{{ val }}" {{ 'selected' if filters.status == val }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      Plan
+      <select name="plan" class="{{ _SEL }}">
+        <option value="">All</option>
+        {% for code, name in plan_choices %}
+        <option value="{{ code }}" {{ 'selected' if filters.plan == code }}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      Started on / after
+      <input type="date" name="start" value="{{ filters.start }}" class="{{ _SEL }}">
+    </label>
+    {% if is_admin %}
+    <label class="flex flex-col gap-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      DGC
+      <select name="dgc" class="{{ _SEL }}">
+        <option value="">All</option>
+        <option value="none" {{ 'selected' if filters.dgc == 'none' }}>— Direct (no DGC)</option>
+        {% for pk, email in dgc_choices %}
+        <option value="{{ pk }}" {{ 'selected' if filters.dgc == pk|string }}>{{ email }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <div class="flex gap-2">
+      <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">Apply</button>
+      {% if querystring %}
+      <a href="{{ url('control:stores') }}" class="rounded-lg px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-100">Clear</a>
+      {% endif %}
+    </div>
+  </form>
+
   <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
-    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[48rem]">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-2">Store</th><th class="px-4 py-2">Domain</th><th class="px-4 py-2">Plan</th>
-          <th class="px-4 py-2">Status</th><th class="px-4 py-2 text-right"></th></tr>
+        <tr>
+          <th class="px-4 py-2">Store</th>
+          <th class="px-4 py-2">Domain</th>
+          <th class="px-4 py-2">Plan</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2">Start</th>
+          <th class="px-4 py-2">End</th>
+          {% if is_admin %}<th class="px-4 py-2">DGC</th>{% endif %}
+          <th class="px-4 py-2 text-right"></th>
+        </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
         {% for s in stores %}
+        {% set sub = s.subscription if s.subscription else None %}
+        {% set st = 'archived' if s.status == 'archived' else (sub.status if sub else s.status) %}
         <tr class="hover:bg-slate-50">
           <td class="px-4 py-2"><a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ s.name }}</a></td>
           <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ s.primary_domain or '—' }}</td>
-          <td class="px-4 py-2 text-xs">{{ s.subscription.plan.name if s.subscription else '—' }}</td>
+          <td class="px-4 py-2 text-xs">{{ sub.plan.name if sub and sub.plan else '—' }}</td>
           <td class="px-4 py-2">
-            {% set st = 'archived' if s.status == 'archived' else (s.subscription.status if s.subscription else s.status) %}
-            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
-              {{ 'bg-emerald-100 text-emerald-700' if st in ('active','trialing') else 'bg-amber-100 text-amber-800' if st == 'past_due' else 'bg-red-100 text-red-700' if st == 'suspended' else 'bg-slate-200 text-slate-500' if st == 'archived' else 'bg-slate-100 text-slate-600' }}">{{ st }}</span>
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase {{ _STATUS_CLS.get(st, 'bg-slate-100 text-slate-600') }}">
+              {{ _STATUS_LABEL.get(st, st) }}
+            </span>
+            {% if sub and sub.is_comp %}<span class="ml-1 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-indigo-700">Gift</span>{% endif %}
           </td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ sub.current_period_start.strftime('%d %b %Y') if sub and sub.current_period_start else '—' }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">
+            {% if sub and sub.current_period_end %}{{ sub.current_period_end.strftime('%d %b %Y') }}{% else %}—{% endif %}
+          </td>
+          {% if is_admin %}<td class="px-4 py-2 text-xs text-slate-500">{{ sub.manager.email if sub and sub.manager_id else '—' }}</td>{% endif %}
           <td class="px-4 py-2 text-right">
             <form method="post" action="{{ url('control:store_switch', kwargs={'pk': s.pk}) }}" class="inline">
-              {{ csrf_input }}<button class="text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline">Work on this →</button>
+              {{ csrf_input }}<button class="whitespace-nowrap text-xs font-medium text-slate-600 hover:text-slate-900 hover:underline">Work on this →</button>
             </form>
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">No stores yet. Create one to get started.</td></tr>
+        <tr><td colspan="{{ _colspan }}" class="px-4 py-8 text-center text-slate-400">No stores match these filters.</td></tr>
         {% endfor %}
       </tbody>
     </table></div>
   </div>
+
   {% if page_obj and page_obj.has_other_pages() %}
   <div class="flex items-center justify-center gap-2 p-2 text-xs text-slate-500">
     {% if page_obj.has_previous() %}
-    <a class="hover:underline" href="?page={{ page_obj.previous_page_number() }}">← Prev</a>
+    <a class="hover:underline" href="?{{ (querystring ~ '&') if querystring else '' }}page={{ page_obj.previous_page_number() }}">← Prev</a>
     {% endif %}
     <span class="mx-2">Page {{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span>
     {% if page_obj.has_next() %}
-    <a class="hover:underline" href="?page={{ page_obj.next_page_number() }}">Next →</a>
+    <a class="hover:underline" href="?{{ (querystring ~ '&') if querystring else '' }}page={{ page_obj.next_page_number() }}">Next →</a>
     {% endif %}
   </div>
   {% endif %}

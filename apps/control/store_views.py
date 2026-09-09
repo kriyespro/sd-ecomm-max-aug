@@ -12,7 +12,7 @@ from django.views.generic import DetailView, FormView, ListView, View
 
 from apps.accounts.models import PlatformRole, StoreRole
 from apps.accounts.permissions import is_platform_admin
-from apps.billing.models import BillingPeriod, Plan
+from apps.billing.models import BillingPeriod, Plan, SubscriptionStatus
 from apps.core.mixins import PlatformStaffRequiredMixin
 from apps.projects import subdomains
 from apps.projects.models import Project
@@ -112,12 +112,63 @@ class StoreListView(_StoreScope, ListView):
     context_object_name = "stores"
     paginate_by = 50
 
+    def _filters(self):
+        g = self.request.GET
+        return {
+            "status": (g.get("status") or "").strip(),
+            "plan": (g.get("plan") or "").strip(),
+            "dgc": (g.get("dgc") or "").strip(),
+            "start": (g.get("start") or "").strip(),
+        }
+
     def get_queryset(self):
-        return self.accessible().order_by("name")
+        from django.utils.dateparse import parse_date
+
+        qs = self.accessible().select_related(
+            "subscription__plan", "subscription__manager"
+        )
+        f = self._filters()
+
+        if f["status"] == "archived":
+            qs = qs.filter(status=Project.Status.ARCHIVED)
+        elif f["status"]:
+            qs = qs.exclude(status=Project.Status.ARCHIVED).filter(
+                subscription__status=f["status"]
+            )
+
+        if f["plan"]:
+            qs = qs.filter(subscription__plan__code=f["plan"])
+        if f["dgc"] == "none":
+            qs = qs.filter(subscription__manager__isnull=True)
+        elif f["dgc"]:
+            qs = qs.filter(subscription__manager_id=f["dgc"])
+        if f["start"]:
+            d = parse_date(f["start"])
+            if d is not None:
+                qs = qs.filter(subscription__current_period_start__date__gte=d)
+
+        return qs.order_by("name")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["is_admin"] = is_platform_admin(self.request.user)
+        admin = is_platform_admin(self.request.user)
+        ctx["is_admin"] = admin
+        ctx["filters"] = self._filters()
+        ctx["status_choices"] = list(SubscriptionStatus.choices) + [("archived", "Archived")]
+        ctx["plan_choices"] = list(
+            Plan.objects.filter(is_active=True).order_by("sort_order").values_list("code", "name")
+        )
+        ctx["dgc_choices"] = (
+            list(
+                User.objects.filter(
+                    profile__platform_role=PlatformRole.MANAGER, is_active=True
+                ).order_by("email").values_list("pk", "email")
+            )
+            if admin else []
+        )
+        params = self.request.GET.copy()
+        params.pop("page", None)
+        ctx["querystring"] = params.urlencode()
         return ctx
 
 
