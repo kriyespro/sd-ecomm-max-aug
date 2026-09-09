@@ -38,6 +38,10 @@ class Profile(TimeStampedModel):
     )
     is_banned = models.BooleanField(default=False)
 
+    # Where a DGC (platform manager) wants commission payouts sent. Self-serve
+    # on /admin/earnings/; the platform admin sees it on the commissions screen.
+    payout_upi = models.CharField(max_length=120, blank=True)
+
     def save(self, *args, **kwargs):
         from apps.media.services import shrink_image_field
 

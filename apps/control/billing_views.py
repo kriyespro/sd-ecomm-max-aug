@@ -130,7 +130,7 @@ class CommissionListView(PlatformAdminRequiredMixin, ListView):
 
     def get_queryset(self):
         qs = (ManagerCommission.objects
-              .select_related("manager", "subscription__project", "invoice")
+              .select_related("manager__profile", "subscription__project", "invoice")
               .order_by("-created_at"))
         status = self.request.GET.get("status")
         return qs.filter(status=status) if status else qs
@@ -140,14 +140,16 @@ class CommissionListView(PlatformAdminRequiredMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["owed"] = (ManagerCommission.objects
                        .filter(status__in=[CommissionStatus.PENDING, CommissionStatus.APPROVED])
-                       .values("manager__username", "manager__email")
+                       .values("manager__username", "manager__email",
+                               "manager__profile__payout_upi")
                        .annotate(total=Sum("amount")).order_by("-total"))
         return ctx
 
 
 class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
-    """A DGC's own commission ledger — read-only. Platform admins have the
-    full cross-DGC view at ``billing_commissions`` instead."""
+    """A DGC's own commission ledger — read-only, plus a self-serve payout-UPI
+    field. Platform admins have the full cross-DGC view at
+    ``billing_commissions`` instead."""
 
     template_name = "control/billing/my_commissions.jinja"
     context_object_name = "rows"
@@ -161,6 +163,19 @@ class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
         status = self.request.GET.get("status")
         return qs.filter(status=status) if status else qs
 
+    def post(self, request, *args, **kwargs):
+        upi = (request.POST.get("payout_upi") or "").strip()[:120]
+        if upi and ("@" not in upi or " " in upi):
+            messages.error(request, "Enter a valid UPI ID, e.g. name@bank.")
+            return redirect("control:my_commissions")
+        profile = request.user.profile
+        profile.payout_upi = upi
+        profile.save(update_fields=["payout_upi", "updated_at"])
+        record_audit(actor=request.user, action=AuditLog.Action.UPDATE, target=profile,
+                     changes={"payout_upi": upi or "cleared"}, request=request)
+        messages.success(request, "Payout UPI saved." if upi else "Payout UPI cleared.")
+        return redirect("control:my_commissions")
+
     def get_context_data(self, **kwargs):
         from django.db.models import Sum
         ctx = super().get_context_data(**kwargs)
@@ -171,6 +186,7 @@ class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
             mine.filter(status__in=[CommissionStatus.PENDING, CommissionStatus.APPROVED])
             .aggregate(t=Sum("amount"))["t"] or 0
         )
+        ctx["payout_upi"] = getattr(self.request.user.profile, "payout_upi", "")
         return ctx
 
 

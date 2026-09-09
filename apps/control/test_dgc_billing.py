@@ -107,6 +107,42 @@ class DgcManagedStoreHidesPlanTests(TestCase):
         self.assertContains(resp, 'href="/admin/earnings/"')
         self.assertNotContains(resp, 'href="/admin/billing/commissions/"')
 
+    def test_dgc_sets_own_payout_upi(self):
+        self._login(self.dgc)
+        resp = self.client.post("/admin/earnings/", {"payout_upi": "dgc@okhdfcbank"}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.dgc.profile.refresh_from_db()
+        self.assertEqual(self.dgc.profile.payout_upi, "dgc@okhdfcbank")
+        self.assertContains(resp, "dgc@okhdfcbank")
+
+    def test_bad_upi_is_rejected(self):
+        self._login(self.dgc)
+        self.client.post("/admin/earnings/", {"payout_upi": "not a upi"}, follow=True)
+        self.dgc.profile.refresh_from_db()
+        self.assertEqual(self.dgc.profile.payout_upi, "")
+
+    def test_admin_commissions_screen_shows_dgc_upi(self):
+        from decimal import Decimal
+        from django.utils import timezone
+        from apps.billing.models import Invoice, ManagerCommission
+
+        self.dgc.profile.payout_upi = "dgc@okaxis"
+        self.dgc.profile.save(update_fields=["payout_upi"])
+        self._make_dgc_managed()
+        now = timezone.now()
+        inv = Invoice.objects.create(
+            subscription=self.sub, number="INV-C1", amount=Decimal("1000"), status="paid",
+            period_start=now, period_end=now, due_at=now,
+        )
+        ManagerCommission.objects.create(
+            manager=self.dgc, subscription=self.sub, invoice=inv, period="monthly",
+            base_amount=Decimal("1000"), rate_pct=Decimal("30"), amount=Decimal("300"),
+        )
+        su = User.objects.create_superuser("root2", "root2@t.test", "pw")
+        self.client.force_login(su)
+        resp = self.client.get("/admin/billing/commissions/")
+        self.assertContains(resp, "dgc@okaxis")
+
 
 class DgcTeamCapsTests(TestCase):
     """A DGC running a store for a client manages the client's staff only —

@@ -16,6 +16,7 @@
       {% for o in owed %}
       <span class="rounded-full bg-amber-50 px-3 py-1 text-xs text-amber-800 ring-1 ring-amber-200">
         {{ o.manager__email or o.manager__username }} · ₹{{ '{:,.0f}'.format(o.total) }}
+        {% if o.manager__profile__payout_upi %}<span class="ml-1 font-mono text-amber-600">{{ o.manager__profile__payout_upi }}</span>{% else %}<span class="ml-1 text-amber-500">(no UPI)</span>{% endif %}
       </span>
       {% else %}<span class="text-xs text-slate-400">Nothing owed.</span>{% endfor %}
     </div>
@@ -38,7 +39,10 @@
         {% for r in rows %}
         <tr class="hover:bg-slate-50">
           <td class="px-4 py-2 text-xs text-slate-500">{{ r.created_at.strftime('%d %b') }}</td>
-          <td class="px-4 py-2 text-xs">{{ r.manager.email }}</td>
+          <td class="px-4 py-2 text-xs">
+            {{ r.manager.email }}
+            {% if r.manager.profile.payout_upi %}<div class="font-mono text-[11px] text-slate-400">{{ r.manager.profile.payout_upi }}</div>{% endif %}
+          </td>
           <td class="px-4 py-2">{{ r.subscription.project.name }}</td>
           <td class="px-4 py-2 font-mono text-xs">{{ r.invoice.number }}</td>
           <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.base_amount) }}</td>
@@ -52,7 +56,7 @@
             {% if r.status != 'paid' %}
             <form method="post" action="{{ url('control:billing_commission_paid', kwargs={'pk': r.pk}) }}" class="flex gap-1">
               {{ csrf_input }}
-              <input name="ref" placeholder="Payout ref" class="w-24 rounded border border-slate-200 px-2 py-1 text-xs">
+              <input name="ref" placeholder="Payout ref / UPI" value="{{ r.manager.profile.payout_upi }}" class="w-32 rounded border border-slate-200 px-2 py-1 text-xs">
               <button class="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">Mark paid</button>
             </form>
             {% else %}<span class="text-xs text-slate-400">{{ r.payout_ref or '—' }}</span>{% endif %}
