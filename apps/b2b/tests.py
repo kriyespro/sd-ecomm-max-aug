@@ -297,6 +297,23 @@ class B2BScreenTests(TestCase):
         self.assertEqual(self.client.get("/admin/b2b/orders/").status_code, 403)
         self.assertEqual(self.client.get("/admin/b2b/payables/").status_code, 403)
 
+    def test_owner_renders_settings_and_marketplace_screens(self):
+        # a listing from another seller so the marketplace table has a row
+        other = Project.objects.create(name="OtherSeller", status="active", is_b2b_seller=True)
+        op = Product.objects.create(project=other, title="Wok", price=Decimal("600"))
+        B2BListing.objects.create(product=op, wholesale_price=Decimal("400"), is_active=True)
+        self._login_as(self.owner)
+
+        r1 = self.client.get("/admin/b2b/settings/")
+        self.assertEqual(r1.status_code, 200)
+        self.assertContains(r1, "List a product")
+        self.assertContains(r1, "Cost / retail")
+
+        r2 = self.client.get("/admin/b2b/marketplace/")
+        self.assertEqual(r2.status_code, 200)
+        self.assertContains(r2, "Wok")
+        self.assertContains(r2, "OtherSeller")
+
     def test_nav_hides_b2b_from_manager_shows_owner(self):
         self._login_as(self.owner)
         resp = self.client.get("/admin/b2b/settings/")
