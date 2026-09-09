@@ -405,3 +405,73 @@ class StoreSwitchView(_StoreScope, View):
         request.session[ACTIVE_PROJECT_SESSION_KEY] = store.pk
         messages.info(request, f"Now working on {store.name}.")
         return redirect(request.POST.get("next") or "control:dashboard")
+
+
+class StoreBackupView(_StoreScope, View):
+    """Platform-admin: download this store's storefront content as a .zip."""
+
+    def get(self, request, pk, *args, **kwargs):
+        from django.http import HttpResponse
+        from django.utils import timezone
+
+        from . import store_backup
+
+        store = self.get_store(pk)
+        if not is_platform_admin(request.user):
+            raise PermissionDenied
+        try:
+            blob = store_backup.dump_store(store)
+        except store_backup.BackupError as exc:
+            messages.error(request, str(exc))
+            return redirect("control:store_detail", pk=pk)
+        slug = (store.slug or f"store-{store.pk}")
+        stamp = timezone.now().strftime("%Y%m%d")
+        resp = HttpResponse(blob, content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="{slug}-backup-{stamp}.zip"'
+        return resp
+
+
+class StoreRestoreView(_StoreScope, View):
+    """Platform-admin: wipe this store's content and rebuild it from an uploaded
+    backup .zip. Requires the store name typed to confirm."""
+
+    MAX_UPLOAD = 700 * 1024 * 1024
+
+    def post(self, request, pk, *args, **kwargs):
+        from . import store_backup
+
+        store = self.get_store(pk)
+        if not is_platform_admin(request.user):
+            raise PermissionDenied
+
+        if (request.POST.get("confirm_name", "") or "").strip() != store.name:
+            messages.error(request, "Type the store's exact name to confirm the restore.")
+            return redirect("control:store_detail", pk=pk)
+
+        upload = request.FILES.get("backup")
+        if upload is None:
+            messages.error(request, "Choose a backup .zip file.")
+            return redirect("control:store_detail", pk=pk)
+        if upload.size and upload.size > self.MAX_UPLOAD:
+            messages.error(request, "That file is too large.")
+            return redirect("control:store_detail", pk=pk)
+
+        try:
+            counts = store_backup.restore_store(store, upload.read(), actor=request.user)
+        except store_backup.BackupError as exc:
+            messages.error(request, str(exc))
+            return redirect("control:store_detail", pk=pk)
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("store restore failed")
+            messages.error(request, f"Restore failed: {exc}")
+            return redirect("control:store_detail", pk=pk)
+
+        total = sum(counts.values())
+        messages.success(
+            request,
+            f"{store.name} restored from backup — {total} items loaded "
+            f"({counts.get('product', 0)} products, {counts.get('category', 0)} categories).",
+        )
+        return redirect("control:store_detail", pk=pk)

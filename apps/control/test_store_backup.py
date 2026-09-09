@@ -1,0 +1,168 @@
+import io
+from decimal import Decimal
+
+from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
+
+from apps.accounts.models import PlatformRole, Profile
+from apps.catalog.models import Brand, Product, ProductImage, ProductType, Variant
+from apps.categories.models import Category
+from apps.cms.models import BudgetBand, Menu, MenuItem, Page, StoreProfile, ThemeSettings
+from apps.control import store_backup
+from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
+from apps.customers.models import Customer
+from apps.projects.models import Project
+
+User = get_user_model()
+
+
+def _png():
+    from PIL import Image
+
+    b = io.BytesIO()
+    Image.new("RGB", (80, 80), "teal").save(b, format="PNG")
+    return b.getvalue()
+
+
+def _build_source(project):
+    clothing = Category.objects.create(project=project, name="Clothing", slug="clothing", order=1)
+    shirts = Category.objects.create(project=project, name="Shirts", slug="shirts",
+                                     parent=clothing, order=2)
+    brand = Brand.objects.create(project=project, name="Acme", slug="acme")
+    ptype = ProductType.objects.create(project=project, name="Simple", slug="simple", kind="simple")
+
+    p1 = Product.objects.create(project=project, title="Tee", slug="tee", price=Decimal("499"),
+                                category=clothing, type=ptype, status="active")
+    ProductImage.objects.create(product=p1,
+                                image=SimpleUploadedFile("t.png", _png(), "image/png"),
+                                alt="tee", is_primary=True)
+    Variant.objects.create(product=p1, name="M", sku="TEE-M",
+                           price=Decimal("499"), stock=5)
+    Product.objects.create(project=project, title="Formal Shirt", slug="formal-shirt",
+                           price=Decimal("1299"), category=shirts, brand=brand, status="active")
+    Product.objects.create(project=project, title="Loose Item", slug="loose", price=Decimal("99"),
+                           status="active")
+
+    page = Page.objects.create(project=project, title="About Us", slug="about-us", status="published")
+    menu = Menu.objects.create(project=project, name="Header", location="main")
+    top = MenuItem.objects.create(menu=menu, label="Shop", link_type="category",
+                                  category=shirts, order=1)
+    MenuItem.objects.create(menu=menu, label="Kids", link_type="category", category=shirts,
+                            parent=top, order=1)
+    MenuItem.objects.create(menu=menu, label="About", link_type="page", page=page, order=2)
+
+    BudgetBand.objects.create(project=project, label="Under 500", max_price=Decimal("500"), order=1)
+    ThemeSettings.objects.update_or_create(project=project,
+                                           defaults={"primary_color": "#123456"})
+    StoreProfile.objects.update_or_create(project=project,
+                                          defaults={"tagline": "Best tees in town"})
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class StoreBackupRoundTripTests(TestCase):
+    def setUp(self):
+        self.src = Project.objects.create(name="SourceCo", status="active")
+        _build_source(self.src)
+
+        self.dst = Project.objects.create(name="TargetCo", status="active")
+        # pre-existing content on the target that the restore must clear
+        Category.objects.create(project=self.dst, name="Old", slug="old")
+        Product.objects.create(project=self.dst, title="OldProd", slug="oldprod",
+                               price=Decimal("1"), status="active")
+        # and an order/customer that the restore must NOT touch
+        self.customer = Customer.objects.create(project=self.dst, email="buyer@dst.test")
+
+    def test_dump_then_restore_clones_content_and_remaps_fks(self):
+        blob = store_backup.dump_store(self.src)
+        with self.captureOnCommitCallbacks(execute=True):
+            counts = store_backup.restore_store(self.dst, blob, actor=None)
+
+        self.assertEqual(counts["product"], 3)
+        self.assertEqual(counts["category"], 2)
+
+        cats = {c.name: c for c in Category.objects.filter(project=self.dst)}
+        self.assertEqual(set(cats), {"Clothing", "Shirts"})          # "Old" wiped
+        self.assertEqual(cats["Shirts"].parent_id, cats["Clothing"].pk)  # self-FK remapped
+
+        titles = set(Product.objects.filter(project=self.dst).values_list("title", flat=True))
+        self.assertEqual(titles, {"Tee", "Formal Shirt", "Loose Item"})   # "OldProd" wiped
+        shirt = Product.objects.get(project=self.dst, title="Formal Shirt")
+        self.assertEqual(shirt.category_id, cats["Shirts"].pk)            # cross-model FK remapped
+        self.assertEqual(shirt.brand.name, "Acme")
+
+        tee = Product.objects.get(project=self.dst, title="Tee")
+        img = ProductImage.objects.get(product=tee)
+        self.assertTrue(img.image.name and img.image.storage.exists(img.image.name))
+        self.assertEqual(Variant.objects.filter(product=tee).count(), 1)
+
+        menu = Menu.objects.get(project=self.dst, name="Header")
+        kids = MenuItem.objects.get(menu=menu, label="Kids")
+        self.assertEqual(kids.parent.label, "Shop")                       # menu self-FK remapped
+        self.assertEqual(MenuItem.objects.get(menu=menu, label="Shop").category_id, cats["Shirts"].pk)
+        self.assertEqual(MenuItem.objects.get(menu=menu, label="About").page.slug, "about-us")
+
+        self.assertEqual(ThemeSettings.objects.get(project=self.dst).primary_color, "#123456")
+        self.assertEqual(StoreProfile.objects.get(project=self.dst).tagline, "Best tees in town")
+
+        # untouched
+        self.assertTrue(Customer.objects.filter(pk=self.customer.pk).exists())
+        # source unchanged
+        self.assertEqual(Product.objects.filter(project=self.src).count(), 3)
+
+    def test_restore_rejects_a_non_backup_zip(self):
+        bad = io.BytesIO()
+        import zipfile
+        with zipfile.ZipFile(bad, "w") as zf:
+            zf.writestr("hello.txt", "nope")
+        with self.assertRaises(store_backup.BackupError):
+            store_backup.restore_store(self.dst, bad.getvalue(), actor=None)
+        self.assertTrue(Product.objects.filter(project=self.dst, title="OldProd").exists())
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class StoreBackupViewTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root", "root@t.test", "pw")
+        self.a = Project.objects.create(name="A Co", status="active")
+        _build_source(self.a)
+        self.b = Project.objects.create(name="B Co", status="active")
+
+    def _login(self, user):
+        self.client.force_login(user)
+
+    def test_admin_downloads_and_restores(self):
+        self._login(self.admin)
+        r = self.client.get(f"/admin/stores/{self.a.pk}/backup/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r["Content-Type"], "application/zip")
+        blob = b"".join(r.streaming_content) if r.streaming else r.content
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
+                "confirm_name": "B Co",
+                "backup": SimpleUploadedFile("bk.zip", blob, "application/zip"),
+            })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(Product.objects.filter(project=self.b).count(), 3)
+
+    def test_restore_needs_exact_name(self):
+        self._login(self.admin)
+        blob = self.client.get(f"/admin/stores/{self.a.pk}/backup/").content
+        resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
+            "confirm_name": "wrong",
+            "backup": SimpleUploadedFile("bk.zip", blob, "application/zip"),
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(Product.objects.filter(project=self.b).count(), 0)
+
+    def test_dgc_cannot_backup_or_restore(self):
+        dgc = User.objects.create_user("d", "d@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        # make the DGC the manager of store A so _StoreScope lets them see it
+        from apps.billing import services as billing_svc
+        sub = billing_svc.ensure_subscription(self.a)
+        sub.manager = User.objects.get(pk=dgc.pk)
+        sub.save(update_fields=["manager"])
+        self._login(User.objects.get(pk=dgc.pk))
+        self.assertEqual(self.client.get(f"/admin/stores/{self.a.pk}/backup/").status_code, 403)

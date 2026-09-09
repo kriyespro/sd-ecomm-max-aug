@@ -285,6 +285,8 @@ urlpatterns = [
     path("stores/<int:pk>/unarchive/", storev.StoreUnarchiveView.as_view(), name="store_unarchive"),
     path("stores/<int:pk>/delete/", storev.StoreDeleteView.as_view(), name="store_delete"),
     path("stores/<int:pk>/switch/", storev.StoreSwitchView.as_view(), name="store_switch"),
+    path("stores/<int:pk>/backup/", storev.StoreBackupView.as_view(), name="store_backup"),
+    path("stores/<int:pk>/restore/", storev.StoreRestoreView.as_view(), name="store_restore"),
 
     # Platform billing (super admin)
     path("billing/", billv.BillingDashboardView.as_view(), name="billing"),
