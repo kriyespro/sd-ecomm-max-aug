@@ -284,6 +284,14 @@ class StoreListFilterTests(TestCase):
         self.assertContains(r, "bg-emerald-100 text-emerald-700")  # active = green
         self.assertContains(r, "bg-amber-100 text-amber-800")      # trial = orange
 
+    def test_table_shows_store_mobile_number(self):
+        from apps.cms.models import StoreProfile
+
+        StoreProfile.objects.create(project=self.active, support_phone="+91 98765 43210")
+        r = self.client.get("/admin/stores/")
+        self.assertContains(r, ">Mobile<")
+        self.assertContains(r, "+91 98765 43210")
+
     def test_dgc_filter_hidden_for_non_admin(self):
         self.client.force_login(self.dgc)
         r = self.client.get("/admin/stores/")

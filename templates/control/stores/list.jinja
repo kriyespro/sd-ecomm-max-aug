@@ -13,7 +13,7 @@
   'active': 'Active', 'trialing': 'Trial', 'past_due': 'Past due',
   'suspended': 'Suspended', 'cancelled': 'Cancelled', 'archived': 'Archived',
 } %}
-{% set _colspan = 8 if is_admin else 7 %}
+{% set _colspan = 9 if is_admin else 8 %}
 {% set _SEL = "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs focus:border-slate-900 focus:outline-none" %}
 
 {% block content %}
@@ -79,6 +79,7 @@
         <tr>
           <th class="px-4 py-2">Store</th>
           <th class="px-4 py-2">Domain</th>
+          <th class="px-4 py-2">Mobile</th>
           <th class="px-4 py-2">Plan</th>
           <th class="px-4 py-2">Status</th>
           <th class="px-4 py-2">Start</th>
@@ -91,9 +92,14 @@
         {% for s in stores %}
         {% set sub = s.subscription if s.subscription else None %}
         {% set st = 'archived' if s.status == 'archived' else (sub.status if sub else s.status) %}
+        {% set sp = s.storeprofiles.all()[0] if s.storeprofiles.all() else None %}
+        {% set mobile = (sp.support_phone or sp.whatsapp) if sp else '' %}
         <tr class="hover:bg-slate-50">
           <td class="px-4 py-2"><a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ s.name }}</a></td>
           <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ s.primary_domain or '—' }}</td>
+          <td class="px-4 py-2 whitespace-nowrap text-xs text-slate-600">
+            {% if mobile %}<a href="tel:{{ mobile }}" class="hover:underline">{{ mobile }}</a>{% else %}—{% endif %}
+          </td>
           <td class="px-4 py-2 text-xs">{{ sub.plan.name if sub and sub.plan else '—' }}</td>
           <td class="px-4 py-2">
             <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase {{ _STATUS_CLS.get(st, 'bg-slate-100 text-slate-600') }}">
