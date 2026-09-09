@@ -80,17 +80,21 @@ def _skin_count():
 
 def _landing_live_stores(limit=12):
     try:
+        from django.db.models import Q
         from apps.projects.models import Project
 
-        return list(
+        qs = (
             Project.objects.filter(
                 showcase_status=Project.ShowcaseStatus.APPROVED,
                 status=Project.Status.ACTIVE,
             )
-            .exclude(primary_domain__isnull=True)
-            .exclude(primary_domain="")
-            .order_by("-showcase_reviewed_at")[:limit]
+            # reachable somehow: a primary_domain, OR any verified Domain
+            # (covers stores that live on a *.<platform> subdomain).
+            .filter(Q(primary_domain__gt="") | Q(domains__is_verified=True))
+            .distinct()
+            .order_by("-showcase_reviewed_at", "-updated_at")
         )
+        return [p for p in qs[: limit * 2] if p.public_url][:limit]
     except Exception:  # noqa: BLE001 — the landing page must never 500 over this
         return []
 

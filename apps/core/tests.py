@@ -218,3 +218,39 @@ class PartnerPageTests(TestCase):
         })
         self.assertEqual(resp.status_code, 400)
         self.assertFalse(PartnerApplication.objects.exists())
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class LandingLiveStoresTests(TestCase):
+    def _approved(self, name, *, domain=None, verified_domain=None, active=True):
+        from django.utils import timezone
+        p = Project.objects.create(
+            name=name, status="active" if active else "archived",
+            primary_domain=domain or None,
+            showcase_status=Project.ShowcaseStatus.APPROVED,
+            showcase_reviewed_at=timezone.now(),
+        )
+        if verified_domain:
+            Domain.objects.create(project=p, host=verified_domain, is_verified=True, is_primary=True)
+        return p
+
+    def test_shows_stores_on_custom_domain_and_on_subdomain(self):
+        from apps.core.views import _landing_live_stores
+        self._approved("Custom", domain="shop.brand.com")
+        self._approved("Subdomain", verified_domain="genze.shopinaday.com")   # no primary_domain
+        self._approved("NoDomain")                                            # excluded
+        self._approved("Archived", domain="x.com", active=False)              # excluded
+
+        names = {s.name for s in _landing_live_stores()}
+        self.assertEqual(names, {"Custom", "Subdomain"})
+
+    def test_public_url_falls_back_to_verified_domain(self):
+        p = self._approved("Sub", verified_domain="foo.shopinaday.com")
+        self.assertEqual(p.public_url, "https://foo.shopinaday.com/")
+        self.assertEqual(p.public_host, "foo.shopinaday.com")
+
+    def test_landing_page_lists_an_approved_store(self):
+        self._approved("VisibleCo", domain="visible.example.com")
+        resp = self.client.get("/", HTTP_HOST="platform.test")
+        self.assertContains(resp, "VisibleCo")
+        self.assertContains(resp, "visible.example.com")

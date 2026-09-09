@@ -129,9 +129,24 @@ class Project(TimeStampedModel):
 
     @property
     def public_url(self):
-        """The store's own live site, or ``None`` if it has no domain yet."""
+        """The store's own live site, or ``None`` if it has no domain yet.
+        Falls back to a verified Domain (platform subdomains live there, not on
+        ``primary_domain``)."""
         host = (self.primary_domain or "").strip()
+        if not host:
+            d = (
+                self.domains.filter(is_verified=True)
+                .order_by("-is_primary", "created_at")
+                .values_list("host", flat=True)
+                .first()
+            )
+            host = (d or "").strip()
         return f"https://{host}/" if host else None
+
+    @property
+    def public_host(self):
+        url = self.public_url
+        return url.split("//", 1)[-1].rstrip("/") if url else ""
 
     def feature_enabled(self, key, default=False):
         return bool(self.feature_flags.get(key, default))
