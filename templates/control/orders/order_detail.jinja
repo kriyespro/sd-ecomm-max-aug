@@ -26,6 +26,14 @@
       <span class="rounded bg-slate-200 px-2 py-1 text-slate-700">{{ order.get_status_display() }}</span>
       <span class="rounded bg-slate-200 px-2 py-1 text-slate-700">{{ order.get_payment_status_display() }}</span>
       <span class="rounded bg-slate-200 px-2 py-1 text-slate-700">{{ order.get_fulfillment_status_display() }}</span>
+      {% if order.is_archived %}<span class="rounded bg-slate-300 px-2 py-1 font-semibold uppercase text-slate-600">Archived</span>{% endif %}
+      {% if can_manage_orders %}
+      {% if order.is_archived %}
+      <form method="post" action="{{ url('control:order_unarchive', kwargs={'pk': order.pk}) }}">{{ csrf_input }}<button class="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">Unarchive</button></form>
+      {% else %}
+      <form method="post" action="{{ url('control:order_archive', kwargs={'pk': order.pk}) }}"><input type="hidden" name="next" value="{{ url('control:order_detail', kwargs={'pk': order.pk}) }}">{{ csrf_input }}<button class="rounded border border-slate-300 px-2 py-1 hover:bg-slate-50">Archive</button></form>
+      {% endif %}
+      {% endif %}
     </div>
   </div>
 

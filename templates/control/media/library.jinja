@@ -34,6 +34,14 @@
     <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">Filter</button>
   </form>
 
+  <div class="flex items-center gap-3 text-xs">
+    <a href="{{ url('control:media') }}" class="{{ 'font-semibold text-slate-900' if not show_trash else 'text-slate-500 hover:text-slate-900' }}">Library</a>
+    <a href="{{ url('control:media') }}?trash=1" class="{{ 'font-semibold text-slate-900' if show_trash else 'text-slate-500 hover:text-slate-900' }}">
+      Trash{% if trash_count %} ({{ trash_count }}){% endif %}
+    </a>
+    {% if show_trash %}<span class="ml-auto text-slate-400">Deleted for good {{ trash_retention_days }} days after trashing.</span>{% endif %}
+  </div>
+
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
     {% for a in assets %}
     <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
@@ -49,10 +57,19 @@
         <p class="text-slate-400">{{ (a.size / 1024) | round(1) }} KB{% if a.width %} · {{ a.width }}×{{ a.height }}{% endif %}</p>
         <div class="mt-1 flex items-center justify-between">
           <a href="{{ a.url }}" target="_blank" class="text-slate-500 hover:underline">open</a>
+          {% if show_trash %}
+            {% if can_manage_trash %}
+            <span class="flex gap-2">
+              <form method="post" action="{{ url('control:media_restore', kwargs={'pk': a.pk}) }}">{{ csrf_input }}<button class="text-slate-600 hover:underline">restore</button></form>
+              <form method="post" action="{{ url('control:media_purge', kwargs={'pk': a.pk}) }}" onsubmit="return confirm('Delete this file permanently?')">{{ csrf_input }}<button class="text-red-600 hover:underline">delete forever</button></form>
+            </span>
+            {% endif %}
+          {% elif can_manage_trash %}
           <form method="post" action="{{ url('control:media_delete', kwargs={'pk': a.pk}) }}">
             {{ csrf_input }}
-            <button class="text-red-600 hover:underline">delete</button>
+            <button class="text-red-600 hover:underline">trash</button>
           </form>
+          {% endif %}
         </div>
       </div>
     </div>

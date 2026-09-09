@@ -33,6 +33,13 @@
       <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
     </div>
   </div>
+  <div class="flex items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs">
+    <a href="{{ url('control:product_list') }}" class="{{ 'font-semibold text-slate-900' if not show_trash else 'text-slate-500 hover:text-slate-900' }}">Products</a>
+    <a href="{{ url('control:product_list') }}?trash=1" class="{{ 'font-semibold text-slate-900' if show_trash else 'text-slate-500 hover:text-slate-900' }}">
+      Trash{% if trash_count %} ({{ trash_count }}){% endif %}
+    </a>
+    {% if show_trash %}<span class="ml-auto text-slate-400">Items are deleted for good {{ trash_retention_days }} days after trashing.</span>{% endif %}
+  </div>
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">SKU</th><th class="px-4 py-2">Price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Category</th><th class="px-4 py-2 text-right">Actions</th></tr>

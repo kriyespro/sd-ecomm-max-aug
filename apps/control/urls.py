@@ -104,6 +104,8 @@ urlpatterns = [
     path("products/new/", cat.ProductCreateView.as_view(), name="product_create"),
     path("products/<int:pk>/", cat.ProductUpdateView.as_view(), name="product_edit"),
     path("products/<int:pk>/delete/", cat.ProductDeleteView.as_view(), name="product_delete"),
+    path("products/<int:pk>/restore/", cat.ProductRestoreView.as_view(), name="product_restore"),
+    path("products/<int:pk>/purge/", cat.ProductPurgeView.as_view(), name="product_purge"),
     path("products/<int:pk>/duplicate/", cat.ProductDuplicateView.as_view(), name="product_duplicate"),
     path("products/<int:pk>/images/", cat.ProductImagePanelView.as_view(), name="product_images"),
     path("products/<int:pk>/images/upload/", cat.ProductImageUploadView.as_view(), name="product_image_upload"),
@@ -127,6 +129,8 @@ urlpatterns = [
     path("orders/", ordv.OrderListView.as_view(), name="order_list"),
     path("orders/export/", ordv.OrderExportView.as_view(), name="order_export"),
     path("orders/<int:pk>/", ordv.OrderDetailView.as_view(), name="order_detail"),
+    path("orders/<int:pk>/archive/", ordv.OrderArchiveView.as_view(), name="order_archive"),
+    path("orders/<int:pk>/unarchive/", ordv.OrderUnarchiveView.as_view(), name="order_unarchive"),
     path("orders/<int:pk>/status/", ordv.OrderStatusView.as_view(), name="order_status"),
     path("orders/<int:pk>/payment/", ordv.OrderPaymentView.as_view(), name="order_payment"),
     path("orders/<int:pk>/fulfill/", ordv.OrderFulfillView.as_view(), name="order_fulfill"),
@@ -203,6 +207,8 @@ urlpatterns = [
     path("media/", p11.MediaLibraryView.as_view(), name="media"),
     path("media/upload/", p11.MediaUploadView.as_view(), name="media_upload"),
     path("media/<int:pk>/delete/", p11.MediaDeleteView.as_view(), name="media_delete"),
+    path("media/<int:pk>/restore/", p11.MediaRestoreView.as_view(), name="media_restore"),
+    path("media/<int:pk>/purge/", p11.MediaPurgeView.as_view(), name="media_purge"),
 
     # CMS — pages
     path("cms/pages/", cmsv.PageListView.as_view(), name="cms_pages"),

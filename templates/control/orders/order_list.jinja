@@ -38,6 +38,12 @@
       {% endif %}
     </div>
   </div>
+  {% if can_manage_orders %}
+  <div class="flex items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs">
+    <a href="{{ url('control:order_list') }}" class="{{ 'font-semibold text-slate-900' if not archived else 'text-slate-500 hover:text-slate-900' }}">Active</a>
+    <a href="{{ url('control:order_list') }}?archived=1" class="{{ 'font-semibold text-slate-900' if archived else 'text-slate-500 hover:text-slate-900' }}">Archived</a>
+  </div>
+  {% endif %}
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
@@ -46,6 +52,7 @@
           <th class="px-4 py-2">Customer</th><th class="px-4 py-2">Status</th>
           <th class="px-4 py-2">Payment</th><th class="px-4 py-2">Fulfilment</th>
           <th class="px-4 py-2 text-right">Total</th>
+          {% if can_manage_orders %}<th class="px-4 py-2"></th>{% endif %}
         </tr>
       </thead>
       <tbody id="order-rows" class="divide-y divide-slate-100">

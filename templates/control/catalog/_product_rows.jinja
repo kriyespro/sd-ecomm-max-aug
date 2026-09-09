@@ -16,9 +16,18 @@
          else 'bg-amber-100 text-amber-700' }}">{{ p.get_status_display() }}</span>
   </td>
   <td class="px-4 py-2 text-slate-500">{{ p.category.name if p.category else "—" }}</td>
-  <td class="px-4 py-2 text-right">
-    <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
-    <a href="{{ url('control:product_delete', kwargs={'pk': p.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+  <td class="px-4 py-2 text-right whitespace-nowrap">
+    {% if show_trash %}
+      {% if can_manage_trash %}
+      <form method="post" action="{{ url('control:product_restore', kwargs={'pk': p.pk}) }}" class="inline">{{ csrf_input }}<button class="text-slate-600 hover:underline">Restore</button></form>
+      <form method="post" action="{{ url('control:product_purge', kwargs={'pk': p.pk}) }}" class="inline" onsubmit="return confirm('Delete “{{ p.title }}” permanently? This cannot be undone.')">{{ csrf_input }}<button class="ml-2 text-red-600 hover:underline">Delete forever</button></form>
+      {% endif %}
+    {% else %}
+      <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+      {% if can_manage_trash %}
+      <a href="{{ url('control:product_delete', kwargs={'pk': p.pk}) }}" class="ml-2 text-red-600 hover:underline">Trash</a>
+      {% endif %}
+    {% endif %}
   </td>
 </tr>
 {% else %}

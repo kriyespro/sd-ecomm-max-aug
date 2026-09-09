@@ -114,6 +114,11 @@ class Order(TenantScopedModel):
     customer_note = models.TextField(blank=True)
     admin_note = models.TextField(blank=True)
 
+    # Owner/manager can archive a finished order to keep the list tidy. It stays
+    # fully intact (totals, timeline, stock) — just hidden from the default view.
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+
     placed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:

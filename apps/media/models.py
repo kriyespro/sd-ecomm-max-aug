@@ -37,6 +37,10 @@ class MediaAsset(TenantScopedModel):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="media_uploads",
     )
 
+    # Trash: hidden from the library; a purge task removes it (file + row) after
+    # 30 days, or an owner/manager restores it.
+    trashed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+
     class Meta:
         ordering = ["-created_at"]
         constraints = [

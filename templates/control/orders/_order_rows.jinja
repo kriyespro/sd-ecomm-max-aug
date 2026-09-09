@@ -29,9 +29,18 @@
   <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ pay_class.get(o.payment_status, 'bg-slate-200 text-slate-600') }}">{{ o.get_payment_status_display() }}</span></td>
   <td class="px-4 py-2 text-slate-500">{{ o.get_fulfillment_status_display() }}</td>
   <td class="px-4 py-2 text-right font-medium">{{ o.currency }} {{ o.grand_total }}</td>
+  {% if can_manage_orders %}
+  <td class="px-4 py-2 text-right">
+    {% if o.is_archived %}
+    <form method="post" action="{{ url('control:order_unarchive', kwargs={'pk': o.pk}) }}" class="inline">{{ csrf_input }}<input type="hidden" name="next" value="?archived=1"><button class="text-xs text-slate-600 hover:underline">Unarchive</button></form>
+    {% else %}
+    <form method="post" action="{{ url('control:order_archive', kwargs={'pk': o.pk}) }}" class="inline">{{ csrf_input }}<button class="text-xs text-slate-500 hover:text-slate-900 hover:underline">Archive</button></form>
+    {% endif %}
+  </td>
+  {% endif %}
 </tr>
 {% else %}
-<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No orders found.</td></tr>
+<tr><td colspan="{{ 8 if can_manage_orders else 7 }}" class="px-4 py-6 text-center text-slate-400">No orders found.</td></tr>
 {% endfor %}
 {% if page_obj and page_obj.has_other_pages() %}
 <tr>

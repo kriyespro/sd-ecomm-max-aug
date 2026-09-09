@@ -37,6 +37,12 @@ from .forms import (
     TagForm,
 )
 from .mixins import ActiveProjectMixin
+from .trash import (
+    TRASH_RETENTION_DAYS,
+    purge_product,
+    restore_product,
+    trash_product,
+)
 
 
 class _ScopedQuerysetMixin(ActiveProjectMixin):
@@ -217,13 +223,20 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
 
     def get_queryset(self):
         qs = super().get_queryset().select_related("brand", "category")
+        if self._show_trash():
+            qs = qs.filter(trashed_at__isnull=False).order_by("-trashed_at")
+        else:
+            qs = qs.filter(trashed_at__isnull=True)
         q = self.request.GET.get("q", "").strip()
         if q:
             qs = qs.filter(title__icontains=q)
         status = self.request.GET.get("status", "").strip()
-        if status:
+        if status and not self._show_trash():
             qs = qs.filter(status=status)
         return qs
+
+    def _show_trash(self):
+        return (self.request.GET.get("trash", "") or "").strip() in ("1", "true", "yes")
 
     def get_template_names(self):
         if self.request.headers.get("HX-Request"):
@@ -231,9 +244,19 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         return [self.template_name]
 
     def get_context_data(self, **kwargs):
+        from apps.accounts.permissions import OWNER_MANAGER, has_store_role
+
         ctx = super().get_context_data(**kwargs)
         ctx["q"] = self.request.GET.get("q", "")
         ctx["status"] = self.request.GET.get("status", "")
+        ctx["show_trash"] = self._show_trash()
+        ctx["trash_count"] = Product.objects.filter(
+            project=self.active_project, trashed_at__isnull=False
+        ).count()
+        ctx["can_manage_trash"] = has_store_role(
+            self.request.user, self.active_project, OWNER_MANAGER
+        )
+        ctx["trash_retention_days"] = TRASH_RETENTION_DAYS
         return ctx
 
 
@@ -548,14 +571,60 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
         return redirect("control:product_edit", pk=clone.pk)
 
 
-class ProductDeleteView(_ScopedQuerysetMixin, DeleteView):
-    model = Product
-    template_name = "control/catalog/confirm_delete.jinja"
-    success_url = reverse_lazy("control:product_list")
+class _ProductTrashBase(_ScopedQuerysetMixin):
+    """Owner / manager only — trashing is reversible, purging is not."""
 
-    def form_valid(self, form):
-        record_audit(
-            actor=self.request.user, project=self.active_project,
-            action=AuditLog.Action.DELETE, target=self.get_object(), request=self.request,
+    def check_active_project_access(self, request):
+        parent = super().check_active_project_access(request)
+        if parent is not None:
+            return parent
+        from apps.accounts.permissions import OWNER_MANAGER, assert_store_role
+
+        assert_store_role(request.user, self.active_project, OWNER_MANAGER,
+                          "Only the store owner or a manager can do this.")
+        return None
+
+    def _product(self):
+        return get_object_or_404(
+            Product.objects.filter(project=self.active_project), pk=self.kwargs["pk"]
         )
-        return super().form_valid(form)
+
+
+class ProductDeleteView(_ProductTrashBase, View):
+    """"Delete" = move to Trash (kept for 30 days, then purged)."""
+
+    def get(self, request, *args, **kwargs):
+        return render(request, "control/catalog/confirm_delete.jinja",
+                      {"object": self._product(), "active_project": self.active_project,
+                       "trash_days": TRASH_RETENTION_DAYS})
+
+    def post(self, request, *args, **kwargs):
+        product = self._product()
+        trash_product(product)
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=product,
+                     changes={"trashed": True}, request=request)
+        messages.success(request, f"“{product.title}” moved to Trash.")
+        return redirect("control:product_list")
+
+
+class ProductRestoreView(_ProductTrashBase, View):
+    def post(self, request, *args, **kwargs):
+        product = self._product()
+        restore_product(product)
+        messages.success(request, f"“{product.title}” restored.")
+        return redirect(f"{reverse_lazy('control:product_list')}?trash=1")
+
+
+class ProductPurgeView(_ProductTrashBase, View):
+    def post(self, request, *args, **kwargs):
+        product = self._product()
+        title = product.title
+        if purge_product(product):
+            record_audit(actor=request.user, project=self.active_project,
+                         action=AuditLog.Action.DELETE, target=None,
+                         changes={"purged_product": title}, request=request)
+            messages.success(request, f"“{title}” permanently deleted.")
+        else:
+            messages.error(request, f"“{title}” is still in a shopper's cart — can't delete it yet.")
+        return redirect(f"{reverse_lazy('control:product_list')}?trash=1")

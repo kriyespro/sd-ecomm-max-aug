@@ -14,6 +14,8 @@ from django.utils import timezone
 from django.views.generic import DetailView, ListView, View
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
+from apps.core.models import AuditLog
+from apps.core.services import record_audit
 from apps.orders import services as orders
 from apps.orders.models import Order, OrderStatus, PaymentStatus
 
@@ -33,6 +35,10 @@ class _OrderScopedMixin(StoreDataAccessMixin, ActiveProjectMixin):
 
 def _filtered_orders(project, params):
     qs = Order.objects.filter(project=project)
+    if (params.get("archived") or "").strip() in ("1", "true", "yes"):
+        qs = qs.filter(is_archived=True)
+    else:
+        qs = qs.filter(is_archived=False)
     status = (params.get("status") or "").strip()
     if status:
         qs = qs.filter(status=status)
@@ -70,7 +76,48 @@ class OrderListView(StoreDataAccessMixin, ActiveProjectMixin, ListView):
         ctx["can_export_orders"] = has_store_role(
             self.request.user, self.active_project, OWNER_MANAGER
         )
+        ctx["can_manage_orders"] = ctx["can_export_orders"]
+        ctx["archived"] = (self.request.GET.get("archived", "") or "").strip() in ("1", "true", "yes")
         return ctx
+
+
+class _OrderManageMixin(StoreDataAccessMixin, StoreRoleRequiredMixin, ActiveProjectMixin):
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can archive orders."
+
+    def _order(self):
+        order = get_object_or_404(Order, pk=self.kwargs["pk"])
+        if order.project_id != self.active_project.pk:
+            raise Http404
+        return order
+
+
+class OrderArchiveView(_OrderManageMixin, View):
+    def post(self, request, *args, **kwargs):
+        from django.utils import timezone
+
+        order = self._order()
+        if not order.is_archived:
+            order.is_archived = True
+            order.archived_at = timezone.now()
+            order.save(update_fields=["is_archived", "archived_at", "updated_at"])
+            record_audit(actor=request.user, project=self.active_project,
+                         action=AuditLog.Action.UPDATE, target=order,
+                         changes={"archived": True}, request=request)
+        messages.success(request, f"Order {order.number} archived.")
+        return redirect(request.POST.get("next") or "control:order_list")
+
+
+class OrderUnarchiveView(_OrderManageMixin, View):
+    def post(self, request, *args, **kwargs):
+        order = self._order()
+        if order.is_archived:
+            order.is_archived = False
+            order.archived_at = None
+            order.save(update_fields=["is_archived", "archived_at", "updated_at"])
+        messages.success(request, f"Order {order.number} restored to the active list.")
+        nxt = request.POST.get("next")
+        return redirect(nxt) if nxt else redirect("control:order_detail", pk=order.pk)
 
 
 _EXPORT_COLUMNS = [
@@ -136,6 +183,11 @@ class OrderDetailView(_OrderScopedMixin, DetailView):
         ctx["shipping_methods"] = ship.methods_for_order(self.object)
         ctx["shipments"] = self.object.shipments.prefetch_related("events", "items")
         ctx["shipment_statuses"] = ShipmentStatus.choices
+        from apps.accounts.permissions import has_store_role
+
+        ctx["can_manage_orders"] = has_store_role(
+            self.request.user, self.active_project, OWNER_MANAGER
+        )
         return ctx
 
 

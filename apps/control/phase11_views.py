@@ -3,7 +3,7 @@
 from django.contrib import messages
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
-from django.urls import reverse_lazy
+from django.urls import reverse, reverse_lazy
 from django.views.generic import (
     CreateView,
     DeleteView,
@@ -242,20 +242,35 @@ class MediaLibraryView(ActiveProjectMixin, ListView):
     context_object_name = "assets"
     paginate_by = 48
 
+    def _show_trash(self):
+        return (self.request.GET.get("trash", "") or "").strip() in ("1", "true", "yes")
+
     def get_queryset(self):
         qs = MediaAsset.objects.filter(project=self.active_project)
+        qs = qs.filter(trashed_at__isnull=not self._show_trash())
         if self.request.GET.get("kind"):
             qs = qs.filter(kind=self.request.GET["kind"])
         q = self.request.GET.get("q", "").strip()
         if q:
             qs = qs.filter(original_name__icontains=q)
-        return qs
+        return qs.order_by("-trashed_at") if self._show_trash() else qs
 
     def get_context_data(self, **kwargs):
+        from apps.accounts.permissions import OWNER_MANAGER, has_store_role
+        from .trash import TRASH_RETENTION_DAYS
+
         ctx = super().get_context_data(**kwargs)
         ctx["form"] = MediaUploadForm()
         ctx["q"] = self.request.GET.get("q", "")
         ctx["kind"] = self.request.GET.get("kind", "")
+        ctx["show_trash"] = self._show_trash()
+        ctx["trash_count"] = MediaAsset.objects.filter(
+            project=self.active_project, trashed_at__isnull=False
+        ).count()
+        ctx["can_manage_trash"] = has_store_role(
+            self.request.user, self.active_project, OWNER_MANAGER
+        )
+        ctx["trash_retention_days"] = TRASH_RETENTION_DAYS
         return ctx
 
 
@@ -288,9 +303,43 @@ class MediaUploadView(ActiveProjectMixin, View):
         return redirect("control:media")
 
 
-class MediaDeleteView(ActiveProjectMixin, View):
+class _MediaTrashBase(ActiveProjectMixin):
+    def check_active_project_access(self, request):
+        parent = super().check_active_project_access(request)
+        if parent is not None:
+            return parent
+        from apps.accounts.permissions import OWNER_MANAGER, assert_store_role
+
+        assert_store_role(request.user, self.active_project, OWNER_MANAGER,
+                          "Only the store owner or a manager can do this.")
+        return None
+
+    def _asset(self):
+        return get_object_or_404(MediaAsset, pk=self.kwargs["pk"], project=self.active_project)
+
+
+class MediaDeleteView(_MediaTrashBase, View):
+    """"Delete" = move to Trash."""
+
     def post(self, request, *args, **kwargs):
-        asset = get_object_or_404(MediaAsset, pk=kwargs["pk"], project=self.active_project)
-        media_svc.delete_asset(asset)
-        messages.success(request, "Deleted.")
+        from .trash import trash_asset
+
+        trash_asset(self._asset())
+        messages.success(request, "Moved to Trash.")
         return redirect("control:media")
+
+
+class MediaRestoreView(_MediaTrashBase, View):
+    def post(self, request, *args, **kwargs):
+        from .trash import restore_asset
+
+        restore_asset(self._asset())
+        messages.success(request, "Restored.")
+        return redirect(f"{reverse('control:media')}?trash=1")
+
+
+class MediaPurgeView(_MediaTrashBase, View):
+    def post(self, request, *args, **kwargs):
+        media_svc.delete_asset(self._asset())
+        messages.success(request, "Permanently deleted.")
+        return redirect(f"{reverse('control:media')}?trash=1")

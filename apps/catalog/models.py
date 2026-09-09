@@ -207,6 +207,12 @@ class Product(TenantScopedModel, SeoFieldsModel):
     rating_avg = models.DecimalField(max_digits=3, decimal_places=2, default=Decimal("0"))
     rating_count = models.PositiveIntegerField(default=0)
 
+    # Trash: set on "delete". The product is forced to ``archived`` status so
+    # the storefront hides it; a purge task hard-deletes it after 30 days, or an
+    # owner/manager restores it (status goes back to ``trashed_from_status``).
+    trashed_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    trashed_from_status = models.CharField(max_length=20, blank=True)
+
     tags = models.ManyToManyField(Tag, blank=True, related_name="products")
     attribute_values = models.ManyToManyField(AttributeValue, blank=True, related_name="products")
     related_products = models.ManyToManyField("self", symmetrical=False, blank=True, related_name="related_to")
