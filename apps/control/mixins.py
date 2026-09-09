@@ -121,3 +121,27 @@ class ActiveProjectMixin(ControlAccessMixin):
         ctx = super().get_context_data(**kwargs)
         ctx["active_project"] = self.active_project
         return ctx
+
+
+class StoreDataAccessMixin:
+    """Mix in *before* ``ActiveProjectMixin`` on any view that exposes a store's
+    orders, customers, payments or revenue. Denies the store's DGC — a Platform
+    Manager who only holds the subscription — while store roles and platform
+    admins pass straight through.
+    """
+
+    store_data_denied_message = (
+        "Orders, customers and payment data are only visible to the store's own team."
+    )
+
+    def check_active_project_access(self, request):
+        parent = super().check_active_project_access(request)
+        if parent is not None:
+            return parent
+        from django.core.exceptions import PermissionDenied
+
+        from apps.accounts.permissions import dgc_without_membership
+
+        if dgc_without_membership(request.user, self.active_project):
+            raise PermissionDenied(self.store_data_denied_message)
+        return None

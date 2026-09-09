@@ -89,6 +89,8 @@ _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}
+# Hidden from a store's DGC — orders, customers and money belong to the store.
+_STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_providers"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 
@@ -123,7 +125,8 @@ def dashboard_url():
 
 
 def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
-              can_upload_skin, can_manage_billing=True, can_manage_owner=False):
+              can_upload_skin, can_manage_billing=True, can_manage_owner=False,
+              store_data_ok=True):
     """Permission-filtered sidebar tree (URLs come pre-resolved and cached)."""
     nav = []
     for key, label, icon, resolved_items in _resolved_sections():
@@ -138,6 +141,7 @@ def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
             and not (it["name"] in _DGC_ONLY and platform_admin)
             and not (it["name"] in _STORE_MANAGE_ONLY and not can_manage)
             and not (it["name"] in _OWNER_ONLY and not can_manage_owner)
+            and not (it["name"] in _STORE_DATA_ONLY and not store_data_ok)
             and not (it["name"] in _BILLING_ONLY and not can_manage_billing)
             and not (it["name"] == "skin_upload" and not can_upload_skin)
         ]

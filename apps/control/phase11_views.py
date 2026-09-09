@@ -32,11 +32,11 @@ from .forms import (
     NotificationTemplateForm,
     WebhookEndpointForm,
 )
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 # --- Analytics / reports -------------------------------------
 
-class AnalyticsView(ActiveProjectMixin, TemplateView):
+class AnalyticsView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
     template_name = "control/analytics/dashboard.jinja"
 
     def get_context_data(self, **kwargs):
@@ -45,7 +45,7 @@ class AnalyticsView(ActiveProjectMixin, TemplateView):
         return ctx
 
 
-class ReportsView(ActiveProjectMixin, TemplateView):
+class ReportsView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
     template_name = "control/analytics/reports.jinja"
 
     # On-screen only — a wide date range on a busy store can return thousands
@@ -89,7 +89,7 @@ class ReportsView(ActiveProjectMixin, TemplateView):
         return out
 
 
-class ReportExportView(ActiveProjectMixin, View):
+class ReportExportView(StoreDataAccessMixin, ActiveProjectMixin, View):
     def get(self, request, *args, **kwargs):
         kind = request.GET.get("kind", "sales")
         if kind not in analytics.REPORT_KINDS:

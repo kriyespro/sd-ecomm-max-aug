@@ -32,6 +32,10 @@
         <option value="{{ value }}" {{ 'selected' if payment == value }}>{{ label }}</option>
         {% endfor %}
       </select>
+      {% if can_export_orders %}
+      <a href="{{ url('control:order_export') }}?q={{ q|urlencode }}&status={{ status|urlencode }}&payment={{ payment|urlencode }}"
+         class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Export CSV</a>
+      {% endif %}
     </div>
   </div>
   <div class="overflow-x-auto">

@@ -70,6 +70,9 @@ def control(request):
     role = store_role(user, active)
     can_manage = admin or managed_by_user or role in OWNER_MANAGER
     can_manage_owner = admin or managed_by_user or role == StoreRole.OWNER
+    # A pure DGC (manages the subscription, no real membership) must not see the
+    # store's orders / customers / revenue — hide those nav items.
+    store_data_ok = not (managed_by_user and role is None)
 
     upload_on = bool(active and (active.feature_flags or {}).get("skin_upload"))
     platform_scope = platform_staff and not _is_store_scoped_view(
@@ -92,6 +95,7 @@ def control(request):
         can_upload_skin=can_upload,
         can_manage_billing=can_manage_billing,
         can_manage_owner=can_manage_owner,
+        store_data_ok=store_data_ok,
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 

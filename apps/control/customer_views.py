@@ -19,10 +19,10 @@ from apps.customers import services as cust
 from apps.customers.models import Customer, CustomerGroup, Segment
 
 from .forms import CustomerForm, CustomerGroupForm
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 
-class CustomerListView(ActiveProjectMixin, ListView):
+class CustomerListView(StoreDataAccessMixin, ActiveProjectMixin, ListView):
     template_name = "control/customers/customer_list.jinja"
     context_object_name = "customers"
     paginate_by = 30
@@ -51,7 +51,7 @@ class CustomerListView(ActiveProjectMixin, ListView):
         return ctx
 
 
-class CustomerDetailView(ActiveProjectMixin, DetailView):
+class CustomerDetailView(StoreDataAccessMixin, ActiveProjectMixin, DetailView):
     template_name = "control/customers/customer_detail.jinja"
     context_object_name = "customer"
 
@@ -76,7 +76,7 @@ class CustomerDetailView(ActiveProjectMixin, DetailView):
         return ctx
 
 
-class CustomerUpdateView(ActiveProjectMixin, UpdateView):
+class CustomerUpdateView(StoreDataAccessMixin, ActiveProjectMixin, UpdateView):
     """POST-only: the form lives on the customer detail page."""
 
     form_class = CustomerForm
@@ -104,7 +104,7 @@ class CustomerUpdateView(ActiveProjectMixin, UpdateView):
         return redirect("control:customer_detail", pk=self.get_object().pk)
 
 
-class CustomerBlockView(ActiveProjectMixin, View):
+class CustomerBlockView(StoreDataAccessMixin, ActiveProjectMixin, View):
     blocked = True
 
     def post(self, request, *args, **kwargs):
@@ -121,7 +121,7 @@ class CustomerUnblockView(CustomerBlockView):
     blocked = False
 
 
-class CustomerResyncView(ActiveProjectMixin, View):
+class CustomerResyncView(StoreDataAccessMixin, ActiveProjectMixin, View):
     def post(self, request, *args, **kwargs):
         customer = get_object_or_404(Customer, pk=kwargs["pk"], project=self.active_project)
         cust.sync_customer_stats(customer)
@@ -131,7 +131,7 @@ class CustomerResyncView(ActiveProjectMixin, View):
 
 # --- Groups ---------------------------------------------------
 
-class GroupListView(ActiveProjectMixin, ListView):
+class GroupListView(StoreDataAccessMixin, ActiveProjectMixin, ListView):
     template_name = "control/customers/group_list.jinja"
     context_object_name = "groups"
 
@@ -139,7 +139,7 @@ class GroupListView(ActiveProjectMixin, ListView):
         return CustomerGroup.objects.filter(project=self.active_project)
 
 
-class _GroupForm(ActiveProjectMixin):
+class _GroupForm(StoreDataAccessMixin, ActiveProjectMixin):
     form_class = CustomerGroupForm
     template_name = "control/customers/group_form.jinja"
     success_url = reverse_lazy("control:customer_groups")
@@ -169,7 +169,7 @@ class GroupUpdateView(_GroupForm, UpdateView):
     pass
 
 
-class GroupDeleteView(ActiveProjectMixin, DeleteView):
+class GroupDeleteView(StoreDataAccessMixin, ActiveProjectMixin, DeleteView):
     template_name = "control/catalog/confirm_delete.jinja"
     success_url = reverse_lazy("control:customer_groups")
 

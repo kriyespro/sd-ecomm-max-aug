@@ -82,6 +82,21 @@ def assert_store_role(user, project, allowed,
         raise PermissionDenied(message)
 
 
+def dgc_without_membership(user, project) -> bool:
+    """True when the user reaches ``project`` only as its DGC — a Platform
+    Manager credited on the subscription — with no real team membership and no
+    full platform-admin authority. Such a user administers the store's setup
+    (team, plan, backup) but must never see its orders, customers or money.
+    """
+    if not (user and getattr(user, "is_authenticated", False)):
+        return False
+    if is_platform_admin(user):
+        return False
+    if store_role(user, project) is not None:
+        return False
+    return is_platform_staff(user)  # only a Platform Manager gets this far
+
+
 class StoreRoleRequiredMixin:
     """Mix in *before* ``ActiveProjectMixin`` on a control view.
 

@@ -20,10 +20,10 @@ from apps.payments import services as pay
 from apps.payments.models import Payment, PaymentProviderConfig
 
 from .forms import PaymentProviderForm
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 
-class _PaymentAdminMixin(StoreRoleRequiredMixin):
+class _PaymentAdminMixin(StoreDataAccessMixin, StoreRoleRequiredMixin):
     """Owner/manager (or platform admin) only — guards payment credentials
     and money movement. Store 'staff' can still run routine order payments."""
 
@@ -75,7 +75,7 @@ class ProviderConfigUpdateView(_ProviderFormView, UpdateView):
 
 # --- per-order payment actions --------------------------------------
 
-class _OrderScoped(ActiveProjectMixin):
+class _OrderScoped(StoreDataAccessMixin, ActiveProjectMixin):
     def get_order(self):
         order = get_object_or_404(Order, pk=self.kwargs["pk"])
         if order.project_id != self.active_project.pk:

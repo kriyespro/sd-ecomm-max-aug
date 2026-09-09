@@ -125,6 +125,7 @@ urlpatterns = [
 
     # Orders
     path("orders/", ordv.OrderListView.as_view(), name="order_list"),
+    path("orders/export/", ordv.OrderExportView.as_view(), name="order_export"),
     path("orders/<int:pk>/", ordv.OrderDetailView.as_view(), name="order_detail"),
     path("orders/<int:pk>/status/", ordv.OrderStatusView.as_view(), name="order_status"),
     path("orders/<int:pk>/payment/", ordv.OrderPaymentView.as_view(), name="order_payment"),
