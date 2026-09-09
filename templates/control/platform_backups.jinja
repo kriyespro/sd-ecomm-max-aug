@@ -1,0 +1,83 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Backup &amp; restore{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-5">
+
+  {# ---- whole platform ---- #}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-700">Whole platform</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      One <code>.zip</code> with every store's catalogue, CMS and theme.
+      Restoring matches each store by its web address (slug) and creates any
+      that don't exist yet. Orders, customers, billing, domains and teams are
+      never in the archive.
+    </p>
+    <div class="mt-3 flex flex-wrap items-center gap-2">
+      <a href="{{ url('control:platform_backup') }}"
+         class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">Download full-platform backup</a>
+    </div>
+    <form method="post" action="{{ url('control:platform_restore') }}" enctype="multipart/form-data"
+          class="mt-4 space-y-2 border-t border-slate-200 pt-4">
+      {{ csrf_input }}
+      <label class="block text-sm font-medium text-slate-700">Batch restore — every store from a full-platform backup</label>
+      <input type="file" name="backup" accept=".zip" required
+             class="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-slate-200">
+      <input name="confirm" placeholder='Type "RESTORE ALL" to confirm'
+             class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-900 focus:outline-none">
+      <button class="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100">
+        Wipe &amp; restore every store
+      </button>
+      <p class="text-xs text-slate-400">Each store's content is replaced from the archive. There is no undo.</p>
+    </form>
+  </div>
+
+  {# ---- per store ---- #}
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4">
+      <h2 class="text-sm font-semibold text-slate-700">Per store</h2>
+      <p class="mt-1 text-xs text-slate-500">Back up or restore a single store. Restore needs the store's exact name typed to confirm.</p>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-4 py-2">Store</th>
+            <th class="px-4 py-2">Plan</th>
+            <th class="px-4 py-2">Backup</th>
+            <th class="px-4 py-2">Restore</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for s in stores %}
+          <tr class="align-top">
+            <td class="px-4 py-3">
+              <a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ s.name }}</a>
+              <div class="font-mono text-[11px] text-slate-400">{{ s.primary_domain or s.slug or ('store-' ~ s.pk) }}</div>
+            </td>
+            <td class="px-4 py-3 text-xs text-slate-500">{{ s.subscription.plan.name if s.subscription and s.subscription.plan else '—' }}</td>
+            <td class="px-4 py-3">
+              <a href="{{ url('control:store_backup', kwargs={'pk': s.pk}) }}"
+                 class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">Download</a>
+            </td>
+            <td class="px-4 py-3">
+              <form method="post" action="{{ url('control:store_restore', kwargs={'pk': s.pk}) }}"
+                    enctype="multipart/form-data" class="flex flex-wrap items-center gap-1.5">
+                {{ csrf_input }}
+                <input type="file" name="backup" accept=".zip" required
+                       class="text-[11px] text-slate-600 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[11px] hover:file:bg-slate-200">
+                <input name="confirm_name" placeholder="{{ s.name }}"
+                       class="w-32 rounded border border-slate-300 px-2 py-1 text-xs focus:border-slate-900 focus:outline-none">
+                <button class="rounded border border-red-300 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100">Restore</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">No stores yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

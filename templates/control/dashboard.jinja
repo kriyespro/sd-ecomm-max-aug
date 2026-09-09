@@ -26,32 +26,14 @@
   </div>
 
   {% if control_is_platform_admin %}
-  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    <h2 class="text-sm font-semibold text-slate-700">Full-platform backup</h2>
-    <p class="mt-1 text-xs text-slate-500">
-      One <code>.zip</code> holding every store's catalogue, CMS and theme.
-      Restoring matches each store by its web address (slug); a store that
-      isn't here yet is created. Orders, customers, billing, domains and
-      teams are never in the archive.
-    </p>
-    <div class="mt-3 flex flex-wrap items-center gap-2">
-      <a href="{{ url('control:platform_backup') }}"
-         class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">Download platform backup</a>
-    </div>
-    <form method="post" action="{{ url('control:platform_restore') }}"
-          enctype="multipart/form-data" class="mt-4 space-y-2 border-t border-slate-200 pt-4">
-      {{ csrf_input }}
-      <label class="block text-sm font-medium text-slate-700">Restore the whole platform</label>
-      <input type="file" name="backup" accept=".zip" required
-             class="block w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-medium hover:file:bg-slate-200">
-      <input name="confirm" placeholder='Type "RESTORE ALL" to confirm'
-             class="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-900 focus:outline-none">
-      <button class="rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-100">
-        Wipe &amp; restore every store
-      </button>
-      <p class="text-xs text-slate-400">Each store's content is replaced from the archive. There is no undo.</p>
-    </form>
-  </div>
+  <a href="{{ url('control:platform_backups') }}"
+     class="flex items-center justify-between rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:ring-slate-300">
+    <span>
+      <span class="text-sm font-semibold text-slate-700">Backup &amp; restore</span>
+      <span class="mt-1 block text-xs text-slate-500">Download or restore any single store, or the whole platform in one batch.</span>
+    </span>
+    <span class="text-slate-400">→</span>
+  </a>
   {% endif %}
 
 </div>

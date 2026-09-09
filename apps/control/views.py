@@ -47,6 +47,23 @@ class DashboardView(ControlAccessMixin, TemplateView):
         return ctx
 
 
+class PlatformBackupCenterView(PlatformAdminRequiredMixin, TemplateView):
+    """Superadmin / Platform Owner: one screen to back up or restore the whole
+    platform, or any single store."""
+
+    template_name = "control/platform_backups.jinja"
+
+    def get_context_data(self, **kwargs):
+        from apps.projects.models import Project
+
+        ctx = super().get_context_data(**kwargs)
+        ctx["stores"] = (
+            Project.objects.select_related("subscription__plan")
+            .order_by("name")
+        )
+        return ctx
+
+
 class PlatformBackupView(PlatformAdminRequiredMixin, View):
     """Superadmin / Platform Owner: download EVERY store's content in one .zip."""
 
@@ -72,25 +89,25 @@ class PlatformRestoreView(PlatformAdminRequiredMixin, View):
 
         if (request.POST.get("confirm", "") or "").strip() != "RESTORE ALL":
             messages.error(request, 'Type "RESTORE ALL" to confirm a full-platform restore.')
-            return redirect("control:dashboard")
+            return redirect("control:platform_backups")
         upload = request.FILES.get("backup")
         if upload is None:
             messages.error(request, "Choose a platform backup .zip file.")
-            return redirect("control:dashboard")
+            return redirect("control:platform_backups")
         if upload.size and upload.size > self.MAX_UPLOAD:
             messages.error(request, "That file is too large.")
-            return redirect("control:dashboard")
+            return redirect("control:platform_backups")
         try:
             report = store_backup.restore_platform(upload.read(), actor=request.user)
         except store_backup.BackupError as exc:
             messages.error(request, str(exc))
-            return redirect("control:dashboard")
+            return redirect("control:platform_backups")
         except Exception as exc:  # noqa: BLE001
             import logging
 
             logging.getLogger(__name__).exception("platform restore failed")
             messages.error(request, f"Platform restore failed: {exc}")
-            return redirect("control:dashboard")
+            return redirect("control:platform_backups")
 
         ok = [k for k, v in report.items() if "error" not in v]
         bad = [k for k, v in report.items() if "error" in v]
@@ -100,7 +117,7 @@ class PlatformRestoreView(PlatformAdminRequiredMixin, View):
             messages.warning(request, msg)
         else:
             messages.success(request, msg + ".")
-        return redirect("control:dashboard")
+        return redirect("control:platform_backups")
 
 
 class ProjectPickerView(ControlAccessMixin, TemplateView):

@@ -262,3 +262,28 @@ class PlatformBackupTests(TestCase):
         blob = store_backup.dump_platform()
         with self.assertRaises(store_backup.BackupError):
             store_backup.restore_store(self.s2, blob, actor=self.admin)
+
+    def test_backup_centre_lists_stores_and_does_per_store_restore(self):
+        self.client.force_login(self.admin)
+        r = self.client.get("/admin/platform-backups/")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "Store One")
+        self.assertContains(r, "Store Two")
+        self.assertContains(r, 'action="/admin/stores/%d/restore/"' % self.s1.pk)
+
+        blob = self.client.get(f"/admin/stores/{self.s1.pk}/backup/").content
+        Product.objects.filter(project=self.s1).delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(f"/admin/stores/{self.s1.pk}/restore/", {
+                "confirm_name": "Store One",
+                "backup": SimpleUploadedFile("s1.zip", blob, "application/zip"),
+            })
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(Product.objects.filter(project=self.s1).count(), 3)
+
+    def test_backup_centre_is_admin_only(self):
+        from apps.accounts.models import PlatformRole, Profile
+        dgc = User.objects.create_user("d", "d@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        self.client.force_login(User.objects.get(pk=dgc.pk))
+        self.assertEqual(self.client.get("/admin/platform-backups/").status_code, 403)
