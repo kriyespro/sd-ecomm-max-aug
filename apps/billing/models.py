@@ -83,6 +83,56 @@ class BillingSettings(TimeStampedModel):
         self.pk = 1
         super().save(*args, **kwargs)
 
+    # --- Razorpay creds: DB value first, then the .env fallback ---------
+    # (config.settings RAZORPAY_*). Everything that talks to the platform's
+    # Razorpay account reads these, never the raw fields.
+
+    @property
+    def effective_key_id(self):
+        from django.conf import settings
+
+        return self.razorpay_key_id or getattr(settings, "RAZORPAY_KEY_ID", "") or ""
+
+    @property
+    def effective_key_secret(self):
+        from django.conf import settings
+
+        return self.razorpay_key_secret or getattr(settings, "RAZORPAY_KEY_SECRET", "") or ""
+
+    @property
+    def effective_webhook_secret(self):
+        from django.conf import settings
+
+        return (
+            self.razorpay_webhook_secret
+            or getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "")
+            or ""
+        )
+
+    @property
+    def razorpay_configured(self):
+        return bool(self.effective_key_id and self.effective_key_secret)
+
+    @property
+    def effective_test_mode(self):
+        """A forced ``RAZORPAY_TEST_MODE`` env flag wins; otherwise infer from
+        the key prefix (``rzp_live_`` / ``rzp_test_``); otherwise the DB flag.
+        Stops a live key from silently minting synthetic test orders because
+        someone forgot to untick "test mode"."""
+        from django.conf import settings
+
+        flag = str(getattr(settings, "RAZORPAY_TEST_MODE", "") or "").strip().lower()
+        if flag in {"1", "true", "yes", "on"}:
+            return True
+        if flag in {"0", "false", "no", "off"}:
+            return False
+        kid = self.effective_key_id
+        if kid.startswith("rzp_live_"):
+            return False
+        if kid.startswith("rzp_test_"):
+            return True
+        return self.is_test_mode
+
 
 class Plan(TimeStampedModel):
     """A subscription tier. Prices are retail INR and editable by a super admin."""

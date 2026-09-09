@@ -305,6 +305,23 @@ PRODUCT_IMAGE_SKIP_UNDER_KB = int(env("PRODUCT_IMAGE_SKIP_UNDER_KB", "300"))
 PRODUCT_IMAGE_RATE_LIMIT = env("PRODUCT_IMAGE_RATE_LIMIT", "6/m")
 
 
+# --- Platform billing gateway (Razorpay) -----------------------------
+# The PLATFORM's own Razorpay account — used to collect subscription
+# payments from stores / DGCs on billing invoices. This is NOT a shop's
+# storefront gateway (each store configures its own under
+# /admin/payments/providers/).
+#
+# These are the fallback: apps.billing.models.BillingSettings.effective_*
+# use the DB value when the super-admin has filled it in on the Billing
+# settings screen, otherwise these. Paste live keys straight into .env.
+# RAZORPAY_TEST_MODE: leave blank to infer from the key prefix
+# (rzp_live_ -> live, rzp_test_ -> test); set true/false to force it.
+RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", "")
+RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", "")
+RAZORPAY_WEBHOOK_SECRET = env("RAZORPAY_WEBHOOK_SECRET", "")
+RAZORPAY_TEST_MODE = env("RAZORPAY_TEST_MODE", "")
+
+
 # --- DRF ---------------------------------------------------------------
 
 REST_FRAMEWORK = {

@@ -49,6 +49,14 @@ class BillingSettingsForm(forms.ModelForm):
             "default_commission_monthly_pct", "default_commission_yearly_pct",
         ]
         widgets = {"razorpay_key_secret": forms.PasswordInput(render_value=True)}
+        help_texts = {
+            "razorpay_key_id": "Leave blank to use the RAZORPAY_KEY_ID from the "
+                               "server .env. A value here overrides it.",
+            "razorpay_key_secret": "Leave blank to use RAZORPAY_KEY_SECRET from .env.",
+            "razorpay_webhook_secret": "Leave blank to use RAZORPAY_WEBHOOK_SECRET from .env.",
+            "is_test_mode": "Ignored when the key is rzp_live_… / rzp_test_… "
+                            "(mode is read from the prefix) or RAZORPAY_TEST_MODE is set.",
+        }
 
 
 class BillingDashboardView(PlatformAdminRequiredMixin, TemplateView):

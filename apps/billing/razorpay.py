@@ -36,7 +36,8 @@ def create_order(*, amount: Decimal, receipt: str, notes: dict, settings) -> dic
         "receipt": receipt[:40], "notes": notes,
     }).encode()
 
-    kid, secret = settings.razorpay_key_id, settings.razorpay_key_secret
+    kid, secret = settings.effective_key_id, settings.effective_key_secret
+    test_mode = settings.effective_test_mode
     if kid and secret:
         token = base64.b64encode(f"{kid}:{secret}".encode()).decode()
         req = urllib.request.Request(
@@ -49,7 +50,7 @@ def create_order(*, amount: Decimal, receipt: str, notes: dict, settings) -> dic
             return {"order_id": remote["id"], "amount": paise, "currency": settings.currency,
                     "key_id": kid, "synthetic": False}
         except (urllib.error.URLError, KeyError, ValueError) as exc:
-            if not settings.is_test_mode:
+            if not test_mode:
                 raise RazorpayError(f"Razorpay order creation failed: {exc}") from exc
 
     return {"order_id": f"order_test_{receipt}", "amount": paise,

@@ -144,6 +144,10 @@ def start_payment(invoice):
     if invoice.status != InvoiceStatus.OPEN:
         raise BillingError("This invoice is not open.")
     cfg = BillingSettings.load()
+    if not cfg.razorpay_configured and not cfg.effective_test_mode:
+        raise BillingError(
+            "Online payment is unavailable — the platform Razorpay keys are not set."
+        )
     res = razorpay.create_order(
         amount=invoice.amount, receipt=invoice.number,
         notes={"invoice": invoice.number, "project": str(invoice.subscription.project_id)},
@@ -160,7 +164,7 @@ def confirm_payment(invoice, *, razorpay_payment_id, razorpay_signature):
     synthetic = invoice.provider_order_id.startswith("order_test_")
     ok = synthetic or razorpay.verify_payment_signature(
         order_id=invoice.provider_order_id, payment_id=razorpay_payment_id,
-        signature=razorpay_signature, secret=cfg.razorpay_key_secret,
+        signature=razorpay_signature, secret=cfg.effective_key_secret,
     )
     if not ok:
         raise BillingError("Payment signature verification failed.")
