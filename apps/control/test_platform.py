@@ -277,10 +277,11 @@ class StoreListFilterTests(TestCase):
         self.assertNotContains(r, "AliveCo")
         self.assertNotContains(r, "TrialCo")
 
-    def test_table_shows_start_end_and_status_colours(self):
+    def test_table_shows_period_and_status_colours(self):
         r = self.client.get("/admin/stores/")
-        self.assertContains(r, ">Start<")
-        self.assertContains(r, ">End<")
+        self.assertContains(r, "Plan / status")
+        self.assertContains(r, ">Period<")
+        self.assertContains(r, self.active.subscription.current_period_start.strftime("%d %b %Y"))
         self.assertContains(r, "bg-emerald-100 text-emerald-700")  # active = green
         self.assertContains(r, "bg-amber-100 text-amber-800")      # trial = orange
 
