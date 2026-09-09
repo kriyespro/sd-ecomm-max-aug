@@ -119,6 +119,47 @@ def _queryset(entry, project):
 
 # --- dump ---------------------------------------------------------------
 
+def _dump_store_into(zf: zipfile.ZipFile, project, prefix: str = "") -> dict:
+    """Write ``{prefix}manifest.json`` + ``{prefix}media/...`` into an open zip.
+    Returns per-model counts."""
+    manifest = {
+        "format": FORMAT_VERSION,
+        "source_project": project.name,
+        "created_at": datetime.now(dt_timezone.utc).isoformat(),
+        "data": {},
+    }
+    counts = {}
+    for entry in _REGISTRY:
+        rows = []
+        for obj in _queryset(entry, project).order_by("pk").iterator():
+            row = {"_id": obj.pk}
+            for f in entry["fields"]:
+                row[f] = getattr(obj, f)
+            for fk in entry.get("fks", {}):
+                row[fk] = getattr(obj, f"{fk}_id")
+            for name in entry.get("files", []):
+                ff = getattr(obj, name)
+                if not ff:
+                    continue
+                token = f"{entry['key']}/{obj.pk}/{name}/{posixpath.basename(ff.name)}"
+                try:
+                    ff.open("rb")
+                    zf.writestr(f"{prefix}media/{token}", ff.read())
+                    row[f"__file__{name}"] = token
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("backup: could not read %s: %s", ff.name, exc)
+                finally:
+                    try:
+                        ff.close()
+                    except Exception:  # noqa: BLE001
+                        pass
+            rows.append(row)
+        manifest["data"][entry["key"]] = rows
+        counts[entry["key"]] = len(rows)
+    zf.writestr(f"{prefix}manifest.json", json.dumps(manifest, cls=DjangoJSONEncoder))
+    return counts
+
+
 def dump_store(project) -> bytes:
     """Serialise ``project``'s storefront content to a .zip byte string."""
     from apps.catalog.models import Product
@@ -128,46 +169,46 @@ def dump_store(project) -> bytes:
         raise BackupError(
             f"This store has {n_products} products — over the {MAX_PRODUCTS} backup limit."
         )
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        _dump_store_into(zf, project, "")
+    return buf.getvalue()
+
+
+_STORE_META_FIELDS = ("name", "slug", "currency", "country", "state", "timezone",
+                      "primary_domain", "is_b2b_seller")
+
+
+def dump_platform() -> bytes:
+    """Every store's content in one archive: ``platform.json`` plus a
+    ``stores/<id>/`` folder per store (each = a normal store backup)."""
+    from apps.projects.models import Project
 
     buf = io.BytesIO()
-    manifest = {
+    index = {
         "format": FORMAT_VERSION,
-        "source_project": project.name,
+        "kind": "platform",
         "created_at": datetime.now(dt_timezone.utc).isoformat(),
-        "data": {},
+        "stores": [],
     }
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for entry in _REGISTRY:
-            rows = []
-            for obj in _queryset(entry, project).order_by("pk").iterator():
-                row = {"_id": obj.pk}
-                for f in entry["fields"]:
-                    row[f] = getattr(obj, f)
-                for fk in entry.get("fks", {}):
-                    row[fk] = getattr(obj, f"{fk}_id")
-                for name in entry.get("files", []):
-                    ff = getattr(obj, name)
-                    if not ff:
-                        continue
-                    token = f"{entry['key']}/{obj.pk}/{name}/{posixpath.basename(ff.name)}"
-                    try:
-                        ff.open("rb")
-                        zf.writestr(f"media/{token}", ff.read())
-                        row[f"__file__{name}"] = token
-                    except Exception as exc:  # noqa: BLE001
-                        logger.warning("backup: could not read %s: %s", ff.name, exc)
-                    finally:
-                        try:
-                            ff.close()
-                        except Exception:  # noqa: BLE001
-                            pass
-                rows.append(row)
-            manifest["data"][entry["key"]] = rows
-        zf.writestr("manifest.json", json.dumps(manifest, cls=DjangoJSONEncoder))
+        for project in Project.objects.all().order_by("pk").iterator():
+            meta = {"id": project.pk}
+            for f in _STORE_META_FIELDS:
+                meta[f] = getattr(project, f, None)
+            meta["feature_flags"] = project.feature_flags or {}
+            skin = getattr(getattr(project, "theme_settings", None), "skin", None)
+            meta["skin"] = skin.slug if skin is not None else ""
+            index["stores"].append(meta)
+            _dump_store_into(zf, project, f"stores/{project.pk}/")
+        zf.writestr("platform.json", json.dumps(index, cls=DjangoJSONEncoder))
     return buf.getvalue()
 
 
 # --- restore -----------------------------------------------------------
+
+_ALLOWED_ROOTS = ("manifest.json", "platform.json", "media/", "stores/")
+
 
 def _safe_zip(zf: zipfile.ZipFile) -> None:
     total = 0
@@ -175,16 +216,13 @@ def _safe_zip(zf: zipfile.ZipFile) -> None:
         name = zi.filename
         if name.startswith("/") or ".." in name.split("/") or "\\" in name:
             raise BackupError("Archive contains an unsafe path.")
-        if name != "manifest.json" and not name.startswith("media/"):
+        if not (name in _ALLOWED_ROOTS or name.startswith(("media/", "stores/"))):
             raise BackupError(f"Unexpected file in archive: {name}")
         total += zi.file_size
+        if name.endswith("manifest.json") and zi.file_size > MAX_MANIFEST_BYTES:
+            raise BackupError("Archive manifest is too large.")
     if total > MAX_ARCHIVE_UNCOMPRESSED:
         raise BackupError("Archive is too large to restore.")
-    try:
-        if zf.getinfo("manifest.json").file_size > MAX_MANIFEST_BYTES:
-            raise BackupError("Archive manifest is too large.")
-    except KeyError:
-        raise BackupError("Archive has no manifest.json — not a store backup.")
 
 
 def _wipe(project) -> None:
@@ -195,21 +233,18 @@ def _wipe(project) -> None:
     apps.get_model("catalog.ProductType").objects.filter(project=project).delete()
 
 
-@transaction.atomic
-def restore_store(project, archive: bytes, *, actor=None) -> dict:
-    """Wipe ``project``'s content, then rebuild it from ``archive`` (bytes of a
-    :func:`dump_store` zip). Returns per-model counts."""
+def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: bytes,
+                        actor=None) -> dict:
+    """Core restore: wipe ``project`` and rebuild from ``{prefix}manifest.json``
+    inside the already-open, already-safety-checked ``zf``. Not atomic itself —
+    the caller wraps it (per-store for a platform restore)."""
     from apps.core.services import record_audit
     from apps.core.models import AuditLog
 
     try:
-        zf = zipfile.ZipFile(io.BytesIO(archive))
-    except zipfile.BadZipFile as exc:
-        raise BackupError("That file is not a valid .zip archive.") from exc
-    _safe_zip(zf)
-
-    try:
-        manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
+        manifest = json.loads(zf.read(f"{prefix}manifest.json").decode("utf-8"))
+    except KeyError as exc:
+        raise BackupError("Archive is missing a store manifest.") from exc
     except (ValueError, UnicodeDecodeError) as exc:
         raise BackupError("Archive manifest is corrupt.") from exc
     if manifest.get("format") != FORMAT_VERSION:
@@ -282,7 +317,7 @@ def restore_store(project, archive: bytes, *, actor=None) -> dict:
             return
         for Model, new_pk, field, token in pending_files:
             try:
-                raw = zf2.read(f"media/{token}")
+                raw = zf2.read(f"{prefix}media/{token}")
             except KeyError:
                 continue
             obj = Model.objects.filter(pk=new_pk).first()
@@ -310,3 +345,67 @@ def restore_store(project, archive: bytes, *, actor=None) -> dict:
     logger.warning("store %s restored from backup (%s): %s",
                    project.pk, manifest.get("source_project"), counts)
     return counts
+
+
+@transaction.atomic
+def restore_store(project, archive: bytes, *, actor=None) -> dict:
+    """Wipe ``project``'s content, then rebuild it from a :func:`dump_store` zip."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(archive))
+    except zipfile.BadZipFile as exc:
+        raise BackupError("That file is not a valid .zip archive.") from exc
+    _safe_zip(zf)
+    if "manifest.json" not in zf.namelist():
+        if "platform.json" in zf.namelist():
+            raise BackupError("That's a full-platform backup — restore it from the platform dashboard.")
+        raise BackupError("Archive has no manifest.json — not a store backup.")
+    return _restore_store_from(zf, project, "", archive, actor)
+
+
+def restore_platform(archive: bytes, *, actor=None) -> dict:
+    """Restore EVERY store from a :func:`dump_platform` archive. Stores are
+    matched to existing ones by slug; a missing store is created. Each store is
+    its own transaction — one failure doesn't abort the rest. Returns
+    ``{slug: counts | {"error": msg}}``."""
+    from apps.projects.models import Project
+
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(archive))
+    except zipfile.BadZipFile as exc:
+        raise BackupError("That file is not a valid .zip archive.") from exc
+    _safe_zip(zf)
+    try:
+        index = json.loads(zf.read("platform.json").decode("utf-8"))
+    except KeyError as exc:
+        raise BackupError("Not a full-platform backup (no platform.json).") from exc
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise BackupError("platform.json is corrupt.") from exc
+    if index.get("format") != FORMAT_VERSION or index.get("kind") != "platform":
+        raise BackupError("Unsupported platform backup.")
+
+    report: dict[str, object] = {}
+    for meta in index.get("stores", []):
+        slug = (meta.get("slug") or "").strip()
+        sid = meta.get("id")
+        label = slug or f"store-{sid}"
+        if not sid:
+            report[label] = {"error": "no store id in backup"}
+            continue
+        try:
+            with transaction.atomic():
+                project = Project.objects.filter(slug=slug).first() if slug else None
+                if project is None:
+                    project = Project.objects.create(
+                        name=meta.get("name") or label,
+                        slug=slug or None,
+                        currency=meta.get("currency") or "INR",
+                        country=meta.get("country") or "IN",
+                        status=Project.Status.ACTIVE,
+                    )
+                counts = _restore_store_from(zf, project, f"stores/{sid}/", archive, actor)
+            report[label] = counts
+        except Exception as exc:  # noqa: BLE001 — record and carry on
+            logger.exception("platform restore: store %s failed", label)
+            report[label] = {"error": str(exc)}
+    logger.warning("platform restore finished: %s stores", len(report))
+    return report

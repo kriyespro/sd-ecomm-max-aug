@@ -47,6 +47,62 @@ class DashboardView(ControlAccessMixin, TemplateView):
         return ctx
 
 
+class PlatformBackupView(PlatformAdminRequiredMixin, View):
+    """Superadmin / Platform Owner: download EVERY store's content in one .zip."""
+
+    def get(self, request, *args, **kwargs):
+        from django.http import HttpResponse
+        from django.utils import timezone
+
+        from . import store_backup
+
+        blob = store_backup.dump_platform()
+        resp = HttpResponse(blob, content_type="application/zip")
+        resp["Content-Disposition"] = (
+            f'attachment; filename="platform-backup-{timezone.now():%Y%m%d-%H%M}.zip"'
+        )
+        return resp
+
+
+class PlatformRestoreView(PlatformAdminRequiredMixin, View):
+    MAX_UPLOAD = 3 * 1024 * 1024 * 1024  # 3 GB
+
+    def post(self, request, *args, **kwargs):
+        from . import store_backup
+
+        if (request.POST.get("confirm", "") or "").strip() != "RESTORE ALL":
+            messages.error(request, 'Type "RESTORE ALL" to confirm a full-platform restore.')
+            return redirect("control:dashboard")
+        upload = request.FILES.get("backup")
+        if upload is None:
+            messages.error(request, "Choose a platform backup .zip file.")
+            return redirect("control:dashboard")
+        if upload.size and upload.size > self.MAX_UPLOAD:
+            messages.error(request, "That file is too large.")
+            return redirect("control:dashboard")
+        try:
+            report = store_backup.restore_platform(upload.read(), actor=request.user)
+        except store_backup.BackupError as exc:
+            messages.error(request, str(exc))
+            return redirect("control:dashboard")
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("platform restore failed")
+            messages.error(request, f"Platform restore failed: {exc}")
+            return redirect("control:dashboard")
+
+        ok = [k for k, v in report.items() if "error" not in v]
+        bad = [k for k, v in report.items() if "error" in v]
+        msg = f"Platform restore: {len(ok)} stores restored"
+        if bad:
+            msg += f"; {len(bad)} failed ({', '.join(bad[:5])})"
+            messages.warning(request, msg)
+        else:
+            messages.success(request, msg + ".")
+        return redirect("control:dashboard")
+
+
 class ProjectPickerView(ControlAccessMixin, TemplateView):
     template_name = "control/project_picker.jinja"
 

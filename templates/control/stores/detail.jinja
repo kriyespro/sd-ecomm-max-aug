@@ -101,7 +101,7 @@
     {% endif %}
   </div>
 
-  {% if is_admin %}
+  {# platform owner + this store's DGC — the store owner has the same on /admin/backup/ #}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Backup &amp; restore</p>
     <p class="mt-1 text-xs text-slate-500">
@@ -131,7 +131,6 @@
       <p class="text-xs text-slate-400">This replaces every product, category, page and banner in {{ store.name }}. There is no undo.</p>
     </form>
   </div>
-  {% endif %}
 
   {# details to relay to the owner #}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">

@@ -70,6 +70,7 @@ _SECTIONS = [
         ("team", "Team", "\U0001f465"),
         ("store_plan", "Plan & billing", "\U0001f4a0"),
         ("store_showcase", "Live store listing", "\U0001f31f"),
+        ("owner_backup", "Backup & restore", "\U0001f4be"),
     ]),
     ("b2b", "B2B / Wholesale", "\U0001f91d", [
         ("b2b_settings", "Sell B2B", "\U0001f4e6"),
@@ -86,7 +87,8 @@ _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
-_OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables", "store_showcase"}
+_OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
+               "store_showcase", "owner_backup"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 

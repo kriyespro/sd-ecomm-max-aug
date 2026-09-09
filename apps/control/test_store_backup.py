@@ -156,13 +156,109 @@ class StoreBackupViewTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(Product.objects.filter(project=self.b).count(), 0)
 
-    def test_dgc_cannot_backup_or_restore(self):
+    def test_dgc_can_backup_their_managed_store_but_not_others(self):
         dgc = User.objects.create_user("d", "d@t.test", "pw", is_staff=True)
         Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
-        # make the DGC the manager of store A so _StoreScope lets them see it
         from apps.billing import services as billing_svc
         sub = billing_svc.ensure_subscription(self.a)
         sub.manager = User.objects.get(pk=dgc.pk)
         sub.save(update_fields=["manager"])
         self._login(User.objects.get(pk=dgc.pk))
-        self.assertEqual(self.client.get(f"/admin/stores/{self.a.pk}/backup/").status_code, 403)
+        self.assertEqual(self.client.get(f"/admin/stores/{self.a.pk}/backup/").status_code, 200)
+        # store B is not theirs
+        self.assertEqual(self.client.get(f"/admin/stores/{self.b.pk}/backup/").status_code, 404)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class OwnerBackupScreenTests(TestCase):
+    def setUp(self):
+        from apps.accounts.models import Membership, StoreRole
+
+        self.store = Project.objects.create(name="OwnerCo", status="active",
+                                            feature_flags={"onboarded": True})
+        _build_source(self.store)
+        self.owner = User.objects.create_user("o", "o@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.store, user=self.owner, role=StoreRole.OWNER)
+        self.mgr = User.objects.create_user("m", "m@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.store, user=self.mgr, role=StoreRole.MANAGER)
+
+    def _login(self, user):
+        self.client.force_login(user)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.store.pk
+        s.save()
+
+    def test_owner_downloads_and_restores_own_store(self):
+        self._login(self.owner)
+        self.assertEqual(self.client.get("/admin/backup/").status_code, 200)
+        blob = self.client.get("/admin/backup/download/").content
+        self.assertTrue(blob[:2] == b"PK")
+
+        Product.objects.filter(project=self.store).delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post("/admin/backup/restore/", {
+                "confirm_name": "OwnerCo",
+                "backup": SimpleUploadedFile("b.zip", blob, "application/zip"),
+            })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
+
+    def test_manager_cannot_reach_owner_backup(self):
+        self._login(self.mgr)
+        self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PlatformBackupTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root", "root@t.test", "pw")
+        self.s1 = Project.objects.create(name="Store One", slug="store-one", status="active")
+        _build_source(self.s1)
+        self.s2 = Project.objects.create(name="Store Two", slug="store-two", status="active")
+
+    def test_platform_dump_and_restore_recreates_a_deleted_store(self):
+        from apps.control import store_backup
+
+        blob = store_backup.dump_platform()
+        self.assertTrue(blob[:2] == b"PK")
+
+        Project.objects.filter(pk=self.s1.pk).delete()   # gone entirely
+        self.assertFalse(Project.objects.filter(slug="store-one").exists())
+
+        with self.captureOnCommitCallbacks(execute=True):
+            report = store_backup.restore_platform(blob, actor=self.admin)
+
+        recreated = Project.objects.get(slug="store-one")
+        self.assertEqual(recreated.name, "Store One")
+        self.assertEqual(Product.objects.filter(project=recreated).count(), 3)
+        self.assertNotIn("error", report.get("store-one", {}))
+
+    def test_platform_backup_view_and_restore_view(self):
+        self.client.force_login(self.admin)
+        r = self.client.get("/admin/platform-backup/")
+        self.assertEqual(r.status_code, 200)
+        blob = b"".join(r.streaming_content) if r.streaming else r.content
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post("/admin/platform-restore/", {
+                "confirm": "RESTORE ALL",
+                "backup": SimpleUploadedFile("p.zip", blob, "application/zip"),
+            }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(Product.objects.filter(project=self.s1).count(), 3)
+
+    def test_platform_restore_needs_passphrase(self):
+        self.client.force_login(self.admin)
+        blob = self.client.get("/admin/platform-backup/").content
+        resp = self.client.post("/admin/platform-restore/", {
+            "confirm": "nope",
+            "backup": SimpleUploadedFile("p.zip", blob, "application/zip"),
+        })
+        self.assertEqual(resp.status_code, 302)
+
+    def test_store_backup_rejects_a_platform_archive(self):
+        from apps.control import store_backup
+
+        blob = store_backup.dump_platform()
+        with self.assertRaises(store_backup.BackupError):
+            store_backup.restore_store(self.s2, blob, actor=self.admin)

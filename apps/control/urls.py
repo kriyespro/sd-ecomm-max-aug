@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import b2b_views as b2bv
+from . import backup_views as backupv
 from . import billing_views as billv
 from . import catalog_views as cat
 from . import onboarding_views as onbv
@@ -287,6 +288,15 @@ urlpatterns = [
     path("stores/<int:pk>/switch/", storev.StoreSwitchView.as_view(), name="store_switch"),
     path("stores/<int:pk>/backup/", storev.StoreBackupView.as_view(), name="store_backup"),
     path("stores/<int:pk>/restore/", storev.StoreRestoreView.as_view(), name="store_restore"),
+
+    # Store-owner's own backup / restore (active project)
+    path("backup/", backupv.OwnerBackupView.as_view(), name="owner_backup"),
+    path("backup/download/", backupv.OwnerBackupDownloadView.as_view(), name="owner_backup_download"),
+    path("backup/restore/", backupv.OwnerRestoreView.as_view(), name="owner_backup_restore"),
+
+    # Full-platform backup / restore (superadmin / platform owner)
+    path("platform-backup/", views.PlatformBackupView.as_view(), name="platform_backup"),
+    path("platform-restore/", views.PlatformRestoreView.as_view(), name="platform_restore"),
 
     # Platform billing (super admin)
     path("billing/", billv.BillingDashboardView.as_view(), name="billing"),

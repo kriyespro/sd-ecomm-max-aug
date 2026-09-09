@@ -408,7 +408,8 @@ class StoreSwitchView(_StoreScope, View):
 
 
 class StoreBackupView(_StoreScope, View):
-    """Platform-admin: download this store's storefront content as a .zip."""
+    """Platform owner / the store's DGC: download this store's content as a .zip.
+    (The store owner has the same thing on their own /admin/backup/ screen.)"""
 
     def get(self, request, pk, *args, **kwargs):
         from django.http import HttpResponse
@@ -417,8 +418,6 @@ class StoreBackupView(_StoreScope, View):
         from . import store_backup
 
         store = self.get_store(pk)
-        if not is_platform_admin(request.user):
-            raise PermissionDenied
         try:
             blob = store_backup.dump_store(store)
         except store_backup.BackupError as exc:
@@ -441,8 +440,6 @@ class StoreRestoreView(_StoreScope, View):
         from . import store_backup
 
         store = self.get_store(pk)
-        if not is_platform_admin(request.user):
-            raise PermissionDenied
 
         if (request.POST.get("confirm_name", "") or "").strip() != store.name:
             messages.error(request, "Type the store's exact name to confirm the restore.")
