@@ -90,3 +90,93 @@ class CreateOrderTests(TestCase):
         # rzp_test_ prefix -> test mode -> network failure falls back to synthetic
         self.assertTrue(res["synthetic"])
         self.assertEqual(res["key_id"], "rzp_test_x")
+
+
+import hashlib
+import hmac
+import json
+
+
+def _sign(secret: str, body: bytes) -> str:
+    return hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+
+
+@override_settings(RAZORPAY_WEBHOOK_SECRET="whsec_test", RAZORPAY_KEY_ID="rzp_live_x",
+                   RAZORPAY_KEY_SECRET="s")
+class BillingWebhookTests(TestCase):
+    def setUp(self):
+        BillingSettings.objects.all().delete()
+        self.project = Project.objects.create(name="WhCo", status="active")
+        self.sub = billing_svc.ensure_subscription(self.project)
+        now = timezone.now()
+        self.invoice = Invoice.objects.create(
+            subscription=self.sub, number="INV-WH-1", amount=Decimal("500"),
+            status=InvoiceStatus.OPEN, period_start=now, period_end=now, due_at=now,
+            provider_order_id="order_ABC",
+        )
+
+    def _event(self, *, event="payment.captured", order_id="order_ABC",
+               payment_id="pay_1", amount=50000):
+        return json.dumps({
+            "event": event,
+            "payload": {"payment": {"entity": {
+                "id": payment_id, "order_id": order_id, "amount": amount,
+            }}},
+        }).encode()
+
+    def _post(self, body, secret="whsec_test"):
+        return self.client.post(
+            "/billing/webhook/razorpay/", data=body, content_type="application/json",
+            HTTP_X_RAZORPAY_SIGNATURE=_sign(secret, body),
+        )
+
+    def test_valid_capture_settles_the_invoice(self):
+        r = self._post(self._event())
+        self.assertEqual(r.status_code, 200)
+        self.invoice.refresh_from_db()
+        self.sub.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.PAID)
+        self.assertEqual(self.invoice.provider_payment_id, "pay_1")
+        self.assertEqual(self.sub.status, "active")
+
+    def test_bad_signature_is_400(self):
+        r = self._post(self._event(), secret="wrong")
+        self.assertEqual(r.status_code, 400)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)
+
+    def test_short_paid_amount_rejected(self):
+        r = self._post(self._event(amount=10000))  # ₹100 < ₹500 due
+        self.assertEqual(r.status_code, 400)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)
+
+    def test_unknown_order_is_acknowledged_noop(self):
+        r = self._post(self._event(order_id="order_NOPE", payment_id="pay_x"))
+        self.assertEqual(r.status_code, 200)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)
+
+    def test_already_paid_is_noop(self):
+        billing_svc.mark_invoice_paid(self.invoice, provider_payment_id="pay_first")
+        r = self._post(self._event(payment_id="pay_second"))
+        self.assertEqual(r.status_code, 200)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.provider_payment_id, "pay_first")
+
+    def test_non_payment_event_ignored(self):
+        r = self._post(self._event(event="payment.failed"))
+        self.assertEqual(r.status_code, 200)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)
+
+    @override_settings(RAZORPAY_WEBHOOK_SECRET="")
+    def test_no_secret_configured_is_noop_not_error(self):
+        body = self._event()
+        r = self.client.post(
+            "/billing/webhook/razorpay/", data=body, content_type="application/json",
+            HTTP_X_RAZORPAY_SIGNATURE="anything",
+        )
+        self.assertEqual(r.status_code, 200)
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)

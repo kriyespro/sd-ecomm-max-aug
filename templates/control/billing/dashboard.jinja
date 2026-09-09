@@ -39,36 +39,40 @@
   <div class="grid gap-5 lg:grid-cols-2">
     <div class="rounded-xl bg-white ring-1 ring-slate-200">
       <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Recent invoices</div>
-      <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+      <table class="w-full text-left text-sm">
         <tbody class="divide-y divide-slate-100">
           {% for inv in recent_invoices %}
-          <tr>
-            <td class="px-4 py-2 font-mono text-xs">{{ inv.number }}</td>
-            <td class="px-4 py-2">{{ inv.subscription.project.name }}</td>
-            <td class="px-4 py-2">₹{{ '{:,.0f}'.format(inv.amount) }}</td>
+          <tr class="align-top">
             <td class="px-4 py-2">
+              <div class="text-slate-800">{{ inv.subscription.project.name }}</div>
+              <div class="font-mono text-[11px] text-slate-400">{{ inv.number }}</div>
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-right text-slate-700">₹{{ '{:,.0f}'.format(inv.amount) }}</td>
+            <td class="px-4 py-2 text-right">
               <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
                 {{ 'bg-emerald-100 text-emerald-700' if inv.status == 'paid' else 'bg-amber-100 text-amber-800' if inv.status == 'open' else 'bg-slate-100 text-slate-600' }}">{{ inv.status }}</span>
             </td>
           </tr>
-          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="4">No invoices yet.</td></tr>{% endfor %}
+          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="3">No invoices yet.</td></tr>{% endfor %}
         </tbody>
-      </table></div>
+      </table>
     </div>
 
     <div class="rounded-xl bg-white ring-1 ring-slate-200">
       <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Overdue</div>
-      <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+      <table class="w-full text-left text-sm">
         <tbody class="divide-y divide-slate-100">
           {% for inv in overdue %}
-          <tr>
-            <td class="px-4 py-2">{{ inv.subscription.project.name }}</td>
-            <td class="px-4 py-2 font-mono text-xs">{{ inv.number }}</td>
-            <td class="px-4 py-2 text-red-600">due {{ inv.due_at.strftime('%d %b') }}</td>
+          <tr class="align-top">
+            <td class="px-4 py-2">
+              <div class="text-slate-800">{{ inv.subscription.project.name }}</div>
+              <div class="font-mono text-[11px] text-slate-400">{{ inv.number }}</div>
+            </td>
+            <td class="px-4 py-2 whitespace-nowrap text-right text-xs font-medium text-red-600">due {{ inv.due_at.strftime('%d %b') }}</td>
           </tr>
-          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="3">Nothing overdue.</td></tr>{% endfor %}
+          {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="2">Nothing overdue.</td></tr>{% endfor %}
         </tbody>
-      </table></div>
+      </table>
     </div>
   </div>
 </div>

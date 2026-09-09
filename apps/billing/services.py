@@ -172,6 +172,72 @@ def confirm_payment(invoice, *, razorpay_payment_id, razorpay_signature):
 
 
 @transaction.atomic
+def handle_billing_webhook(*, headers, body: bytes):
+    """Razorpay -> platform. Settle the matching subscription invoice when the
+    browser confirm-callback never came back (tab closed after paying, etc.).
+
+    Idempotent and signature-checked. Returns the Invoice it settled, or None
+    when there's nothing to do (unknown order, already paid, non-payment event,
+    no webhook secret configured).
+    """
+    import hmac
+    import json
+    import logging
+
+    cfg = BillingSettings.load()
+    secret = cfg.effective_webhook_secret
+    sent_sig = headers.get("X-Razorpay-Signature", "") or headers.get("x-razorpay-signature", "")
+
+    if not secret:
+        logging.getLogger(__name__).warning(
+            "billing webhook received but RAZORPAY_WEBHOOK_SECRET is not set — ignored"
+        )
+        return None
+    if not (sent_sig and razorpay.verify_webhook(body=body, signature=sent_sig, secret=secret)):
+        raise BillingError("Invalid webhook signature.")
+
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise BillingError("Malformed webhook body.") from exc
+
+    event = data.get("event", "")
+    if event not in {"payment.captured", "payment.authorized", "order.paid"}:
+        return None
+
+    payload = data.get("payload", {}) or {}
+    pay_entity = (payload.get("payment", {}) or {}).get("entity", {}) or {}
+    order_entity = (payload.get("order", {}) or {}).get("entity", {}) or {}
+
+    order_id = pay_entity.get("order_id") or order_entity.get("id") or ""
+    payment_id = pay_entity.get("id") or ""
+    amount_minor = pay_entity.get("amount")
+    if amount_minor is None:
+        amount_minor = order_entity.get("amount_paid") or order_entity.get("amount")
+
+    invoice = None
+    if order_id:
+        invoice = (
+            Invoice.objects.select_for_update()
+            .filter(provider_order_id=order_id).first()
+        )
+    if invoice is None and payment_id:
+        invoice = (
+            Invoice.objects.select_for_update()
+            .filter(provider_payment_id=payment_id).first()
+        )
+    if invoice is None or invoice.status == InvoiceStatus.PAID:
+        return None
+
+    if amount_minor is not None:
+        due_minor = int((invoice.amount * 100).to_integral_value())
+        if int(amount_minor) < due_minor:
+            raise BillingError("Webhook amount is less than the invoice total.")
+
+    return mark_invoice_paid(invoice, provider_payment_id=payment_id)
+
+
+@transaction.atomic
 def mark_invoice_paid(invoice, *, provider_payment_id=""):
     if invoice.status == InvoiceStatus.PAID:
         return invoice
