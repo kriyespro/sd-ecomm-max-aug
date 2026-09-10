@@ -1,0 +1,27 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Certificate{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data"
+      class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  {% if object %}
+  <p class="rounded bg-slate-100 px-3 py-2 text-sm">
+    Verification code <span class="font-mono font-semibold">{{ object.code }}</span>
+    · <a href="/verify/{{ object.code }}/" target="_blank" class="text-slate-600 underline">open verify page</a>
+  </p>
+  {% endif %}
+  {{ render_form(form) }}
+  <p class="text-xs text-slate-400">Certificate images must be JPG or PNG.</p>
+  <div class="flex gap-2 pt-2">
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+    <a href="{{ url('control:certificates') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+    {% if object %}
+    <button formaction="{{ url('control:certificate_delete', kwargs={'pk': object.pk}) }}"
+            formnovalidate
+            class="ml-auto rounded-lg px-4 py-2 text-sm text-red-600 hover:bg-red-50">Delete</button>
+    {% endif %}
+  </div>
+</form>
+{% endblock %}

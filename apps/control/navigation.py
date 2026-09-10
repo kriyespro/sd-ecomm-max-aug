@@ -42,6 +42,7 @@ _SECTIONS = [
         ("brand_list", "Brands", "\U0001f3f7"),
         ("inventory_list", "Inventory", "\U0001f4ca"),
         ("warehouse_list", "Warehouses", "\U0001f3ec"),
+        ("certificates", "Certificates", "\U0001f48e"),
     ]),
     ("marketing", "Marketing", "\U0001f3af", [
         ("coupon_list", "Coupons", "\U0001f39f"),

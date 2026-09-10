@@ -4,6 +4,7 @@ from . import b2b_views as b2bv
 from . import backup_views as backupv
 from . import billing_views as billv
 from . import catalog_views as cat
+from . import certificate_views as certv
 from . import onboarding_views as onbv
 from . import cms_views as cmsv
 from . import coupon_views as coup
@@ -115,6 +116,12 @@ urlpatterns = [
     path("products/<int:pk>/images/<int:image_pk>/primary/", cat.ProductImagePrimaryView.as_view(), name="product_image_primary"),
     path("products/<int:pk>/images/<int:image_pk>/delete/", cat.ProductImageDeleteView.as_view(), name="product_image_delete"),
     path("products/<int:pk>/images/<int:image_pk>/move/<str:dir>/", cat.ProductImageMoveView.as_view(), name="product_image_move"),
+
+    # Jewellery / gemstone certificates
+    path("certificates/", certv.CertificateListView.as_view(), name="certificates"),
+    path("certificates/new/", certv.CertificateCreateView.as_view(), name="certificate_create"),
+    path("certificates/<int:pk>/", certv.CertificateUpdateView.as_view(), name="certificate_edit"),
+    path("certificates/<int:pk>/delete/", certv.CertificateDeleteView.as_view(), name="certificate_delete"),
 
     # Warehouses
     path("warehouses/", invv.WarehouseListView.as_view(), name="warehouse_list"),
