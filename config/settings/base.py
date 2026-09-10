@@ -88,6 +88,7 @@ LOCAL_APPS = [
     "apps.whatsapp",
     "apps.social",
     "apps.certificates",
+    "apps.learning",
     "apps.storefront",
     "apps.shopfront",
 ]

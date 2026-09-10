@@ -1,0 +1,55 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Training{% endblock %}
+
+{% block content %}
+<div x-data="{ open: null }" class="space-y-8">
+  <div class="flex items-center justify-between">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Training</h2>
+      <p class="text-xs text-slate-500">Short videos for your role. Click one to play.</p>
+    </div>
+    {% if is_admin_editor %}
+    <a href="{{ url('control:learning') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Manage videos</a>
+    {% endif %}
+  </div>
+
+  {% for topic, videos in groups %}
+  <section>
+    <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">{{ topic }}</h3>
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {% for v in videos %}
+      <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+        <div class="relative aspect-video bg-slate-100">
+          <template x-if="open === {{ v.pk }}">
+            <iframe class="absolute inset-0 h-full w-full" src="{{ v.embed_url }}?autoplay=1"
+                    title="{{ v.title }}" loading="lazy" allowfullscreen
+                    allow="accelerated-sensors; autoplay; encrypted-media; picture-in-picture"></iframe>
+          </template>
+          <template x-if="open !== {{ v.pk }}">
+            <button type="button" @click="open = {{ v.pk }}"
+                    class="group absolute inset-0 h-full w-full">
+              <img src="{{ v.thumbnail_url }}" alt="" class="h-full w-full object-cover">
+              <span class="absolute inset-0 grid place-items-center">
+                <span class="grid h-12 w-12 place-items-center rounded-full bg-black/60 text-white group-hover:bg-black/80">&#9654;</span>
+              </span>
+              {% if v.duration_label %}
+              <span class="absolute bottom-2 right-2 rounded bg-black/70 px-1.5 py-0.5 text-[11px] text-white">{{ v.duration_label }}</span>
+              {% endif %}
+            </button>
+          </template>
+        </div>
+        <div class="p-3">
+          <p class="text-sm font-medium text-slate-800">{{ v.title }}</p>
+          {% if v.description %}<p class="mt-1 text-xs text-slate-500">{{ v.description }}</p>{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% else %}
+  <div class="rounded-xl bg-white p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
+    No training videos for your role yet.
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
