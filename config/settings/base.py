@@ -84,6 +84,7 @@ LOCAL_APPS = [
     "apps.webhooks",
     "apps.media",
     "apps.analytics",
+    "apps.marketing",
     "apps.storefront",
     "apps.shopfront",
 ]
@@ -107,6 +108,7 @@ MIDDLEWARE = [
     "apps.core.middleware.StorefrontHostMiddleware",
     "apps.shopfront.middleware.StorefrontSkinMiddleware",
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
+    "apps.shopfront.middleware.TrackingInjectionMiddleware",
     "apps.billing.middleware.SubscriptionGateMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
@@ -139,6 +141,7 @@ TEMPLATES = [
                 "config.jinja2.csrf",
                 "apps.core.context_processors.tenant",
                 "apps.control.context_processors.control",
+                "apps.marketing.context_processors.platform_pixels",
             ],
         },
     },
@@ -324,6 +327,18 @@ RAZORPAY_KEY_ID = env("RAZORPAY_KEY_ID", "")
 RAZORPAY_KEY_SECRET = env("RAZORPAY_KEY_SECRET", "")
 RAZORPAY_WEBHOOK_SECRET = env("RAZORPAY_WEBHOOK_SECRET", "")
 RAZORPAY_TEST_MODE = env("RAZORPAY_TEST_MODE", "")
+
+
+# --- Meta "Connect with Meta" OAuth (optional) ------------------------
+# One platform-owned Meta app. When APP_ID + APP_SECRET are set, the tracking
+# screen shows a "Connect with Meta" button that fills a store's Pixel ID + a
+# long-lived access token automatically instead of the seller pasting them.
+# Needs Meta App Review for `ads_management` + `business_management` before it
+# works in production; until then, leave blank and sellers paste manually.
+META_APP_ID = env("META_APP_ID", "")
+META_APP_SECRET = env("META_APP_SECRET", "")
+META_OAUTH_CONFIG_ID = env("META_OAUTH_CONFIG_ID", "")  # Facebook Login for Business config
+META_GRAPH_VERSION = env("META_GRAPH_VERSION", "v21.0")
 
 
 # --- DRF ---------------------------------------------------------------

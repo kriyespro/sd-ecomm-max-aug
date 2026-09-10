@@ -1,0 +1,52 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Tracking{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">Conversion tracking · {{ active_project.name }}</h2>
+    <div class="flex gap-2">
+      {% if meta_oauth_ready %}
+      <a href="{{ url('control:tracking_meta_connect') }}" class="rounded-lg bg-[#1877f2] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#166fe0]">Connect with Meta</a>
+      {% endif %}
+      {% if can_add %}
+      <a href="{{ url('control:tracking_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add integration</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <p class="max-w-2xl text-xs text-slate-500">
+    Connect Meta Pixel, Google Analytics 4 or TikTok Pixel. The browser tag fires
+    PageView, ViewContent, InitiateCheckout and Purchase from your storefront. Add
+    a server access token and Purchase is <em>also</em> sent server-side — deduped
+    against the browser event by order number — so ad-blockers can't hide sales.
+  </p>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Provider</th><th class="px-4 py-2">Pixel / Measurement ID</th>
+          <th class="px-4 py-2">Browser</th><th class="px-4 py-2">Server</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for row in integrations %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium text-slate-800">{{ row.get_provider_display() }}</td>
+          <td class="px-4 py-2 font-mono text-slate-500">{{ row.pixel_id or "—" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ "on" if row.browser_ready else "off" }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ "on" if row.server_ready else "off" }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if row.is_enabled else 'bg-slate-200 text-slate-600' }}">
+              {{ "live" if row.is_enabled else "off" }}</span>
+          </td>
+          <td class="px-4 py-2 text-right"><a href="{{ url('control:tracking_edit', kwargs={'pk': row.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No tracking connected yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

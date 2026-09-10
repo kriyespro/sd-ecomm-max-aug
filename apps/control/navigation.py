@@ -25,6 +25,7 @@ _SECTIONS = [
         ("users", "Users", "\U0001f464"),
         ("partner_applications", "Partners", "\U0001f91d"),
         ("showcase_list", "Live stores", "\U0001f31f"),
+        ("platform_tracking", "Marketing pixels", "\U0001f4c8"),
         ("platform_backups", "Backup & restore", "\U0001f4be"),
     ]),
     ("store", "Store", "▦", [
@@ -46,6 +47,7 @@ _SECTIONS = [
         ("coupon_list", "Coupons", "\U0001f39f"),
         ("review_list", "Reviews", "★"),
         ("notification_settings", "Notifications", "\U0001f514"),
+        ("tracking", "Pixels & tracking", "\U0001f4c8"),
     ]),
     ("storefront", "Storefront", "\U0001f6cd", [
         ("cms_store_profile", "Store profile", "\U0001f3ea"),
@@ -83,11 +85,12 @@ _SECTIONS = [
 
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
-                        "partner_applications", "showcase_list", "platform_backups"}
+                        "partner_applications", "showcase_list", "platform_backups",
+                        "platform_tracking"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
-_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding"}
+_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding", "tracking"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}

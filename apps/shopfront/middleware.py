@@ -134,6 +134,66 @@ class NoStoreStorefrontMiddleware:
         return response
 
 
+class TrackingInjectionMiddleware:
+    """Inject the browser pixel base tags (+ a per-page conversion event from
+    ``request._tracking``) into storefront HTML, once per provider the store has
+    enabled — Meta Pixel, GA4, TikTok Pixel.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if not _is_storefront_request(request):
+            return response
+        if getattr(response, "streaming", False) or response.status_code != 200:
+            return response
+        if request.headers.get("HX-Request") == "true":
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        project = getattr(request, "project", None) or None
+        if project is None:
+            return response
+
+        from apps.marketing import providers
+        from apps.marketing.models import tracking_for
+
+        active = tracking_for(project)
+        if not active:
+            return response
+
+        try:
+            content = response.content.decode(response.charset or "utf-8")
+        except (UnicodeDecodeError, AttributeError):
+            return response
+        if "</head>" not in content:
+            return response
+
+        heads = "".join(
+            providers.head_snippet(name, cfg) for name, cfg in active.items()
+        )
+        content = content.replace("</head>", heads + "</head>", 1)
+
+        evt = getattr(request, "_tracking", None)
+        if evt:
+            name = evt[0]
+            data = evt[1] if len(evt) > 1 else {}
+            event_id = evt[2] if len(evt) > 2 else None
+            bits = "".join(
+                providers.event_snippet(p, cfg, name, data, event_id)
+                for p, cfg in active.items()
+            )
+            if bits and "</body>" in content:
+                content = content.replace("</body>", bits + "</body>", 1)
+
+        response.content = content.encode(response.charset or "utf-8")
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
+        return response
+
+
 def _preview_skin(request):
     """A platform admin can force any skin via ``?preview_skin=<id>`` — used by
     the review screen before a skin is approved."""

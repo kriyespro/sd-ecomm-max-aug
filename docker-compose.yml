@@ -80,6 +80,14 @@ services:
       RUN_COLLECTSTATIC: "0"
     volumes:
       - ${MEDIA_DIR:-media}:/app/media
+    # The image HEALTHCHECK curls /healthz/ — right for `web`, meaningless for a
+    # worker (no HTTP server). Ask Celery itself whether the worker is up.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A config inspect ping -t 10 | grep -q pong"]
+      interval: 30s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
 
   beat:
     <<: *app
@@ -88,6 +96,12 @@ services:
       <<: *app-env
       RUN_MIGRATIONS: "0"
       RUN_COLLECTSTATIC: "0"
+    # `celery beat` is a bare scheduler — no HTTP server, and it does not answer
+    # `inspect ping` (that's a worker control command). The image HEALTHCHECK
+    # can only ever fail here; disable it and rely on `restart: unless-stopped`
+    # (the container exits if the beat process dies).
+    healthcheck:
+      disable: true
 
   # Scheduled pg_dump with daily/weekly/monthly retention -> pgbackups volume.
   # On-demand:  docker compose exec pgbackup /backup.sh
