@@ -9,5 +9,6 @@ urlpatterns = [
     path("store/navigation/<str:location>/", views.NavigationView.as_view(), name="navigation"),
     path("store/pages/<slug:slug>/", views.PageDetailView.as_view(), name="page_detail"),
     path("sitemap.xml", views.SitemapView.as_view(), name="sitemap"),
+    path("sitemap-<int:page>.xml", views.SitemapChunkView.as_view(), name="sitemap_chunk"),
     path("robots.txt", views.RobotsView.as_view(), name="robots"),
 ]

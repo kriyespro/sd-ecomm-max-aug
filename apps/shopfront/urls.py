@@ -1,4 +1,7 @@
+from django.conf import settings
 from django.urls import path
+
+from apps.seo.views import IndexNowKeyView
 
 from . import views
 
@@ -7,6 +10,7 @@ app_name = "shopfront"
 urlpatterns = [
     path("", views.HomeView.as_view(), name="home"),
     path("shop/", views.ShopView.as_view(), name="shop"),
+    path("c/<slug:slug>/", views.CategoryView.as_view(), name="category"),
     path("p/<slug:slug>/", views.ProductView.as_view(), name="product"),
     path("p/<slug:slug>/review/", views.ReviewSubmitView.as_view(), name="review"),
     path("quick/<slug:slug>/", views.QuickView.as_view(), name="quickview"),
@@ -33,3 +37,8 @@ urlpatterns = [
 
     path("page/<slug:slug>/", views.PageView.as_view(), name="page"),
 ]
+
+if settings.SEO_INDEXNOW_KEY:
+    urlpatterns.append(
+        path(f"{settings.SEO_INDEXNOW_KEY}.txt", IndexNowKeyView.as_view(), name="indexnow_key")
+    )

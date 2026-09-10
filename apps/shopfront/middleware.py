@@ -20,6 +20,7 @@ subsequent requests. Everything else keeps normal CSRF.
 In DEBUG the QA storefronts are forced ``no-store`` so edits show immediately.
 """
 
+import re
 from urllib.parse import urlparse
 
 from django.conf import settings
@@ -131,6 +132,68 @@ class NoStoreStorefrontMiddleware:
         else:
             response.setdefault("Cache-Control", "private, no-cache")
             response["X-Storefront-Cache"] = "private"
+        return response
+
+
+_TITLE_RE = re.compile(r"<title>.*?</title>", re.S | re.I)
+_DESC_RE = re.compile(r'<meta\s+name=["\']description["\'][^>]*>', re.I)
+
+
+class SeoInjectionMiddleware:
+    """Splice a full SEO <head> block into every storefront HTML page —
+    computed <title>/description, canonical, Open Graph, Twitter cards, robots
+    and JSON-LD. The view attaches ``request._seo`` ({"type","obj","crumbs",…});
+    without it the page still gets canonical + site-wide tags, and the private
+    pages (cart/checkout/account/order) are marked ``noindex``.
+
+    Injection (vs editing 18 skin templates) keeps every skin correct for free.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if not _is_storefront_request(request):
+            return response
+        if getattr(response, "streaming", False) or response.status_code != 200:
+            return response
+        if request.headers.get("HX-Request") == "true":
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        project = getattr(request, "project", None) or None
+        if project is None:
+            return response
+
+        try:
+            content = response.content.decode(response.charset or "utf-8")
+        except (UnicodeDecodeError, AttributeError):
+            return response
+        if "</head>" not in content:
+            return response
+
+        rel = _rel_path(request.path)
+        seo = dict(getattr(request, "_seo", None) or {})
+        probe = (rel.rstrip("/") or "/")
+        if any(probe.startswith(p.rstrip("/")) for p in _PRIVATE_PATHS):
+            seo["noindex"] = True
+
+        base = (getattr(project, "public_url", "") or "").rstrip("/") \
+            or f"{request.scheme}://{request.get_host()}"
+        try:
+            from apps.seo.head import build
+            block = build(project=project, path=rel, seo=seo, base_url=base)
+        except Exception:  # noqa: BLE001 — never break a page over SEO
+            return response
+
+        content = _TITLE_RE.sub("", content, count=1)
+        content = _DESC_RE.sub("", content, count=1)
+        content = content.replace("</head>", block + "\n</head>", 1)
+
+        response.content = content.encode(response.charset or "utf-8")
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
         return response
 
 
