@@ -144,9 +144,15 @@ class ProductForm(ProjectScopedForm):
             "slug": forms.TextInput(attrs={"placeholder": "auto from title"}),
             "sku": forms.TextInput(attrs={"placeholder": "auto"}),
         }
+        labels = {
+            "search_indexed": "Show in search & storefront listings",
+        }
         help_texts = {
             "slug": "Leave blank to auto-generate from the title.",
             "sku": "Leave blank to auto-generate.",
+            "search_indexed": "Off = hidden from the storefront grid, search and "
+                              "sitemap even when the status is Active. Direct link "
+                              "still works.",
         }
 
     def __init__(self, *args, **kwargs):
