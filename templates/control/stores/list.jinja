@@ -93,8 +93,14 @@
         {% set mobile = (sp.support_phone or sp.whatsapp) if sp else '' %}
         <tr class="align-top hover:bg-slate-50">
           <td class="px-3 py-2">
-            <a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ s.name }}</a>
-            <div class="font-mono text-[11px] text-slate-400">{{ s.primary_domain or 'no domain' }}</div>
+            <a href="{{ url('control:store_detail', kwargs={'pk': s.pk}) }}" target="_blank" rel="noopener"
+               class="font-medium text-slate-900 hover:underline">{{ s.name }}</a>
+            {% if s.public_url %}
+            <a href="{{ s.public_url }}" target="_blank" rel="noopener"
+               class="block font-mono text-[11px] text-slate-400 hover:text-slate-600 hover:underline">{{ s.public_host }}</a>
+            {% else %}
+            <div class="font-mono text-[11px] text-slate-400">no domain</div>
+            {% endif %}
           </td>
           <td class="px-3 py-2 whitespace-nowrap text-xs text-slate-600">
             {% if mobile %}<a href="tel:{{ mobile }}" class="hover:underline">{{ mobile }}</a>{% else %}—{% endif %}

@@ -126,7 +126,7 @@ class StoreListView(_StoreScope, ListView):
 
         qs = self.accessible().select_related(
             "subscription__plan", "subscription__manager"
-        ).prefetch_related("storeprofiles")
+        ).prefetch_related("storeprofiles", "domains")
         f = self._filters()
 
         if f["status"] == "archived":

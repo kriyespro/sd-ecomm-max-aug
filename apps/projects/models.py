@@ -28,6 +28,18 @@ def validate_hostname(value):
         raise ValidationError("Enter a valid domain name, e.g. shop.example.com")
 
 
+def _is_platform_host(host: str) -> bool:
+    """True when ``host`` is the platform itself or one of its ``*.<platform>``
+    subdomains — i.e. NOT a merchant's own custom domain."""
+    host = (host or "").strip().lower()
+    if not host:
+        return False
+    bases = {(getattr(settings, "PLATFORM_BASE_DOMAIN", "") or "").strip().lower()}
+    bases |= {h.strip().lower() for h in (getattr(settings, "PLATFORM_HOSTS", []) or [])}
+    bases.discard("")
+    return any(host == b or host.endswith("." + b) for b in bases)
+
+
 class Project(TimeStampedModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -130,18 +142,24 @@ class Project(TimeStampedModel):
     @property
     def public_url(self):
         """The store's own live site, or ``None`` if it has no domain yet.
-        Falls back to a verified Domain (platform subdomains live there, not on
-        ``primary_domain``)."""
-        host = (self.primary_domain or "").strip()
-        if not host:
-            d = (
-                self.domains.filter(is_verified=True)
-                .order_by("-is_primary", "created_at")
-                .values_list("host", flat=True)
-                .first()
-            )
-            host = (d or "").strip()
-        return f"https://{host}/" if host else None
+
+        Prefers a *custom* domain (the merchant's own), falling back to the
+        store's ``<slug>.<platform>`` subdomain. Reads verified ``Domain`` rows,
+        plus ``primary_domain`` in case it isn't mirrored as one.
+        """
+        verified = sorted(
+            (d for d in self.domains.all() if d.is_verified),
+            key=lambda d: (not d.is_primary, d.created_at),
+        )
+        hosts = [d.host.strip().lower() for d in verified]
+        pd = (self.primary_domain or "").strip().lower()
+        if pd and pd not in hosts:
+            hosts.insert(0, pd)
+        if not hosts:
+            return None
+        # stable sort: custom domains keep their order and come before subdomains
+        hosts.sort(key=_is_platform_host)
+        return f"https://{hosts[0]}/"
 
     @property
     def public_host(self):

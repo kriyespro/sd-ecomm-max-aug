@@ -92,6 +92,7 @@ def _landing_live_stores(limit=12):
             # (covers stores that live on a *.<platform> subdomain).
             .filter(Q(primary_domain__gt="") | Q(domains__is_verified=True))
             .distinct()
+            .prefetch_related("domains")
             .order_by("-showcase_reviewed_at", "-updated_at")
         )
         return [p for p in qs[: limit * 2] if p.public_url][:limit]

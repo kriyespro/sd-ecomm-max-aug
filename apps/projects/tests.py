@@ -80,3 +80,37 @@ class DomainCheckEndpointTests(TestCase):
     def test_404_for_unknown_host(self):
         resp = self.client.get("/.well-known/sd-domain-check", HTTP_HOST="nope.example.test")
         self.assertEqual(resp.status_code, 404)
+
+
+from django.test import override_settings as _os
+
+
+@_os(PLATFORM_BASE_DOMAIN="shopinaday.com", PLATFORM_HOSTS=["shopinaday.com"])
+class PublicUrlPriorityTests(TestCase):
+    def _store(self):
+        from apps.projects.models import Project
+        return Project.objects.create(name="P", status="active")
+
+    def test_custom_domain_beats_platform_subdomain(self):
+        from apps.projects.models import Domain
+        p = self._store()
+        Domain.objects.create(project=p, host="genze.shopinaday.com", is_verified=True, is_primary=True)
+        Domain.objects.create(project=p, host="shop.genze.in", is_verified=True)
+        self.assertEqual(p.public_url, "https://shop.genze.in/")
+        self.assertEqual(p.public_host, "shop.genze.in")
+
+    def test_falls_back_to_subdomain_when_no_custom_domain(self):
+        from apps.projects.models import Domain
+        p = self._store()
+        Domain.objects.create(project=p, host="genze.shopinaday.com", is_verified=True, is_primary=True)
+        self.assertEqual(p.public_url, "https://genze.shopinaday.com/")
+
+    def test_unverified_custom_domain_is_ignored(self):
+        from apps.projects.models import Domain
+        p = self._store()
+        Domain.objects.create(project=p, host="genze.shopinaday.com", is_verified=True, is_primary=True)
+        Domain.objects.create(project=p, host="not-yet.genze.in", is_verified=False)
+        self.assertEqual(p.public_url, "https://genze.shopinaday.com/")
+
+    def test_none_when_no_domain(self):
+        self.assertIsNone(self._store().public_url)
