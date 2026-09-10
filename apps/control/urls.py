@@ -330,6 +330,8 @@ urlpatterns = [
     # Marketing — conversion tracking (Meta Pixel + Conversions API)
     path("marketing/tracking/", mktv.TrackingListView.as_view(), name="tracking"),
     path("marketing/tracking/new/", mktv.TrackingCreateView.as_view(), name="tracking_create"),
+    path("marketing/tracking/meta/connect/", mktv.MetaConnectStartView.as_view(), name="tracking_meta_connect"),
+    path("marketing/tracking/meta/callback/", mktv.MetaConnectCallbackView.as_view(), name="tracking_meta_callback"),
     path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
     path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
 

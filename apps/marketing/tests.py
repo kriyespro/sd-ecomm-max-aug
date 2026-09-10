@@ -14,13 +14,17 @@ from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.billing import services as billing_svc
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
 from apps.core.events import Events, emit
-from apps.marketing import capi
+from apps.marketing import capi, ga4, providers, tiktok
 from apps.marketing.models import (
     TrackingIntegration,
     TrackingProvider,
     tracking_for,
 )
-from apps.marketing.tasks import send_meta_capi_event
+from apps.marketing.tasks import (
+    send_ga4_event,
+    send_meta_capi_event,
+    send_tiktok_event,
+)
 from apps.projects.models import Project
 from apps.shopfront.middleware import TrackingInjectionMiddleware
 
@@ -36,6 +40,20 @@ def _meta(project, **kw):
         track_server=True,
         is_enabled=True,
     )
+    defaults.update(kw)
+    return TrackingIntegration.objects.create(project=project, **defaults)
+
+
+def _ga4(project, **kw):
+    defaults = dict(provider=TrackingProvider.GA4, pixel_id="G-ABC1234",
+                    server_token="secret", is_enabled=True)
+    defaults.update(kw)
+    return TrackingIntegration.objects.create(project=project, **defaults)
+
+
+def _tiktok(project, **kw):
+    defaults = dict(provider=TrackingProvider.TIKTOK, pixel_id="C4A1B2C3D4E5F6G7H8",
+                    server_token="tttoken", is_enabled=True)
     defaults.update(kw)
     return TrackingIntegration.objects.create(project=project, **defaults)
 
@@ -316,3 +334,190 @@ class AdminScreenAccessTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         row.refresh_from_db()
         self.assertEqual(row.server_token, "tok")
+
+    def test_can_add_ga4(self):
+        self._login(self.owner)
+        resp = self.client.post("/admin/marketing/tracking/new/", {
+            "provider": TrackingProvider.GA4,
+            "pixel_id": "G-ABC1234",
+            "server_token": "apisecret",
+            "test_event_code": "",
+            "track_browser": "on",
+            "track_server": "on",
+            "is_enabled": "on",
+        })
+        self.assertEqual(resp.status_code, 302)
+        row = TrackingIntegration.objects.get(project=self.store, provider=TrackingProvider.GA4)
+        self.assertTrue(row.server_ready)
+
+    def test_ga4_id_format_validated(self):
+        self._login(self.owner)
+        resp = self.client.post("/admin/marketing/tracking/new/", {
+            "provider": TrackingProvider.GA4,
+            "pixel_id": "12345",          # Meta-style, wrong for GA4
+            "server_token": "",
+            "test_event_code": "",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(
+            TrackingIntegration.objects.filter(project=self.store, provider=TrackingProvider.GA4).exists()
+        )
+
+
+class ProviderSnippetTests(TestCase):
+    def test_meta_head_and_event(self):
+        head = providers.head_snippet("meta", {"pixel_id": "111222333"})
+        self.assertIn("fbevents.js", head)
+        self.assertIn("fbq('init','111222333')", head)
+        evt = providers.event_snippet("meta", {}, "Purchase", {"value": 5}, "o1")
+        self.assertIn('fbq(\'track\',"Purchase"', evt)
+        self.assertIn('"eventID":"o1"', evt)
+
+    def test_ga4_head_and_event(self):
+        head = providers.head_snippet("ga4", {"pixel_id": "G-XYZ999"})
+        self.assertIn("googletagmanager.com/gtag/js?id=G-XYZ999", head)
+        self.assertIn("gtag('config','G-XYZ999')", head)
+        evt = providers.event_snippet("ga4", {}, "Purchase",
+                                      {"value": 5, "currency": "INR", "order_id": "A9"}, "A9")
+        self.assertIn("gtag('event',\"purchase\"", evt)
+        self.assertIn('"transaction_id":"A9"', evt)
+
+    def test_ga4_maps_event_names(self):
+        self.assertIn("view_item",
+                      providers.event_snippet("ga4", {}, "ViewContent", {}, None))
+        self.assertIn("begin_checkout",
+                      providers.event_snippet("ga4", {}, "InitiateCheckout", {}, None))
+
+    def test_tiktok_head_and_event(self):
+        head = providers.head_snippet("tiktok", {"pixel_id": "CABC123"})
+        self.assertIn("analytics.tiktok.com", head)
+        self.assertIn('ttq.load("CABC123")', head)
+        evt = providers.event_snippet("tiktok", {}, "Purchase",
+                                      {"value": 5, "currency": "INR",
+                                       "content_ids": ["SKU1"]}, "o2")
+        self.assertIn('ttq.track("CompletePayment"', evt)
+        self.assertIn('"event_id":"o2"', evt)
+        self.assertIn('"content_id":"SKU1"', evt)
+
+    def test_pageview_never_an_event(self):
+        for p in ("meta", "ga4", "tiktok"):
+            self.assertEqual(providers.event_snippet(p, {}, "PageView", {}, None), "")
+
+
+class GA4TaskTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Shop", status="active", currency="INR")
+
+    def test_client_id_stable(self):
+        self.assertEqual(ga4.client_id_for("A1"), ga4.client_id_for("A1"))
+        self.assertNotEqual(ga4.client_id_for("A1"), ga4.client_id_for("A2"))
+
+    def test_task_skips_without_token(self):
+        row = _ga4(self.project, server_token="")
+        with mock.patch.object(ga4, "send_event") as sent:
+            self.assertEqual(
+                send_ga4_event(integration_id=row.pk, name="purchase",
+                               event_id="A1", params={}), "skipped")
+        sent.assert_not_called()
+
+    def test_task_sends(self):
+        row = _ga4(self.project)
+        with mock.patch.object(ga4, "send_event") as sent:
+            self.assertEqual(
+                send_ga4_event(integration_id=row.pk, name="purchase",
+                               event_id="A1", params={"value": 9}), "sent")
+        _, kw = sent.call_args
+        self.assertEqual(kw["measurement_id"], "G-ABC1234")
+        self.assertEqual(kw["api_secret"], "secret")
+
+
+class TikTokTaskTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="Shop", status="active", currency="INR")
+
+    def test_user_pii_hashed(self):
+        import json
+
+        captured = {}
+
+        class _Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b'{"code":0}'
+
+        def fake_urlopen(req, timeout=0):
+            captured["body"] = json.loads(req.data.decode())
+            return _Resp()
+
+        with mock.patch("urllib.request.urlopen", fake_urlopen):
+            tiktok.send_event(pixel_code="C1", access_token="t", event_name="CompletePayment",
+                              event_id="o1", contact={"email": "A@B.com", "phone": "+91 98765 43210"},
+                              properties={"value": 1})
+        user = captured["body"]["data"][0]["user"]
+        self.assertEqual(user["email"], hashlib.sha256(b"a@b.com").hexdigest())
+        self.assertEqual(user["phone"], hashlib.sha256(b"+919876543210").hexdigest())
+
+    def test_task_skips_without_token(self):
+        row = _tiktok(self.project, server_token="")
+        with mock.patch.object(tiktok, "send_event") as sent:
+            self.assertEqual(
+                send_tiktok_event(integration_id=row.pk, event_name="CompletePayment",
+                                  event_id="o1", contact={}, properties={}), "skipped")
+        sent.assert_not_called()
+
+    def test_nonzero_code_raises(self):
+        class _Resp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return b'{"code":40000,"message":"bad"}'
+
+        with mock.patch("urllib.request.urlopen", lambda *a, **k: _Resp()):
+            with self.assertRaises(tiktok.TikTokError):
+                tiktok.send_event(pixel_code="C1", access_token="t",
+                                  event_name="X", event_id="1", contact={})
+
+
+class MultiProviderFanOutTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.project = Project.objects.create(name="Shop", status="active", currency="INR")
+
+    def _payment(self):
+        order = mock.Mock(number="Z9", email="b@t.test", phone="", currency="INR",
+                          grand_total=Decimal("300"), customer_id=3,
+                          shipping_address={"city": "Pune"})
+        order.items.all.return_value = []
+        return mock.Mock(order=order)
+
+    def test_all_three_enqueue_on_payment_success(self):
+        _meta(self.project)
+        _ga4(self.project)
+        _tiktok(self.project)
+        with mock.patch("apps.marketing.tasks.send_meta_capi_event.delay") as m, \
+             mock.patch("apps.marketing.tasks.send_ga4_event.delay") as g, \
+             mock.patch("apps.marketing.tasks.send_tiktok_event.delay") as t:
+            emit(Events.PAYMENT_SUCCESS, project=self.project,
+                 payload={"order_number": "Z9", "email": "b@t.test",
+                          "currency": "INR", "total": "300.00"},
+                 instance=self._payment())
+        m.assert_called_once()
+        g.assert_called_once()
+        t.assert_called_once()
+        self.assertEqual(g.call_args.kwargs["name"], "purchase")
+        self.assertEqual(t.call_args.kwargs["event_name"], "CompletePayment")
+
+    def test_middleware_injects_all_enabled(self):
+        _meta(self.project)
+        _ga4(self.project)
+        req = RequestFactory().get("/app/")
+        req.project = self.project
+        req.user = AnonymousUser()
+
+        def get_response(r):
+            resp = HttpResponse("<html><head></head><body>x</body></html>")
+            resp["Content-Type"] = "text/html; charset=utf-8"
+            return resp
+
+        body = TrackingInjectionMiddleware(get_response)(req).content.decode()
+        self.assertIn("fbevents.js", body)
+        self.assertIn("googletagmanager.com/gtag/js", body)

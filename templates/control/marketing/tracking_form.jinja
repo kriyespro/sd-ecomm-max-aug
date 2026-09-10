@@ -7,9 +7,8 @@
   {{ csrf_input }}
   {{ render_form(form) }}
   <p class="text-xs text-slate-400">
-    Find the Pixel ID and Conversions API token in Meta
-    <a class="underline" href="https://business.facebook.com/events_manager2" target="_blank" rel="noopener">Events Manager</a>.
-    The token is write-only here — leave it blank when editing to keep the saved one.
+    The access token is write-only here — when editing, leave it blank to keep the
+    saved one. Server events need it; the browser tag does not.
   </p>
   <div class="flex gap-2 pt-2">
     <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>

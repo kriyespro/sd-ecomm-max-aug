@@ -134,43 +134,10 @@ class NoStoreStorefrontMiddleware:
         return response
 
 
-import json as _json
-
-
-_META_BASE = """<script>!function(f,b,e,v,n,t,s)
-{{if(f.fbq)return;n=f.fbq=function(){{n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)}};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];
-s.parentNode.insertBefore(t,s)}}(window,document,'script',
-'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','{pixel}');fbq('track','PageView');</script>
-<noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id={pixel}&ev=PageView&noscript=1"/></noscript>"""
-
-
-def _pixel_head(pixel_id):
-    return _META_BASE.format(pixel=pixel_id)
-
-
-def _pixel_event(tracking):
-    """``tracking`` = ``(event_name, data_dict, event_id | None)`` set by the view."""
-    if not tracking:
-        return ""
-    name = tracking[0]
-    data = tracking[1] if len(tracking) > 1 else {}
-    event_id = tracking[2] if len(tracking) > 2 else None
-    opts = {"eventID": str(event_id)} if event_id else {}
-    return (
-        "<script>window.fbq&&fbq('track',"
-        f"{_json.dumps(name)},{_json.dumps(data)},{_json.dumps(opts)});</script>"
-    )
-
-
 class TrackingInjectionMiddleware:
-    """Insert the Meta Pixel base snippet (+ a per-page conversion event from
-    ``request._tracking``) into storefront HTML for stores that have enabled it.
+    """Inject the browser pixel base tags (+ a per-page conversion event from
+    ``request._tracking``) into storefront HTML, once per provider the store has
+    enabled — Meta Pixel, GA4, TikTok Pixel.
     """
 
     def __init__(self, get_response):
@@ -184,17 +151,17 @@ class TrackingInjectionMiddleware:
             return response
         if request.headers.get("HX-Request") == "true":
             return response
-        ctype = response.get("Content-Type", "")
-        if "text/html" not in ctype:
+        if "text/html" not in response.get("Content-Type", ""):
             return response
         project = getattr(request, "project", None) or None
         if project is None:
             return response
 
+        from apps.marketing import providers
         from apps.marketing.models import tracking_for
 
-        meta = tracking_for(project).get("meta")
-        if not meta:
+        active = tracking_for(project)
+        if not active:
             return response
 
         try:
@@ -204,10 +171,22 @@ class TrackingInjectionMiddleware:
         if "</head>" not in content:
             return response
 
-        content = content.replace("</head>", _pixel_head(meta["pixel_id"]) + "</head>", 1)
-        event = _pixel_event(getattr(request, "_tracking", None))
-        if event and "</body>" in content:
-            content = content.replace("</body>", event + "</body>", 1)
+        heads = "".join(
+            providers.head_snippet(name, cfg) for name, cfg in active.items()
+        )
+        content = content.replace("</head>", heads + "</head>", 1)
+
+        evt = getattr(request, "_tracking", None)
+        if evt:
+            name = evt[0]
+            data = evt[1] if len(evt) > 1 else {}
+            event_id = evt[2] if len(evt) > 2 else None
+            bits = "".join(
+                providers.event_snippet(p, cfg, name, data, event_id)
+                for p, cfg in active.items()
+            )
+            if bits and "</body>" in content:
+                content = content.replace("</body>", bits + "</body>", 1)
 
         response.content = content.encode(response.charset or "utf-8")
         if response.has_header("Content-Length"):

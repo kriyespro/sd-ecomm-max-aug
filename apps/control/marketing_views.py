@@ -4,17 +4,42 @@ import re
 
 from django import forms
 from django.contrib import messages
-from django.urls import reverse_lazy
+from django.shortcuts import redirect
+from django.urls import reverse, reverse_lazy
+from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
+from apps.marketing import meta_oauth
 from apps.marketing.models import TrackingIntegration, TrackingProvider
+from apps.marketing.providers import IMPLEMENTED
 
 from .mixins import ActiveProjectMixin
 
-_PIXEL_ID_RE = re.compile(r"^\d{5,20}$")
+_OAUTH_STATE_KEY = "meta_oauth_state"
+
+# provider -> (id regex, human hint, "what the id is", "what the token is")
+_PROVIDER_SPEC = {
+    TrackingProvider.META: (
+        re.compile(r"^\d{5,20}$"), "a 5–20 digit number",
+        "Meta Pixel ID (Events Manager → Data sources)",
+        "Conversions API access token (Events Manager → Settings → "
+        "Conversions API → Generate access token)",
+    ),
+    TrackingProvider.GA4: (
+        re.compile(r"^G-[A-Z0-9]{6,12}$"), "like G-XXXXXXX",
+        "GA4 Measurement ID (Admin → Data streams → your web stream)",
+        "Measurement Protocol API secret (same screen → Measurement Protocol "
+        "API secrets → Create)",
+    ),
+    TrackingProvider.TIKTOK: (
+        re.compile(r"^[A-Z0-9]{10,40}$"), "the ~20-character Pixel Code",
+        "TikTok Pixel Code (Events Manager → your pixel → Settings)",
+        "Events API access token (same Settings screen → Generate access token)",
+    ),
+}
 
 
 class TrackingIntegrationForm(forms.ModelForm):
@@ -27,34 +52,51 @@ class TrackingIntegrationForm(forms.ModelForm):
                 render_value=False, attrs={"autocomplete": "off"}
             ),
         }
+        labels = {
+            "pixel_id": "Pixel / Measurement ID",
+            "server_token": "Server access token / API secret",
+            "track_browser": "Load the browser pixel on the storefront",
+            "track_server": "Also send server-side Purchase events",
+            "test_event_code": "Test event code",
+        }
         help_texts = {
-            "pixel_id": "Meta: your Pixel ID from Events Manager (a number).",
-            "server_token": "Conversions API access token (Events Manager → "
-                            "Settings → Conversions API → Generate access token). "
-                            "Enables server-side Purchase events.",
-            "test_event_code": "Optional. From the Test Events tab — events sent "
-                               "with it only show there, not in live data.",
+            "test_event_code": "Optional. Events sent with it show only in the "
+                               "vendor's test/debug view, never in live data.",
         }
 
-    def __init__(self, *args, project=None, **kwargs):
+    def __init__(self, *args, project=None, taken=(), **kwargs):
         super().__init__(*args, **kwargs)
         self.project = project
-        # Meta is the only provider wired today.
-        self.fields["provider"].choices = [
-            (TrackingProvider.META, TrackingProvider.META.label)
-        ]
         self.fields["server_token"].required = False
+
         if self.instance.pk:
             self.fields["provider"].disabled = True
-            if self.instance.server_token:
-                self.fields["server_token"].help_text += (
-                    "  A token is saved — leave blank to keep it."
-                )
+            choices = [(self.instance.provider,
+                        TrackingProvider(self.instance.provider).label)]
+        else:
+            choices = [(p, TrackingProvider(p).label)
+                       for p in IMPLEMENTED if p not in taken]
+        self.fields["provider"].choices = choices
+
+        spec = _PROVIDER_SPEC.get(self._provider())
+        if spec:
+            self.fields["pixel_id"].help_text = spec[2] + f" — {spec[1]}."
+            self.fields["server_token"].help_text = spec[3] + "."
+        if self.instance.pk and self.instance.server_token:
+            self.fields["server_token"].help_text += " A token is saved — leave blank to keep it."
+
+    def _provider(self):
+        if self.instance.pk:
+            return self.instance.provider
+        return (self.data.get("provider") if self.is_bound
+                else self.initial.get("provider")) or TrackingProvider.META
 
     def clean_pixel_id(self):
         pid = (self.cleaned_data.get("pixel_id") or "").strip()
-        if pid and not _PIXEL_ID_RE.match(pid):
-            raise forms.ValidationError("A Meta Pixel ID is 5–20 digits.")
+        provider = self._provider()
+        spec = _PROVIDER_SPEC.get(provider)
+        if pid and spec and not spec[0].match(pid):
+            raise forms.ValidationError(f"That doesn't look like {spec[2]} ({spec[1]}).")
         return pid
 
     def clean_server_token(self):
@@ -67,12 +109,13 @@ class TrackingIntegrationForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         if cleaned.get("is_enabled") and not cleaned.get("pixel_id"):
-            self.add_error("pixel_id", "Add the Pixel ID before enabling tracking.")
-        if cleaned.get("track_server") and cleaned.get("is_enabled") and not cleaned.get("server_token"):
+            self.add_error("pixel_id", "Add the ID before enabling tracking.")
+        if (cleaned.get("track_server") and cleaned.get("is_enabled")
+                and not cleaned.get("server_token")):
             self.add_error(
                 "server_token",
                 "Server-side events need an access token — add one, or turn off "
-                "“Send server events”.",
+                "“Also send server-side Purchase events”.",
             )
         return cleaned
 
@@ -100,9 +143,9 @@ class TrackingListView(_TrackingBase, ListView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["can_add_meta"] = not self.get_queryset().filter(
-            provider=TrackingProvider.META
-        ).exists()
+        taken = set(self.get_queryset().values_list("provider", flat=True))
+        ctx["can_add"] = bool([p for p in IMPLEMENTED if p not in taken])
+        ctx["meta_oauth_ready"] = meta_oauth.is_configured()
         return ctx
 
 
@@ -114,6 +157,9 @@ class _TrackingForm(_TrackingBase):
     def get_form_kwargs(self):
         kw = super().get_form_kwargs()
         kw["project"] = self.active_project
+        kw["taken"] = set(
+            self.get_queryset().values_list("provider", flat=True)
+        )
         return kw
 
     def form_valid(self, form):
@@ -129,7 +175,9 @@ class _TrackingForm(_TrackingBase):
 
 class TrackingCreateView(_TrackingForm, CreateView):
     def get_initial(self):
-        return {"provider": TrackingProvider.META}
+        taken = set(self.get_queryset().values_list("provider", flat=True))
+        first = next((p for p in IMPLEMENTED if p not in taken), TrackingProvider.META)
+        return {"provider": first}
 
 
 class TrackingUpdateView(_TrackingForm, UpdateView):
@@ -145,3 +193,65 @@ class TrackingDeleteView(_TrackingBase, DeleteView):
                      request=self.request)
         messages.success(self.request, "Tracking integration removed.")
         return super().form_valid(form)
+
+
+# --- "Connect with Meta" OAuth (optional, platform-owned Meta app) ----------
+
+class _MetaOAuthBase(StoreRoleRequiredMixin, ActiveProjectMixin):
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage tracking."
+
+    def _redirect_uri(self):
+        return self.request.build_absolute_uri(reverse("control:tracking_meta_callback"))
+
+
+class MetaConnectStartView(_MetaOAuthBase, View):
+    def get(self, request):
+        if not meta_oauth.is_configured():
+            messages.error(request, "“Connect with Meta” isn't available on this platform.")
+            return redirect("control:tracking")
+        state = meta_oauth.make_state()
+        request.session[_OAUTH_STATE_KEY] = state
+        return redirect(meta_oauth.auth_url(self._redirect_uri(), state))
+
+
+class MetaConnectCallbackView(_MetaOAuthBase, View):
+    def get(self, request):
+        saved = request.session.pop(_OAUTH_STATE_KEY, None)
+        if request.GET.get("error"):
+            messages.error(request, "Meta connection was cancelled.")
+            return redirect("control:tracking")
+        if not saved or saved != request.GET.get("state"):
+            messages.error(request, "Meta connection expired — try again.")
+            return redirect("control:tracking")
+        code = request.GET.get("code", "")
+        try:
+            token = meta_oauth.exchange_code(code, self._redirect_uri())
+            pixels = meta_oauth.list_pixels(token)
+        except meta_oauth.MetaOAuthError as exc:
+            logger_msg = str(exc)[:200]
+            messages.error(request, f"Meta connection failed: {logger_msg}")
+            return redirect("control:tracking")
+
+        if not pixels:
+            messages.warning(request, "Connected, but no Meta Pixel was found on that account.")
+            return redirect("control:tracking")
+
+        pixel = pixels[0]
+        row, _ = TrackingIntegration.objects.get_or_create(
+            project=self.active_project, provider=TrackingProvider.META,
+        )
+        row.pixel_id = pixel["id"]
+        row.server_token = token
+        row.track_browser = True
+        row.track_server = True
+        row.save()
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=row,
+                     changes={"provider": "meta", "via": "oauth"}, request=request)
+        extra = f" ({len(pixels) - 1} more available — edit to switch)" if len(pixels) > 1 else ""
+        messages.success(
+            request,
+            f"Connected Meta Pixel “{pixel['name']}”{extra}. Review, then turn it on.",
+        )
+        return redirect("control:tracking_edit", pk=row.pk)
