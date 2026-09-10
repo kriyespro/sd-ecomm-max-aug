@@ -36,6 +36,9 @@ urlpatterns = [
     path("track/", views.TrackOrderView.as_view(), name="track"),
 
     path("page/<slug:slug>/", views.PageView.as_view(), name="page"),
+
+    path("verify/", views.VerifyView.as_view(), name="verify"),
+    path("verify/<str:code>/", views.VerifyView.as_view(), name="verify_code"),
 ]
 
 if settings.SEO_INDEXNOW_KEY:

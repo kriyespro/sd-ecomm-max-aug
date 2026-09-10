@@ -757,8 +757,31 @@ class PageView(View):
         page = Page.objects.filter(project=project, slug=slug).first()
         if page is None or not page.is_live:
             raise Http404
+        if page.slug == "verify":
+            return _render_verify(request, project, page_title=page.title)
         request._seo = {
             "type": "page", "obj": page,
             "crumbs": [("Home", "/"), (page.title, f"/page/{page.slug}/")],
         }
         return render(request, "shopfront/page.jinja", base_context(request, project, page=page))
+
+
+# --- certificate verification --------------------------------
+
+def _render_verify(request, project, *, code=None, page_title="Verify certificate"):
+    from apps.certificates.models import lookup
+
+    query = code or request.GET.get("code", "")
+    certificate = lookup(project, query) if query else None
+    searched = bool(query)
+    request._seo = {"type": "page", "title": page_title,
+                    "description": f"Verify a certificate issued by {project.name}.",
+                    "noindex": searched}
+    ctx = base_context(request, project, certificate=certificate, query=query,
+                       searched=searched, page_title=page_title)
+    return render(request, "shopfront/verify.jinja", ctx)
+
+
+class VerifyView(View):
+    def get(self, request, code=None):
+        return _render_verify(request, current_project(request), code=code)
