@@ -11,6 +11,7 @@ from . import coupon_views as coup
 from . import customer_views as custv
 from . import domain_views as domv
 from . import inventory_views as invv
+from . import learning_views as learnv
 from . import marketing_views as mktv
 from . import order_views as ordv
 from . import payment_views as payv
@@ -344,6 +345,13 @@ urlpatterns = [
     path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
     path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
     path("platform-tracking/", mktv.PlatformTrackingView.as_view(), name="platform_tracking"),
+
+    # Learning / training videos
+    path("training/", learnv.TrainingLibraryView.as_view(), name="training"),
+    path("learning/", learnv.LearningListView.as_view(), name="learning"),
+    path("learning/new/", learnv.LearningCreateView.as_view(), name="learning_create"),
+    path("learning/<int:pk>/", learnv.LearningUpdateView.as_view(), name="learning_edit"),
+    path("learning/<int:pk>/delete/", learnv.LearningDeleteView.as_view(), name="learning_delete"),
 
     # WhatsApp (per-store add-on)
     path("settings/whatsapp/", wav.WhatsAppSettingsView.as_view(), name="whatsapp"),

@@ -1,0 +1,42 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Learning videos{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">Learning videos</h2>
+    <div class="flex gap-2">
+      <a href="{{ url('control:training') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Preview library</a>
+      <a href="{{ url('control:learning_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add video</a>
+    </div>
+  </div>
+  <p class="text-xs text-slate-500">Shown to store owners, managers, staff and DGCs in <em>Training</em>, grouped by topic and filtered to each role.</p>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Topic</th><th class="px-4 py-2">Title</th>
+          <th class="px-4 py-2">Audience</th><th class="px-4 py-2">Video</th>
+          <th class="px-4 py-2">Live</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for v in videos %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 text-slate-500">{{ v.topic }}</td>
+          <td class="px-4 py-2 font-medium text-slate-800">{{ v.title }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ v.audience_labels | join(', ') or "Everyone" }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-400">{{ v.youtube_id or "—" }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if v.is_published else 'bg-slate-200 text-slate-600' }}">
+              {{ "yes" if v.is_published else "no" }}</span>
+          </td>
+          <td class="px-4 py-2 text-right"><a href="{{ url('control:learning_edit', kwargs={'pk': v.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No videos yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
