@@ -461,7 +461,9 @@ class ProductDuplicateTests(TestCase):
         self.assertEqual(resp["Location"], f"/admin/products/{clone.pk}/")
         self.assertEqual(clone.title, "Original (copy)")
         self.assertEqual(clone.status, "draft")
-        self.assertFalse(clone.search_indexed)
+        # search_indexed is inherited (not forced off): DRAFT hides the copy, and
+        # forcing it off used to leave the product invisible after activation.
+        self.assertEqual(clone.search_indexed, self.product.search_indexed)
         self.assertNotEqual(clone.slug, self.product.slug)
         self.assertNotEqual(clone.sku, self.product.sku)
 

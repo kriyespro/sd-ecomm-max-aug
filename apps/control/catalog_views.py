@@ -414,6 +414,17 @@ class ProductUpdateView(_ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
     def get_success_url(self):
         return reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
 
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        if self.object.status == "active" and not self.object.search_indexed:
+            messages.warning(
+                self.request,
+                "This product is active but “Show in search & storefront listings” "
+                "is off, so it won’t appear in the storefront or sitemap. Turn it "
+                "on to make it visible.",
+            )
+        return response
+
 
 class _ProductImageBase(ActiveProjectMixin, View):
     def get_product(self):
@@ -532,7 +543,9 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
         clone.sku = ""
         clone.title = f"{src.title} (copy)"
         clone.status = ProductStatus.DRAFT
-        clone.search_indexed = False
+        # Keep search_indexed inherited from the source: DRAFT already hides the
+        # copy from the storefront, and forcing it off here silently kept the
+        # product out of search/sitemap even after the owner activated it.
         clone.rating_avg = 0
         clone.rating_count = 0
         clone.save()
