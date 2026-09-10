@@ -778,8 +778,18 @@ class NotificationSettingsForm(ProjectScopedForm):
 class NotificationTemplateForm(ProjectScopedForm):
     class Meta:
         model = NotificationTemplate
-        fields = ["event", "channel", "subject", "body", "is_active"]
+        fields = ["event", "channel", "subject", "body",
+                  "wa_template_name", "wa_language", "is_active"]
         widgets = {"body": forms.Textarea(attrs={"rows": 8, "class": TEXT})}
+        help_texts = {
+            "body": "Email/SMS: the message text ({name}, {order_number}, "
+                    "{total}, {currency}, {carrier}, {tracking}…). WhatsApp: one "
+                    "line per template body placeholder {{1}}, {{2}}… — each a "
+                    "template using the same {…} fields.",
+            "wa_template_name": "WhatsApp only. The exact name of the template "
+                                "approved in your Meta Business account.",
+            "wa_language": "WhatsApp only. e.g. en_US, en, hi.",
+        }
 
 
 class B2BImportForm(forms.Form):

@@ -23,6 +23,7 @@ from . import skin_views as skinv
 from . import store_views as storev
 from . import team_views as teamv
 from . import views
+from . import whatsapp_views as wav
 
 app_name = "control"
 
@@ -335,6 +336,11 @@ urlpatterns = [
     path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
     path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
     path("platform-tracking/", mktv.PlatformTrackingView.as_view(), name="platform_tracking"),
+
+    # WhatsApp (per-store add-on)
+    path("settings/whatsapp/", wav.WhatsAppSettingsView.as_view(), name="whatsapp"),
+    path("settings/whatsapp/test/", wav.WhatsAppTestView.as_view(), name="whatsapp_test"),
+    path("settings/whatsapp/disconnect/", wav.WhatsAppDisconnectView.as_view(), name="whatsapp_disconnect"),
 
     # SEO
     path("seo/", seov.SeoSettingsView.as_view(), name="seo_settings"),

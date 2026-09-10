@@ -24,6 +24,7 @@ urlpatterns = [
     path("accounts/", include("apps.accounts.urls", namespace="accounts")),
     path("admin/", include("apps.control.urls", namespace="control")),
     path("payments/", include("apps.payments.urls", namespace="payments")),
+    path("whatsapp/", include("apps.whatsapp.urls", namespace="whatsapp")),
     path("billing/", include("apps.billing.urls", namespace="billing")),
     path("shipping/", include("apps.shipping.urls", namespace="shipping")),
     path("api/", include("apps.api.urls", namespace="api")),

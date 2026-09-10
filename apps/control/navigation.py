@@ -68,6 +68,7 @@ _SECTIONS = [
     ("settings", "Settings", "⚙", [
         ("shipping_zones", "Shipping", "\U0001f69a"),
         ("webhooks", "Webhooks", "\U0001f517"),
+        ("whatsapp", "WhatsApp", "\U0001f4ac"),
         ("payment_providers", "Payments", "\U0001f4b3"),
         ("domains", "Domains", "\U0001f310"),
         ("team", "Team", "\U0001f465"),
@@ -90,7 +91,7 @@ _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
-_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding", "tracking"}
+_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding", "tracking", "whatsapp"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}

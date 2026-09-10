@@ -40,3 +40,22 @@ def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
     label = instance._meta.label if instance is not None else ""
     pk = str(instance.pk) if instance is not None else ""
     send_notification_task.delay(project.id, notif_event, to, context, label, pk)
+
+    _maybe_whatsapp(project, notif_event, payload, context, label, pk)
+
+
+def _maybe_whatsapp(project, notif_event, payload, context, label, pk):
+    """Also send the event over WhatsApp when the store has an active account
+    and the customer left a phone number. ``send_transactional`` still no-ops
+    cleanly if no WhatsApp template is configured for this event."""
+    phone = payload.get("phone") or payload.get("customer_phone") or ""
+    if not phone:
+        return
+    try:
+        from apps.whatsapp.models import account_for
+        from apps.whatsapp.tasks import send_whatsapp_task
+    except Exception:  # noqa: BLE001 - app not installed
+        return
+    if account_for(project) is None:
+        return
+    send_whatsapp_task.delay(project.id, notif_event, phone, context, label, pk)
