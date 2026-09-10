@@ -10,10 +10,15 @@ from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
+from apps.core.mixins import PlatformAdminRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.marketing import meta_oauth
-from apps.marketing.models import TrackingIntegration, TrackingProvider
+from apps.marketing.models import (
+    PlatformTrackingSettings,
+    TrackingIntegration,
+    TrackingProvider,
+)
 from apps.marketing.providers import IMPLEMENTED
 
 from .mixins import ActiveProjectMixin
@@ -255,3 +260,54 @@ class MetaConnectCallbackView(_MetaOAuthBase, View):
             f"Connected Meta Pixel “{pixel['name']}”{extra}. Review, then turn it on.",
         )
         return redirect("control:tracking_edit", pk=row.pk)
+
+
+# --- Platform marketing-site pixels (superadmin) ---------------------------
+
+class PlatformTrackingForm(forms.ModelForm):
+    class Meta:
+        model = PlatformTrackingSettings
+        fields = ["is_enabled", "meta_pixel_id", "ga4_measurement_id", "tiktok_pixel_id"]
+        labels = {
+            "is_enabled": "Load these pixels on the marketing site",
+            "meta_pixel_id": "Meta Pixel ID",
+            "ga4_measurement_id": "GA4 Measurement ID",
+            "tiktok_pixel_id": "TikTok Pixel Code",
+        }
+        help_texts = {
+            "meta_pixel_id": "A number. Leave blank to skip Meta.",
+            "ga4_measurement_id": "Like G-XXXXXXX. Leave blank to skip GA4.",
+            "tiktok_pixel_id": "The ~20-character code. Leave blank to skip TikTok.",
+        }
+
+    def _check(self, field, provider):
+        val = (self.cleaned_data.get(field) or "").strip()
+        spec = _PROVIDER_SPEC[provider]
+        if val and not spec[0].match(val):
+            raise forms.ValidationError(f"That doesn't look right ({spec[1]}).")
+        return val
+
+    def clean_meta_pixel_id(self):
+        return self._check("meta_pixel_id", TrackingProvider.META)
+
+    def clean_ga4_measurement_id(self):
+        return self._check("ga4_measurement_id", TrackingProvider.GA4)
+
+    def clean_tiktok_pixel_id(self):
+        return self._check("tiktok_pixel_id", TrackingProvider.TIKTOK)
+
+
+class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
+    form_class = PlatformTrackingForm
+    template_name = "control/_object_form.jinja"
+    success_url = reverse_lazy("control:platform_tracking")
+
+    def get_object(self, queryset=None):
+        return PlatformTrackingSettings.load()
+
+    def form_valid(self, form):
+        resp = super().form_valid(form)
+        record_audit(actor=self.request.user, action=AuditLog.Action.UPDATE,
+                     target=self.object, request=self.request)
+        messages.success(self.request, "Marketing-site tracking saved.")
+        return resp

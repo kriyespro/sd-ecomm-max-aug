@@ -334,6 +334,7 @@ urlpatterns = [
     path("marketing/tracking/meta/callback/", mktv.MetaConnectCallbackView.as_view(), name="tracking_meta_callback"),
     path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
     path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
+    path("platform-tracking/", mktv.PlatformTrackingView.as_view(), name="platform_tracking"),
 
     # SEO
     path("seo/", seov.SeoSettingsView.as_view(), name="seo_settings"),

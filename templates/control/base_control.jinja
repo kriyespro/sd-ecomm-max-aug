@@ -2,6 +2,9 @@
 
 {% block title %}{% block page_title %}Mission Control{% endblock %} · Mission Control{% endblock %}
 
+{# The marketing-site pixels never belong on an operator's admin pages. #}
+{% block platform_tracking %}{% endblock %}
+
 {% block body %}
 {# Mission Control colour scheme by the viewer's highest role:
    platform (superuser / Platform Owner) = indigo, DGC (Platform Manager) =

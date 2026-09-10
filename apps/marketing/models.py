@@ -1,24 +1,28 @@
-"""Third-party marketing / conversion tracking per store.
+"""Third-party marketing / conversion tracking.
 
-One row per (store, provider). Only ``meta`` (Meta Pixel + Conversions API) is
-wired today; ``ga4`` / ``tiktok`` are reserved so the storefront + admin can
-grow to them without a schema change.
+``TrackingIntegration`` — one row per (store, provider): Meta Pixel + Conversions
+API, GA4, TikTok Pixel + Events API. Configured by the store's own team.
+
+``PlatformTrackingSettings`` — a singleton for the platform marketing site
+(shopinaday.com landing / pricing / signup), configured by a superadmin. Browser
+pixels only; no server-side / PII path.
 """
 
 from django.core.cache import cache
 from django.db import models
 
-from apps.core.models import TenantScopedModel
+from apps.core.models import TenantScopedModel, TimeStampedModel
 
 
 class TrackingProvider(models.TextChoices):
     META = "meta", "Meta Pixel"
-    GA4 = "ga4", "Google Analytics 4"        # not implemented yet
-    TIKTOK = "tiktok", "TikTok Pixel"        # not implemented yet
+    GA4 = "ga4", "Google Analytics 4"
+    TIKTOK = "tiktok", "TikTok Pixel"
 
 
 _CACHE_KEY = "marketing:tracking:{project_id}"
 _CACHE_TTL = 600
+_PLATFORM_CACHE_KEY = "marketing:platform-tracking"
 
 
 class TrackingIntegration(TenantScopedModel):
@@ -82,4 +86,50 @@ def tracking_for(project):
         if row.browser_ready:
             out[row.provider] = {"pixel_id": row.pixel_id}
     cache.set(key, out, _CACHE_TTL)
+    return out
+
+
+class PlatformTrackingSettings(TimeStampedModel):
+    """Singleton — pixels for the platform's own marketing site."""
+
+    meta_pixel_id = models.CharField(max_length=64, blank=True)
+    ga4_measurement_id = models.CharField(max_length=32, blank=True)
+    tiktok_pixel_id = models.CharField(max_length=64, blank=True)
+    is_enabled = models.BooleanField(
+        default=False, help_text="Master switch — off = inject nothing.",
+    )
+
+    class Meta:
+        verbose_name = "platform tracking settings"
+        verbose_name_plural = "platform tracking settings"
+
+    def __str__(self):
+        return "Platform tracking settings"
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+        cache.delete(_PLATFORM_CACHE_KEY)
+
+    def as_map(self):
+        """``{provider: {"pixel_id": id}}`` for the enabled, filled-in ones."""
+        if not self.is_enabled:
+            return {}
+        pairs = (("meta", self.meta_pixel_id), ("ga4", self.ga4_measurement_id),
+                 ("tiktok", self.tiktok_pixel_id))
+        return {p: {"pixel_id": v.strip()} for p, v in pairs if v.strip()}
+
+
+def platform_tracking():
+    """Cached ``{provider: {"pixel_id": id}}`` for the marketing site."""
+    cached = cache.get(_PLATFORM_CACHE_KEY)
+    if cached is not None:
+        return cached
+    out = PlatformTrackingSettings.load().as_map()
+    cache.set(_PLATFORM_CACHE_KEY, out, _CACHE_TTL)
     return out

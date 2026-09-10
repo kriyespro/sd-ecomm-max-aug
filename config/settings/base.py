@@ -141,6 +141,7 @@ TEMPLATES = [
                 "config.jinja2.csrf",
                 "apps.core.context_processors.tenant",
                 "apps.control.context_processors.control",
+                "apps.marketing.context_processors.platform_pixels",
             ],
         },
     },

@@ -15,9 +15,12 @@ from apps.billing import services as billing_svc
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
 from apps.core.events import Events, emit
 from apps.marketing import capi, ga4, providers, tiktok
+from apps.marketing.context_processors import platform_pixels
 from apps.marketing.models import (
+    PlatformTrackingSettings,
     TrackingIntegration,
     TrackingProvider,
+    platform_tracking,
     tracking_for,
 )
 from apps.marketing.tasks import (
@@ -521,3 +524,94 @@ class MultiProviderFanOutTests(TestCase):
         body = TrackingInjectionMiddleware(get_response)(req).content.decode()
         self.assertIn("fbevents.js", body)
         self.assertIn("googletagmanager.com/gtag/js", body)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PlatformTrackingTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_as_map_empty_when_disabled(self):
+        s = PlatformTrackingSettings.load()
+        s.meta_pixel_id = "123456789"
+        s.is_enabled = False
+        s.save()
+        self.assertEqual(s.as_map(), {})
+
+    def test_as_map_only_filled_providers(self):
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.meta_pixel_id = "123456789"
+        s.ga4_measurement_id = ""
+        s.tiktok_pixel_id = "CABC123DEF456"
+        s.save()
+        self.assertEqual(set(s.as_map()), {"meta", "tiktok"})
+
+    def test_platform_tracking_cache_busts_on_save(self):
+        self.assertEqual(platform_tracking(), {})
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.meta_pixel_id = "999888777"
+        s.save()
+        self.assertIn("meta", platform_tracking())
+
+    def test_context_processor_marketing_vs_admin(self):
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.ga4_measurement_id = "G-PLAT123"
+        s.save()
+
+        market = RequestFactory().get("/")
+        out = platform_pixels(market)
+        self.assertIn("gtag/js?id=G-PLAT123", str(out["platform_tracking_head"]))
+
+        admin = RequestFactory().get("/admin/dashboard/")
+        self.assertEqual(platform_pixels(admin), {})
+
+    def test_landing_page_carries_pixel_when_enabled(self):
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.meta_pixel_id = "112233445566"
+        s.save()
+        body = self.client.get("/").content.decode()
+        self.assertIn("fbq('init','112233445566')", body)
+
+    def test_landing_page_clean_when_disabled(self):
+        body = self.client.get("/").content.decode()
+        self.assertNotIn("fbevents.js", body)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PlatformTrackingScreenTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_superuser("root", "root@t.test", "pw")
+        self.plain = User.objects.create_user("p", "p@t.test", "pw", is_staff=True)
+
+    def test_superadmin_can_open_and_save(self):
+        self.client.force_login(self.admin)
+        self.assertEqual(self.client.get("/admin/platform-tracking/").status_code, 200)
+        resp = self.client.post("/admin/platform-tracking/", {
+            "is_enabled": "on",
+            "meta_pixel_id": "123456789012",
+            "ga4_measurement_id": "G-ABC1234",
+            "tiktok_pixel_id": "",
+        })
+        self.assertEqual(resp.status_code, 302)
+        s = PlatformTrackingSettings.load()
+        self.assertTrue(s.is_enabled)
+        self.assertEqual(s.meta_pixel_id, "123456789012")
+
+    def test_bad_ga4_id_rejected(self):
+        self.client.force_login(self.admin)
+        resp = self.client.post("/admin/platform-tracking/", {
+            "is_enabled": "on",
+            "meta_pixel_id": "",
+            "ga4_measurement_id": "nope",
+            "tiktok_pixel_id": "",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(PlatformTrackingSettings.load().is_enabled)
+
+    def test_non_admin_denied(self):
+        self.client.force_login(self.plain)
+        self.assertIn(self.client.get("/admin/platform-tracking/").status_code, (302, 403))
