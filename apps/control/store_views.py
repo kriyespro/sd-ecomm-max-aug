@@ -147,7 +147,7 @@ class StoreListView(_StoreScope, ListView):
             if d is not None:
                 qs = qs.filter(subscription__current_period_start__date__gte=d)
 
-        return qs.order_by("name")
+        return qs.order_by("-created_at")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
