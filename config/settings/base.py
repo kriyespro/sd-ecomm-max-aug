@@ -84,6 +84,7 @@ LOCAL_APPS = [
     "apps.webhooks",
     "apps.media",
     "apps.analytics",
+    "apps.marketing",
     "apps.storefront",
     "apps.shopfront",
 ]
@@ -107,6 +108,7 @@ MIDDLEWARE = [
     "apps.core.middleware.StorefrontHostMiddleware",
     "apps.shopfront.middleware.StorefrontSkinMiddleware",
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
+    "apps.shopfront.middleware.TrackingInjectionMiddleware",
     "apps.billing.middleware.SubscriptionGateMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]

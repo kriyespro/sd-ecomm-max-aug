@@ -10,6 +10,7 @@ from . import coupon_views as coup
 from . import customer_views as custv
 from . import domain_views as domv
 from . import inventory_views as invv
+from . import marketing_views as mktv
 from . import order_views as ordv
 from . import payment_views as payv
 from . import phase11_views as p11
@@ -325,6 +326,12 @@ urlpatterns = [
 
     path("showcase/settings/", showv.StoreShowcaseView.as_view(), name="store_showcase"),
     path("showcase/settings/submit/", showv.StoreShowcaseSubmitView.as_view(), name="store_showcase_submit"),
+
+    # Marketing — conversion tracking (Meta Pixel + Conversions API)
+    path("marketing/tracking/", mktv.TrackingListView.as_view(), name="tracking"),
+    path("marketing/tracking/new/", mktv.TrackingCreateView.as_view(), name="tracking_create"),
+    path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
+    path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
 
     # SEO
     path("seo/", seov.SeoSettingsView.as_view(), name="seo_settings"),

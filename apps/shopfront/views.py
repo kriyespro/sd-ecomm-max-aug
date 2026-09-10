@@ -266,6 +266,13 @@ class ProductView(View):
             delivery=delivery,
             available=_available(product),
         )
+        request._tracking = ("ViewContent", {
+            "content_ids": [product.sku or str(product.pk)],
+            "content_name": product.title,
+            "content_type": "product",
+            "value": float(product.sale_price or product.price or 0),
+            "currency": project.currency,
+        })
         return render(request, "shopfront/product.jinja", ctx)
 
 
@@ -413,9 +420,18 @@ class CheckoutView(View):
     def get(self, request):
         project = current_project(request)
         ctx = base_context(request, project)
-        if not ctx["cart"].items.exists():
+        cart = ctx["cart"]
+        if not cart.items.exists():
             return redirect("shopfront:cart")
         ctx["payment_providers"] = _checkout_payment_providers(project)
+        request._tracking = ("InitiateCheckout", {
+            "value": float(cart.subtotal or 0),
+            "currency": project.currency,
+            "num_items": cart.item_count,
+            "content_ids": [
+                (i.product.sku or str(i.product_id)) for i in cart.items.all()
+            ],
+        })
         return render(request, "shopfront/checkout.jinja", ctx)
 
     def post(self, request):
@@ -551,6 +567,14 @@ class OrderView(View):
         if not allowed:
             raise Http404
         order = get_object_or_404(Order.objects.prefetch_related("items"), project=project, number=number)
+        request._tracking = ("Purchase", {
+            "value": float(order.grand_total or 0),
+            "currency": order.currency,
+            "num_items": sum(i.quantity for i in order.items.all()),
+            "content_ids": [(i.sku or str(i.product_id)) for i in order.items.all()],
+            "content_type": "product",
+            "order_id": order.number,
+        }, order.number)
         return render(request, "shopfront/order.jinja", base_context(request, project, order=order))
 
 
