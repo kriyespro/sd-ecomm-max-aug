@@ -32,7 +32,7 @@ _PREFIXES = ("/app/", "/demo/", "/shop/")
 # On a store's own domain (request.storefront_host) everything is the storefront
 # EXCEPT these shared mounts (see config.storefront_urls).
 _NON_STOREFRONT = (
-    "/admin/", "/sd/", "/api/", "/accounts/", "/payments/", "/shipping/",
+    "/admin/", "/sd/", "/api/", "/accounts/", "/payments/", "/whatsapp/", "/shipping/",
     "/healthz", "/readyz", "/.well-known", "/media/", "/static/",
 )
 

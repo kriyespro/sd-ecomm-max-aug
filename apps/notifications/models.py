@@ -56,8 +56,14 @@ class NotificationTemplate(TenantScopedModel):
     event = models.CharField(max_length=40, choices=Event.choices)
     channel = models.CharField(max_length=12, choices=Channel.choices, default=Channel.EMAIL)
     subject = models.CharField(max_length=255, blank=True)
-    body = models.TextField()
+    body = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
+
+    # WhatsApp only: the name + language of the template approved in the seller's
+    # Meta Business account. ``body`` then holds one line per body placeholder
+    # ({{1}}, {{2}}…), each a Python .format() string over the event context.
+    wa_template_name = models.CharField("WhatsApp template name", max_length=120, blank=True)
+    wa_language = models.CharField("WhatsApp template language", max_length=12, blank=True, default="en_US")
 
     class Meta:
         ordering = ["event", "channel"]

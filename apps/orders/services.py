@@ -55,10 +55,14 @@ def _generate_number(project):
 
 
 def order_event_payload(order, **extra):
-    name = (order.shipping_address or {}).get("name") or (order.billing_address or {}).get("name") or ""
+    addr = order.shipping_address or {}
+    bill = order.billing_address or {}
+    name = addr.get("name") or bill.get("name") or ""
+    phone = getattr(order, "phone", "") or addr.get("phone") or bill.get("phone") or ""
     data = {
         "order_number": order.number,
         "email": order.email,
+        "phone": phone,
         "name": name,
         "currency": order.currency,
         "total": str(order.grand_total),

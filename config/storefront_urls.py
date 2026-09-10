@@ -28,6 +28,7 @@ urlpatterns = [
     # so the owner lands straight in it (no store picker).
     path("admin/", include("apps.control.urls", namespace="control")),
     path("payments/", include("apps.payments.urls", namespace="payments")),
+    path("whatsapp/", include("apps.whatsapp.urls", namespace="whatsapp")),
     path("shipping/", include("apps.shipping.urls", namespace="shipping")),
     path("api/", include("apps.api.urls", namespace="api")),
     # Legacy /app/... -> clean root URL. 302 (not 301) so browsers don't cache
