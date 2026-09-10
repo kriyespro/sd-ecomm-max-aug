@@ -1,0 +1,114 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Auto-share{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-6">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Social auto-share · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Connect Pinterest and / or your Google Business Profile once. Every product
+      you publish is then posted automatically — referral traffic plus Pinterest
+      and Google indexing. You use your own Pinterest / Google app; register its
+      redirect URI (shown below), paste the client ID + secret, then Connect.
+    </p>
+  </div>
+
+  {% for row in rows %}
+  {% set acc = row.account %}
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200 space-y-4">
+    <div class="flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-slate-700">{{ row.label }}</h3>
+      {% if acc and acc.ready %}
+      <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">live</span>
+      {% elif acc and acc.connected %}
+      <span class="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">connected · pick a target</span>
+      {% elif acc and acc.client_id %}
+      <span class="rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">not connected</span>
+      {% else %}
+      <span class="rounded bg-slate-200 px-2 py-0.5 text-xs text-slate-600">off</span>
+      {% endif %}
+    </div>
+
+    <p class="text-xs text-slate-400">
+      Redirect URI to register: <code class="break-all">{{ row.redirect_uri }}</code>
+    </p>
+    {% if acc and acc.last_error %}
+    <p class="rounded bg-red-50 px-3 py-2 text-xs text-red-700">{{ acc.last_error }}</p>
+    {% endif %}
+
+    {# 1. credentials #}
+    <form method="post" action="{{ url('control:social_creds', args=[row.provider]) }}"
+          class="grid gap-2 sm:grid-cols-2">
+      {{ csrf_input }}
+      <input name="client_id" value="{{ acc.client_id if acc else '' }}" placeholder="Client ID"
+             class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <input name="client_secret" type="password" placeholder="Client secret {{ '(saved)' if acc and acc.client_secret else '' }}"
+             class="rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <div class="sm:col-span-2 flex gap-2">
+        <button class="rounded-lg bg-slate-700 px-3 py-1.5 text-sm text-white hover:bg-slate-600">Save credentials</button>
+        {% if acc and acc.client_id and acc.client_secret %}
+        <a href="{{ url('control:social_connect', args=[row.provider]) }}"
+           class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">
+           {{ "Reconnect" if acc.connected else "Connect" }}</a>
+        {% endif %}
+      </div>
+    </form>
+
+    {# 2. pick a board / location #}
+    {% if acc and acc.connected %}
+    <form method="post" action="{{ url('control:social_target', args=[row.provider]) }}"
+          class="space-y-2 border-t border-slate-100 pt-3">
+      {{ csrf_input }}
+      <label class="block text-xs font-medium text-slate-600">
+        {{ "Board" if row.provider == "pinterest" else "Business location" }}
+      </label>
+      <select name="target_id" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+        {% for t in row.targets %}
+        <option value="{{ t.id }}" {{ 'selected' if acc.target_id == t.id else '' }}>{{ t.name }}</option>
+        {% else %}
+        <option value="{{ acc.target_id }}">{{ acc.target_name or acc.target_id or "— reconnect to load —" }}</option>
+        {% endfor %}
+      </select>
+      <label class="flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" name="auto_share" {{ 'checked' if acc.auto_share else '' }}>
+        Auto-post every new product
+      </label>
+      <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Save</button>
+      <button formaction="{{ url('control:social_disconnect', args=[row.provider]) }}" formnovalidate
+              class="ml-2 rounded-lg px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">Disconnect</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <h3 class="px-4 py-3 text-sm font-semibold text-slate-700">Recent posts</h3>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+          <tr><th class="px-4 py-2">When</th><th class="px-4 py-2">Channel</th>
+            <th class="px-4 py-2">Product</th><th class="px-4 py-2">Status</th></tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for p in recent %}
+          <tr>
+            <td class="px-4 py-2 text-slate-500">{{ p.created_at.strftime('%d %b %H:%M') }}</td>
+            <td class="px-4 py-2 text-slate-600">{{ p.get_provider_display() }}</td>
+            <td class="px-4 py-2 text-slate-600">
+              {% if p.url %}<a href="{{ p.url }}" target="_blank" class="hover:underline">{{ p.product.title }}</a>
+              {% else %}{{ p.product.title }}{% endif %}
+            </td>
+            <td class="px-4 py-2">
+              <span class="rounded px-2 py-0.5 text-xs {{ 'bg-red-100 text-red-700' if p.status == 'failed' else 'bg-slate-100 text-slate-600' }}">{{ p.status }}</span>
+              {% if p.error %}<span class="ml-1 text-xs text-red-500">{{ p.error }}</span>{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">Nothing shared yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

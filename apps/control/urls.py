@@ -21,6 +21,7 @@ from . import shipping_views as shipv
 from . import showcase_views as showv
 from . import skin_views as skinv
 from . import store_views as storev
+from . import social_views as socv
 from . import team_views as teamv
 from . import views
 from . import whatsapp_views as wav
@@ -341,6 +342,16 @@ urlpatterns = [
     path("settings/whatsapp/", wav.WhatsAppSettingsView.as_view(), name="whatsapp"),
     path("settings/whatsapp/test/", wav.WhatsAppTestView.as_view(), name="whatsapp_test"),
     path("settings/whatsapp/disconnect/", wav.WhatsAppDisconnectView.as_view(), name="whatsapp_disconnect"),
+
+    # Social auto-share (per-store add-on)
+    path("marketing/social/", socv.SocialSettingsView.as_view(), name="social"),
+    path("marketing/social/<str:provider>/creds/", socv.SocialSaveCredsView.as_view(), name="social_creds"),
+    path("marketing/social/<str:provider>/connect/", socv.SocialConnectView.as_view(), name="social_connect"),
+    path("marketing/social/<str:provider>/callback/", socv.SocialCallbackView.as_view(), name="social_callback"),
+    path("marketing/social/<str:provider>/target/", socv.SocialTargetView.as_view(), name="social_target"),
+    path("marketing/social/<str:provider>/toggle/", socv.SocialToggleView.as_view(), name="social_toggle"),
+    path("marketing/social/<str:provider>/disconnect/", socv.SocialDisconnectView.as_view(), name="social_disconnect"),
+    path("marketing/social/<str:provider>/share-now/", socv.SocialShareNowView.as_view(), name="social_share_now"),
 
     # SEO
     path("seo/", seov.SeoSettingsView.as_view(), name="seo_settings"),
