@@ -2,8 +2,6 @@
 sitemap entries, redirect resolution.
 """
 
-from django.utils import timezone
-
 from .models import Redirect, SeoMeta, SeoSettings
 
 
@@ -49,12 +47,12 @@ def meta_for(project, *, path="", obj=None, obj_type=""):
         )
         slug = getattr(obj, "slug", "")
         if obj_type == "product":
-            canonical = f"/product/{slug}/"
+            canonical = f"/p/{slug}/"
             structured = product_schema(obj)
         elif obj_type == "category":
-            canonical = f"/category/{slug}/"
+            canonical = f"/c/{slug}/"
         elif obj_type == "page":
-            canonical = f"/{slug}/"
+            canonical = f"/page/{slug}/"
 
     if override is not None:
         title = _clean(override.title, title)
@@ -88,21 +86,51 @@ def meta_for(project, *, path="", obj=None, obj_type=""):
     }
 
 
-def product_schema(product):
+def website_schema(project):
+    return {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": project.name,
+        "url": project.public_url or "",
+    }
+
+
+def organization_schema(project):
+    s = _settings(project)
+    data = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": project.name,
+        "url": project.public_url or "",
+    }
+    if s and s.default_og_image:
+        data["logo"] = s.default_og_image.url
+    if s and s.organization_schema:
+        data.update(s.organization_schema)
+    return data
+
+
+def product_schema(product, *, available=None, base_url=""):
     price = getattr(product, "current_price", None) or getattr(product, "price", 0)
+    in_stock = not (available is not None and available <= 0)
     data = {
         "@context": "https://schema.org",
         "@type": "Product",
         "name": product.title,
         "sku": product.sku or "",
-        "description": (product.short_description or product.description or "")[:500],
+        "description": _strip_tags(product.short_description or product.description or "")[:500],
         "offers": {
             "@type": "Offer",
             "price": str(price),
             "priceCurrency": product.project.currency,
-            "availability": "https://schema.org/InStock",
+            "availability": "https://schema.org/InStock" if in_stock
+            else "https://schema.org/OutOfStock",
+            "url": (base_url.rstrip("/") + f"/p/{product.slug}/") if base_url else "",
         },
     }
+    img = _primary_image_url(product)
+    if img:
+        data["image"] = (base_url.rstrip("/") + img) if (base_url and img.startswith("/")) else img
     if getattr(product, "brand_id", None):
         data["brand"] = {"@type": "Brand", "name": product.brand.name}
     if getattr(product, "rating_count", 0):
@@ -112,6 +140,27 @@ def product_schema(product):
             "reviewCount": product.rating_count,
         }
     return data
+
+
+def _strip_tags(value):
+    from django.utils.html import strip_tags
+
+    return strip_tags(value or "").strip()
+
+
+def _primary_image_url(product):
+    try:
+        cache = getattr(product, "_prefetched_objects_cache", {})
+        images = cache["images"] if "images" in cache else product.images.all()
+        for im in images:
+            if im.is_primary and im.image:
+                return im.image.url
+        for im in images:
+            if im.image:
+                return im.image.url
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
 
 
 def breadcrumb_schema(crumbs):
@@ -127,25 +176,37 @@ def breadcrumb_schema(crumbs):
 
 
 def sitemap_entries(project):
+    """``[{loc, lastmod, changefreq, priority, images?}]`` — storefront-relative
+    ``loc`` matching the real shopfront routes (``/p/…``, ``/c/…``, ``/page/…``).
+    """
     from apps.catalog.models import Product
     from apps.categories.models import Category
-    from apps.cms.models import Page, PublishStatus
+    from apps.cms.models import Page
 
-    now = timezone.now()
-    entries = []
+    entries = [
+        {"loc": "/", "changefreq": "daily", "priority": "1.0"},
+        {"loc": "/shop/", "changefreq": "daily", "priority": "0.9"},
+    ]
 
     for page in Page.objects.filter(project=project, show_in_sitemap=True):
         if page.is_live:
-            entries.append({"loc": f"/{page.slug}/", "lastmod": page.updated_at,
-                            "changefreq": "monthly", "priority": "0.6"})
+            entries.append({"loc": f"/page/{page.slug}/", "lastmod": page.updated_at,
+                            "changefreq": "monthly", "priority": "0.5"})
 
-    for product in Product.objects.filter(project=project, status="active", search_indexed=True):
-        entries.append({"loc": f"/product/{product.slug}/", "lastmod": product.updated_at,
-                        "changefreq": "weekly", "priority": "0.8"})
+    products = (
+        Product.objects.filter(project=project, status="active", search_indexed=True)
+        .prefetch_related("images")
+    )
+    for product in products:
+        images = [im.image.url for im in product.images.all() if im.image][:5]
+        entries.append({
+            "loc": f"/p/{product.slug}/", "lastmod": product.updated_at,
+            "changefreq": "weekly", "priority": "0.8", "images": images,
+        })
 
     for category in Category.objects.filter(project=project, is_active=True):
-        entries.append({"loc": f"/category/{category.slug}/", "lastmod": category.updated_at,
-                        "changefreq": "weekly", "priority": "0.5"})
+        entries.append({"loc": f"/c/{category.slug}/", "lastmod": category.updated_at,
+                        "changefreq": "weekly", "priority": "0.6"})
 
     return entries
 

@@ -124,6 +124,7 @@ class HomeView(View):
             featured=featured, new_arrivals=new_arrivals,
             cat_tiles=tiles, cat_tiles_top=tiles_top, testimonials=testimonials,
         )
+        request._seo = {"type": "home"}
         return render(request, "shopfront/home.jinja", ctx)
 
 
@@ -164,17 +165,40 @@ class ShopView(View):
         }.get(sort, qs.order_by("-created_at"))
 
         page = Paginator(qs, self.per_page).get_page(f.get("page"))
+        category_obj = (
+            Category.objects.filter(project=project, slug=cat, is_active=True).first()
+            if cat else None
+        )
         ctx = base_context(
             request, project,
             page_obj=page, products=page.object_list,
-            active_category=cat, query=q, sort=sort,
+            active_category=cat, category=category_obj, query=q, sort=sort,
             price_min=f.get("min", ""), price_max=f.get("max", ""),
             all_categories=Category.objects.filter(project=project, is_active=True),
             result_count=page.paginator.count,
         )
         if _htmx(request):
             return render(request, "shopfront/partials/_grid.jinja", ctx)
+
+        filtered = bool(q or f.get("min") or f.get("max") or f.get("page") or sort not in ("", "new"))
+        if category_obj is not None:
+            request._seo = {
+                "type": "category", "obj": category_obj, "noindex": filtered,
+                "crumbs": [("Home", "/"), ("Shop", "/shop/"),
+                           (category_obj.name, f"/c/{category_obj.slug}/")],
+            }
+        else:
+            request._seo = {"type": "shop", "noindex": filtered}
         return render(request, "shopfront/shop.jinja", ctx)
+
+
+class CategoryView(ShopView):
+    """Canonical per-category URL — ``/c/<slug>/`` — reusing the shop listing."""
+
+    def get(self, request, slug):
+        request.GET = request.GET.copy()
+        request.GET["category"] = slug
+        return super().get(request)
 
 
 # --- product -----------------------------------------------------
@@ -273,6 +297,15 @@ class ProductView(View):
             "value": float(product.sale_price or product.price or 0),
             "currency": project.currency,
         })
+        _crumbs = [("Home", "/"), ("Shop", "/shop/")]
+        if product.category_id:
+            _crumbs.append((product.category.name, f"/c/{product.category.slug}/"))
+        _crumbs.append((product.title, f"/p/{product.slug}/"))
+        request._seo = {
+            "type": "product", "obj": product, "crumbs": _crumbs,
+            "available": ctx.get("available"),
+            "image": (product.images.all()[0].image.url if product.images.all() else ""),
+        }
         return render(request, "shopfront/product.jinja", ctx)
 
 
@@ -724,4 +757,8 @@ class PageView(View):
         page = Page.objects.filter(project=project, slug=slug).first()
         if page is None or not page.is_live:
             raise Http404
+        request._seo = {
+            "type": "page", "obj": page,
+            "crumbs": [("Home", "/"), (page.title, f"/page/{page.slug}/")],
+        }
         return render(request, "shopfront/page.jinja", base_context(request, project, page=page))

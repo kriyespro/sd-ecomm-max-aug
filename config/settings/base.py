@@ -109,6 +109,7 @@ MIDDLEWARE = [
     "apps.core.middleware.StorefrontHostMiddleware",
     "apps.shopfront.middleware.StorefrontSkinMiddleware",
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
+    "apps.shopfront.middleware.SeoInjectionMiddleware",
     "apps.shopfront.middleware.TrackingInjectionMiddleware",
     "apps.billing.middleware.SubscriptionGateMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
@@ -336,6 +337,13 @@ RAZORPAY_TEST_MODE = env("RAZORPAY_TEST_MODE", "")
 # long-lived access token automatically instead of the seller pasting them.
 # Needs Meta App Review for `ads_management` + `business_management` before it
 # works in production; until then, leave blank and sellers paste manually.
+# --- SEO -------------------------------------------------------------
+# IndexNow (Bing / Yandex / Seznam instant indexing). One platform-wide key;
+# blank = disabled. When set, it is served at /<key>.txt on every storefront
+# host and product publishes ping the IndexNow API.
+SEO_INDEXNOW_KEY = env("SEO_INDEXNOW_KEY", "")
+
+
 META_APP_ID = env("META_APP_ID", "")
 META_APP_SECRET = env("META_APP_SECRET", "")
 META_OAUTH_CONFIG_ID = env("META_OAUTH_CONFIG_ID", "")  # Facebook Login for Business config
