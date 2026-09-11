@@ -1,0 +1,33 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Platform tracking{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+
+  <div class="flex flex-wrap gap-2 rounded-xl bg-white p-4 ring-1 ring-slate-200 text-sm">
+    <span class="rounded px-2 py-1 {{ 'bg-emerald-100 text-emerald-700' if object.is_enabled and object.meta_pixel_id else 'bg-slate-200 text-slate-600' }}">
+      Meta browser pixel: {{ "on (" ~ object.meta_pixel_id ~ ")" if object.is_enabled and object.meta_pixel_id else "off" }}
+    </span>
+    <span class="rounded px-2 py-1 {{ 'bg-emerald-100 text-emerald-700' if object.capi_ready else 'bg-slate-200 text-slate-600' }}">
+      Meta Conversions API: {{ "token saved ✓" if object.meta_capi_token else "no token" }}
+    </span>
+    <span class="rounded px-2 py-1 {{ 'bg-emerald-100 text-emerald-700' if object.is_enabled and object.ga4_measurement_id else 'bg-slate-200 text-slate-600' }}">
+      GA4: {{ "on (" ~ object.ga4_measurement_id ~ ")" if object.is_enabled and object.ga4_measurement_id else "off" }}
+    </span>
+    <span class="rounded px-2 py-1 {{ 'bg-emerald-100 text-emerald-700' if object.is_enabled and object.tiktok_pixel_id else 'bg-slate-200 text-slate-600' }}">
+      TikTok: {{ "on (" ~ object.tiktok_pixel_id ~ ")" if object.is_enabled and object.tiktok_pixel_id else "off" }}
+    </span>
+  </div>
+
+  <form method="post" class="space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h2 class="text-sm font-semibold text-slate-700">Edit platform tracking settings</h2>
+    {{ render_form(form) }}
+    <div class="flex gap-2 pt-2">
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+      <a href="{{ request.META.get('HTTP_REFERER', '/admin/') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

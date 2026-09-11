@@ -320,7 +320,7 @@ class PlatformTrackingForm(forms.ModelForm):
 
 class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
     form_class = PlatformTrackingForm
-    template_name = "control/_object_form.jinja"
+    template_name = "control/marketing/platform_tracking_form.jinja"
     success_url = reverse_lazy("control:platform_tracking")
 
     def get_object(self, queryset=None):
