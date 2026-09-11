@@ -1,0 +1,115 @@
+"""OpenRouter client — stdlib only. Discovers the free-tier ("$0 per token")
+model catalog and ranks it so callers always try the strongest free model
+first, with a few solid fallbacks behind it.
+"""
+
+import json
+import logging
+import urllib.error
+import urllib.request
+
+from django.core.cache import cache
+
+logger = logging.getLogger(__name__)
+
+_API = "https://openrouter.ai/api/v1"
+_MODELS_CACHE_KEY = "ai:openrouter:free_models"
+_MODELS_CACHE_TTL = 3600  # OpenRouter's free catalog changes slowly; refetch hourly.
+
+# Substring preferences, strongest first, matched against a free model's id
+# (e.g. "meta-llama/llama-3.3-70b-instruct:free"). Not exhaustive — anything
+# free that doesn't match one of these still gets used, just ranked below by
+# context length.
+_PREFERRED = [
+    "llama-3.3-70b", "llama-3.1-70b", "deepseek-chat", "deepseek-r1",
+    "qwen-2.5-72b", "qwen-2.5-coder-32b", "gemini-2.0-flash", "gemini-flash",
+    "mistral-small", "phi-4", "gemma-2-27b", "gemma-2-9b",
+]
+
+# Used only if OpenRouter's catalog is unreachable — a small set of models
+# that have reliably had a free tier.
+_FALLBACK_MODELS = [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-chat-v3-0324:free",
+    "qwen/qwen-2.5-72b-instruct:free",
+    "google/gemini-2.0-flash-exp:free",
+]
+
+
+class OpenRouterError(Exception):
+    def __init__(self, message, *, status=None):
+        super().__init__(message)
+        self.status = status
+
+
+def _is_free(model):
+    pricing = model.get("pricing") or {}
+    try:
+        return float(pricing.get("prompt", 1)) == 0 and float(pricing.get("completion", 1)) == 0
+    except (TypeError, ValueError):
+        return False
+
+
+def list_free_models():
+    """Every ``:free`` model OpenRouter currently lists, cached an hour."""
+    cached = cache.get(_MODELS_CACHE_KEY)
+    if cached is not None:
+        return cached
+    req = urllib.request.Request(f"{_API}/models")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except (urllib.error.URLError, TimeoutError, ValueError):
+        logger.warning("openrouter model catalog unreachable", exc_info=True)
+        return []
+    free = [m for m in data.get("data", []) if _is_free(m)]
+    cache.set(_MODELS_CACHE_KEY, free, _MODELS_CACHE_TTL)
+    return free
+
+
+def ranked_free_models():
+    """Free model ids, best first, per ``_PREFERRED`` then by context length."""
+    free = list_free_models()
+    if not free:
+        return list(_FALLBACK_MODELS)
+
+    ids = [m["id"] for m in free]
+    ranked = []
+    for pref in _PREFERRED:
+        ranked += [i for i in ids if pref in i and i not in ranked]
+    rest = sorted(
+        (m for m in free if m["id"] not in ranked),
+        key=lambda m: m.get("context_length") or 0, reverse=True,
+    )
+    ranked += [m["id"] for m in rest if m["id"] not in ranked]
+    return ranked
+
+
+def chat(*, api_key, model, messages, max_tokens=800, temperature=0.7, timeout=25):
+    body = {
+        "model": model, "messages": messages,
+        "max_tokens": max_tokens, "temperature": temperature,
+    }
+    req = urllib.request.Request(
+        f"{_API}/chat/completions", data=json.dumps(body).encode(), method="POST",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            # OpenRouter asks for these on free-tier calls; harmless otherwise.
+            "HTTP-Referer": "https://shopinaday.com",
+            "X-Title": "shopinaday",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise OpenRouterError(f"{model} -> {exc.code}: {detail}", status=exc.code) from exc
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        raise OpenRouterError(f"{model} unreachable: {exc}") from exc
+
+    try:
+        return data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise OpenRouterError(f"{model}: unexpected response shape") from exc

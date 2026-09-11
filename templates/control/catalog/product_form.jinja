@@ -20,6 +20,27 @@
     <a href="{{ url('control:product_list') }}" class="ml-auto text-sm text-slate-500 hover:text-slate-800">← All products</a>
   </div>
 
+  <div x-data="aiProductAssist()" class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">✨ Write it for me</h3>
+    <p class="mt-1 text-xs text-slate-500">
+      Describe the product in a few words — AI fills in the title, description,
+      SEO and tags below. Review before saving.
+      <a href="{{ url('control:ai_keys') }}" class="underline">AI key settings</a>
+    </p>
+    <div class="mt-2 flex flex-wrap gap-2">
+      <input x-model="brief" type="text" placeholder="e.g. handmade blue ceramic mug, 350ml, dishwasher safe"
+             @keydown.enter.prevent="generate()"
+             class="min-w-[16rem] flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      <button type="button" @click="generate()" :disabled="loading"
+              class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50">
+        <span x-show="!loading">Generate</span>
+        <span x-show="loading" x-cloak>Generating…</span>
+      </button>
+    </div>
+    <p x-show="error" x-text="error" x-cloak class="mt-2 text-xs text-red-600"></p>
+    <p x-show="modelUsed" x-cloak class="mt-1 text-[11px] text-slate-400">Model: <span x-text="modelUsed"></span></p>
+  </div>
+
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {{ csrf_input }}
     <div class="grid gap-4 rounded-xl bg-white p-6 ring-1 ring-slate-200 md:grid-cols-2">
@@ -54,4 +75,38 @@
   </div>
   {% endif %}
 </div>
+
+<script>
+function aiProductAssist() {
+  return {
+    brief: '', loading: false, error: '', modelUsed: '',
+    async generate() {
+      if (!this.brief.trim()) { this.error = 'Describe the product first.'; this.modelUsed = ''; return; }
+      this.loading = true; this.error = ''; this.modelUsed = '';
+      try {
+        const m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+        const res = await fetch("{{ url('control:product_ai_generate') }}", {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json', 'X-CSRFToken': m ? decodeURIComponent(m[1]) : ''},
+          body: JSON.stringify({brief: this.brief}),
+        });
+        const data = await res.json();
+        if (!res.ok) { this.error = data.error || 'AI is busy — try again.'; return; }
+        const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+        set('id_title', data.title);
+        set('id_short_description', data.short_description);
+        set('id_description', data.description);
+        set('id_seo_title', data.seo_title);
+        set('id_seo_description', data.seo_description);
+        set('id_tags', data.tags);
+        this.modelUsed = data.model || '';
+      } catch (e) {
+        this.error = 'Network error — try again.';
+      } finally {
+        this.loading = false;
+      }
+    },
+  };
+}
+</script>
 {% endblock %}

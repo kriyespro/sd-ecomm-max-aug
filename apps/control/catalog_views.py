@@ -584,6 +584,29 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
         return redirect("control:product_edit", pk=clone.pk)
 
 
+class ProductAiGenerateView(ActiveProjectMixin, View):
+    """"Write it for me" on the product form — one-line brief in, suggested
+    title/description/SEO/tags out, using the store's own rotated OpenRouter
+    keys. Client-side JS fills the visible fields; nothing is saved here."""
+
+    def post(self, request, *args, **kwargs):
+        import json
+
+        from apps.ai import services as ai_services
+
+        try:
+            payload = json.loads(request.body or b"{}")
+        except ValueError:
+            payload = {}
+        brief = (payload.get("brief") or "").strip()
+
+        try:
+            copy = ai_services.generate_product_copy(self.active_project, brief)
+        except ai_services.AiError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
+        return JsonResponse(copy)
+
+
 class _ProductTrashBase(_ScopedQuerysetMixin):
     """Owner / manager only — trashing is reversible, purging is not."""
 
