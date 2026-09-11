@@ -260,11 +260,12 @@ class StoreCreateOwnerPasswordTests(TestCase):
         self.assertTrue(owner.check_password("Zx9!kLmq7Ww"))
         self.assertTrue(self.client.login(username="owner@fresh.test", password="Zx9!kLmq7Ww"))
 
-    def test_blank_owner_password_keeps_account_unusable(self):
-        resp = self.client.post("/admin/stores/new/", self._payload())
-        self.assertEqual(resp.status_code, 302)
+    def test_blank_owner_password_autogenerates_one(self):
+        resp = self.client.post("/admin/stores/new/", self._payload(), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "one-time password")
         owner = get_user_model().objects.get(email="owner@fresh.test")
-        self.assertFalse(owner.has_usable_password())
+        self.assertTrue(owner.has_usable_password())
 
     def test_weak_owner_password_rejected(self):
         resp = self.client.post(

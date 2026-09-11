@@ -87,7 +87,7 @@ class Command(BaseCommand):
             domain = f"{label}.{suffix}"
 
             owner_email, owner_pw, owner_name = spec["owner"]
-            project, owner, _ = store_services.create_store(
+            project, owner, _, _ = store_services.create_store(
                 name=spec["name"], primary_domain=domain,
                 owner_email=owner_email, owner_name=owner_name,
                 plan=plan, period=spec["period"], manager=pm, actor=actor,

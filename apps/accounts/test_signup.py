@@ -224,7 +224,7 @@ class DgcCreatedStoreGetsLongerTrialTests(TestCase):
         )
         plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
 
-        project, _, _ = store_services.create_store(
+        project, _, _, _ = store_services.create_store(
             name="Partner Store", owner_email="po@store.test", plan=plan,
             actor=admin, manager=dgc,
         )

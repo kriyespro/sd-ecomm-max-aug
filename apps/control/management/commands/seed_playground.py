@@ -156,7 +156,7 @@ class Command(BaseCommand):
             Project.objects.filter(name=spec["name"]).delete()  # reset
             host = f"{spec['label']}.{suffix}"
 
-            project, _owner, _ = store_services.create_store(
+            project, _owner, _, _ = store_services.create_store(
                 name=spec["name"], primary_domain=host,
                 owner_email=users["storeowner"].email, owner_name=users["storeowner"].get_full_name(),
                 plan=plan, period=spec["period"], manager=users[spec["dgc"]], actor=actor,
