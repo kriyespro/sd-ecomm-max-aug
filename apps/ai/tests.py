@@ -379,6 +379,25 @@ class JsonParsingTests(TestCase):
         with self.assertRaises(ValueError):
             services._parse_json_object('{"title": "Truncated mid-str')
 
+    def test_python_dict_repr_with_single_quotes(self):
+        """Live failure: a free model returned {'title': 'X', ...} — a Python
+        dict repr, not JSON. json.loads chokes on the single quotes; this
+        must still come back as a usable dict."""
+        raw = "{'title': 'Blue Mug', 'tags': 'mug, blue, ceramic'}"
+        out = services._parse_json_object(raw)
+        self.assertEqual(out["title"], "Blue Mug")
+        self.assertEqual(out["tags"], "mug, blue, ceramic")
+
+    def test_python_booleans_and_none_repaired(self):
+        raw = "{'title': 'X', 'in_stock': True, 'note': None}"
+        out = services._parse_json_object(raw)
+        self.assertTrue(out["in_stock"])
+        self.assertIsNone(out["note"])
+
+    def test_apostrophe_inside_double_quoted_string_still_fine(self):
+        raw = '{"title": "It\'s a great mug"}'
+        self.assertEqual(services._parse_json_object(raw)["title"], "It's a great mug")
+
 
 class ProductCopyTests(TestCase):
     def setUp(self):

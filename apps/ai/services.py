@@ -3,6 +3,7 @@ store's keys and OpenRouter's free models so no single one gets rate-limited
 or flagged for hammering the free tier.
 """
 
+import ast
 import json
 import logging
 import re
@@ -209,7 +210,8 @@ def _clip(value, length):
 
 def _parse_json_object(text):
     """Free models sometimes wrap JSON in ```json fences, add a stray
-    sentence, or leave a trailing comma. Raises ``ValueError`` (not
+    sentence, leave a trailing comma, or emit a Python dict repr (single
+    quotes, True/False/None) instead of real JSON. Raises ``ValueError`` (not
     ``AiError``) on failure — the rotation in ``generate()`` treats that as
     "try the next model", not a final failure the merchant sees."""
     raw = (text or "").strip()
@@ -234,5 +236,19 @@ def _parse_json_object(text):
     repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
     try:
         return json.loads(repaired)
-    except ValueError as exc:
-        raise ValueError(f"invalid JSON: {exc}") from exc
+    except ValueError:
+        pass
+
+    # Some free models emit a Python dict repr instead of JSON — single-quoted
+    # strings, True/False/None. ast.literal_eval parses literals only (no code
+    # execution), so it's a safe way to accept that without a fragile
+    # quote-swapping regex that would also mangle a genuine apostrophe.
+    for candidate_text in (repaired, candidate):
+        try:
+            parsed = ast.literal_eval(candidate_text)
+        except (ValueError, SyntaxError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+
+    raise ValueError("invalid JSON")
