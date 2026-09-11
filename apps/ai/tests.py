@@ -182,6 +182,29 @@ class RotationTests(TestCase):
         with self.assertRaises(services.AiError):
             services.generate(project=self.project, system_prompt="s", user_prompt="u")
 
+    def test_catalog_fetch_latency_counts_against_the_time_budget(self):
+        """Regression: `started` must be set before the (possibly slow,
+        cold-cache) model-catalog fetch, not after it — a slow fetch plus a
+        full rotation budget stacked on top could together exceed the 30s
+        gunicorn/nginx timeout, which is exactly what happened live."""
+        _key(self.project)
+        calls = []
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
+            calls.append(api_key)
+            return '{"ok": true}'
+
+        # started=0; by the time the loop takes its first budget check, 20s
+        # have already gone by (standing in for a slow catalog fetch).
+        clock = iter([0, 20])
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models", return_value=["m1"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat), \
+             mock.patch("apps.ai.services.time.monotonic", side_effect=lambda: next(clock, 20)):
+            with self.assertRaises(services.AiError):
+                services.generate(project=self.project, system_prompt="s", user_prompt="u")
+        self.assertEqual(calls, [])  # gave up before ever calling chat()
+
     def test_least_recently_used_key_tried_first(self):
         old = _key(self.project, api_key="sk-or-v1-old000000000000",
                    last_used_at=timezone.now() - timezone.timedelta(hours=1))
@@ -448,3 +471,39 @@ class ProductCopyTests(TestCase):
         with mock.patch("apps.ai.services.generate", side_effect=_gen):
             services.generate_product_copy(self.project, "brief")
         self.assertGreater(captured["max_tokens"], 800)
+
+
+class RefreshTaskTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+
+    def test_refresh_task_repopulates_cache(self):
+        from apps.ai.tasks import refresh_free_models_task
+
+        catalog = {"data": [
+            {"id": "meta-llama/llama-3.3-70b-instruct:free",
+             "pricing": {"prompt": "0", "completion": "0"}},
+        ]}
+        with mock.patch("urllib.request.urlopen", lambda *a, **k: _Resp(catalog)):
+            count = refresh_free_models_task()
+        self.assertEqual(count, 1)
+        # Cache is now warm without hitting the network again.
+        with mock.patch("urllib.request.urlopen", side_effect=AssertionError("should not fetch")):
+            self.assertEqual(len(openrouter.list_free_models()), 1)
+
+    def test_refresh_ignores_a_stale_cached_value(self):
+        from django.core.cache import cache
+
+        from apps.ai.tasks import refresh_free_models_task
+
+        cache.set("ai:openrouter:free_models", [{"id": "stale/one"}], 3600)
+        catalog = {"data": [
+            {"id": "meta-llama/llama-3.3-70b-instruct:free",
+             "pricing": {"prompt": "0", "completion": "0"}},
+        ]}
+        with mock.patch("urllib.request.urlopen", lambda *a, **k: _Resp(catalog)):
+            refresh_free_models_task()
+        ids = [m["id"] for m in openrouter.list_free_models()]
+        self.assertEqual(ids, ["meta-llama/llama-3.3-70b-instruct:free"])
