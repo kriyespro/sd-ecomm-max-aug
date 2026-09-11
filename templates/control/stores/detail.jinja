@@ -48,7 +48,11 @@
           <div class="min-w-[16rem] flex-1">{{ manager_form.manager.as_widget(attrs={"class": _SEL}) }}</div>
           <button class="{{ _BTN_DARK }}">Assign</button>
         </div>
-        <p class="text-xs text-slate-400">Leave blank for a direct signup with no DGC credited.</p>
+        <p class="text-xs text-slate-400">
+          Commission only — does not change who owns or runs the store. Leave blank for a
+          direct signup with no DGC credited. To change the store's owner, use the Team panel
+          below.
+        </p>
       </form>
       {% endif %}
 
