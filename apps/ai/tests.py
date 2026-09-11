@@ -81,6 +81,28 @@ class OpenRouterCatalogTests(TestCase):
         self.assertNotIn("qwen/qwq-32b:free", ids)
         self.assertEqual(ranked, ["meta-llama/llama-3.3-70b-instruct:free"])
 
+    def test_non_text_models_excluded(self):
+        """Regression: google/lyria-3-pro-preview and google/lyria-3-clip-preview
+        are MUSIC models OpenRouter listed at $0 during preview — no ":free"
+        suffix, no "reasoning" in the name, just the wrong tool entirely. Duly
+        returned song lyrics instead of JSON in production."""
+        catalog = {"data": [
+            {"id": "google/lyria-3-pro-preview", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "google/lyria-3-clip-preview", "pricing": {"prompt": "0", "completion": "0"}},
+            {"id": "some/image-gen-model", "pricing": {"prompt": "0", "completion": "0"},
+             "architecture": {"output_modalities": ["image"]}},
+            {"id": "meta-llama/llama-3.3-70b-instruct:free",
+             "pricing": {"prompt": "0", "completion": "0"},
+             "architecture": {"output_modalities": ["text"]}},
+        ]}
+        from django.core.cache import cache
+
+        cache.clear()
+        with mock.patch("urllib.request.urlopen", lambda *a, **k: _Resp(catalog)):
+            free = openrouter.list_free_models()
+        ids = [m["id"] for m in free]
+        self.assertEqual(ids, ["meta-llama/llama-3.3-70b-instruct:free"])
+
     def test_falls_back_to_hardcoded_list_when_catalog_unreachable(self):
         import urllib.error
 
