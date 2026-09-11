@@ -472,6 +472,93 @@ class UserSetPasswordTests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
 
+class UserDeleteTests(TestCase):
+    def setUp(self):
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root2", email="root2@t.test", password="pw"
+        )
+        self.victim = User.objects.create_user(
+            username="vic2", email="vic2@t.test", password="pw"
+        )
+        self.client.force_login(self.admin)
+
+    def test_admin_deletes_a_user(self):
+        resp = self.client.post(f"/admin/users/{self.victim.pk}/delete/")
+        self.assertRedirects(resp, "/admin/users/")
+        self.assertFalse(get_user_model().objects.filter(pk=self.victim.pk).exists())
+
+    def test_non_platform_admin_forbidden(self):
+        owner = get_user_model().objects.create_user(
+            username="ow2", email="ow2@t.test", password="pw", is_staff=True
+        )
+        self.client.force_login(owner)
+        resp = self.client.post(f"/admin/users/{self.victim.pk}/delete/")
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(get_user_model().objects.filter(pk=self.victim.pk).exists())
+
+    def test_cannot_delete_self(self):
+        resp = self.client.post(f"/admin/users/{self.admin.pk}/delete/", follow=True)
+        self.assertContains(resp, "cannot delete your own account")
+        self.assertTrue(get_user_model().objects.filter(pk=self.admin.pk).exists())
+
+    def test_cannot_delete_the_last_superuser(self):
+        # Through the view this is unreachable except as a self-delete (the
+        # only actor allowed to touch a superuser is one) — exercise the
+        # service-level safety net directly, as defense in depth.
+        from django.core.exceptions import PermissionDenied
+
+        from apps.control import services
+
+        with self.assertRaises(PermissionDenied):
+            services.delete_user(actor=self.admin, target=self.admin, request=None)
+        self.assertTrue(get_user_model().objects.filter(pk=self.admin.pk).exists())
+
+    def test_non_superuser_platform_admin_cannot_delete_a_superuser(self):
+        from apps.accounts.models import PlatformRole, Profile
+
+        User = get_user_model()
+        second_super = User.objects.create_superuser("root3", "root3@t.test", "pw")
+        po = User.objects.create_user(username="po2", email="po2@t.test", password="pw", is_staff=True)
+        Profile.objects.update_or_create(user=po, defaults={"platform_role": PlatformRole.OWNER})
+        self.client.force_login(po)
+        resp = self.client.post(f"/admin/users/{second_super.pk}/delete/")
+        self.assertEqual(resp.status_code, 302)  # redirected back with an error message, not 403
+        self.assertTrue(User.objects.filter(pk=second_super.pk).exists())
+
+    def test_sole_store_owner_cannot_be_deleted(self):
+        from apps.accounts.models import Membership
+        from apps.projects.models import Project
+
+        project = Project.objects.create(name="SoleCo", status="active")
+        Membership.objects.create(project=project, user=self.victim, role="owner", is_active=True)
+        resp = self.client.post(f"/admin/users/{self.victim.pk}/delete/", follow=True)
+        self.assertContains(resp, "Reassign ownership first")
+        self.assertTrue(get_user_model().objects.filter(pk=self.victim.pk).exists())
+
+    def test_deletable_once_another_owner_exists(self):
+        from apps.accounts.models import Membership
+        from apps.projects.models import Project
+
+        project = Project.objects.create(name="SharedCo", status="active")
+        Membership.objects.create(project=project, user=self.victim, role="owner", is_active=True)
+        other_owner = get_user_model().objects.create_user(
+            username="oo", email="oo@t.test", password="pw"
+        )
+        Membership.objects.create(project=project, user=other_owner, role="owner", is_active=True)
+        resp = self.client.post(f"/admin/users/{self.victim.pk}/delete/")
+        self.assertRedirects(resp, "/admin/users/")
+        self.assertFalse(get_user_model().objects.filter(pk=self.victim.pk).exists())
+
+    def test_deleting_a_user_keeps_their_audit_trail(self):
+        from apps.core.models import AuditLog
+
+        self.client.post(f"/admin/users/{self.victim.pk}/delete/")
+        log = AuditLog.objects.filter(action=AuditLog.Action.DELETE).latest("created_at")
+        self.assertEqual(log.changes.get("email"), "vic2@t.test")
+        self.assertEqual(log.changes.get("username"), "vic2")
+
+
 class PartnerApplicationReviewTests(TestCase):
     def setUp(self):
         User = get_user_model()

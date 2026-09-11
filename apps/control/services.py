@@ -217,6 +217,47 @@ def can_impersonate(actor, target):
     return actor.is_superuser or getattr(actor.profile, "is_platform_admin", False)
 
 
+def delete_user(*, actor, target, request=None):
+    """Permanently remove an account. Platform-admin only; a superuser is
+    only removable by another superuser, and the last superuser can't be
+    removed at all (would lock the platform out). Refused if it would leave
+    any store with no active owner — reassign ownership first."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can delete users.")
+    if target.pk == actor.pk:
+        raise PermissionDenied("You cannot delete your own account.")
+    if target.is_superuser:
+        if not actor.is_superuser:
+            raise PermissionDenied("Only a superuser can delete a superuser.")
+        others = User.objects.filter(is_superuser=True, is_active=True).exclude(pk=target.pk)
+        if not others.exists():
+            raise PermissionDenied("Cannot delete the last superuser.")
+
+    from apps.accounts.models import Membership, StoreRole
+
+    owned = Membership.objects.filter(
+        user=target, role=StoreRole.OWNER, is_active=True
+    ).select_related("project")
+    blocking = [
+        m.project.name for m in owned
+        if not Membership.objects.filter(
+            project=m.project, role=StoreRole.OWNER, is_active=True
+        ).exclude(user=target).exists()
+    ]
+    if blocking:
+        raise ValidationError(
+            "Reassign ownership first — " + ", ".join(blocking) + " would be left with no owner."
+        )
+
+    identifier = target.email or target.get_username()
+    record_audit(
+        actor=actor, action=AuditLog.Action.DELETE, target=target,
+        changes={"email": target.email, "username": target.get_username()}, request=request,
+    )
+    target.delete()
+    return identifier
+
+
 def start_impersonation(*, request, target):
     actor = request.user
     if not can_impersonate(actor, target):
