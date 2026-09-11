@@ -4,7 +4,14 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.billing import razorpay, services as billing_svc
-from apps.billing.models import BillingSettings, Invoice, InvoiceStatus
+from apps.billing.models import (
+    BillingPeriod,
+    BillingSettings,
+    Invoice,
+    InvoiceStatus,
+    Plan,
+    SubscriptionStatus,
+)
 from apps.projects.models import Project
 
 
@@ -49,6 +56,53 @@ class EffectiveRazorpayCredsTests(TestCase):
         self.assertTrue(self.cfg.effective_test_mode)
         self.cfg.is_test_mode = False
         self.assertFalse(self.cfg.effective_test_mode)
+
+
+class ChangePlanBillingTests(TestCase):
+    def setUp(self):
+        BillingSettings.objects.all().delete()
+        self.project = Project.objects.create(name="BuyCo", status="active")
+        self.sub = billing_svc.ensure_subscription(self.project)
+        self.other_plan = (
+            Plan.objects.filter(is_active=True, is_public=True)
+            .exclude(pk=self.sub.plan_id).order_by("sort_order").first()
+        )
+
+    def test_buying_during_trial_bills_starting_today(self):
+        self.assertEqual(self.sub.status, SubscriptionStatus.TRIALING)
+        before = timezone.now()
+        billing_svc.change_plan(self.sub, plan=self.other_plan, period=BillingPeriod.MONTHLY)
+        inv = self.sub.invoices.get(status=InvoiceStatus.OPEN)
+        self.assertGreaterEqual(inv.period_start, before)
+        self.assertEqual(self.sub.plan_id, self.other_plan.pk)
+
+    def test_paying_the_trial_invoice_activates_the_subscription(self):
+        billing_svc.change_plan(self.sub, plan=self.other_plan, period=BillingPeriod.MONTHLY)
+        inv = self.sub.invoices.get(status=InvoiceStatus.OPEN)
+        billing_svc.mark_invoice_paid(inv, provider_payment_id="test")
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, SubscriptionStatus.ACTIVE)
+
+    def test_switching_an_active_subscription_defers_billing_to_next_cycle(self):
+        self.sub.status = SubscriptionStatus.ACTIVE
+        self.sub.save(update_fields=["status"])
+        original_period_end = self.sub.current_period_end
+        billing_svc.change_plan(self.sub, plan=self.other_plan, period=BillingPeriod.MONTHLY)
+        inv = self.sub.invoices.get(status=InvoiceStatus.OPEN)
+        self.assertEqual(inv.period_start, original_period_end)
+
+    def test_reactivating_a_suspended_subscription_bills_starting_today(self):
+        self.sub.status = SubscriptionStatus.SUSPENDED
+        self.sub.save(update_fields=["status"])
+        before = timezone.now()
+        billing_svc.change_plan(self.sub, plan=self.sub.plan, period=self.sub.period)
+        inv = self.sub.invoices.get(status=InvoiceStatus.OPEN)
+        self.assertGreaterEqual(inv.period_start, before)
+
+    def test_second_change_while_invoice_open_does_not_duplicate_it(self):
+        billing_svc.change_plan(self.sub, plan=self.other_plan, period=BillingPeriod.MONTHLY)
+        billing_svc.change_plan(self.sub, plan=self.sub.plan, period=BillingPeriod.YEARLY)
+        self.assertEqual(self.sub.invoices.filter(status=InvoiceStatus.OPEN).count(), 1)
 
 
 class StartPaymentGuardTests(TestCase):
