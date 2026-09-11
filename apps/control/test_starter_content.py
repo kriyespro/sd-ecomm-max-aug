@@ -210,7 +210,7 @@ class CreateStoreSeedsDemoTests(TestCase):
         actor = get_user_model().objects.create_superuser("root", "root@t.test", "pw")
 
         with self.captureOnCommitCallbacks(execute=True):
-            project, _owner, _created = create_store(
+            project, _owner, _created, _pw = create_store(
                 name="Seeded Store", owner_email="o@seed.test", plan=plan,
                 actor=actor, period=BillingPeriod.MONTHLY,
             )
@@ -231,7 +231,7 @@ class CreateStoreSeedsDemoTests(TestCase):
         actor = get_user_model().objects.create_superuser("root2", "root2@t.test", "pw")
 
         with self.captureOnCommitCallbacks(execute=True):
-            project, _owner, _created = create_store(
+            project, _owner, _created, _pw = create_store(
                 name="No Public Plan Store", owner_email="o@npp.test", plan=plan,
                 actor=actor, period=BillingPeriod.YEARLY,
             )

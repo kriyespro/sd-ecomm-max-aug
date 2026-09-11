@@ -55,8 +55,9 @@ class StoreCreateForm(forms.Form):
     owner_password = forms.CharField(
         required=False, label="Owner password", widget=forms.PasswordInput(render_value=False),
         strip=False,
-        help_text="Set a password so a new owner can sign in right away. "
-                  "Leave blank for an existing account, or to set it later under Users.",
+        help_text="Optional. Leave blank and a one-time password is generated "
+                  "automatically for a brand-new owner (shown once after creating "
+                  "the store); has no effect for an email that already has a login.",
     )
 
     plan = forms.ModelChoiceField(queryset=Plan.objects.filter(is_active=True).order_by("sort_order"))
@@ -194,7 +195,7 @@ class StoreCreateView(_StoreScope, FormView):
             actor_role = getattr(getattr(actor, "profile", None), "platform_role", None)
             manager = actor if actor_role == PlatformRole.MANAGER else None
         try:
-            project, owner, created = store_services.create_store(
+            project, owner, created, temp_password = store_services.create_store(
                 name=form.cleaned_data["name"],
                 subdomain=form.cleaned_data.get("subdomain", ""),
                 primary_domain=form.cleaned_data["primary_domain"],
@@ -217,7 +218,7 @@ class StoreCreateView(_StoreScope, FormView):
         elif form.cleaned_data.get("owner_password"):
             note = "the password you just set"
         else:
-            note = "a password you set under Users → the owner → Reset password"
+            note = f"the one-time password {temp_password} — share it with them now"
         messages.success(
             self.request,
             f"Store “{project.name}” created. The owner ({owner.email}) signs in with {note}.",
@@ -346,12 +347,19 @@ class StoreMemberAddView(_StoreScope, View):
         try:
             if password:
                 validate_password(password)
-            store_services.add_member(
+            _membership, temp_password = store_services.add_member(
                 project=store, email=request.POST.get("email", ""),
                 name=request.POST.get("name", ""), role=request.POST.get("role", ""),
                 actor=request.user, request=request, password=password or None,
             )
-            messages.success(request, "Team member added.")
+            if temp_password:
+                messages.success(
+                    request,
+                    f"Team member added. One-time password: {temp_password} — "
+                    f"share it with them now; they should change it after signing in.",
+                )
+            else:
+                messages.success(request, "Team member added.")
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
         except Exception as exc:  # team_svc.TeamError etc.

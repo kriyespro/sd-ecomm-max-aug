@@ -4,6 +4,7 @@ subscription. Used by the Mission Control "New store" flow (platform staff)."""
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
+from django.utils.crypto import get_random_string
 
 from apps.accounts import team as team_svc
 from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
@@ -18,9 +19,14 @@ User = get_user_model()
 
 
 def _get_or_create_staff_user(email, name="", password=None):
+    """Returns ``(user, created, temp_password)``. ``temp_password`` is set only
+    when we just created the account and had to invent a password for it (the
+    actor left the field blank) — the caller shows it once so it can be handed
+    to the new owner; nothing generated here is ever logged or stored raw."""
     email = email.strip().lower()
     user = User.objects.filter(email__iexact=email).first()
     created = user is None
+    temp_password = None
     if created:
         first, _, last = (name or "").strip().partition(" ")
         user = User.objects.create_user(
@@ -29,14 +35,15 @@ def _get_or_create_staff_user(email, name="", password=None):
         if password:
             user.set_password(password)
         else:
-            user.set_unusable_password()
+            temp_password = get_random_string(12)
+            user.set_password(temp_password)
         user.is_staff = True
         user.save()
     elif not user.is_staff:
         user.is_staff = True
         user.save(update_fields=["is_staff"])
     Profile.objects.get_or_create(user=user)
-    return user, created
+    return user, created, temp_password
 
 
 @transaction.atomic
@@ -70,7 +77,9 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     sub.manager = manager
     sub.save(update_fields=["plan", "period", "manager", "updated_at"])
 
-    owner, created_owner = _get_or_create_staff_user(owner_email, owner_name, owner_password)
+    owner, created_owner, temp_password = _get_or_create_staff_user(
+        owner_email, owner_name, owner_password
+    )
     Membership.objects.update_or_create(
         user=owner, project=project,
         defaults={"role": StoreRole.OWNER, "is_active": True},
@@ -107,7 +116,7 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     # creation on it.
     transaction.on_commit(lambda: _seed_demo(project.pk))
 
-    return project, owner, created_owner
+    return project, owner, created_owner, temp_password
 
 
 def _seed_demo(project_id):
@@ -125,11 +134,14 @@ def _seed_demo(project_id):
 
 
 def add_member(*, project, email, name, role, actor, request=None, password=None):
-    """Add (creating the account if needed) an owner / manager / staff member."""
-    _get_or_create_staff_user(email, name, password)  # ensure the account exists
-    return team_svc.add_member(
+    """Add (creating the account if needed) an owner / manager / staff member.
+    Returns ``(membership, temp_password | None)`` — a password is generated
+    automatically for a brand-new account when the actor didn't type one."""
+    _, _, temp_password = _get_or_create_staff_user(email, name, password)
+    membership = team_svc.add_member(
         actor=actor, project=project, email=email, role=role, request=request,
     )
+    return membership, temp_password
 
 
 def set_store_manager(*, project, manager, actor, request=None):
