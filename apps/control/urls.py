@@ -77,6 +77,7 @@ urlpatterns = [
     path("users/<int:pk>/ban/", views.UserBanView.as_view(), name="user_ban"),
     path("users/<int:pk>/unban/", views.UserUnbanView.as_view(), name="user_unban"),
     path("users/<int:pk>/impersonate/", views.ImpersonateView.as_view(), name="user_impersonate"),
+    path("users/<int:pk>/delete/", views.UserDeleteView.as_view(), name="user_delete"),
     path("impersonate/active/", views.ImpersonateActiveView.as_view(), name="impersonate_active"),
     path("impersonate/stop/", views.StopImpersonateView.as_view(), name="impersonate_stop"),
 

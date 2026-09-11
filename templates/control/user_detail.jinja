@@ -53,5 +53,23 @@
       {% endfor %}
     </ul>
   </div>
+
+  {% if target.pk != request.user.pk %}
+  <div class="rounded-xl bg-white p-6 ring-1 ring-red-200">
+    <h3 class="text-sm font-semibold text-red-700">Danger zone</h3>
+    <p class="mt-1 text-xs text-slate-500">
+      Permanently deletes the login. Refused if this account is the sole
+      owner of a store — reassign ownership first.
+    </p>
+    <form method="post" action="{{ url('control:user_delete', kwargs={'pk': target.pk}) }}"
+          class="mt-2"
+          onsubmit="return confirm('Permanently delete {{ target.get_username() }}? This cannot be undone.')">
+      {{ csrf_input }}
+      <button class="rounded-lg bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700">
+        Delete account
+      </button>
+    </form>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -381,6 +381,20 @@ class UserUnbanView(_UserRowActionView):
         services.set_user_banned(actor=request.user, target=target, banned=False, request=request)
 
 
+class UserDeleteView(PlatformAdminRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk, *args, **kwargs):
+        target = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+        try:
+            email = services.delete_user(actor=request.user, target=target, request=request)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            return redirect("control:user_detail", pk=pk)
+        messages.success(request, f"Deleted {email}.")
+        return redirect("control:users")
+
+
 class ImpersonateView(PlatformAdminRequiredMixin, View):
     http_method_names = ["post"]
 
