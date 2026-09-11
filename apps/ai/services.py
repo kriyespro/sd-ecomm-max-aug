@@ -5,6 +5,7 @@ or flagged for hammering the free tier.
 
 import json
 import logging
+import re
 
 from django.core.cache import cache
 from django.db.models import F
@@ -87,12 +88,20 @@ def _rotation_order(project):
     )
 
 
-def generate(*, project, system_prompt, user_prompt, max_tokens=800):
-    """Returns ``(text, model_id)``. Model is the outer loop, key the inner one:
-    a model-level error (400/403/404 — the model itself rejects plain chat
-    calls) blacklists that model for everyone and moves to the next model
-    instead of wasting every key on it; a key-level error (401/429/5xx) just
-    tries the next key against the same, presumably-fine, model."""
+def generate(*, project, system_prompt, user_prompt, max_tokens=800, parse=None):
+    """Returns ``(result, model_id)`` — ``result`` is the raw text, or
+    ``parse(text)`` when ``parse`` is given. Model is the outer loop, key the
+    inner one:
+    - a model-level API error (400/403/404 — the model itself rejects plain
+      chat calls) blacklists that model for everyone and moves to the next
+      model instead of wasting every key on it;
+    - a key-level API error (401/429/5xx) tries the next key against the
+      same, presumably-fine, model;
+    - a successful call whose text fails ``parse`` (a ``ValueError``) is
+      treated the same as a key-level failure — some free models just don't
+      reliably follow a "JSON only" instruction, so try the next one rather
+      than surfacing a parse error the merchant can't act on.
+    """
     keys = _rotation_order(project)
     if not keys:
         raise AiError("Add an OpenRouter API key first (Settings → AI).")
@@ -122,10 +131,25 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800):
                     cache.set(_dead_model_key(model), True, _DEAD_MODEL_TTL)
                     break  # this model is broken, not the key — try the next model
                 continue
+
+            if parse is not None:
+                try:
+                    result = parse(text)
+                except ValueError as exc:
+                    last_error = exc
+                    logger.warning(
+                        "ai key %s model %s returned unparseable content: %s | raw=%r",
+                        key.pk, model, exc, text[:500],
+                    )
+                    AiProviderKey.objects.filter(pk=key.pk).update(last_error=f"bad output: {exc}"[:255])
+                    continue
+            else:
+                result = text
+
             AiProviderKey.objects.filter(pk=key.pk).update(
                 last_used_at=timezone.now(), last_error="", request_count=F("request_count") + 1,
             )
-            return text, model
+            return result, model
 
     raise AiError(
         "AI is busy right now — every key hit a snag. Try again in a minute."
@@ -135,8 +159,10 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800):
 
 _PRODUCT_SYSTEM_PROMPT = (
     "You write concise, honest ecommerce product copy for an Indian online "
-    "store. Given a short brief, return ONLY a JSON object — no markdown "
-    "fences, no commentary — with exactly these keys: "
+    "store. Given a short brief, respond with ONE JSON object and NOTHING "
+    "else: no markdown code fences, no preamble like \"Here you go\", no "
+    "explanation before or after. Your entire response must start with { and "
+    "end with }. Use exactly these keys: "
     '"title" (<=70 chars), "short_description" (<=160 chars, one line), '
     '"description" (2-3 short plain-text paragraphs, no markdown/headings), '
     '"seo_title" (<=60 chars), "seo_description" (<=160 chars), '
@@ -154,10 +180,10 @@ def generate_product_copy(project, brief):
         brief = brief[:500]
 
     user_prompt = f'Store: {project.name}\nBrief: "{brief}"'
-    text, model = generate(
+    data, model = generate(
         project=project, system_prompt=_PRODUCT_SYSTEM_PROMPT, user_prompt=user_prompt,
+        max_tokens=1000, parse=_parse_json_object,
     )
-    data = _parse_json_object(text)
     return {
         "title": _clip(data.get("title"), 70),
         "short_description": _clip(data.get("short_description"), 160),
@@ -174,13 +200,31 @@ def _clip(value, length):
 
 
 def _parse_json_object(text):
-    """Free models sometimes wrap JSON in ```json fences or add a stray
-    sentence — pull out the first {...} block rather than failing outright."""
+    """Free models sometimes wrap JSON in ```json fences, add a stray
+    sentence, or leave a trailing comma. Raises ``ValueError`` (not
+    ``AiError``) on failure — the rotation in ``generate()`` treats that as
+    "try the next model", not a final failure the merchant sees."""
     raw = (text or "").strip()
+    if not raw:
+        raise ValueError("empty response")
+
+    try:
+        return json.loads(raw)
+    except ValueError:
+        pass
+
     start, end = raw.find("{"), raw.rfind("}")
     if start == -1 or end == -1 or end < start:
-        raise AiError("The AI didn't return usable content — try rephrasing the brief.")
+        raise ValueError("no JSON object found in response")
+    candidate = raw[start:end + 1]
     try:
-        return json.loads(raw[start:end + 1])
+        return json.loads(candidate)
+    except ValueError:
+        pass
+
+    # One common repair: a trailing comma before a closing brace/bracket.
+    repaired = re.sub(r",\s*([}\]])", r"\1", candidate)
+    try:
+        return json.loads(repaired)
     except ValueError as exc:
-        raise AiError("The AI's response wasn't valid — try again.") from exc
+        raise ValueError(f"invalid JSON: {exc}") from exc
