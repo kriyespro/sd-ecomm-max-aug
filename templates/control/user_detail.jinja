@@ -45,9 +45,30 @@
 
   <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
     <h3 class="text-sm font-semibold text-slate-700">Store memberships</h3>
-    <ul class="mt-2 space-y-1 text-sm">
+    <ul class="mt-2 space-y-2 text-sm">
       {% for m in target.memberships.all() %}
-      <li>{{ m.project.name }} — {{ m.get_role_display() }}{{ " (inactive)" if not m.is_active }}</li>
+      <li class="flex flex-wrap items-center gap-2">
+        <span>{{ m.project.name }} — {{ m.get_role_display() }}{{ " (inactive)" if not m.is_active }}</span>
+        {% if dgc_choices is defined %}
+        <form method="post" action="{{ url('control:store_manager_assign', kwargs={'pk': m.project.pk}) }}"
+              class="flex items-center gap-1">
+          {{ csrf_input }}
+          <input type="hidden" name="next" value="{{ url('control:user_detail', kwargs={'pk': target.pk}) }}">
+          <select name="manager" class="rounded border border-slate-300 py-0.5 text-xs">
+            <option value="">No DGC</option>
+            {% for dgc in dgc_choices %}
+            <option value="{{ dgc.pk }}"
+              {{ "selected" if m.project.subscription and m.project.subscription.manager_id == dgc.pk }}>
+              {{ dgc.email }}
+            </option>
+            {% endfor %}
+          </select>
+          <button class="rounded border border-slate-300 px-2 py-0.5 text-xs hover:bg-slate-50">
+            Assign DGC
+          </button>
+        </form>
+        {% endif %}
+      </li>
       {% else %}
       <li class="text-slate-400">None</li>
       {% endfor %}
