@@ -302,6 +302,7 @@ urlpatterns = [
     path("stores/<int:pk>/", storev.StoreDetailView.as_view(), name="store_detail"),
     path("stores/<int:pk>/members/add/", storev.StoreMemberAddView.as_view(), name="store_member_add"),
     path("stores/<int:pk>/manager/", storev.StoreManagerAssignView.as_view(), name="store_manager_assign"),
+    path("stores/<int:pk>/transfer-owner/", storev.StoreOwnerTransferView.as_view(), name="store_owner_transfer"),
     path("stores/<int:pk>/billing/", storev.StoreBillingAdjustView.as_view(), name="store_billing_adjust"),
     path("stores/<int:pk>/billing/mark-paid/", storev.StoreBillingMarkPaidView.as_view(), name="store_billing_mark_paid"),
     path("stores/<int:pk>/archive/", storev.StoreArchiveView.as_view(), name="store_archive"),

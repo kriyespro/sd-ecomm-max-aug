@@ -49,6 +49,19 @@
       {% for m in target.memberships.all() %}
       <li class="flex flex-wrap items-center gap-2">
         <span>{{ m.project.name }} — {{ m.get_role_display() }}{{ " (inactive)" if not m.is_active }}</span>
+        {% if m.role == "owner" and m.is_active %}
+        <form method="post" action="{{ url('control:store_owner_transfer', kwargs={'pk': m.project.pk}) }}"
+              class="flex items-center gap-1">
+          {{ csrf_input }}
+          <input type="hidden" name="current_owner" value="{{ target.pk }}">
+          <input type="hidden" name="next" value="{{ url('control:user_detail', kwargs={'pk': target.pk}) }}">
+          <input type="email" name="new_owner_email" required placeholder="new-owner@email.com"
+                 class="rounded border border-slate-300 px-2 py-0.5 text-xs">
+          <button class="rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-800 hover:bg-amber-100">
+            Make owner (demotes {{ target.get_username() }})
+          </button>
+        </form>
+        {% endif %}
         {% if dgc_choices is defined %}
         <form method="post" action="{{ url('control:store_manager_assign', kwargs={'pk': m.project.pk}) }}"
               class="flex items-center gap-1">

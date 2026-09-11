@@ -559,6 +559,73 @@ class UserDeleteTests(TestCase):
         self.assertEqual(log.changes.get("username"), "vic2")
 
 
+class StoreOwnerTransferTests(TestCase):
+    def setUp(self):
+        from apps.accounts.models import Membership
+        from apps.projects.models import Project
+
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="root4", email="root4@t.test", password="pw"
+        )
+        self.old_owner = User.objects.create_user(
+            username="oldowner", email="old@t.test", password="pw"
+        )
+        self.project = Project.objects.create(name="Kajal Store", status="active")
+        self.membership = Membership.objects.create(
+            project=self.project, user=self.old_owner, role="owner", is_active=True
+        )
+        self.client.force_login(self.admin)
+
+    def test_transfer_to_new_email_creates_account_and_unblocks_delete(self):
+        from apps.accounts.models import Membership
+
+        resp = self.client.post(
+            f"/admin/stores/{self.project.pk}/transfer-owner/",
+            {"current_owner": self.old_owner.pk, "new_owner_email": "new@t.test"},
+            follow=True,
+        )
+        self.assertContains(resp, "new@t.test is now the owner")
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.role, "manager")
+        new_membership = Membership.objects.get(project=self.project, user__email="new@t.test")
+        self.assertEqual(new_membership.role, "owner")
+        self.assertTrue(new_membership.is_active)
+
+        # the sole-owner block is now gone
+        del_resp = self.client.post(f"/admin/users/{self.old_owner.pk}/delete/")
+        self.assertRedirects(del_resp, "/admin/users/")
+
+    def test_transfer_to_existing_team_member_promotes_them(self):
+        from apps.accounts.models import Membership
+
+        staff = get_user_model().objects.create_user(
+            username="staff1", email="staff1@t.test", password="pw"
+        )
+        Membership.objects.create(
+            project=self.project, user=staff, role="staff", is_active=True
+        )
+        self.client.post(
+            f"/admin/stores/{self.project.pk}/transfer-owner/",
+            {"current_owner": self.old_owner.pk, "new_owner_email": "staff1@t.test"},
+        )
+        self.membership.refresh_from_db()
+        self.assertEqual(self.membership.role, "manager")
+        promoted = Membership.objects.get(project=self.project, user=staff)
+        self.assertEqual(promoted.role, "owner")
+
+    def test_non_platform_admin_forbidden(self):
+        owner = get_user_model().objects.create_user(
+            username="ow3", email="ow3@t.test", password="pw", is_staff=True
+        )
+        self.client.force_login(owner)
+        resp = self.client.post(
+            f"/admin/stores/{self.project.pk}/transfer-owner/",
+            {"current_owner": self.old_owner.pk, "new_owner_email": "new@t.test"},
+        )
+        self.assertEqual(resp.status_code, 403)
+
+
 class PartnerApplicationReviewTests(TestCase):
     def setUp(self):
         User = get_user_model()
