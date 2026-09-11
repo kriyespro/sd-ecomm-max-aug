@@ -171,6 +171,56 @@ def set_store_manager(*, project, manager, actor, request=None):
     return sub
 
 
+def transfer_store_owner(*, project, current_owner, new_owner_email, actor, request=None):
+    """Platform-admin moves the Owner role from ``current_owner`` to another
+    account, demoting ``current_owner`` to manager in the same transaction.
+
+    Exists so a superadmin can fix "sole owner" — the block ``delete_user``
+    raises — without switching their session into the store's own Team screen.
+    Creates the new owner's account (with a one-time password) if they don't
+    have one yet, same as the Team panel's add-member flow.
+    """
+    if not is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can transfer store ownership.")
+    new_owner_email = (new_owner_email or "").strip().lower()
+    if not new_owner_email:
+        raise ValidationError("Enter the new owner's email.")
+    if new_owner_email == (current_owner.email or "").strip().lower():
+        raise ValidationError("Pick a different user to become owner.")
+
+    with transaction.atomic():
+        existing = Membership.objects.filter(
+            project=project, user__email__iexact=new_owner_email,
+            is_active=True, role__in=team_svc.TEAM_ROLES,
+        ).first()
+        temp_password = None
+        if existing is not None:
+            new_owner = existing.user
+            team_svc.change_role(
+                actor=actor, project=project, membership=existing,
+                role=StoreRole.OWNER, request=request,
+            )
+        else:
+            # Creates the account (with a one-time password) if the email is new,
+            # or reactivates a dormant membership row — same as the Team panel.
+            membership, temp_password = add_member(
+                project=project, email=new_owner_email, name="",
+                role=StoreRole.OWNER, actor=actor, request=request,
+            )
+            new_owner = membership.user
+
+        old_membership = Membership.objects.filter(
+            project=project, user=current_owner, role=StoreRole.OWNER, is_active=True,
+        ).first()
+        if old_membership is not None:
+            team_svc.change_role(
+                actor=actor, project=project, membership=old_membership,
+                role=StoreRole.MANAGER, request=request,
+            )
+
+    return new_owner, temp_password
+
+
 def _require_superuser(actor):
     if not actor.is_superuser:
         raise PermissionDenied("Only a superadmin can do that.")

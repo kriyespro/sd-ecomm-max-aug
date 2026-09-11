@@ -322,6 +322,34 @@ class StoreBillingMarkPaidView(_StoreScope, View):
         return redirect("control:store_detail", pk=pk)
 
 
+class StoreOwnerTransferView(_StoreScope, View):
+    """Platform-admin: move a store's Owner role to another (existing or
+    brand-new) account, demoting the current owner. Lets a superadmin clear
+    ``delete_user``'s sole-owner block without switching into the store's own
+    Team screen."""
+
+    def post(self, request, pk, *args, **kwargs):
+        store = self.get_store(pk)
+        current_owner = get_object_or_404(User, pk=request.POST.get("current_owner"))
+        try:
+            new_owner, temp_password = store_services.transfer_store_owner(
+                project=store, current_owner=current_owner,
+                new_owner_email=request.POST.get("new_owner_email", ""),
+                actor=request.user, request=request,
+            )
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            note = f" — one-time password {temp_password}" if temp_password else ""
+            messages.success(request, f"{new_owner.email} is now the owner of {store.name}{note}.")
+        next_url = request.POST.get("next")
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            return redirect(next_url)
+        return redirect("control:store_detail", pk=pk)
+
+
 class StoreManagerAssignView(_StoreScope, View):
     def post(self, request, pk, *args, **kwargs):
         store = self.get_store(pk)
