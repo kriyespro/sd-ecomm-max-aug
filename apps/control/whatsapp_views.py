@@ -40,6 +40,16 @@ class WhatsAppConnectForm(forms.ModelForm):
         if self.instance.pk and self.instance.access_token:
             self.fields["access_token"].help_text += " A token is saved — leave blank to keep it."
 
+    def clean_phone_number_id(self):
+        pn = (self.cleaned_data.get("phone_number_id") or "").strip()
+        if pn:
+            dup = WhatsAppAccount.objects.filter(phone_number_id=pn).exclude(pk=self.instance.pk)
+            if dup.exists():
+                raise forms.ValidationError(
+                    "This phone number ID is already connected to another store."
+                )
+        return pn
+
     def clean_access_token(self):
         tok = self.cleaned_data.get("access_token") or ""
         if not tok and self.instance.pk:

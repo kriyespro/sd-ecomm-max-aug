@@ -217,8 +217,14 @@ class OrderPaymentView(_OrderScopedMixin, View):
 
 class OrderFulfillView(_OrderScopedMixin, View):
     def post(self, request, *args, **kwargs):
+        from apps.inventory.services import InsufficientStockError
+
         order = self.get_order()
-        orders.fulfill_order(order=order, actor=request.user, note=request.POST.get("note", "").strip())
+        try:
+            orders.fulfill_order(order=order, actor=request.user, note=request.POST.get("note", "").strip())
+        except InsufficientStockError as exc:
+            messages.error(request, f"Could not fulfil: {exc}")
+            return redirect("control:order_detail", pk=order.pk)
         messages.success(request, "Order fulfilled; stock consumed.")
         return redirect("control:order_detail", pk=order.pk)
 

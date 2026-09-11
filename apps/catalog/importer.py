@@ -349,7 +349,9 @@ def _media_index(project):
     from apps.media.models import AssetKind, MediaAsset
 
     index = {}
-    for a in MediaAsset.objects.filter(project=project, kind=AssetKind.IMAGE):
+    for a in MediaAsset.objects.filter(
+        project=project, kind=AssetKind.IMAGE, trashed_at__isnull=True
+    ):
         index[str(a.pk)] = a
         name = (a.original_name or a.file.name.rsplit("/", 1)[-1]).lower()
         index.setdefault(name, a)

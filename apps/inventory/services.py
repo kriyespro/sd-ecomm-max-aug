@@ -43,11 +43,16 @@ def record_movement(*, item, reason, quantity_delta=0, reserved_delta=0, referen
     """
     locked = InventoryItem.objects.select_for_update().get(pk=item.pk)
     new_reserved = locked.reserved + reserved_delta
+    new_quantity = locked.quantity + quantity_delta
     if reserved_delta > 0 and new_reserved > locked.quantity:
         raise InsufficientStockError(
             f"Only {locked.available} of {locked.product.title} left in stock."
         )
-    locked.quantity = locked.quantity + quantity_delta
+    if new_quantity < 0:
+        raise InsufficientStockError(
+            f"This would take {locked.product.title}'s on-hand stock negative."
+        )
+    locked.quantity = new_quantity
     locked.reserved = new_reserved
     locked.save(update_fields=["quantity", "reserved", "updated_at"])
 

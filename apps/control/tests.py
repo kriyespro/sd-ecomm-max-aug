@@ -803,3 +803,28 @@ class PaymentProviderFormTests(TestCase):
         resp = self.client.get(f"/admin/payments/providers/{cfg.pk}/")
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "rzp_live_x")
+
+    def test_edit_page_never_echoes_the_saved_key_secret(self):
+        from apps.payments.models import PaymentProviderConfig
+        cfg = PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay",
+            credentials={"key_id": "rzp_live_x", "key_secret": "top-secret-value"},
+        )
+        resp = self.client.get(f"/admin/payments/providers/{cfg.pk}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "top-secret-value")
+
+    def test_leaving_key_secret_blank_on_edit_keeps_the_existing_one(self):
+        from apps.payments.models import PaymentProviderConfig
+        cfg = PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True,
+            credentials={"key_id": "rzp_live_x", "key_secret": "keep-me"},
+        )
+        resp = self.client.post(f"/admin/payments/providers/{cfg.pk}/", {
+            "provider": "razorpay", "display_name": "Razorpay", "priority": "100",
+            "is_enabled": "on", "key_id": "rzp_live_y", "key_secret": "",
+        })
+        self.assertEqual(resp.status_code, 302)
+        cfg.refresh_from_db()
+        self.assertEqual(cfg.credentials["key_secret"], "keep-me")
+        self.assertEqual(cfg.credentials["key_id"], "rzp_live_y")

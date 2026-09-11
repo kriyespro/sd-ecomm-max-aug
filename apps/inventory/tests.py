@@ -43,3 +43,16 @@ class ReserveStockTests(TestCase):
         item.refresh_from_db()
         self.assertEqual(item.quantity, 2)
         self.assertEqual(item.reserved, 0)
+
+    def test_consume_sale_cannot_drive_on_hand_quantity_negative(self):
+        # A manual adjustment (or any prior corruption) can leave reserved
+        # above quantity — fulfilling those reserved units must not silently
+        # push on-hand stock below zero.
+        item = InventoryItem.objects.create(
+            warehouse=self.warehouse, product=self.product, quantity=0, reserved=5
+        )
+        with self.assertRaises(inv.InsufficientStockError):
+            inv.consume_sale(item=item, quantity=5)
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 0)
+        self.assertEqual(item.reserved, 5)
