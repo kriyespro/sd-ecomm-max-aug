@@ -263,6 +263,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.control.tasks.purge_trashed_task",
         "schedule": 3600.0 * 24,   # daily — empties Trash older than 30 days
     },
+    "ai-refresh-free-models": {
+        "task": "apps.ai.tasks.refresh_free_models_task",
+        "schedule": 1800.0,   # every 30 min — keeps the 1h cache from ever going cold
+    },
 }
 
 

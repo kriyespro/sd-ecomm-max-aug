@@ -24,7 +24,10 @@ logger = logging.getLogger(__name__)
 # clock first, attempt count second: stop well before either timeout so a
 # clean AiError always makes it back to the browser. Each individual call
 # gets a short timeout too, so one hanging attempt can't eat the whole budget.
-_TIME_BUDGET_SECONDS = 18
+# The clock starts at the very top of generate() — including the free-model
+# catalog fetch, which is itself a real HTTP call on a cold cache and must
+# count against the same ceiling, not run before it.
+_TIME_BUDGET_SECONDS = 14
 _CALL_TIMEOUT_SECONDS = 7
 _MAX_ATTEMPTS = 10
 _MODEL_POOL = 5
@@ -110,6 +113,8 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800, parse=None)
       reliably follow a "JSON only" instruction, so try the next one rather
       than surfacing a parse error the merchant can't act on.
     """
+    started = time.monotonic()  # covers everything below, including the catalog fetch
+
     keys = _rotation_order(project)
     if not keys:
         raise AiError("Add an OpenRouter API key first (Settings → AI).")
@@ -119,7 +124,6 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800, parse=None)
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}]
 
-    started = time.monotonic()
     attempts = 0
     last_error = None
     for model in models:

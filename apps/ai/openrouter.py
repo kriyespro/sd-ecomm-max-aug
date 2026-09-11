@@ -86,7 +86,10 @@ def list_free_models():
         return cached
     req = urllib.request.Request(f"{_API}/models")
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
+        # Short — on a cold cache this runs inline on a "Generate" click and
+        # counts against apps.ai.services' own wall-clock budget (which in
+        # turn must stay under gunicorn/nginx's 30s request ceiling).
+        with urllib.request.urlopen(req, timeout=6) as resp:
             data = json.loads(resp.read().decode())
     except (urllib.error.URLError, TimeoutError, ValueError):
         logger.warning("openrouter model catalog unreachable", exc_info=True)
@@ -94,6 +97,14 @@ def list_free_models():
     free = [m for m in data.get("data", []) if _is_free(m) and _is_text_chat_model(m)]
     cache.set(_MODELS_CACHE_KEY, free, _MODELS_CACHE_TTL)
     return free
+
+
+def refresh_free_models_cache():
+    """Force a re-fetch, ignoring whatever's cached. Used by a periodic beat
+    task so the catalog rarely goes cold — a cold cache means a "Generate"
+    click pays this fetch inline, on top of its own tight time budget."""
+    cache.delete(_MODELS_CACHE_KEY)
+    return list_free_models()
 
 
 def ranked_free_models():
