@@ -90,7 +90,17 @@ function aiProductAssist() {
           headers: {'Content-Type': 'application/json', 'X-CSRFToken': m ? decodeURIComponent(m[1]) : ''},
           body: JSON.stringify({brief: this.brief}),
         });
-        const data = await res.json();
+        let data;
+        try {
+          data = await res.json();
+        } catch (parseErr) {
+          // A gateway/proxy timeout or an unhandled 500 returns an HTML page,
+          // not JSON — tell the merchant something more useful than "network error".
+          this.error = res.status >= 500
+            ? 'AI took too long to respond — try again.'
+            : 'Unexpected response — try again.';
+          return;
+        }
         if (!res.ok) { this.error = data.error || 'AI is busy — try again.'; return; }
         const set = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
         set('id_title', data.title);

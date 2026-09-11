@@ -6,6 +6,7 @@ or flagged for hammering the free tier.
 import json
 import logging
 import re
+import time
 
 from django.core.cache import cache
 from django.db.models import F
@@ -16,8 +17,14 @@ from .models import MAX_KEYS_PER_STORE, AiProviderKey
 
 logger = logging.getLogger(__name__)
 
-# Bounded so a "Generate" click never hangs: at most this many (key, model)
-# attempts before giving up and telling the merchant to try again.
+# "Generate" is a plain synchronous request — gunicorn (30s) and nginx's
+# proxy_read_timeout (30s) both kill it past that, and the client then sees a
+# 502/504 HTML page, not our JSON error. So the rotation is bounded by wall
+# clock first, attempt count second: stop well before either timeout so a
+# clean AiError always makes it back to the browser. Each individual call
+# gets a short timeout too, so one hanging attempt can't eat the whole budget.
+_TIME_BUDGET_SECONDS = 18
+_CALL_TIMEOUT_SECONDS = 7
 _MAX_ATTEMPTS = 10
 _MODEL_POOL = 5
 
@@ -111,18 +118,19 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800, parse=None)
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}]
 
+    started = time.monotonic()
     attempts = 0
     last_error = None
     for model in models:
-        if attempts >= _MAX_ATTEMPTS:
+        if attempts >= _MAX_ATTEMPTS or time.monotonic() - started > _TIME_BUDGET_SECONDS:
             break
         for key in keys:
-            if attempts >= _MAX_ATTEMPTS:
+            if attempts >= _MAX_ATTEMPTS or time.monotonic() - started > _TIME_BUDGET_SECONDS:
                 break
             attempts += 1
             try:
                 text = openrouter.chat(api_key=key.api_key, model=model, messages=messages,
-                                       max_tokens=max_tokens)
+                                       max_tokens=max_tokens, timeout=_CALL_TIMEOUT_SECONDS)
             except openrouter.OpenRouterError as exc:
                 last_error = exc
                 AiProviderKey.objects.filter(pk=key.pk).update(last_error=str(exc)[:255])

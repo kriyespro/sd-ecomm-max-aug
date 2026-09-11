@@ -163,7 +163,7 @@ class RotationTests(TestCase):
         good = _key(self.project, api_key="sk-or-v1-good000000000000",
                     last_used_at=timezone.now())  # used more recently -> tried second
 
-        def fake_chat(*, api_key, model, messages, max_tokens=800):
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
             if api_key == bad.api_key:
                 raise openrouter.OpenRouterError("boom")
             return "ok response"
@@ -189,7 +189,7 @@ class RotationTests(TestCase):
             _key(self.project, api_key=f"sk-or-v1-b{i:04d}aaaaaaaaaaa")
         calls = []
 
-        def fake_chat(*, api_key, model, messages, max_tokens=800):
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
             calls.append(api_key)
             raise openrouter.OpenRouterError("nope")
 
@@ -199,6 +199,33 @@ class RotationTests(TestCase):
                 services.generate(project=self.project, system_prompt="s", user_prompt="u")
         self.assertLessEqual(len(calls), services._MAX_ATTEMPTS)
 
+    def test_time_budget_stops_rotation_before_the_proxy_timeout(self):
+        """Regression: gunicorn/nginx both cut a request at 30s. Rotation must
+        give up with a clean AiError well before that, not run every
+        (key, model) combination regardless of how long it's taking."""
+        for i in range(MAX_KEYS_PER_STORE):
+            _key(self.project, api_key=f"sk-or-v1-tb{i:04d}aaaaaaaaaa")
+        calls = []
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
+            calls.append(api_key)
+            raise openrouter.OpenRouterError("slow")
+
+        # started=0, a couple of budget checks still pass, then every
+        # subsequent check reports the budget blown.
+        clock = iter([0, 0, 0])
+
+        def fake_monotonic():
+            return next(clock, 999)
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models",
+                        return_value=["m1", "m2", "m3"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat), \
+             mock.patch("apps.ai.services.time.monotonic", side_effect=fake_monotonic):
+            with self.assertRaises(services.AiError):
+                services.generate(project=self.project, system_prompt="s", user_prompt="u")
+        self.assertLessEqual(len(calls), 2)
+
     def test_model_level_error_moves_on_without_trying_every_key(self):
         """Regression: a free model that 403s ("agentic harness only" etc.) is
         a property of the model, not the key — must not burn every key on it."""
@@ -206,7 +233,7 @@ class RotationTests(TestCase):
             _key(self.project, api_key=f"sk-or-v1-mk{i:04d}aaaaaaaaaa")
         calls = []
 
-        def fake_chat(*, api_key, model, messages, max_tokens=800):
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
             calls.append((api_key, model))
             if model == "bad-model":
                 raise openrouter.OpenRouterError("harness only", status=403)
@@ -229,7 +256,7 @@ class RotationTests(TestCase):
         good = _key(self.project, api_key="sk-or-v1-goodtext000000",
                    last_used_at=timezone.now())
 
-        def fake_chat(*, api_key, model, messages, max_tokens=800):
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
             return "not json at all" if api_key == bad.api_key else '{"ok": true}'
 
         def fail_on_plain_text(text):
@@ -250,7 +277,7 @@ class RotationTests(TestCase):
     def test_dead_model_skipped_entirely_on_next_call(self):
         _key(self.project)
 
-        def fake_chat(*, api_key, model, messages, max_tokens=800):
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
             if model == "bad-model":
                 raise openrouter.OpenRouterError("nope", status=403)
             return "ok"
