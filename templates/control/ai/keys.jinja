@@ -1,0 +1,66 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}AI keys{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">AI · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Paste your own <a href="https://openrouter.ai/keys" target="_blank" class="underline">OpenRouter</a>
+      API key(s) to power AI product copywriting for this store. Only OpenRouter's
+      free ($0) models are ever called, and requests automatically rotate across
+      whichever keys you add, and across a few top free models, so no single key
+      gets rate-limited. Up to {{ max_keys }} keys per store — free to you and to us.
+    </p>
+  </div>
+
+  {% if keys|length < max_keys %}
+  <form method="post" class="flex flex-wrap items-end gap-2 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <div class="min-w-[10rem]">{{ render_form(form) }}</div>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add key</button>
+  </form>
+  {% else %}
+  <p class="rounded-xl bg-amber-50 p-4 text-sm text-amber-700 ring-1 ring-amber-200">
+    You've added the maximum of {{ max_keys }} keys. Remove one to add another.
+  </p>
+  {% endif %}
+
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Label</th><th class="px-4 py-2">Key</th>
+          <th class="px-4 py-2">Used</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for k in keys %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium text-slate-800">{{ k.label }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-500">{{ k.masked_key }}</td>
+          <td class="px-4 py-2 text-slate-500">
+            {{ k.request_count }} calls{% if k.last_used_at %} · last {{ k.last_used_at.strftime('%d %b %H:%M') }}{% endif %}
+          </td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if k.is_active else 'bg-slate-200 text-slate-600' }}">
+              {{ "active" if k.is_active else "off" }}</span>
+            {% if k.last_error %}<div class="mt-1 text-[11px] text-red-500">{{ k.last_error }}</div>{% endif %}
+          </td>
+          <td class="px-4 py-2 text-right whitespace-nowrap">
+            <form method="post" action="{{ url('control:ai_key_toggle', kwargs={'pk': k.pk}) }}" class="inline">
+              {{ csrf_input }}<button class="text-slate-600 hover:underline">{{ "Disable" if k.is_active else "Enable" }}</button>
+            </form>
+            <form method="post" action="{{ url('control:ai_key_delete', kwargs={'pk': k.pk}) }}" class="inline"
+                  onsubmit="return confirm('Remove this key?')">
+              {{ csrf_input }}<button class="ml-2 text-red-600 hover:underline">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No keys yet — add one above.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

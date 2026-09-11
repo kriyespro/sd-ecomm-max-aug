@@ -1,5 +1,6 @@
 from django.urls import path
 
+from . import ai_views as aiv
 from . import b2b_views as b2bv
 from . import backup_views as backupv
 from . import billing_views as billv
@@ -113,6 +114,7 @@ urlpatterns = [
     path("products/<int:pk>/restore/", cat.ProductRestoreView.as_view(), name="product_restore"),
     path("products/<int:pk>/purge/", cat.ProductPurgeView.as_view(), name="product_purge"),
     path("products/<int:pk>/duplicate/", cat.ProductDuplicateView.as_view(), name="product_duplicate"),
+    path("products/ai-generate/", cat.ProductAiGenerateView.as_view(), name="product_ai_generate"),
     path("products/<int:pk>/images/", cat.ProductImagePanelView.as_view(), name="product_images"),
     path("products/<int:pk>/images/upload/", cat.ProductImageUploadView.as_view(), name="product_image_upload"),
     path("products/<int:pk>/images/<int:image_pk>/primary/", cat.ProductImagePrimaryView.as_view(), name="product_image_primary"),
@@ -358,6 +360,11 @@ urlpatterns = [
     path("settings/whatsapp/", wav.WhatsAppSettingsView.as_view(), name="whatsapp"),
     path("settings/whatsapp/test/", wav.WhatsAppTestView.as_view(), name="whatsapp_test"),
     path("settings/whatsapp/disconnect/", wav.WhatsAppDisconnectView.as_view(), name="whatsapp_disconnect"),
+
+    # AI (per-store OpenRouter keys)
+    path("settings/ai/", aiv.AiKeysView.as_view(), name="ai_keys"),
+    path("settings/ai/<int:pk>/toggle/", aiv.AiKeyToggleView.as_view(), name="ai_key_toggle"),
+    path("settings/ai/<int:pk>/delete/", aiv.AiKeyDeleteView.as_view(), name="ai_key_delete"),
 
     # Social auto-share (per-store add-on)
     path("marketing/social/", socv.SocialSettingsView.as_view(), name="social"),
