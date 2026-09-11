@@ -11,6 +11,7 @@ import secrets
 
 from django.core.cache import cache
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models import TenantScopedModel, TimeStampedModel
 
@@ -43,6 +44,14 @@ class WhatsAppAccount(TenantScopedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["project"], name="uniq_whatsapp_account_per_project"),
+            # Two stores must never be routable by the same phone_number_id —
+            # the inbound webhook has no other way to pick which store a
+            # message belongs to. Blank is allowed on multiple rows (not yet
+            # configured).
+            models.UniqueConstraint(
+                fields=["phone_number_id"], name="uniq_whatsapp_phone_number_id",
+                condition=~Q(phone_number_id=""),
+            ),
         ]
         verbose_name = "WhatsApp account"
 
@@ -82,12 +91,14 @@ def account_for(project):
 
 def account_by_phone_number_id(phone_number_id):
     """Route an inbound webhook (which only carries the phone-number id) to the
-    right store."""
+    right store. Only a verified (``is_active``) account may claim routing —
+    a row left over from a failed Meta credential check must never intercept
+    another store's messages."""
     if not phone_number_id:
         return None
     return (
         WhatsAppAccount.objects
-        .filter(phone_number_id=phone_number_id)
+        .filter(phone_number_id=phone_number_id, is_active=True)
         .select_related("project")
         .first()
     )

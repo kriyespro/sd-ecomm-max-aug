@@ -45,7 +45,7 @@ class SubscriptionGateMiddleware:
                     return HttpResponse(_ARCHIVED_HTML, status=410,
                                         content_type="text/html")
                 sub = getattr(project, "subscription", None)
-                if sub is not None and sub.status == "suspended":
+                if sub is not None and sub.status in ("suspended", "cancelled"):
                     return HttpResponse(_SUSPENDED_HTML, status=503,
                                         content_type="text/html")
         return self.get_response(request)

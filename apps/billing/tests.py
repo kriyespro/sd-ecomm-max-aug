@@ -105,6 +105,45 @@ class ChangePlanBillingTests(TestCase):
         self.assertEqual(self.sub.invoices.filter(status=InvoiceStatus.OPEN).count(), 1)
 
 
+class SubscriptionGateMiddlewareTests(TestCase):
+    """A cancelled subscription must be gated off the storefront exactly like
+    a suspended one — otherwise it stays live and sellable forever once
+    mark_invoice_paid() flips a cancel_at_period_end subscription straight to
+    CANCELLED on its last payment."""
+
+    def setUp(self):
+        from apps.billing.middleware import SubscriptionGateMiddleware
+
+        self.project = Project.objects.create(name="GateCo", status="active")
+        self.sub = billing_svc.ensure_subscription(self.project)
+        self.middleware = SubscriptionGateMiddleware(get_response=lambda r: "PASSED")
+
+    def _request(self, path="/app/"):
+        class _Req:
+            pass
+
+        req = _Req()
+        req.path = path
+        req.project = self.project
+        return req
+
+    def test_cancelled_subscription_blocks_the_storefront(self):
+        self.sub.status = SubscriptionStatus.CANCELLED
+        self.sub.save(update_fields=["status"])
+        resp = self.middleware(self._request())
+        self.assertEqual(resp.status_code, 503)
+
+    def test_active_subscription_passes_through(self):
+        self.sub.status = SubscriptionStatus.ACTIVE
+        self.sub.save(update_fields=["status"])
+        self.assertEqual(self.middleware(self._request()), "PASSED")
+
+    def test_admin_path_is_exempt_even_when_cancelled(self):
+        self.sub.status = SubscriptionStatus.CANCELLED
+        self.sub.save(update_fields=["status"])
+        self.assertEqual(self.middleware(self._request("/admin/plan/")), "PASSED")
+
+
 class StartPaymentGuardTests(TestCase):
     def setUp(self):
         BillingSettings.objects.all().delete()

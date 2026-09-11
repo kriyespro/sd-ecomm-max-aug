@@ -182,6 +182,23 @@ class ModelLookupTests(TestCase):
         self.assertEqual(account_by_phone_number_id("PNX"), acc)
         self.assertIsNone(account_by_phone_number_id("nope"))
 
+    def test_inactive_account_cannot_be_routed_to(self):
+        _account(self.project, phone_number_id="PNY", is_active=False)
+        self.assertIsNone(account_by_phone_number_id("PNY"))
+
+    def test_two_stores_cannot_share_a_phone_number_id(self):
+        from django.db import IntegrityError, transaction
+
+        other = Project.objects.create(name="Other Shop", status="active")
+        _account(self.project, phone_number_id="SHARED")
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            _account(other, phone_number_id="SHARED")
+
+    def test_multiple_stores_can_all_be_unconfigured(self):
+        other = Project.objects.create(name="Other Shop 2", status="active")
+        _account(self.project, phone_number_id="")
+        _account(other, phone_number_id="")  # no IntegrityError
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class WebhookTests(TestCase):
@@ -252,6 +269,31 @@ class WebhookTests(TestCase):
     def test_unknown_phone_number_id_ignored(self):
         r = self._post(self._status_payload("wamid.x", "sent"))
         self.assertEqual(r.status_code, 200)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class ConnectFormDuplicatePhoneNumberTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.taken = Project.objects.create(name="Taken Co", status="active")
+        _account(self.taken, phone_number_id="PN999")
+        self.mine = Project.objects.create(name="Mine Co", status="active",
+                                           feature_flags={"onboarded": True})
+        self.owner = User.objects.create_user("wo", "wo@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.mine, user=self.owner, role=StoreRole.OWNER)
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.mine.pk
+        s.save()
+
+    def test_reusing_another_stores_phone_number_id_is_a_form_error_not_500(self):
+        resp = self.client.post("/admin/settings/whatsapp/", {
+            "phone_number_id": "PN999", "waba_id": "W1",
+            "access_token": "tok", "graph_version": "v21.0",
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "already connected to another store")
+        self.assertFalse(WhatsAppAccount.objects.filter(project=self.mine, phone_number_id="PN999").exists())
 
 
 class NotificationWiringTests(TestCase):

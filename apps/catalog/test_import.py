@@ -107,6 +107,24 @@ class ImporterCoreTests(TestCase):
         self.assertEqual(result.images_attached, 1)
         self.assertEqual(result.missing_images, {"missing.jpg"})
 
+    def test_trashed_media_is_not_matched_by_filename(self):
+        from django.utils import timezone
+
+        asset = store_upload(
+            project=self.project,
+            upload=SimpleUploadedFile("hero.png", _png_bytes(), content_type="image/png"),
+        )
+        asset.trashed_at = timezone.now()
+        asset.save(update_fields=["trashed_at"])
+
+        f = _csv({"title": "Trashed pic", "sku": "P-2", "price": "9", "images": "hero.png"})
+        result = importer.run_import(self.project, importer.read_table(f, "p2.csv"))
+
+        p = Product.objects.get(sku="P-2")
+        self.assertEqual(p.images.count(), 0)
+        self.assertEqual(result.images_attached, 0)
+        self.assertEqual(result.missing_images, {"hero.png"})
+
     def test_xlsx_round_trips(self):
         from openpyxl import Workbook
 

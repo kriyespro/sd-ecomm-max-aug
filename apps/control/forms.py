@@ -258,8 +258,6 @@ class PaymentProviderForm(ProjectScopedForm):
 
     # Razorpay's only two store-owner-facing keys. ``webhook_secret`` (if a
     # store ever needs one) is left in the ``credentials`` blob untouched.
-    _CRED_FIELDS = ("key_id", "key_secret")
-
     key_id = forms.CharField(
         required=False, label="Key ID",
         widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false"}),
@@ -267,7 +265,7 @@ class PaymentProviderForm(ProjectScopedForm):
     )
     key_secret = forms.CharField(
         required=False, label="Key secret", strip=False,
-        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "new-password"}),
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
         help_text="Shown once by Razorpay when you generate the key pair.",
     )
 
@@ -283,8 +281,13 @@ class PaymentProviderForm(ProjectScopedForm):
         if self.instance.pk:
             self.fields["provider"].disabled = True
         creds = self.instance.credentials or {}
-        for name in self._CRED_FIELDS:
-            self.fields[name].initial = creds.get(name, "")
+        self.fields["key_id"].initial = creds.get("key_id", "")
+        # key_secret is never echoed back (render_value=False above already
+        # blanks it on redisplay even if we set initial) — leaving this blank
+        # is what "keep the current secret" means in save(), below.
+        self._has_existing_secret = bool(creds.get("key_secret"))
+        if self._has_existing_secret:
+            self.fields["key_secret"].help_text = "A key secret is already saved. Leave blank to keep it."
 
     def clean(self):
         cleaned = super().clean()
@@ -298,8 +301,9 @@ class PaymentProviderForm(ProjectScopedForm):
                     "provider",
                     "This provider is already set up. Edit the existing entry instead.",
                 )
+        has_secret = bool(cleaned.get("key_secret")) or getattr(self, "_has_existing_secret", False)
         if cleaned.get("is_enabled") and provider == "razorpay" and not (
-            cleaned.get("key_id") and cleaned.get("key_secret")
+            cleaned.get("key_id") and has_secret
         ):
             self.add_error(
                 "is_enabled",
@@ -310,12 +314,14 @@ class PaymentProviderForm(ProjectScopedForm):
     def save(self, commit=True):
         obj = super().save(commit=False)
         creds = dict(obj.credentials or {})
-        for name in self._CRED_FIELDS:
-            value = (self.cleaned_data.get(name) or "").strip()
-            if value:
-                creds[name] = value
-            else:
-                creds.pop(name, None)
+        creds["key_id"] = (self.cleaned_data.get("key_id") or "").strip() or None
+        if creds["key_id"] is None:
+            creds.pop("key_id", None)
+        # A blank key_secret means "keep the current one" (it's never echoed
+        # back to the browser) — only an explicitly typed value replaces it.
+        new_secret = (self.cleaned_data.get("key_secret") or "").strip()
+        if new_secret:
+            creds["key_secret"] = new_secret
         obj.credentials = creds
         if commit:
             obj.save()
