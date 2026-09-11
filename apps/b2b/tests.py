@@ -291,6 +291,22 @@ class B2BScreenTests(TestCase):
         resp = self.client.get("/admin/b2b/settings/")
         self.assertEqual(resp.status_code, 403)
 
+    def test_dgc_without_membership_forbidden_from_b2b_settings(self):
+        from apps.accounts.models import PlatformRole, Profile
+        from apps.billing import services as billing_svc
+
+        billing_svc.ensure_subscription(self.seller)
+        dgc = User.objects.create_user(
+            username="dgc@t.test", email="dgc@t.test", password="pw", is_staff=True
+        )
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        self.seller.subscription.manager = dgc
+        self.seller.subscription.save(update_fields=["manager"])
+
+        self._login_as(dgc)
+        resp = self.client.get("/admin/b2b/settings/")
+        self.assertEqual(resp.status_code, 403)
+
     def test_manager_forbidden_from_marketplace_and_orders(self):
         self._login_as(self.manager)
         self.assertEqual(self.client.get("/admin/b2b/marketplace/").status_code, 403)

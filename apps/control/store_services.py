@@ -266,9 +266,33 @@ def delete_store(*, project, actor, confirm_name, request=None):
         raise ValidationError("Type the store's exact name to confirm deletion.")
 
     name, pk = project.name, project.pk
+
+    # Deleting the project cascades away its Subscription and every
+    # ManagerCommission on it — a DGC's paid/pending commission history for
+    # this store would otherwise vanish with no trace. Snapshot the totals
+    # into the audit row below (AuditLog.project is SET_NULL, so it outlives
+    # the project it names) before the cascade destroys the source rows.
+    commission_summary = None
+    sub = getattr(project, "subscription", None)
+    if sub is not None:
+        from decimal import Decimal
+
+        from django.db.models import Sum
+
+        totals = sub.commissions.values("status").annotate(total=Sum("amount"))
+        if totals:
+            commission_summary = {
+                row["status"]: str(row["total"].quantize(Decimal("0.01")))
+                for row in totals
+            }
+
     # AuditLog.project is SET_NULL, so this row outlives the project it names.
     record_audit(
         actor=actor, project=None, action=AuditLog.Action.DELETE, target=None,
-        changes={"deleted_store": name, "project_id": pk}, request=request,
+        changes={
+            "deleted_store": name, "project_id": pk,
+            "commission_summary_lost": commission_summary,
+        },
+        request=request,
     )
     project.delete()

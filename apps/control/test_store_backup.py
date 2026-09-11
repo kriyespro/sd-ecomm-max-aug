@@ -168,6 +168,21 @@ class StoreBackupViewTests(TestCase):
         # store B is not theirs
         self.assertEqual(self.client.get(f"/admin/stores/{self.b.pk}/backup/").status_code, 404)
 
+    def test_dgc_cannot_restore_their_own_managed_store(self):
+        dgc = User.objects.create_user("d2", "d2@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        from apps.billing import services as billing_svc
+        sub = billing_svc.ensure_subscription(self.b)
+        sub.manager = User.objects.get(pk=dgc.pk)
+        sub.save(update_fields=["manager"])
+        self._login(User.objects.get(pk=dgc.pk))
+        b_blob = store_backup.dump_store(self.b)
+        resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
+            "confirm_name": "B Co",
+            "backup": SimpleUploadedFile("bk.zip", b_blob, "application/zip"),
+        }, follow=True)
+        self.assertContains(resp, "Only a platform admin can restore a store")
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class OwnerBackupScreenTests(TestCase):
@@ -205,6 +220,16 @@ class OwnerBackupScreenTests(TestCase):
 
     def test_manager_cannot_reach_owner_backup(self):
         self._login(self.mgr)
+        self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
+
+    def test_dgc_without_membership_cannot_reach_owner_backup(self):
+        dgc = User.objects.create_user("d3", "d3@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        from apps.billing import services as billing_svc
+        sub = billing_svc.ensure_subscription(self.store)
+        sub.manager = User.objects.get(pk=dgc.pk)
+        sub.save(update_fields=["manager"])
+        self._login(User.objects.get(pk=dgc.pk))
         self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
 
 

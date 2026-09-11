@@ -12,12 +12,12 @@ from django.views.generic import TemplateView
 from apps.accounts.permissions import StoreRole, StoreRoleRequiredMixin
 
 from . import store_backup
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 _MAX_UPLOAD = 700 * 1024 * 1024
 
 
-class _OwnerOnly(StoreRoleRequiredMixin, ActiveProjectMixin):
+class _OwnerOnly(StoreDataAccessMixin, StoreRoleRequiredMixin, ActiveProjectMixin):
     required_store_roles = frozenset({StoreRole.OWNER})
     role_denied_message = "Only the store owner can back up or restore this store."
 

@@ -174,6 +174,39 @@ class ArchiveAndDeleteStoreTests(TestCase):
             )
         self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
 
+    def test_deleting_a_store_keeps_a_record_of_its_commission_totals(self):
+        from decimal import Decimal
+
+        from apps.accounts.models import Membership, StoreRole
+        from apps.billing import services as billing_svc
+        from apps.billing.models import CommissionStatus, Invoice, InvoiceStatus, ManagerCommission
+        from apps.core.models import AuditLog
+
+        dgc = User.objects.create_user("dgc2", "dgc2@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        owner = User.objects.create_user("own2", "own2@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.project, user=owner, role=StoreRole.OWNER, is_active=True)
+
+        sub = billing_svc.ensure_subscription(self.project)
+        sub.manager = User.objects.get(pk=dgc.pk)
+        sub.save(update_fields=["manager"])
+        inv = Invoice.objects.create(
+            subscription=sub, number="INV-DEL-1", amount=Decimal("999"),
+            status=InvoiceStatus.PAID, period_start=sub.current_period_start,
+            period_end=sub.current_period_end, due_at=sub.current_period_end,
+        )
+        ManagerCommission.objects.create(
+            manager=dgc, subscription=sub, invoice=inv, period=sub.period,
+            base_amount=inv.amount, rate_pct=Decimal("30"), amount=Decimal("299.70"),
+            status=CommissionStatus.PAID,
+        )
+
+        store_services.delete_store(
+            project=self.project, actor=self.superuser, confirm_name="ArchiveCo",
+        )
+        log = AuditLog.objects.filter(action=AuditLog.Action.DELETE, project__isnull=True).latest("created_at")
+        self.assertEqual(log.changes["commission_summary_lost"], {"paid": "299.70"})
+
 
 class ArchiveAndDeleteScreensTests(TestCase):
     def setUp(self):
@@ -292,6 +325,12 @@ class StoreListFilterTests(TestCase):
         r = self.client.get("/admin/stores/")
         self.assertContains(r, ">Mobile<")
         self.assertContains(r, "+91 98765 43210")
+
+    def test_dgc_filter_ignores_non_numeric_value_instead_of_crashing(self):
+        r = self.client.get("/admin/stores/?dgc=abc")
+        self.assertEqual(r.status_code, 200)
+        self.assertContains(r, "AliveCo")
+        self.assertContains(r, "TrialCo")
 
     def test_dgc_filter_hidden_for_non_admin(self):
         self.client.force_login(self.dgc)

@@ -142,7 +142,7 @@ class StoreListView(_StoreScope, ListView):
             qs = qs.filter(subscription__plan__code=f["plan"])
         if f["dgc"] == "none":
             qs = qs.filter(subscription__manager__isnull=True)
-        elif f["dgc"]:
+        elif f["dgc"].isdigit():
             qs = qs.filter(subscription__manager_id=f["dgc"])
         if f["start"]:
             d = parse_date(f["start"])
@@ -482,6 +482,10 @@ class StoreRestoreView(_StoreScope, View):
         from . import store_backup
 
         store = self.get_store(pk)
+
+        if not is_platform_admin(request.user):
+            messages.error(request, "Only a platform admin can restore a store.")
+            return redirect("control:store_detail", pk=pk)
 
         if (request.POST.get("confirm_name", "") or "").strip() != store.name:
             messages.error(request, "Type the store's exact name to confirm the restore.")
