@@ -51,6 +51,33 @@ class VerifyDomainTests(TestCase):
         self.assertTrue(self.domain.last_check_error)
 
 
+class VerifyPendingDomainsTaskTests(TestCase):
+    """A domain added long ago that only just got its TXT record set must
+    still be picked up by the periodic retry — no age cutoff should drop it
+    out of automatic verification forever."""
+
+    def test_a_domain_older_than_the_old_14_day_cutoff_still_gets_retried(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.projects.tasks import verify_pending_domains_task
+
+        project = Project.objects.create(name="OldDomainCo")
+        domain = Domain.objects.create(project=project, host="late.acme.test")
+        Domain.objects.filter(pk=domain.pk).update(
+            created_at=timezone.now() - timedelta(days=30)
+        )
+
+        with mock.patch(_PATCH + "_lookup_txt", return_value=[domain.txt_value]), \
+             mock.patch(_PATCH + "_lookup_ips", return_value=[]), \
+             mock.patch(_PATCH + "_fetch_domain_check", return_value=""):
+            verify_pending_domains_task()
+
+        domain.refresh_from_db()
+        self.assertTrue(domain.is_verified)
+
+
 class LookupIpsFallbackTests(TestCase):
     def test_falls_back_to_getaddrinfo_when_dig_missing(self):
         info = [(2, 1, 6, "", ("104.16.5.5", 0))]

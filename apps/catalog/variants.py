@@ -106,6 +106,37 @@ def _all_axis_value_ids(project):
     )
 
 
+def _sync_variant_stock_tracking(product):
+    """Keep each Size/Colour variant's real stock tracking in step with
+    ``Product.track_variant_stock`` — opt-in, per the same "no InventoryItem
+    row = unlimited" convention the rest of the platform uses. On: every
+    active variant gets (or keeps) an InventoryItem at the store's default
+    warehouse, quantity synced from Variant.stock. Off: any such rows are
+    removed outright — a store that turns this off means "stop enforcing
+    it", not "freeze it at whatever the count happened to be"."""
+    from apps.inventory.models import InventoryItem, Warehouse
+
+    if not product.track_variant_stock:
+        InventoryItem.objects.filter(product=product, variant__isnull=False).delete()
+        return
+
+    warehouse = (
+        Warehouse.objects.filter(project=product.project, is_active=True)
+        .order_by("-is_default", "name").first()
+    )
+    if warehouse is None:
+        warehouse = Warehouse.objects.create(project=product.project, name="Main", is_default=True)
+
+    for v in product.variants.filter(is_active=True):
+        item, _ = InventoryItem.objects.get_or_create(
+            warehouse=warehouse, product=product, variant=v,
+        )
+        qty = v.stock or 0
+        if item.quantity != qty:
+            item.quantity = qty
+            item.save(update_fields=["quantity", "updated_at"])
+
+
 @transaction.atomic
 def apply_size_color(product, *, sizes, colors, matrix=None):
     """Reconcile ``product``'s variants to the given size/colour lists.
@@ -136,6 +167,7 @@ def apply_size_color(product, *, sizes, colors, matrix=None):
                 v.is_active = False
                 v.save(update_fields=["is_active"])
                 deactivated += 1
+        _sync_variant_stock_tracking(product)
         return 0, 0, deactivated
 
     size_vals = _values_for(_ensure_attr(project, SIZE), sizes) if sizes else {}
@@ -192,6 +224,7 @@ def apply_size_color(product, *, sizes, colors, matrix=None):
         product.kind = ProductKind.VARIABLE
         product.save(update_fields=["kind"])
 
+    _sync_variant_stock_tracking(product)
     return created, updated, deactivated
 
 
@@ -259,7 +292,26 @@ def storefront_axes(variants):
 
         {"axes": [{"name": "Size", "values": ["S", "M"]}, ...],
          "map": {"S|||Red": {"pk", "price", "sale_price", "stock"}}}
+
+    A variant with real stock tracking on (``Product.track_variant_stock`` —
+    see ``_sync_variant_stock_tracking``) reports live available-to-sell
+    (on-hand minus reserved) instead of the static ``Variant.stock`` number,
+    so the picker reflects what checkout will actually allow.
     """
+    from django.db.models import F, Sum
+
+    from apps.inventory.models import InventoryItem
+
+    variants = list(variants)
+    tracked_stock = {}
+    variant_ids = [v.pk for v in variants]
+    if variant_ids:
+        tracked_stock = {
+            row["variant_id"]: max(0, row["a"] or 0)
+            for row in InventoryItem.objects.filter(variant_id__in=variant_ids)
+            .values("variant_id").annotate(a=Sum(F("quantity") - F("reserved")))
+        }
+
     axes_order, axes_values = [], {}
     vmap = {}
     any_axis = False
@@ -280,11 +332,12 @@ def storefront_axes(variants):
                 axes_order.append(aname)
             if av.value not in axes_values[aname]:
                 axes_values[aname].append(av.value)
+        stock = tracked_stock[v.pk] if v.pk in tracked_stock else (v.stock or 0)
         vmap[combo_key(s, c)] = {
             "pk": v.pk,
             "price": str(v.effective_price),
-            "in_stock": (v.stock or 0) > 0,
-            "stock": v.stock or 0,
+            "in_stock": stock > 0,
+            "stock": stock,
         }
 
     if not any_axis:

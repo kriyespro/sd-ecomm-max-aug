@@ -279,9 +279,11 @@ class _ProductSizeColorMixin:
             ctx["sc_sizes"] = ", ".join(sizes)
             ctx["sc_colors"] = ", ".join(colors)
             ctx["sc_rows"] = rows
+            ctx["track_variant_stock"] = obj.track_variant_stock
         else:
             ctx["sc_sizes"] = ctx["sc_colors"] = ""
             ctx["sc_rows"] = {}
+            ctx["track_variant_stock"] = False
         return ctx
 
     def form_valid(self, form):
@@ -296,6 +298,10 @@ class _ProductSizeColorMixin:
             )
 
             post = self.request.POST
+            track = post.get("track_variant_stock") == "on"
+            if self.object.track_variant_stock != track:
+                self.object.track_variant_stock = track
+                self.object.save(update_fields=["track_variant_stock"])
             apply_size_color(
                 self.object,
                 sizes=parse_list(post.get("sizes")),

@@ -1,21 +1,19 @@
 """Periodic project maintenance."""
 
-from datetime import timedelta
-
 from celery import shared_task
-from django.utils import timezone
 
 
 @shared_task(name="apps.projects.tasks.verify_pending_domains_task")
 def verify_pending_domains_task():
-    """Re-check DNS for domains added in the last 14 days that aren't verified
-    yet — so a store owner who adds the TXT record a bit late doesn't have to
-    hit "Verify" again."""
+    """Re-check DNS for every unverified domain — so a store owner who adds
+    the TXT record late (even much later than the domain row itself) doesn't
+    have to remember to hit "Verify" again. No age cutoff: a domain that
+    fails DNS forever costs nothing but a cheap lookup every 5 minutes, and
+    drops out of this query the moment it verifies."""
     from .models import Domain
     from . import domains as domain_svc
 
-    cutoff = timezone.now() - timedelta(days=14)
-    pending = Domain.objects.filter(is_verified=False, created_at__gte=cutoff)[:200]
+    pending = Domain.objects.filter(is_verified=False).order_by("created_at")[:200]
     for domain in pending:
         try:
             domain_svc.verify_domain(domain)

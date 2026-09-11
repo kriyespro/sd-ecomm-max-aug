@@ -91,6 +91,117 @@ class ApplySizeColorTests(TestCase):
         self.assertEqual(rows[combo_key("S", "Red")]["stock"], "4")
 
 
+class TrackVariantStockTests(TestCase):
+    """Opt-in real stock enforcement for Size/Colour variants
+    (Product.track_variant_stock) — off by default, matching the platform's
+    existing "no InventoryItem row = unlimited" convention."""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="TrackCo", status="active")
+        self.product = Product.objects.create(
+            project=self.project, title="Hoodie", price=Decimal("1999"), status="active",
+        )
+
+    def test_off_by_default_creates_no_inventory_item(self):
+        from apps.inventory.models import InventoryItem
+
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "5"}},
+        )
+        self.assertFalse(InventoryItem.objects.filter(product=self.product).exists())
+
+    def test_enabling_creates_inventory_items_synced_to_variant_stock(self):
+        from apps.inventory.models import InventoryItem, Warehouse
+
+        self.product.track_variant_stock = True
+        self.product.save(update_fields=["track_variant_stock"])
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "5"}, combo_key("M", ""): {"stock": "2"}},
+        )
+        s = self.product.variants.get(name="S")
+        m = self.product.variants.get(name="M")
+        item_s = InventoryItem.objects.get(product=self.product, variant=s)
+        item_m = InventoryItem.objects.get(product=self.product, variant=m)
+        self.assertEqual(item_s.quantity, 5)
+        self.assertEqual(item_m.quantity, 2)
+        self.assertTrue(Warehouse.objects.filter(project=self.project, is_default=True).exists())
+
+    def test_checkout_actually_blocks_oversell_once_enabled(self):
+        from apps.cart.models import Cart, CartItem
+        from apps.orders.services import OrderError, place_order
+
+        self.product.track_variant_stock = True
+        self.product.save(update_fields=["track_variant_stock"])
+        apply_size_color(
+            self.product, sizes=["S"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "1"}},
+        )
+        variant = self.product.variants.get(name="S")
+
+        cart = Cart.objects.create(project=self.project, is_active=True)
+        CartItem.objects.create(cart=cart, product=self.product, variant=variant,
+                                quantity=2, unit_price=self.product.price)
+        with self.assertRaises(OrderError):
+            place_order(
+                project=self.project, cart=cart, email="x@t.test",
+                billing_address={}, shipping_address={"name": "X"},
+            )
+
+    def test_disabling_removes_inventory_items(self):
+        from apps.inventory.models import InventoryItem
+
+        self.product.track_variant_stock = True
+        self.product.save(update_fields=["track_variant_stock"])
+        apply_size_color(
+            self.product, sizes=["S"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "5"}},
+        )
+        self.assertTrue(InventoryItem.objects.filter(product=self.product).exists())
+
+        self.product.track_variant_stock = False
+        self.product.save(update_fields=["track_variant_stock"])
+        apply_size_color(
+            self.product, sizes=["S"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "5"}},
+        )
+        self.assertFalse(InventoryItem.objects.filter(product=self.product).exists())
+
+    def test_storefront_axes_reports_live_availability_when_tracked(self):
+        from apps.inventory import services as inv
+
+        self.product.track_variant_stock = True
+        self.product.save(update_fields=["track_variant_stock"])
+        apply_size_color(
+            self.product, sizes=["S"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "3"}},
+        )
+        variant = self.product.variants.get(name="S")
+        item = variant.inventory_items.get()
+        inv.reserve(item=item, quantity=3)  # sold out
+
+        variants = list(
+            self.product.variants.filter(is_active=True)
+            .prefetch_related("attribute_values__attribute")
+        )
+        axes = storefront_axes(variants)
+        self.assertEqual(axes["map"][combo_key("S", "")]["stock"], 0)
+        self.assertFalse(axes["map"][combo_key("S", "")]["in_stock"])
+
+    def test_storefront_axes_falls_back_to_variant_stock_when_untracked(self):
+        apply_size_color(
+            self.product, sizes=["S"], colors=[],
+            matrix={combo_key("S", ""): {"stock": "7"}},
+        )
+        variants = list(
+            self.product.variants.filter(is_active=True)
+            .prefetch_related("attribute_values__attribute")
+        )
+        axes = storefront_axes(variants)
+        self.assertEqual(axes["map"][combo_key("S", "")]["stock"], 7)
+
+
 class MatrixFromPostTests(TestCase):
     def test_pulls_combo_fields(self):
         post = {

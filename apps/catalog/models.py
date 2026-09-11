@@ -162,6 +162,15 @@ class Tag(TenantScopedModel):
 
 class Product(TenantScopedModel, SeoFieldsModel):
     kind = models.CharField(max_length=20, choices=ProductKind.choices, default=ProductKind.SIMPLE)
+    # Off by default: a Size/Colour variant's "stock" number is otherwise just
+    # display text, never enforced (apps.catalog.variants.apply_size_color).
+    # Turning this on makes each combo's stock a real InventoryItem, checked
+    # and reserved like any other tracked product. See apply_size_color's
+    # docstring for exactly what flipping it does/undoes.
+    track_variant_stock = models.BooleanField(
+        default=False,
+        help_text="Enforce stock limits for this product's Size/Colour variants.",
+    )
     type = models.ForeignKey(
         ProductType, on_delete=models.SET_NULL, null=True, blank=True, related_name="products"
     )
