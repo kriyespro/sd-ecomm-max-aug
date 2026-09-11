@@ -22,7 +22,8 @@
     <p class="mt-1 text-xs text-slate-500">
       People who can sign into Mission Control for this store. Add someone by
       email — if they don't have a login yet, one is created and you're shown a
-      one-time password to pass on.
+      one-time password to pass on. Locked out? Use <span class="font-medium">Reset password</span>
+      on their row to generate a new one.
       {% if not can_grant_privileged %}
       As a manager you can add and manage <span class="font-medium">staff</span> only.
       {% endif %}
@@ -89,8 +90,9 @@
           </td>
           <td class="px-4 py-3 text-xs text-slate-400">{{ m.created_at.strftime('%d %b %Y') }}</td>
           <td class="px-4 py-3">
-            {% if editable %}
-            <div class="flex items-center justify-end gap-2">
+            {% set can_reset_row = m.user_id != me_id and (can_reset_privileged or m.role == 'staff') %}
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              {% if editable %}
               <form method="post" action="{{ url('control:team_role', kwargs={'pk': m.pk}) }}">
                 {{ csrf_input }}
                 <select name="role" onchange="this.form.submit()"
@@ -98,15 +100,25 @@
                   {{ role_options(m.role, can_grant_privileged) }}
                 </select>
               </form>
+              {% endif %}
+              {% if can_reset_row %}
+              <form method="post" action="{{ url('control:team_reset_password', kwargs={'pk': m.pk}) }}"
+                    onsubmit="return confirm('Generate a new one-time password for {{ m.user.email }}? Their current password stops working immediately.')">
+                {{ csrf_input }}
+                <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">Reset password</button>
+              </form>
+              {% endif %}
+              {% if editable %}
               <form method="post" action="{{ url('control:team_remove', kwargs={'pk': m.pk}) }}"
                     onsubmit="return confirm('Remove {{ m.user.email }} from the team?')">
                 {{ csrf_input }}
                 <button class="rounded-lg px-3 py-1 text-xs text-red-600 hover:bg-red-50">Remove</button>
               </form>
+              {% endif %}
+              {% if not editable and not can_reset_row %}
+              <span class="text-xs text-slate-300">—</span>
+              {% endif %}
             </div>
-            {% else %}
-            <div class="text-right text-xs text-slate-300">—</div>
-            {% endif %}
           </td>
         </tr>
         {% else %}
