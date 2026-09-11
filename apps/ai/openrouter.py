@@ -26,13 +26,19 @@ _PREFERRED = [
     "mistral-small", "phi-4", "gemma-2-27b", "gemma-2-9b",
 ]
 
-# "Reasoning" models spend most (sometimes all) of max_tokens on an internal
-# chain-of-thought before ever emitting the actual answer, so for a low-
-# latency "return one JSON object" task they routinely come back with no
-# usable content at all — not a fit for this feature, excluded outright
-# rather than just ranked lower.
-_EXCLUDE = ["-r1", "r1-", "r1:", "qwq", "-o1", "o1-", "-o3", "o3-",
-           "thinking", "reasoning", "deepseek-r1"]
+# Two kinds of free-tier listing that are the wrong tool for "return one JSON
+# object of product copy" entirely:
+# - reasoning models spend most/all of max_tokens on an internal chain-of-
+#   thought before ever emitting the answer, often returning nothing usable;
+# - non-text models (music/audio/image/video generation) OpenRouter also
+#   lists at $0 during preview — e.g. google/lyria-3-pro-preview turned out
+#   to be a MUSIC model and duly returned song lyrics, not JSON.
+# Excluded outright rather than just ranked lower.
+_EXCLUDE = [
+    "-r1", "r1-", "r1:", "qwq", "-o1", "o1-", "-o3", "o3-", "thinking", "reasoning",
+    "lyria", "whisper", "tts", "dall-e", "stable-diffusion", "flux", "imagen",
+    "veo-", "-veo", "sora", "music", "-audio", "audio-", "image-gen", "-image:",
+]
 
 # Used only if OpenRouter's catalog is unreachable — a small set of models
 # that have reliably had a free tier.
@@ -58,14 +64,23 @@ def _is_free(model):
         return False
 
 
-def _is_excluded(model_id):
-    low = model_id.lower()
-    return any(bad in low for bad in _EXCLUDE)
+def _is_text_chat_model(model):
+    """Reject anything that isn't a plain text-in/text-out chat model — by the
+    id denylist first, then by OpenRouter's own architecture metadata when
+    present (catches a non-text model whose name doesn't give it away)."""
+    if any(bad in model.get("id", "").lower() for bad in _EXCLUDE):
+        return False
+    arch = model.get("architecture") or {}
+    out = arch.get("output_modalities")
+    if out is not None and list(out) != ["text"]:
+        return False
+    return True
 
 
 def list_free_models():
-    """Every ``:free`` model OpenRouter currently lists (minus reasoning
-    models, see ``_EXCLUDE``), cached an hour."""
+    """Every ``:free`` text chat model OpenRouter currently lists — reasoning
+    models and non-text (audio/image/video) listings excluded, see
+    ``_EXCLUDE``. Cached an hour."""
     cached = cache.get(_MODELS_CACHE_KEY)
     if cached is not None:
         return cached
@@ -76,7 +91,7 @@ def list_free_models():
     except (urllib.error.URLError, TimeoutError, ValueError):
         logger.warning("openrouter model catalog unreachable", exc_info=True)
         return []
-    free = [m for m in data.get("data", []) if _is_free(m) and not _is_excluded(m["id"])]
+    free = [m for m in data.get("data", []) if _is_free(m) and _is_text_chat_model(m)]
     cache.set(_MODELS_CACHE_KEY, free, _MODELS_CACHE_TTL)
     return free
 
