@@ -26,6 +26,7 @@ from apps.marketing.models import (
 from apps.marketing.tasks import (
     send_ga4_event,
     send_meta_capi_event,
+    send_platform_capi_event,
     send_tiktok_event,
 )
 from apps.projects.models import Project
@@ -579,6 +580,48 @@ class PlatformTrackingTests(TestCase):
     def test_landing_page_clean_when_disabled(self):
         body = self.client.get("/").content.decode()
         self.assertNotIn("fbevents.js", body)
+
+
+class PlatformCapiTests(TestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_capi_ready_needs_enabled_pixel_and_token(self):
+        s = PlatformTrackingSettings.load()
+        self.assertFalse(s.capi_ready)
+        s.is_enabled = True
+        s.meta_pixel_id = "123"
+        s.save()
+        self.assertFalse(s.capi_ready)          # no token yet
+        s.meta_capi_token = "tok"
+        s.save()
+        self.assertTrue(s.capi_ready)
+
+    def test_task_skips_when_not_ready(self):
+        with mock.patch.object(capi, "send_event") as sent:
+            result = send_platform_capi_event(
+                event_name="CompleteRegistration", event_id="signup-1", user_data={})
+        self.assertEqual(result, "skipped")
+        sent.assert_not_called()
+
+    def test_task_sends_when_ready(self):
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.meta_pixel_id = "123456789012"
+        s.meta_capi_token = "tok"
+        s.meta_test_event_code = "TEST1"
+        s.save()
+        with mock.patch.object(capi, "send_event", return_value={}) as sent:
+            result = send_platform_capi_event(
+                event_name="CompleteRegistration", event_id="signup-9",
+                user_data={"em": ["x"]}, custom_data={"content_name": "growth"},
+            )
+        self.assertEqual(result, "sent")
+        _, kw = sent.call_args
+        self.assertEqual(kw["pixel_id"], "123456789012")
+        self.assertEqual(kw["access_token"], "tok")
+        self.assertEqual(kw["event_id"], "signup-9")
+        self.assertEqual(kw["test_event_code"], "TEST1")
 
 
 @override_settings(ALLOWED_HOSTS=["*"])

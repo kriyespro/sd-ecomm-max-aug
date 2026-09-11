@@ -99,6 +99,17 @@ class PlatformTrackingSettings(TimeStampedModel):
         default=False, help_text="Master switch — off = inject nothing.",
     )
 
+    # Server-side: fires a Meta Conversions API "CompleteRegistration" event
+    # when a visitor finishes public self-signup (a new trial store). Browser
+    # pixel above stays PageView-only; this is the one funnel event worth
+    # sending server-side (ad-blockers hide the browser one most often).
+    meta_capi_token = models.CharField(
+        "Meta Conversions API access token", max_length=512, blank=True,
+        help_text="Events Manager → your pixel → Settings → Conversions API "
+                  "→ Generate access token.",
+    )
+    meta_test_event_code = models.CharField(max_length=64, blank=True)
+
     class Meta:
         verbose_name = "platform tracking settings"
         verbose_name_plural = "platform tracking settings"
@@ -123,6 +134,10 @@ class PlatformTrackingSettings(TimeStampedModel):
         pairs = (("meta", self.meta_pixel_id), ("ga4", self.ga4_measurement_id),
                  ("tiktok", self.tiktok_pixel_id))
         return {p: {"pixel_id": v.strip()} for p, v in pairs if v.strip()}
+
+    @property
+    def capi_ready(self):
+        return bool(self.is_enabled and self.meta_pixel_id and self.meta_capi_token)
 
 
 def platform_tracking():

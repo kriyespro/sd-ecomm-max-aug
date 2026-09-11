@@ -47,6 +47,35 @@ def send_meta_capi_event(*, integration_id, event_name, event_id, user_data,
 
 
 @shared_task(
+    name="apps.marketing.tasks.send_platform_capi_event",
+    autoretry_for=(capi.CAPIError,),
+    retry_backoff=30,
+    retry_kwargs={"max_retries": 3},
+)
+def send_platform_capi_event(*, event_name, event_id, user_data, custom_data=None,
+                             event_source_url=""):
+    """Same as ``send_meta_capi_event`` but for the platform's own pixel
+    (``PlatformTrackingSettings``, not a per-store ``TrackingIntegration``)."""
+    from .models import PlatformTrackingSettings
+
+    row = PlatformTrackingSettings.load()
+    if not row.capi_ready:
+        return "skipped"
+    capi.send_event(
+        pixel_id=row.meta_pixel_id,
+        access_token=row.meta_capi_token,
+        event_name=event_name,
+        event_id=event_id,
+        user_data=user_data,
+        custom_data=custom_data,
+        event_source_url=event_source_url,
+        test_event_code=row.meta_test_event_code,
+    )
+    logger.info("platform meta capi %s sent (event %s)", event_name, event_id)
+    return "sent"
+
+
+@shared_task(
     name="apps.marketing.tasks.send_ga4_event",
     autoretry_for=(ga4.GA4Error,),
     retry_backoff=30,

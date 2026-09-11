@@ -121,6 +121,27 @@ class GoogleCallbackView(View):
         return redirect("accounts:signup_complete")
 
 
+def _track_signup(request, *, project, email, plan):
+    """Fire the platform's own Meta CAPI "CompleteRegistration" event for a new
+    trial store. Best-effort — a broker hiccup must never break signup."""
+    try:
+        from apps.marketing.capi import hash_user_data
+        from apps.marketing.models import PlatformTrackingSettings
+        from apps.marketing.tasks import send_platform_capi_event
+
+        if not PlatformTrackingSettings.load().capi_ready:
+            return
+        send_platform_capi_event.delay(
+            event_name="CompleteRegistration",
+            event_id=f"signup-{project.pk}",
+            user_data=hash_user_data(email=email),
+            custom_data={"content_name": plan.name if plan else "trial"},
+            event_source_url=request.build_absolute_uri("/accounts/signup/"),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 class SignupCompleteForm(forms.Form):
     store_name = forms.CharField(
         label="Store name", max_length=120,
@@ -172,5 +193,7 @@ class SignupCompleteView(FormView):
             return self.form_invalid(form)
 
         self.request.session.pop(_PENDING, None)
+        _track_signup(self.request, project=_project, email=self.pending["email"],
+                     plan=plan)
         login(self.request, user)
         return redirect("control:onboarding")

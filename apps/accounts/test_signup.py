@@ -172,6 +172,44 @@ class GoogleCallbackTests(TestCase):
         self.assertNotIn("/accounts/signup", resp["Location"])
         self.assertEqual(int(self.client.session["_auth_user_id"]), u.pk)
 
+    def test_completion_fires_platform_capi_when_configured(self):
+        from apps.marketing.models import PlatformTrackingSettings
+
+        s = PlatformTrackingSettings.load()
+        s.is_enabled = True
+        s.meta_pixel_id = "123456789012"
+        s.meta_capi_token = "tok"
+        s.save()
+
+        state = self._start(plan="growth")
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "cap@gmail.test", "email_verified": True,
+                               "name": "Cap", "sub": "77"}
+            self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+
+        with self.captureOnCommitCallbacks(execute=True), \
+             patch("apps.marketing.tasks.send_platform_capi_event.delay") as delay:
+            self.client.post("/accounts/signup/complete/",
+                             {"store_name": "CapCo", "phone": "9"})
+        delay.assert_called_once()
+        kw = delay.call_args.kwargs
+        self.assertEqual(kw["event_name"], "CompleteRegistration")
+        project = Project.objects.get(name="CapCo")
+        self.assertEqual(kw["event_id"], f"signup-{project.pk}")
+
+    def test_completion_skips_capi_when_not_configured(self):
+        state = self._start()
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "nocap@gmail.test", "email_verified": True,
+                               "name": "N", "sub": "78"}
+            self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+
+        with self.captureOnCommitCallbacks(execute=True), \
+             patch("apps.marketing.tasks.send_platform_capi_event.delay") as delay:
+            self.client.post("/accounts/signup/complete/",
+                             {"store_name": "NoCapCo", "phone": "9"})
+        delay.assert_not_called()
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class DgcCreatedStoreGetsLongerTrialTests(TestCase):

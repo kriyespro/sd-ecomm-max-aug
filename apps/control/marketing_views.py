@@ -267,18 +267,39 @@ class MetaConnectCallbackView(_MetaOAuthBase, View):
 class PlatformTrackingForm(forms.ModelForm):
     class Meta:
         model = PlatformTrackingSettings
-        fields = ["is_enabled", "meta_pixel_id", "ga4_measurement_id", "tiktok_pixel_id"]
+        fields = ["is_enabled", "meta_pixel_id", "ga4_measurement_id", "tiktok_pixel_id",
+                  "meta_capi_token", "meta_test_event_code"]
+        widgets = {
+            "meta_capi_token": forms.PasswordInput(render_value=False, attrs={"autocomplete": "off"}),
+        }
         labels = {
             "is_enabled": "Load these pixels on the marketing site",
             "meta_pixel_id": "Meta Pixel ID",
             "ga4_measurement_id": "GA4 Measurement ID",
             "tiktok_pixel_id": "TikTok Pixel Code",
+            "meta_test_event_code": "Meta test event code",
         }
         help_texts = {
             "meta_pixel_id": "A number. Leave blank to skip Meta.",
             "ga4_measurement_id": "Like G-XXXXXXX. Leave blank to skip GA4.",
             "tiktok_pixel_id": "The ~20-character code. Leave blank to skip TikTok.",
+            "meta_test_event_code": "Optional. Events sent with it show only in "
+                                    "Events Manager's Test Events tab.",
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["meta_capi_token"].required = False
+        if self.instance.pk and self.instance.meta_capi_token:
+            self.fields["meta_capi_token"].help_text = (
+                "A token is saved — leave blank to keep it."
+            )
+
+    def clean_meta_capi_token(self):
+        tok = (self.cleaned_data.get("meta_capi_token") or "").strip()
+        if not tok and self.instance.pk:
+            return self.instance.meta_capi_token
+        return tok
 
     def _check(self, field, provider):
         val = (self.cleaned_data.get(field) or "").strip()
