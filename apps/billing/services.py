@@ -88,19 +88,27 @@ def is_dgc_managed(project) -> bool:
 
 @transaction.atomic
 def change_plan(subscription, *, plan, period, actor=None):
-    """Switch plan/period. Takes effect immediately; the price change applies to
-    the next invoice (current paid period is honoured)."""
+    """Switch plan/period and bill it, unless an invoice is already open.
+
+    Trialing, suspended or cancelled subscriptions have no live paid period to
+    honour, so the new invoice starts today — paying it activates the store
+    immediately (ending a trial early counts as "buy now"). An already-active
+    subscription keeps its current paid period; the new price is billed at the
+    next cycle boundary, as before.
+    """
     if not plan.is_active:
         raise BillingError("That plan is not available.")
+    immediate = subscription.status in (
+        SubscriptionStatus.TRIALING, SubscriptionStatus.SUSPENDED, SubscriptionStatus.CANCELLED,
+    )
     subscription.plan = plan
     subscription.period = period
     subscription.cancel_at_period_end = False
     if subscription.status == SubscriptionStatus.CANCELLED:
         subscription.status = SubscriptionStatus.ACTIVE
     subscription.save(update_fields=["plan", "period", "cancel_at_period_end", "status", "updated_at"])
-    # If they're out of trial and have no open invoice, bill the new plan now.
-    if subscription.status != SubscriptionStatus.TRIALING and not _open_invoice(subscription):
-        issue_invoice(subscription)
+    if not _open_invoice(subscription):
+        issue_invoice(subscription, period_start=timezone.now() if immediate else None)
     return subscription
 
 

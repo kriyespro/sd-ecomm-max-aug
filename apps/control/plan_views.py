@@ -70,7 +70,15 @@ class PlanChangeView(_PlanBase, View):
         record_audit(actor=request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=sub,
                      changes={"plan": plan.code, "period": period}, request=request)
-        messages.success(request, f"Plan changed to {plan.name} ({period}).")
+        open_invoice = sub.invoices.filter(status="open").first()
+        if open_invoice is not None:
+            messages.success(
+                request,
+                f"Plan set to {plan.name} ({period}) — pay ₹{open_invoice.amount:,.0f} "
+                "below to activate it.",
+            )
+        else:
+            messages.success(request, f"Plan changed to {plan.name} ({period}).")
         return redirect("control:store_plan")
 
 

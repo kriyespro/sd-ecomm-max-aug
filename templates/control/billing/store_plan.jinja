@@ -82,8 +82,10 @@
 
     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
       {% for p in plans %}
+      {% set is_current = p.pk == subscription.plan_id %}
+      {% set already_paid = is_current and subscription.status in ('active', 'past_due') %}
       <form method="post" action="{{ url('control:store_plan_change') }}"
-            class="flex flex-col rounded-xl border p-4 {{ 'border-slate-900 ring-1 ring-slate-900' if p.pk == subscription.plan_id else 'border-slate-200' }}">
+            class="flex flex-col rounded-xl border p-4 {{ 'border-slate-900 ring-1 ring-slate-900' if is_current else 'border-slate-200' }}">
         {{ csrf_input }}
         <input type="hidden" name="plan" value="{{ p.pk }}">
         <input type="hidden" name="period" :value="period">
@@ -97,14 +99,21 @@
           {% for f in p.features %}<li>• {{ f }}</li>{% endfor %}
         </ul>
         <button class="mt-4 rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wide
-          {{ 'bg-slate-100 text-slate-400' if p.pk == subscription.plan_id else 'bg-slate-900 text-white hover:bg-slate-800' }}"
-          {{ 'disabled' if p.pk == subscription.plan_id }}>
-          {{ 'Current plan' if p.pk == subscription.plan_id else 'Switch to this' }}
+          {{ 'bg-slate-100 text-slate-400' if already_paid else 'bg-slate-900 text-white hover:bg-slate-800' }}"
+          {{ 'disabled' if already_paid }}>
+          {% if already_paid %}Current plan
+          {% elif subscription.status == 'trialing' %}Buy now
+          {% elif subscription.status in ('suspended', 'cancelled') %}Reactivate
+          {% else %}Upgrade
+          {% endif %}
         </button>
       </form>
       {% endfor %}
     </div>
-    <p class="mt-3 text-xs text-slate-400">Switching takes effect now; the new price applies to your next invoice.</p>
+    <p class="mt-3 text-xs text-slate-400">
+      Paying takes effect immediately — during a trial it activates the store
+      right away; on an active plan the new price applies to your next invoice.
+    </p>
   </div>
 </div>
 
