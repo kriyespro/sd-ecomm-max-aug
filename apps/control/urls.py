@@ -47,6 +47,7 @@ urlpatterns = [
     path("team/", teamv.TeamListView.as_view(), name="team"),
     path("team/add/", teamv.TeamAddView.as_view(), name="team_add"),
     path("team/<int:pk>/role/", teamv.TeamRoleView.as_view(), name="team_role"),
+    path("team/<int:pk>/reset-password/", teamv.TeamResetPasswordView.as_view(), name="team_reset_password"),
     path("team/<int:pk>/remove/", teamv.TeamRemoveView.as_view(), name="team_remove"),
 
     # Storefront skins

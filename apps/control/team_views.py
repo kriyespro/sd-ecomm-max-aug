@@ -41,6 +41,9 @@ class TeamListView(_TeamBase, TemplateView):
         ctx["can_grant_privileged"] = team_svc.can_grant_privileged(
             self.request.user, self.active_project
         )
+        ctx["can_reset_privileged"] = team_svc.can_reset_password(
+            self.request.user, self.active_project
+        )
         ctx["me_id"] = self.request.user.pk
         ctx["role_access"] = caps.TEAM_ROLE_ACCESS
         used, cap = billing_limits.usage(self.active_project)["staff"]
@@ -86,6 +89,24 @@ class TeamRoleView(_TeamBase, View):
                 membership=m, role=request.POST.get("role", ""), request=request,
             )
             messages.success(request, f"Updated {m.user.email}'s role.")
+        except (team_svc.TeamError, PermissionDenied) as exc:
+            messages.error(request, str(exc))
+        return redirect("control:team")
+
+
+class TeamResetPasswordView(_TeamBase, View):
+    def post(self, request, *args, **kwargs):
+        m = self._membership(kwargs["pk"])
+        try:
+            new_password = team_svc.reset_password(
+                actor=request.user, project=self.active_project,
+                membership=m, request=request,
+            )
+            messages.success(
+                request,
+                f"New one-time password for {m.user.email}: {new_password} — "
+                f"share it with them now; they should change it after signing in.",
+            )
         except (team_svc.TeamError, PermissionDenied) as exc:
             messages.error(request, str(exc))
         return redirect("control:team")

@@ -79,6 +79,24 @@ def can_grant_privileged(actor, project) -> bool:
     return can_priv
 
 
+def can_reset_password(actor, project) -> bool:
+    """May this actor generate a new one-time password for ANY team member
+    (owner, manager or staff)? Broader than ``can_grant_privileged`` — a DGC
+    running a client's store may reset any of that store's logins (they're
+    the one fielding "I'm locked out" calls) even though they can't reassign
+    the owner/manager roles themselves. A manager still resets staff only
+    (checked separately in ``reset_password``); platform admins and a real
+    owner always can.
+    """
+    if is_platform_admin(actor):
+        return True
+    if store_role(actor, project) == StoreRole.OWNER:
+        return True
+    if is_platform_staff(actor) and has_store_role(actor, project, {StoreRole.OWNER}):
+        return True
+    return False
+
+
 def _clean_role(role):
     role = (role or "").strip()
     if role not in TEAM_ROLES:
@@ -225,6 +243,41 @@ def provision_member(*, actor, project, email, role, name="", request=None):
         actor=actor, project=project, user=user, role=role, request=request
     )
     return membership, temp_password
+
+
+@transaction.atomic
+def reset_password(*, actor, project, membership, request=None):
+    """Generate a fresh one-time password for an existing member's login and
+    return it. The old password stops working immediately.
+
+    Permission: platform admin, the store's real owner, or a DGC running this
+    store (via the subscription-manager bypass) may reset anyone's login. A
+    manager may reset a staff login only. Nobody may reset their own — use the
+    normal change-password flow for that.
+    """
+    if membership.project_id != project.pk:
+        raise TeamError("That member is not on this store.")
+    if membership.user_id == getattr(actor, "pk", None):
+        raise TeamError("Use your account settings to change your own password.")
+
+    if can_reset_password(actor, project):
+        pass
+    elif (store_role(actor, project) == StoreRole.MANAGER
+          and membership.role == StoreRole.STAFF):
+        pass
+    else:
+        raise PermissionDenied(
+            "Only the store owner, a DGC, or a platform admin can reset this login."
+        )
+
+    new_password = get_random_string(12)
+    membership.user.set_password(new_password)
+    membership.user.save(update_fields=["password"])
+    record_audit(
+        actor=actor, project=project, action=AuditLog.Action.UPDATE,
+        target=membership, changes={"password_reset": True}, request=request,
+    )
+    return new_password
 
 
 @transaction.atomic

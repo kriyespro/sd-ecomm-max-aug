@@ -133,3 +133,170 @@ class TeamScreenTests(TestCase):
                 project=self.project, user=u, role="staff", is_active=True
             ).exists()
         )
+
+
+class ResetPasswordTests(TestCase):
+    """Generate a new one-time password for an existing team login."""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="ResetCo", status="active")
+        self.owner = User.objects.create_user(
+            username="owner@reset.test", email="owner@reset.test", password="pw"
+        )
+        Membership.objects.create(
+            project=self.project, user=self.owner, role=StoreRole.OWNER, is_active=True
+        )
+        self.owner2 = User.objects.create_user(
+            username="owner2@reset.test", email="owner2@reset.test", password="pw"
+        )
+        Membership.objects.create(
+            project=self.project, user=self.owner2, role=StoreRole.OWNER, is_active=True
+        )
+        self.manager = User.objects.create_user(
+            username="mgr@reset.test", email="mgr@reset.test", password="pw"
+        )
+        self.mgr_membership = Membership.objects.create(
+            project=self.project, user=self.manager, role=StoreRole.MANAGER, is_active=True
+        )
+        self.staff = User.objects.create_user(
+            username="staff@reset.test", email="staff@reset.test", password="pw"
+        )
+        self.staff_membership = Membership.objects.create(
+            project=self.project, user=self.staff, role=StoreRole.STAFF, is_active=True
+        )
+
+    def _dgc(self):
+        from apps.accounts.models import PlatformRole, Profile
+        from apps.billing import services as billing_svc
+
+        billing_svc.ensure_subscription(self.project)
+        dgc = User.objects.create_user(
+            username="dgc@reset.test", email="dgc@reset.test", password="pw", is_staff=True
+        )
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        self.project.subscription.manager = dgc
+        self.project.subscription.save(update_fields=["manager"])
+        return User.objects.get(pk=dgc.pk)
+
+    def test_owner_can_reset_anyone(self):
+        for target in (self.mgr_membership, self.staff_membership):
+            old_hash = target.user.password
+            new_password = team_svc.reset_password(
+                actor=self.owner, project=self.project, membership=target
+            )
+            target.user.refresh_from_db()
+            self.assertTrue(target.user.check_password(new_password))
+            self.assertNotEqual(target.user.password, old_hash)
+
+    def test_owner_cannot_reset_self(self):
+        owner_membership = Membership.objects.get(project=self.project, user=self.owner)
+        with self.assertRaises(team_svc.TeamError):
+            team_svc.reset_password(
+                actor=self.owner, project=self.project, membership=owner_membership
+            )
+
+    def test_dgc_can_reset_owner_manager_and_staff(self):
+        dgc = self._dgc()
+        owner_membership = Membership.objects.get(project=self.project, user=self.owner)
+        for target in (owner_membership, self.mgr_membership, self.staff_membership):
+            new_password = team_svc.reset_password(
+                actor=dgc, project=self.project, membership=target
+            )
+            target.user.refresh_from_db()
+            self.assertTrue(target.user.check_password(new_password))
+
+    def test_manager_can_reset_staff_only(self):
+        new_password = team_svc.reset_password(
+            actor=self.manager, project=self.project, membership=self.staff_membership
+        )
+        self.staff.refresh_from_db()
+        self.assertTrue(self.staff.check_password(new_password))
+
+        owner_membership = Membership.objects.get(project=self.project, user=self.owner)
+        with self.assertRaises(PermissionDenied):
+            team_svc.reset_password(
+                actor=self.manager, project=self.project, membership=owner_membership
+            )
+
+    def test_manager_cannot_reset_another_manager(self):
+        other_mgr = User.objects.create_user(
+            username="mgr2@reset.test", email="mgr2@reset.test", password="pw"
+        )
+        other_mgr_membership = Membership.objects.create(
+            project=self.project, user=other_mgr, role=StoreRole.MANAGER, is_active=True
+        )
+        with self.assertRaises(PermissionDenied):
+            team_svc.reset_password(
+                actor=self.manager, project=self.project, membership=other_mgr_membership
+            )
+
+    def test_stranger_cannot_reset(self):
+        stranger = User.objects.create_user(
+            username="stranger@reset.test", email="stranger@reset.test", password="pw"
+        )
+        with self.assertRaises(PermissionDenied):
+            team_svc.reset_password(
+                actor=stranger, project=self.project, membership=self.staff_membership
+            )
+
+    def test_can_reset_password_capability(self):
+        self.assertTrue(team_svc.can_reset_password(self.owner, self.project))
+        self.assertFalse(team_svc.can_reset_password(self.manager, self.project))
+        self.assertTrue(team_svc.can_reset_password(self._dgc(), self.project))
+
+
+class ResetPasswordScreenTests(TestCase):
+    def setUp(self):
+        from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
+
+        self.project = Project.objects.create(
+            name="ResetScreenCo", status="active", feature_flags={"onboarded": True}
+        )
+        self.owner = User.objects.create_user(
+            username="o3@t.test", email="o3@t.test", password="pw", is_staff=True
+        )
+        Membership.objects.create(
+            project=self.project, user=self.owner, role=StoreRole.OWNER, is_active=True
+        )
+        self.staff = User.objects.create_user(
+            username="s3@t.test", email="s3@t.test", password="oldpw", is_staff=True
+        )
+        self.staff_membership = Membership.objects.create(
+            project=self.project, user=self.staff, role=StoreRole.STAFF, is_active=True
+        )
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+
+    def test_reset_button_shown_and_flashes_new_password(self):
+        resp = self.client.get("/admin/team/")
+        self.assertContains(resp, "Reset password")
+
+        resp = self.client.post(
+            f"/admin/team/{self.staff_membership.pk}/reset-password/", follow=True
+        )
+        self.assertContains(resp, "New one-time password for s3@t.test:")
+        self.staff.refresh_from_db()
+        self.assertFalse(self.staff.check_password("oldpw"))
+
+    def test_manager_screen_hides_reset_for_owner_row(self):
+        manager = User.objects.create_user(
+            username="m3@t.test", email="m3@t.test", password="pw", is_staff=True
+        )
+        Membership.objects.create(
+            project=self.project, user=manager, role=StoreRole.MANAGER, is_active=True
+        )
+        self.client.force_login(manager)
+        s = self.client.session
+        from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
+
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        resp = self.client.get("/admin/team/")
+        self.assertContains(resp, "Reset password")   # for the staff row
+        owner_membership = Membership.objects.get(project=self.project, user=self.owner)
+        resp = self.client.post(
+            f"/admin/team/{owner_membership.pk}/reset-password/", follow=True
+        )
+        self.assertContains(resp, "Only the store owner")
