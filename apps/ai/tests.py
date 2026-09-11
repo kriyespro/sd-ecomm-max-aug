@@ -220,6 +220,33 @@ class RotationTests(TestCase):
         bad_calls = [c for c in calls if c[1] == "bad-model"]
         self.assertEqual(len(bad_calls), 1)  # tried once, then skipped for every other key
 
+    def test_unparseable_content_falls_through_to_next_attempt(self):
+        """A successful API call that returns unusable text (a free model
+        ignoring the "JSON only" instruction) must rotate on, not fail
+        outright — and must not blacklist the model, since it's a formatting
+        hiccup, not the model being unavailable."""
+        bad = _key(self.project, api_key="sk-or-v1-badtext0000000")
+        good = _key(self.project, api_key="sk-or-v1-goodtext000000",
+                   last_used_at=timezone.now())
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800):
+            return "not json at all" if api_key == bad.api_key else '{"ok": true}'
+
+        def fail_on_plain_text(text):
+            if text == "not json at all":
+                raise ValueError("no JSON object found")
+            return {"ok": True}
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models", return_value=["m1"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat):
+            result, model = services.generate(
+                project=self.project, system_prompt="s", user_prompt="u", parse=fail_on_plain_text,
+            )
+        self.assertEqual(result, {"ok": True})
+        from django.core.cache import cache
+
+        self.assertIsNone(cache.get(services._dead_model_key("m1")))
+
     def test_dead_model_skipped_entirely_on_next_call(self):
         _key(self.project)
 
@@ -238,6 +265,49 @@ class RotationTests(TestCase):
         self.assertNotIn("bad-model", models_tried)
 
 
+def _fake_generate_returning(raw_text, model="m1"):
+    """A ``services.generate`` stand-in that applies ``parse`` the same way
+    the real rotation does: a ValueError from it surfaces as the same
+    AiError the real function raises once every attempt is exhausted."""
+    def _gen(*, project, system_prompt, user_prompt, max_tokens=800, parse=None):
+        if parse is None:
+            return raw_text, model
+        try:
+            return parse(raw_text), model
+        except ValueError as exc:
+            raise services.AiError(f"AI is busy right now. ({exc})") from exc
+    return _gen
+
+
+class JsonParsingTests(TestCase):
+    """``_parse_json_object`` — the free models this hits don't always follow
+    a "JSON only" instruction."""
+
+    def test_clean_json(self):
+        out = services._parse_json_object('{"title": "T"}')
+        self.assertEqual(out["title"], "T")
+
+    def test_wrapped_in_markdown_fence_with_preamble(self):
+        raw = 'Sure! Here you go:\n```json\n{"title": "T"}\n```'
+        self.assertEqual(services._parse_json_object(raw)["title"], "T")
+
+    def test_trailing_comma_repaired(self):
+        raw = '{"title": "T", "tags": "a, b",}'
+        self.assertEqual(services._parse_json_object(raw)["title"], "T")
+
+    def test_empty_response_rejected(self):
+        with self.assertRaises(ValueError):
+            services._parse_json_object("   ")
+
+    def test_no_braces_at_all_rejected(self):
+        with self.assertRaises(ValueError):
+            services._parse_json_object("Sorry, I can't help with that.")
+
+    def test_truncated_json_rejected(self):
+        with self.assertRaises(ValueError):
+            services._parse_json_object('{"title": "Truncated mid-str')
+
+
 class ProductCopyTests(TestCase):
     def setUp(self):
         self.project = Project.objects.create(name="Shop", status="active")
@@ -253,23 +323,15 @@ class ProductCopyTests(TestCase):
             "description": "Great mug.\n\nBuy it.", "seo_title": "Blue Mug | Shop",
             "seo_description": "Buy a blue mug.", "tags": "mug, blue, ceramic",
         })
-        with mock.patch("apps.ai.services.generate", return_value=(body, "m1")):
+        with mock.patch("apps.ai.services.generate", side_effect=_fake_generate_returning(body)):
             out = services.generate_product_copy(self.project, "blue ceramic mug")
         self.assertEqual(out["title"], "Blue Mug")
         self.assertEqual(out["model"], "m1")
         self.assertIn("mug", out["tags"])
 
-    def test_parses_json_wrapped_in_markdown_fence(self):
-        wrapped = "Sure! Here you go:\n```json\n" + json.dumps({
-            "title": "T", "short_description": "S", "description": "D",
-            "seo_title": "ST", "seo_description": "SD", "tags": "a, b",
-        }) + "\n```"
-        with mock.patch("apps.ai.services.generate", return_value=(wrapped, "m1")):
-            out = services.generate_product_copy(self.project, "brief")
-        self.assertEqual(out["title"], "T")
-
     def test_unparseable_response_raises_ai_error(self):
-        with mock.patch("apps.ai.services.generate", return_value=("not json at all", "m1")):
+        with mock.patch("apps.ai.services.generate",
+                        side_effect=_fake_generate_returning("not json at all")):
             with self.assertRaises(services.AiError):
                 services.generate_product_copy(self.project, "brief")
 
@@ -278,9 +340,20 @@ class ProductCopyTests(TestCase):
             "title": "x" * 200, "short_description": "y" * 300, "description": "z" * 3000,
             "seo_title": "a" * 100, "seo_description": "b" * 300, "tags": "c" * 300,
         })
-        with mock.patch("apps.ai.services.generate", return_value=(body, "m1")):
+        with mock.patch("apps.ai.services.generate", side_effect=_fake_generate_returning(body)):
             out = services.generate_product_copy(self.project, "brief")
         self.assertEqual(len(out["title"]), 70)
         self.assertEqual(len(out["short_description"]), 160)
         self.assertEqual(len(out["seo_title"]), 60)
         self.assertEqual(len(out["seo_description"]), 160)
+
+    def test_calls_generate_with_a_bumped_token_budget(self):
+        captured = {}
+
+        def _gen(*, project, system_prompt, user_prompt, max_tokens=800, parse=None):
+            captured["max_tokens"] = max_tokens
+            return parse(json.dumps({"title": "T"})), "m1"
+
+        with mock.patch("apps.ai.services.generate", side_effect=_gen):
+            services.generate_product_copy(self.project, "brief")
+        self.assertGreater(captured["max_tokens"], 800)
