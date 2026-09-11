@@ -21,10 +21,18 @@ _MODELS_CACHE_TTL = 3600  # OpenRouter's free catalog changes slowly; refetch ho
 # free that doesn't match one of these still gets used, just ranked below by
 # context length.
 _PREFERRED = [
-    "llama-3.3-70b", "llama-3.1-70b", "deepseek-chat", "deepseek-r1",
+    "llama-3.3-70b", "llama-3.1-70b", "deepseek-chat",
     "qwen-2.5-72b", "qwen-2.5-coder-32b", "gemini-2.0-flash", "gemini-flash",
     "mistral-small", "phi-4", "gemma-2-27b", "gemma-2-9b",
 ]
+
+# "Reasoning" models spend most (sometimes all) of max_tokens on an internal
+# chain-of-thought before ever emitting the actual answer, so for a low-
+# latency "return one JSON object" task they routinely come back with no
+# usable content at all — not a fit for this feature, excluded outright
+# rather than just ranked lower.
+_EXCLUDE = ["-r1", "r1-", "r1:", "qwq", "-o1", "o1-", "-o3", "o3-",
+           "thinking", "reasoning", "deepseek-r1"]
 
 # Used only if OpenRouter's catalog is unreachable — a small set of models
 # that have reliably had a free tier.
@@ -50,8 +58,14 @@ def _is_free(model):
         return False
 
 
+def _is_excluded(model_id):
+    low = model_id.lower()
+    return any(bad in low for bad in _EXCLUDE)
+
+
 def list_free_models():
-    """Every ``:free`` model OpenRouter currently lists, cached an hour."""
+    """Every ``:free`` model OpenRouter currently lists (minus reasoning
+    models, see ``_EXCLUDE``), cached an hour."""
     cached = cache.get(_MODELS_CACHE_KEY)
     if cached is not None:
         return cached
@@ -62,7 +76,7 @@ def list_free_models():
     except (urllib.error.URLError, TimeoutError, ValueError):
         logger.warning("openrouter model catalog unreachable", exc_info=True)
         return []
-    free = [m for m in data.get("data", []) if _is_free(m)]
+    free = [m for m in data.get("data", []) if _is_free(m) and not _is_excluded(m["id"])]
     cache.set(_MODELS_CACHE_KEY, free, _MODELS_CACHE_TTL)
     return free
 
