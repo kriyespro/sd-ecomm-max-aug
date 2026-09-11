@@ -226,6 +226,26 @@ class RotationTests(TestCase):
         _key(self.project, api_key="sk-or-v1-off0000000000000", is_active=False)
         self.assertEqual(services._rotation_order(self.project), [])
 
+    def test_key_is_claimed_before_the_network_call_not_just_on_success(self):
+        """Regression: a key must be marked "just used" the moment it's tried,
+        not only once its call succeeds — otherwise two near-simultaneous
+        requests both read the same "least recently used" key and both hammer
+        it for the whole (up to 7s) call duration, defeating rotation. Before
+        this fix, a failing key's last_used_at was never touched at all."""
+        key = _key(self.project, api_key="sk-or-v1-solo0000000000000")
+        self.assertIsNone(key.last_used_at)
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800, timeout=25):
+            raise openrouter.OpenRouterError("boom")
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models", return_value=["m1"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat):
+            with self.assertRaises(services.AiError):
+                services.generate(project=self.project, system_prompt="s", user_prompt="u")
+
+        key.refresh_from_db()
+        self.assertIsNotNone(key.last_used_at)
+
     def test_falls_through_to_next_key_on_failure(self):
         bad = _key(self.project, api_key="sk-or-v1-bad0000000000000")
         good = _key(self.project, api_key="sk-or-v1-good000000000000",

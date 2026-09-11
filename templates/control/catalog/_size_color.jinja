@@ -11,6 +11,17 @@
     Leave a price blank to use the product price.
   </p>
 
+  <label class="mt-4 flex items-center gap-2 text-sm text-slate-700">
+    <input type="checkbox" name="track_variant_stock" value="on" {{ "checked" if track_variant_stock }}
+           class="rounded border-slate-300">
+    Enforce stock limits for these variants
+  </label>
+  <p class="mt-1 text-xs text-slate-400">
+    Off by default — the Stock column below is just a note to yourself and
+    shoppers can always buy. Turn this on to actually block checkout once a
+    size/colour sells out.
+  </p>
+
   <div class="mt-4 grid gap-4 sm:grid-cols-2">
     <div>
       <label class="block text-sm font-medium text-slate-700">Sizes</label>

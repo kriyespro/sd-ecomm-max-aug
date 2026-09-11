@@ -216,7 +216,11 @@ class MetaConnectStartView(_MetaOAuthBase, View):
             messages.error(request, "“Connect with Meta” isn't available on this platform.")
             return redirect("control:tracking")
         state = meta_oauth.make_state()
-        request.session[_OAUTH_STATE_KEY] = state
+        # Bind the state to the store that started the flow — if the active
+        # project changes before the callback returns (switched store in
+        # another tab, session reused), the fetched pixel/token must not get
+        # attached to whatever store happens to be active by then.
+        request.session[_OAUTH_STATE_KEY] = {"state": state, "project_id": self.active_project.pk}
         return redirect(meta_oauth.auth_url(self._redirect_uri(), state))
 
 
@@ -226,7 +230,12 @@ class MetaConnectCallbackView(_MetaOAuthBase, View):
         if request.GET.get("error"):
             messages.error(request, "Meta connection was cancelled.")
             return redirect("control:tracking")
-        if not saved or saved != request.GET.get("state"):
+        if (
+            not saved
+            or not isinstance(saved, dict)
+            or saved.get("state") != request.GET.get("state")
+            or saved.get("project_id") != self.active_project.pk
+        ):
             messages.error(request, "Meta connection expired — try again.")
             return redirect("control:tracking")
         code = request.GET.get("code", "")

@@ -133,6 +133,11 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800, parse=None)
             if attempts >= _MAX_ATTEMPTS or time.monotonic() - started > _TIME_BUDGET_SECONDS:
                 break
             attempts += 1
+            # Claim this key *before* the (slow) network call, not just on
+            # success — otherwise two near-simultaneous requests both read the
+            # same least-recently-used snapshot and both hammer the same key
+            # for the whole call duration, defeating the rotation's purpose.
+            AiProviderKey.objects.filter(pk=key.pk).update(last_used_at=timezone.now())
             try:
                 text = openrouter.chat(api_key=key.api_key, model=model, messages=messages,
                                        max_tokens=max_tokens, timeout=_CALL_TIMEOUT_SECONDS)
