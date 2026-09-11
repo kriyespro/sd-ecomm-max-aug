@@ -128,6 +128,9 @@ class KeyManagementTests(TestCase):
 
 class RotationTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
         self.project = Project.objects.create(name="Shop", status="active")
 
     def test_no_keys_raises(self):
@@ -194,7 +197,45 @@ class RotationTests(TestCase):
              mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat):
             with self.assertRaises(services.AiError):
                 services.generate(project=self.project, system_prompt="s", user_prompt="u")
-        self.assertLessEqual(len(calls), 6)
+        self.assertLessEqual(len(calls), services._MAX_ATTEMPTS)
+
+    def test_model_level_error_moves_on_without_trying_every_key(self):
+        """Regression: a free model that 403s ("agentic harness only" etc.) is
+        a property of the model, not the key — must not burn every key on it."""
+        for i in range(5):
+            _key(self.project, api_key=f"sk-or-v1-mk{i:04d}aaaaaaaaaa")
+        calls = []
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800):
+            calls.append((api_key, model))
+            if model == "bad-model":
+                raise openrouter.OpenRouterError("harness only", status=403)
+            return "ok"
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models",
+                        return_value=["bad-model", "good-model"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat):
+            text, model = services.generate(project=self.project, system_prompt="s", user_prompt="u")
+        self.assertEqual(model, "good-model")
+        bad_calls = [c for c in calls if c[1] == "bad-model"]
+        self.assertEqual(len(bad_calls), 1)  # tried once, then skipped for every other key
+
+    def test_dead_model_skipped_entirely_on_next_call(self):
+        _key(self.project)
+
+        def fake_chat(*, api_key, model, messages, max_tokens=800):
+            if model == "bad-model":
+                raise openrouter.OpenRouterError("nope", status=403)
+            return "ok"
+
+        with mock.patch("apps.ai.openrouter.ranked_free_models",
+                        return_value=["bad-model", "good-model"]), \
+             mock.patch("apps.ai.openrouter.chat", side_effect=fake_chat) as chat:
+            services.generate(project=self.project, system_prompt="s", user_prompt="u")
+            chat.reset_mock()
+            services.generate(project=self.project, system_prompt="s", user_prompt="u")
+        models_tried = {c.kwargs["model"] for c in chat.call_args_list}
+        self.assertNotIn("bad-model", models_tried)
 
 
 class ProductCopyTests(TestCase):

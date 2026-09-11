@@ -6,6 +6,7 @@ or flagged for hammering the free tier.
 import json
 import logging
 
+from django.core.cache import cache
 from django.db.models import F
 from django.utils import timezone
 
@@ -16,8 +17,20 @@ logger = logging.getLogger(__name__)
 
 # Bounded so a "Generate" click never hangs: at most this many (key, model)
 # attempts before giving up and telling the merchant to try again.
-_MAX_ATTEMPTS = 6
-_MODELS_PER_KEY = 2
+_MAX_ATTEMPTS = 10
+_MODEL_POOL = 5
+
+# Some "$0-priced" free models on OpenRouter still 400/403/404 every plain
+# chat-completions call (e.g. an agentic-harness-only or deprecated model) —
+# that's a property of the MODEL, not of whichever key hit it. Once seen,
+# skip it platform-wide for a while instead of burning every store's attempt
+# budget on the same dead model.
+_DEAD_MODEL_TTL = 1800
+_MODEL_LEVEL_STATUSES = {400, 403, 404}
+
+
+def _dead_model_key(model):
+    return f"ai:openrouter:dead_model:{model}"
 
 
 class AiError(Exception):
@@ -75,21 +88,26 @@ def _rotation_order(project):
 
 
 def generate(*, project, system_prompt, user_prompt, max_tokens=800):
-    """Returns ``(text, model_id)``. Tries the least-recently-used key against
-    the top free models, then the next key, until one works or the attempt
-    budget runs out."""
+    """Returns ``(text, model_id)``. Model is the outer loop, key the inner one:
+    a model-level error (400/403/404 — the model itself rejects plain chat
+    calls) blacklists that model for everyone and moves to the next model
+    instead of wasting every key on it; a key-level error (401/429/5xx) just
+    tries the next key against the same, presumably-fine, model."""
     keys = _rotation_order(project)
     if not keys:
         raise AiError("Add an OpenRouter API key first (Settings → AI).")
 
-    models = openrouter.ranked_free_models()[:_MODELS_PER_KEY] or ["openrouter/auto"]
+    candidates = openrouter.ranked_free_models()[:_MODEL_POOL] or ["openrouter/auto"]
+    models = [m for m in candidates if not cache.get(_dead_model_key(m))] or candidates
     messages = [{"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}]
 
     attempts = 0
     last_error = None
-    for key in keys:
-        for model in models:
+    for model in models:
+        if attempts >= _MAX_ATTEMPTS:
+            break
+        for key in keys:
             if attempts >= _MAX_ATTEMPTS:
                 break
             attempts += 1
@@ -100,13 +118,14 @@ def generate(*, project, system_prompt, user_prompt, max_tokens=800):
                 last_error = exc
                 AiProviderKey.objects.filter(pk=key.pk).update(last_error=str(exc)[:255])
                 logger.info("ai key %s failed on %s: %s", key.pk, model, exc)
+                if exc.status in _MODEL_LEVEL_STATUSES:
+                    cache.set(_dead_model_key(model), True, _DEAD_MODEL_TTL)
+                    break  # this model is broken, not the key — try the next model
                 continue
             AiProviderKey.objects.filter(pk=key.pk).update(
                 last_used_at=timezone.now(), last_error="", request_count=F("request_count") + 1,
             )
             return text, model
-        if attempts >= _MAX_ATTEMPTS:
-            break
 
     raise AiError(
         "AI is busy right now — every key hit a snag. Try again in a minute."
