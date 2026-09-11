@@ -493,6 +493,16 @@ class CheckoutView(View):
         # price shipping onto it, then initiate the gateway payment.
         gateway = method_key not in ("cod", "manual")
 
+        shipping_method = None
+        if method_id:
+            shipping_method = (
+                project.shippingmethods.filter(pk=method_id).first()
+                if hasattr(project, "shippingmethods") else None
+            )
+            if shipping_method is None:
+                from apps.shipping.models import ShippingMethod
+                shipping_method = ShippingMethod.objects.filter(project=project, pk=method_id).first()
+
         try:
             order, payment_ctx = checkout_svc.complete_checkout(
                 project=project, cart=cart,
@@ -502,21 +512,11 @@ class CheckoutView(View):
                 coupon_code=coupon or None,
                 payment_method=None if gateway else method_key,
                 user=request.user if request.user.is_authenticated else None,
+                shipping_method=shipping_method,
             )
         except checkout_svc.CheckoutError as exc:
             messages.error(request, str(exc))
             return redirect("shopfront:checkout")
-
-        if method_id:
-            method = project.shippingmethods.filter(pk=method_id).first() if hasattr(project, "shippingmethods") else None
-            if method is None:
-                from apps.shipping.models import ShippingMethod
-                method = ShippingMethod.objects.filter(project=project, pk=method_id).first()
-            if method is not None:
-                try:
-                    ship_svc.set_order_shipping(order=order, method=method)
-                except ship_svc.ShippingError:
-                    pass
 
         placed = request.session.get("shopfront_orders", [])
         request.session["shopfront_orders"] = list({*placed, order.number})

@@ -66,9 +66,16 @@ def validate_checkout(*, cart, email, shipping_address, billing_address=None):
 def complete_checkout(
     *, project, cart, email, shipping_address, billing_address=None,
     phone="", customer_note="", warehouse=None, actor=None, user=None,
-    payment_method=None, coupon_code=None,
+    payment_method=None, coupon_code=None, shipping_method=None,
 ):
     """Create the order. If ``payment_method`` is given, also start payment.
+
+    ``shipping_method`` (an ``apps.shipping.models.ShippingMethod``), when
+    given, is priced onto the order *before* the coupon is applied and before
+    any payment is recorded — a ``FREE_SHIPPING`` coupon quotes its discount
+    against ``order.shipping_total``, and a COD/offline payment snapshots
+    ``order.grand_total``, so both must see the real shipping cost, not the
+    ``0`` the order starts with.
 
     Returns ``(order, payment_context)``. ``payment_context`` is ``None`` for a
     plain order, a provider client-params dict for a gateway, or ``{}`` for COD.
@@ -97,6 +104,15 @@ def complete_checkout(
     # Link/refresh the customer record (imported here to keep orders decoupled).
     from apps.customers import services as customers
     customers.attach_customer(order, actor=actor)
+
+    if shipping_method is not None:
+        from apps.shipping import services as shipping
+
+        order.refresh_from_db()
+        try:
+            shipping.set_order_shipping(order=order, method=shipping_method, actor=actor)
+        except shipping.ShippingError:
+            pass
 
     if coupon_code:
         from apps.coupons import services as coupons

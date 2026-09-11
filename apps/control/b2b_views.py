@@ -14,10 +14,10 @@ from apps.b2b.models import B2BListing, B2BOrderLedger
 from apps.catalog.models import Product, ProductStatus
 
 from .forms import B2BImportForm, B2BMarkPaidForm, B2BShipForm
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 
-class _B2BBase(StoreRoleRequiredMixin, ActiveProjectMixin):
+class _B2BBase(StoreDataAccessMixin, StoreRoleRequiredMixin, ActiveProjectMixin):
     required_store_roles = frozenset({StoreRole.OWNER})
     role_denied_message = "Only the store owner can manage B2B / wholesale."
 

@@ -404,7 +404,11 @@ class ImpersonateView(PlatformAdminRequiredMixin, View):
 
     def post(self, request, pk, *args, **kwargs):
         target = get_object_or_404(User, pk=pk)
-        services.start_impersonation(request=request, target=target)
+        try:
+            services.start_impersonation(request=request, target=target)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+            return redirect("control:user_detail", pk=pk)
         return redirect("control:impersonate_active")
 
 

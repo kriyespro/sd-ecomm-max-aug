@@ -472,6 +472,17 @@ class UserSetPasswordTests(TestCase):
         self.assertEqual(resp.status_code, 403)
 
 
+class ImpersonateSelfTests(TestCase):
+    def test_clicking_impersonate_on_your_own_row_shows_an_error_not_a_500(self):
+        admin = get_user_model().objects.create_superuser(
+            username="root5", email="root5@t.test", password="pw"
+        )
+        self.client.force_login(admin)
+        resp = self.client.post(f"/admin/users/{admin.pk}/impersonate/", follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Not allowed to impersonate this user.")
+
+
 class UserDeleteTests(TestCase):
     def setUp(self):
         User = get_user_model()
