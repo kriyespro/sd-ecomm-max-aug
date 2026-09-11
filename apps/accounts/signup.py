@@ -84,15 +84,18 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
 
         logging.getLogger(__name__).exception("subdomain assignment failed")
 
-    # The billing post_save signal already opened a standard-length trial with
-    # no manager — shorten it to the self-signup length, pin the chosen plan.
+    # The billing post_save signal should already have opened a
+    # standard-length trial with no manager — but it swallows its own errors
+    # (e.g. no active/public plan at that instant), so the row may not exist.
+    # ensure_subscription() is idempotent — safe to call unconditionally,
+    # never assume the signal's row is there — then shorten to the
+    # self-signup length and pin the chosen plan.
     cfg = BillingSettings.load()
-    sub = getattr(project, "subscription", None)
-    if sub is not None:
-        if plan is not None and sub.plan_id != plan.pk:
-            sub.plan = plan
-            sub.save(update_fields=["plan", "updated_at"])
-        billing_svc.reset_trial(sub, cfg.self_signup_trial_days)
+    sub = billing_svc.ensure_subscription(project, plan=plan, trial_days=cfg.self_signup_trial_days)
+    if plan is not None and sub.plan_id != plan.pk:
+        sub.plan = plan
+        sub.save(update_fields=["plan", "updated_at"])
+    billing_svc.reset_trial(sub, cfg.self_signup_trial_days)
 
     record_audit(
         actor=user, project=project, action=AuditLog.Action.CREATE, target=project,

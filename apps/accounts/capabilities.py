@@ -54,7 +54,7 @@ ROLE_ACCESS = {
         "summary": "Day-to-day store operations.",
         "can": [
             "Products, variants, collections and inventory",
-            "Orders, fulfilment and refunds",
+            "Orders and fulfilment",
             "Customers and customer groups",
             "Coupons and discounts",
             "Pages, banners and navigation (CMS)",
@@ -64,6 +64,8 @@ ROLE_ACCESS = {
             "Configure outbound webhooks",
         ],
         "cannot": [
+            "Issue refunds",
+            "Archive or export orders",
             "Payment provider credentials",
             "Plan & billing",
             "Custom domains",
