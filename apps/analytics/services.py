@@ -142,6 +142,37 @@ def _out_of_stock(project):
     ).count()
 
 
+def today_dashboard(project):
+    """The store owner's landing page: today's numbers + what needs doing right
+    now, on top of the same ``dashboard_summary`` the full Analytics report
+    uses. Cheap — no new tables, just a couple of extra bounded queries."""
+    from apps.inventory import services as inv
+    from apps.orders.models import Order
+
+    summary = dashboard_summary(project)
+
+    needs_action_qs = Order.objects.filter(
+        project=project, is_archived=False,
+        status__in=["confirmed", "processing", "packed"],
+        fulfillment_status__in=["unfulfilled", "partial"],
+    )
+    needs_action_count = needs_action_qs.count()
+    needs_action = list(
+        needs_action_qs.select_related("customer").order_by("created_at")[:8]
+    )
+
+    recent_orders = list(
+        Order.objects.filter(project=project, is_archived=False)
+        .select_related("customer").order_by("-created_at")[:6]
+    )
+
+    summary["needs_action"] = needs_action
+    summary["needs_action_count"] = needs_action_count
+    summary["recent_orders"] = recent_orders
+    summary["low_stock_items"] = inv.low_stock_items(project)[:6]
+    return summary
+
+
 def _revenue_series(project, *, days=30):
     from apps.orders.models import Order
 
