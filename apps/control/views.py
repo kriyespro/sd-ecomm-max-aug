@@ -13,7 +13,7 @@ from django.urls import reverse_lazy
 from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.base import TemplateResponseMixin
 
-from apps.accounts.permissions import is_platform_staff
+from apps.accounts.permissions import dgc_without_membership, is_platform_staff
 from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
@@ -25,26 +25,59 @@ User = get_user_model()
 
 
 class DashboardView(ControlAccessMixin, TemplateView):
-    template_name = "control/dashboard.jinja"
+    """``/admin/`` — a store's "Today" numbers when one is active (owner,
+    manager, staff, or a platform admin looking at that store); the
+    platform-wide overview otherwise (a pure DGC, or platform staff with
+    nothing selected). A DGC never sees a store's own revenue/order numbers
+    here — same rule as the Orders/Analytics screens.
+    """
 
     def get(self, request, *args, **kwargs):
-        # This dashboard is the platform overview (global user / project counts).
-        # A store user must never land here — with no store in context the
-        # sidebar is empty, and the numbers aren't theirs. Route them into a
-        # store instead.
-        if not is_platform_staff(request.user):
-            if get_active_project(request) is not None:
-                return redirect("control:order_list")
-            if projects_for_user(request.user).exists():
-                messages.info(request, "Choose a store to manage.")
-                return redirect("control:project_picker")
+        project = get_active_project(request)
+        if project is not None and not dgc_without_membership(request.user, project):
+            gate = self._onboarding_redirect(request, project)
+            if gate is not None:
+                return gate
+            self.template_name = "control/store_dashboard.jinja"
+            self.active_project = project
+            return self.render_to_response(self.get_context_data())
+
+        self.template_name = "control/dashboard.jinja"
+        if is_platform_staff(request.user):
+            return super().get(request, *args, **kwargs)
+        if projects_for_user(request.user).exists():
+            messages.info(request, "Choose a store to manage.")
+            return redirect("control:project_picker")
         return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        if getattr(self, "active_project", None) is not None:
+            from apps.analytics.services import today_dashboard
+
+            ctx["active_project"] = self.active_project
+            ctx["today"] = today_dashboard(self.active_project)
+            return ctx
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)
         return ctx
+
+    @staticmethod
+    def _onboarding_redirect(request, project):
+        """Same rule ``ActiveProjectMixin`` applies everywhere else: an owner
+        or manager who hasn't finished the setup wizard is sent there instead
+        of the store's own numbers. Platform staff and plain store staff pass
+        straight through."""
+        from apps.accounts.permissions import OWNER_MANAGER, has_store_role
+        from apps.projects.verticals import is_onboarded
+
+        user = request.user
+        if is_platform_staff(user) or is_onboarded(project):
+            return None
+        if not has_store_role(user, project, OWNER_MANAGER):
+            return None
+        messages.info(request, "Finish setting up your store first.")
+        return redirect("control:onboarding")
 
 
 class PlatformBackupCenterView(PlatformAdminRequiredMixin, TemplateView):

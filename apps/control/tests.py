@@ -106,6 +106,91 @@ class DashboardRoutingTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+class TodayDashboardScreenTests(TestCase):
+    """/admin/ shows a store's "Today" numbers once one is active — except for
+    a pure DGC, who keeps seeing the platform-wide overview."""
+
+    def setUp(self):
+        from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
+
+        self.project = Project.objects.create(
+            name="TodayCo", status="active", feature_flags={"onboarded": True}
+        )
+        self.owner = get_user_model().objects.create_user(
+            username="tdo", email="tdo@t.test", password="pw", is_staff=True
+        )
+        Membership.objects.create(user=self.owner, project=self.project, role="owner")
+        self._session_key = ACTIVE_PROJECT_SESSION_KEY
+
+    def _login_with_store(self, user):
+        self.client.force_login(user)
+        s = self.client.session
+        s[self._session_key] = self.project.pk
+        s.save()
+
+    def test_owner_sees_today_numbers(self):
+        self._login_with_store(self.owner)
+        resp = self.client.get("/admin/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Sales today")
+        self.assertContains(resp, "Needs your attention")
+        self.assertContains(resp, "Low stock")
+
+    def test_manager_and_staff_also_see_it(self):
+        for role in ("manager", "staff"):
+            user = get_user_model().objects.create_user(
+                username=f"td-{role}", email=f"td-{role}@t.test", password="pw", is_staff=True
+            )
+            Membership.objects.create(user=user, project=self.project, role=role)
+            self._login_with_store(user)
+            resp = self.client.get("/admin/")
+            self.assertContains(resp, "Sales today")
+
+    def test_dgc_still_sees_platform_overview_not_store_financials(self):
+        from apps.accounts.models import PlatformRole, Profile
+        from apps.billing import services as billing_svc
+
+        billing_svc.ensure_subscription(self.project)
+        dgc = get_user_model().objects.create_user(
+            username="tddgc", email="tddgc@t.test", password="pw", is_staff=True
+        )
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        self.project.subscription.manager = dgc
+        self.project.subscription.save(update_fields=["manager"])
+        dgc = get_user_model().objects.get(pk=dgc.pk)
+
+        self._login_with_store(dgc)
+        resp = self.client.get("/admin/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "Sales today")
+        self.assertNotContains(resp, "Needs your attention")
+
+    def test_owner_not_onboarded_is_sent_to_setup_wizard(self):
+        unfinished = Project.objects.create(name="RawCo", status="active")  # onboarded not set
+        Membership.objects.create(user=self.owner, project=unfinished, role="owner")
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[self._session_key] = unfinished.pk
+        s.save()
+        resp = self.client.get("/admin/")
+        self.assertRedirects(resp, "/admin/start/")
+
+    def test_needs_attention_order_appears_and_links_to_detail(self):
+        from apps.orders.models import Order
+
+        order = Order.objects.create(
+            project=self.project, number="TD-1", email="c@t.test",
+            subtotal=0, discount_total=0, tax_total=0, shipping_total=0,
+            grand_total=250, status="confirmed", payment_status="paid",
+            fulfillment_status="unfulfilled",
+        )
+        self._login_with_store(self.owner)
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "TD-1")
+        self.assertContains(resp, f"/admin/orders/{order.pk}/")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
 class ChromeThemeByRoleTests(TestCase):
     """Mission Control chrome colour follows the viewer's highest role:
     platform=indigo, DGC=orange, store owner=emerald, store manager=rose."""
