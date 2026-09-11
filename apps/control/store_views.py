@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import DetailView, FormView, ListView, View
 
 from apps.accounts.models import PlatformRole, StoreRole
@@ -337,6 +338,11 @@ class StoreManagerAssignView(_StoreScope, View):
                 messages.success(request, f"Manager updated for {store.name}.")
         else:
             messages.error(request, "Pick a valid DGC account.")
+        next_url = request.POST.get("next")
+        if next_url and url_has_allowed_host_and_scheme(
+            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+        ):
+            return redirect(next_url)
         return redirect("control:store_detail", pk=pk)
 
 

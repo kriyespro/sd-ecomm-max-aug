@@ -13,6 +13,7 @@ from django.urls import reverse_lazy
 from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.base import TemplateResponseMixin
 
+from apps.accounts.models import PlatformRole
 from apps.accounts.permissions import dgc_without_membership, is_platform_staff
 from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
@@ -305,6 +306,9 @@ class UserDetailView(PlatformAdminRequiredMixin, DetailView):
         ctx["role_form"] = UserRoleChangeForm(
             initial={"platform_role": self.object.profile.platform_role}
         )
+        ctx["dgc_choices"] = User.objects.filter(
+            profile__platform_role=PlatformRole.MANAGER, is_active=True
+        ).order_by("email")
         return ctx
 
 
