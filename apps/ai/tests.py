@@ -58,6 +58,29 @@ class OpenRouterCatalogTests(TestCase):
             ranked = openrouter.ranked_free_models()
         self.assertEqual(ranked[0], "meta-llama/llama-3.3-70b-instruct:free")
 
+    def test_reasoning_models_excluded(self):
+        """Regression: deepseek-r1 (and other chain-of-thought models) spend
+        max_tokens on internal reasoning and often return no usable content
+        at all for a "one JSON object, nothing else" task."""
+        catalog = {"data": [
+            {"id": "deepseek/deepseek-r1:free", "pricing": {"prompt": "0", "completion": "0"},
+             "context_length": 64000},
+            {"id": "qwen/qwq-32b:free", "pricing": {"prompt": "0", "completion": "0"},
+             "context_length": 32000},
+            {"id": "meta-llama/llama-3.3-70b-instruct:free",
+             "pricing": {"prompt": "0", "completion": "0"}, "context_length": 128000},
+        ]}
+        from django.core.cache import cache
+
+        cache.clear()
+        with mock.patch("urllib.request.urlopen", lambda *a, **k: _Resp(catalog)):
+            free = openrouter.list_free_models()
+            ranked = openrouter.ranked_free_models()
+        ids = [m["id"] for m in free]
+        self.assertNotIn("deepseek/deepseek-r1:free", ids)
+        self.assertNotIn("qwen/qwq-32b:free", ids)
+        self.assertEqual(ranked, ["meta-llama/llama-3.3-70b-instruct:free"])
+
     def test_falls_back_to_hardcoded_list_when_catalog_unreachable(self):
         import urllib.error
 
