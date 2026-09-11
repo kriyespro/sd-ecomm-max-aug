@@ -79,6 +79,26 @@ class SelfSignupServiceTests(TestCase):
         )
         self.assertEqual(Subscription.objects.get(project__name="C Shop").plan_id, plan.pk)
 
+    def test_gets_a_short_trial_even_if_the_post_save_signal_failed(self):
+        """The post_save signal swallows its own errors (e.g. no active/public
+        plan at that instant) and leaves no Subscription at all. self_signup
+        must not just skip billing setup in that case, nor fall back to the
+        longer default trial — it must still create one at the documented
+        7-day self-signup length."""
+        plan = Plan.objects.filter(is_active=True, is_public=True).order_by("sort_order").first()
+        Plan.objects.exclude(pk=plan.pk).update(is_active=False)
+        plan.is_active = False
+        plan.save(update_fields=["is_active"])  # signal's own lookup now finds nothing
+
+        project, _, _ = self_signup(
+            name="", email="e@shop.test", store_name="E Shop", phone="9",
+            plan=plan, oauth=True,
+        )
+        sub = project.subscription
+        self.assertEqual(sub.plan_id, plan.pk)
+        days = (sub.trial_end - sub.current_period_start).days
+        self.assertEqual(days, BillingSettings.load().self_signup_trial_days)
+
     def test_existing_usable_account_rejected(self):
         User.objects.create_user("dup", email="dup@shop.test", password="x")
         from django.core.exceptions import ValidationError

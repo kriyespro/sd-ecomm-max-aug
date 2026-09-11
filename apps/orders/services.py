@@ -8,6 +8,8 @@ Rules enforced here:
 Status transitions follow the machine in project.md section 10.
 """
 
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
@@ -197,6 +199,37 @@ def place_order(
         lambda: emit(Events.ORDER_CREATED, project=project, payload=order_event_payload(order), instance=order)
     )
     return order
+
+
+def expire_stale_pending_orders(*, older_than_hours=48):
+    """Cancel PENDING orders whose gateway payment never completed (the
+    shopper abandoned the checkout modal, the browser tab closed, the gateway
+    call failed) — releasing the stock they reserved, which otherwise stays
+    locked forever since nothing else ever moves these orders out of PENDING.
+
+    Only touches orders with a real, non-COD/manual payment attempt — a COD
+    order legitimately sits PENDING until fulfilled and must never be
+    auto-cancelled just for being old.
+    """
+    cutoff = timezone.now() - timedelta(hours=older_than_hours)
+    stale = (
+        Order.objects.filter(status=OrderStatus.PENDING, created_at__lt=cutoff)
+        .exclude(payment_status=PaymentStatus.PAID)
+        .filter(payments__isnull=False)
+        .exclude(payments__provider__in=("cod", "manual"))
+        .distinct()
+    )
+    cancelled = []
+    for order in stale:
+        try:
+            transition_order(
+                order=order, to_status=OrderStatus.CANCELLED,
+                note="Auto-cancelled: payment was never completed.",
+            )
+        except OrderError:
+            continue
+        cancelled.append(order)
+    return cancelled
 
 
 @transaction.atomic

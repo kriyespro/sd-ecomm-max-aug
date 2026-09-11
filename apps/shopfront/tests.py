@@ -181,6 +181,137 @@ class StorefrontCartCsrfBypassTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+class GuestCartMergeTests(TestCase):
+    """Items added to an anonymous session cart must survive signing in or
+    registering — the view looks the cart up by ``user`` afterward, never
+    ``session_key`` again, so without an explicit merge they silently vanish."""
+
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="MergeShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="merge.shop.test", is_verified=True)
+        self.product = Product.objects.create(
+            project=self.project, title="Tote", price=Decimal("500"), status="active",
+        )
+
+    def _add_as_guest(self):
+        return self.client.post(
+            "/cart/add/", {"product": self.product.slug, "quantity": "2"},
+            HTTP_HOST="merge.shop.test",
+        )
+
+    def test_login_merges_the_anonymous_cart(self):
+        User = get_user_model()
+        user = User.objects.create_user(username="s2@buy.test", email="s2@buy.test", password="pw")
+        self._add_as_guest()
+
+        resp = self.client.post(
+            "/account/login/", {"email": "s2@buy.test", "password": "pw"},
+            HTTP_HOST="merge.shop.test",
+        )
+        self.assertEqual(resp.status_code, 302)
+
+        cart = Cart.objects.get(project=self.project, user=user, is_active=True)
+        self.assertEqual(cart.items.count(), 1)
+        self.assertEqual(cart.items.first().quantity, 2)
+
+    def test_login_merges_into_an_existing_account_cart(self):
+        from apps.cart.services import get_or_create_cart
+
+        User = get_user_model()
+        user = User.objects.create_user(username="s3@buy.test", email="s3@buy.test", password="pw")
+        existing_cart = get_or_create_cart(project=self.project, user=user)
+        CartItem.objects.create(
+            cart=existing_cart, product=self.product, quantity=1,
+            unit_price=self.product.price,
+        )
+        self._add_as_guest()
+
+        self.client.post(
+            "/account/login/", {"email": "s3@buy.test", "password": "pw"},
+            HTTP_HOST="merge.shop.test",
+        )
+        existing_cart.refresh_from_db()
+        self.assertEqual(existing_cart.items.get().quantity, 3)
+
+    def test_register_merges_the_anonymous_cart(self):
+        self._add_as_guest()
+        resp = self.client.post(
+            "/account/register/",
+            {"email": "new@buy.test", "password": "Str0ngPassw0rd!"},
+            HTTP_HOST="merge.shop.test",
+        )
+        self.assertEqual(resp.status_code, 302)
+        user = get_user_model().objects.get(email="new@buy.test")
+        cart = Cart.objects.get(project=self.project, user=user, is_active=True)
+        self.assertEqual(cart.items.get().quantity, 2)
+
+
+class OrderPayRetryTests(TestCase):
+    """The checkout flow tells a shopper whose gateway payment failed "you can
+    pay for it from the order page" — that page must actually offer a way to
+    do that, not just a static receipt."""
+
+    def setUp(self):
+        from apps.orders.models import Order
+        from apps.payments.models import Payment, PaymentProviderConfig
+
+        self.project = Project.objects.create(name="RetryShop", status="active", currency="INR")
+        from apps.projects.models import Domain
+        Domain.objects.create(project=self.project, host="retry.shop.test", is_verified=True)
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True, is_test_mode=True,
+            credentials={"key_id": "rzp_test_k", "key_secret": "sec"},
+        )
+        self.order = Order.objects.create(
+            project=self.project, number="RETRY-1", email="x@t.test",
+            status="pending", payment_status="pending",
+            subtotal=Decimal("500"), grand_total=Decimal("500"),
+        )
+        Payment.objects.create(
+            project=self.project, order=self.order, provider="razorpay",
+            amount=Decimal("500"), currency="INR", status="failed",
+        )
+        session = self.client.session
+        session["shopfront_orders"] = [self.order.number]
+        session.save()
+
+    def test_retry_opens_a_new_gateway_attempt(self):
+        resp = self.client.post(
+            f"/order/{self.order.number}/pay/", HTTP_HOST="retry.shop.test",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Completing your payment")
+
+    def test_cod_order_cannot_be_retried(self):
+        from apps.payments.models import Payment
+
+        self.order.payments.all().delete()
+        Payment.objects.create(
+            project=self.project, order=self.order, provider="cod",
+            amount=Decimal("500"), currency="INR",
+        )
+        resp = self.client.post(
+            f"/order/{self.order.number}/pay/", HTTP_HOST="retry.shop.test", follow=True,
+        )
+        self.assertContains(resp, "can no longer be paid online")
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, "pending")
+
+    def test_already_paid_order_cannot_be_retried(self):
+        self.order.payment_status = "paid"
+        self.order.save(update_fields=["payment_status"])
+        resp = self.client.post(
+            f"/order/{self.order.number}/pay/", HTTP_HOST="retry.shop.test", follow=True,
+        )
+        self.assertContains(resp, "can no longer be paid online")
+
+    def test_order_page_shows_retry_button_when_eligible(self):
+        resp = self.client.get(f"/order/{self.order.number}/", HTTP_HOST="retry.shop.test")
+        self.assertContains(resp, "Retry payment")
+
+
 class CheckoutRazorpayTests(TestCase):
     def setUp(self):
         from apps.projects.models import Domain

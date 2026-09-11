@@ -589,17 +589,25 @@ class CouponPreviewView(View):
         return render(request, "shopfront/partials/_checkout_summary.jinja", ctx)
 
 
+def _order_access_allowed(request, project, number):
+    allowed = number in request.session.get("shopfront_orders", [])
+    if request.user.is_authenticated:
+        allowed = allowed or Order.objects.filter(
+            project=project, number=number, email__iexact=request.user.email
+        ).exists()
+    return allowed
+
+
 class OrderView(View):
     def get(self, request, number):
         project = current_project(request)
-        allowed = number in request.session.get("shopfront_orders", [])
-        if request.user.is_authenticated:
-            allowed = allowed or Order.objects.filter(
-                project=project, number=number, email__iexact=request.user.email
-            ).exists()
-        if not allowed:
+        if not _order_access_allowed(request, project, number):
             raise Http404
         order = get_object_or_404(Order.objects.prefetch_related("items"), project=project, number=number)
+        order.can_retry_payment = (
+            order.status == "pending" and order.payment_status != "paid"
+            and order.payments.exclude(provider__in=("cod", "manual")).exists()
+        )
         request._tracking = ("Purchase", {
             "value": float(order.grand_total or 0),
             "currency": order.currency,
@@ -609,6 +617,50 @@ class OrderView(View):
             "order_id": order.number,
         }, order.number)
         return render(request, "shopfront/order.jinja", base_context(request, project, order=order))
+
+
+class OrderPayRetryView(View):
+    """A gateway attempt failed (or the shopper closed the checkout modal)
+    right after ``place_order`` created the order — the checkout flow's own
+    error message says "you can pay for it from the order page", so that page
+    needs an actual way to do that instead of just a static receipt."""
+
+    def post(self, request, number):
+        project = current_project(request)
+        if not _order_access_allowed(request, project, number):
+            raise Http404
+        order = get_object_or_404(Order, project=project, number=number)
+
+        gateway_keys = [
+            p["key"] for p in _checkout_payment_providers(project)
+            if p["key"] not in ("cod", "manual")
+        ]
+        can_retry = (
+            order.status == "pending" and order.payment_status != "paid"
+            and order.payments.exclude(provider__in=("cod", "manual")).exists()
+        )
+        if not can_retry or not gateway_keys:
+            messages.error(request, "This order can no longer be paid online.")
+            return redirect("shopfront:order", number=number)
+
+        from apps.payments import services as payments
+
+        try:
+            payment, client_params = payments.initiate_payment(
+                order=order, provider_key=gateway_keys[0],
+                actor=request.user if request.user.is_authenticated else None,
+            )
+        except payments.PaymentError as exc:
+            messages.error(request, str(exc))
+            return redirect("shopfront:order", number=number)
+
+        ctx = base_context(request, project)
+        ctx.update(
+            order=order, pay=client_params, payment_id=payment.pk,
+            order_url=reverse("shopfront:order", kwargs={"number": order.number}),
+            verify_url=reverse("payments:verify"),
+        )
+        return render(request, "shopfront/checkout_pay.jinja", ctx)
 
 
 # --- account ---------------------------------------------------
@@ -645,7 +697,11 @@ class LoginView(View):
             messages.error(request, "Invalid email or password.")
         else:
             login_ratelimit.clear(request, email)
+            session_key = request.session.session_key
             login(request, user)
+            cart_svc.merge_session_cart_into_user(
+                project=current_project(request), user=user, session_key=session_key,
+            )
             messages.success(request, "Signed in.")
         return redirect(request.POST.get("next") or "shopfront:account")
 
@@ -685,7 +741,9 @@ class RegisterView(View):
             last_name=request.POST.get("last_name", "").strip(),
         )
         customers_svc.get_or_create_customer(project=project, email=email, user=user)
+        session_key = request.session.session_key
         login(request, user)
+        cart_svc.merge_session_cart_into_user(project=project, user=user, session_key=session_key)
         messages.success(request, "Account created.")
         return redirect("shopfront:account")
 

@@ -107,6 +107,23 @@ class ImporterCoreTests(TestCase):
         self.assertEqual(result.images_attached, 1)
         self.assertEqual(result.missing_images, {"missing.jpg"})
 
+    def test_reimporting_the_same_file_does_not_duplicate_images(self):
+        store_upload(
+            project=self.project,
+            upload=SimpleUploadedFile("hero2.png", _png_bytes(), content_type="image/png"),
+        )
+        f = _csv({"title": "Repeat", "sku": "P-3", "price": "9", "images": "hero2.png"})
+        importer.run_import(self.project, importer.read_table(f, "p3.csv"))
+        result2 = importer.run_import(
+            self.project, importer.read_table(_csv(
+                {"title": "Repeat Fixed", "sku": "P-3", "price": "9", "images": "hero2.png"}
+            ), "p3b.csv"),
+        )
+
+        p = Product.objects.get(sku="P-3")
+        self.assertEqual(p.images.count(), 1)
+        self.assertEqual(result2.images_attached, 0)
+
     def test_trashed_media_is_not_matched_by_filename(self):
         from django.utils import timezone
 

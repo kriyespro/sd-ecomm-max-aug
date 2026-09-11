@@ -26,6 +26,7 @@ urlpatterns = [
     path("checkout/shipping/", views.ShippingQuoteView.as_view(), name="shipping_quote"),
     path("checkout/coupon/", views.CouponPreviewView.as_view(), name="coupon_preview"),
     path("order/<str:number>/", views.OrderView.as_view(), name="order"),
+    path("order/<str:number>/pay/", views.OrderPayRetryView.as_view(), name="order_pay_retry"),
 
     path("account/", views.AccountView.as_view(), name="account"),
     path("account/login/", views.LoginView.as_view(), name="login"),

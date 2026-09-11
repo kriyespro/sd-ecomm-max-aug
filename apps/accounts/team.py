@@ -104,12 +104,23 @@ def _clean_role(role):
     return role
 
 
-def _active_owner_count(project, *, exclude_pk=None):
+def _active_owner_count(project, *, exclude_pk=None, lock=False):
+    """Count of active owners on ``project``.
+
+    ``lock=True`` (used inside change_role/remove_member, both already
+    @transaction.atomic) row-locks the matching Membership rows first, so two
+    concurrent "demote the other owner" calls can't both read count=1 and both
+    proceed — closing a race that could otherwise zero out a store's owners.
+    select_for_update() can't be combined with .count() (Postgres rejects FOR
+    UPDATE with an aggregate), so the locked rows are counted in Python.
+    """
     qs = Membership.objects.filter(
         project=project, role=StoreRole.OWNER, is_active=True
     )
     if exclude_pk is not None:
         qs = qs.exclude(pk=exclude_pk)
+    if lock:
+        return len(list(qs.select_for_update()))
     return qs.count()
 
 
@@ -148,6 +159,17 @@ def _attach_member(*, actor, project, user, role, request=None):
     already_on_team = bool(existing and existing.is_active and existing.role in TEAM_ROLES)
 
     if not already_on_team:
+        # Lock the project's current team rows first — otherwise two
+        # concurrent adds (two managers, or a double click) can both read the
+        # same under-cap count and both pass, pushing the team past the
+        # plan's seat limit. A blocked FOR UPDATE re-reads on unblock, so the
+        # second caller's subsequent count (in check_can_add_staff) sees the
+        # first caller's now-committed row.
+        list(
+            Membership.objects.select_for_update().filter(
+                project=project, is_active=True, role__in=TEAM_ROLES
+            )
+        )
         # net add -> check the plan's team-size limit
         try:
             from apps.billing.limits import check_can_add_staff
@@ -291,7 +313,7 @@ def change_role(*, actor, project, membership, role, request=None):
         return membership
     if (
         membership.role == StoreRole.OWNER
-        and _active_owner_count(project, exclude_pk=membership.pk) == 0
+        and _active_owner_count(project, exclude_pk=membership.pk, lock=True) == 0
     ):
         raise TeamError(
             "The store must keep at least one owner. Add another owner first."
@@ -314,7 +336,7 @@ def remove_member(*, actor, project, membership, request=None):
     _guard_target(actor, project, membership, can_priv, assignable)
     if (
         membership.role == StoreRole.OWNER
-        and _active_owner_count(project, exclude_pk=membership.pk) == 0
+        and _active_owner_count(project, exclude_pk=membership.pk, lock=True) == 0
     ):
         raise TeamError("The store must keep at least one owner.")
 

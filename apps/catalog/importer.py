@@ -359,6 +359,12 @@ def _media_index(project):
     return index
 
 
+def _image_hash(data: bytes) -> str:
+    import hashlib
+
+    return hashlib.md5(data).hexdigest()
+
+
 def _attach_images(product, cell, media_index, missing: set) -> int:
     refs = [r.strip() for r in cell.replace("\n", "|").split("|") if r.strip()]
     if not refs:
@@ -366,9 +372,21 @@ def _attach_images(product, cell, media_index, missing: set) -> int:
 
     from django.core.files.base import ContentFile
 
-    existing = product.images.count()
-    has_primary = product.images.filter(is_primary=True).exists()
+    existing_images = list(product.images.all())
+    existing = len(existing_images)
+    has_primary = any(img.is_primary for img in existing_images)
     attached = 0
+
+    # Re-running the same (or an overlapping) import file must not re-attach an
+    # image the product already has — dedupe by content, since the storage
+    # backend renames files on collision so filenames alone aren't reliable.
+    seen_hashes = set()
+    for img in existing_images:
+        try:
+            with img.image.open("rb") as f:
+                seen_hashes.add(_image_hash(f.read()))
+        except (OSError, ValueError):
+            continue
 
     for ref in refs:
         asset = media_index.get(ref.lower())
@@ -380,6 +398,10 @@ def _attach_images(product, cell, media_index, missing: set) -> int:
             data = asset.file.read()
         finally:
             asset.file.close()
+        digest = _image_hash(data)
+        if digest in seen_hashes:
+            continue
+        seen_hashes.add(digest)
         img = ProductImage(
             product=product, alt=asset.alt or product.title,
             order=existing + attached + 1,

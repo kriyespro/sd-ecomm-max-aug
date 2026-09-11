@@ -64,6 +64,49 @@ def get_or_create_cart(*, project, user=None, session_key="", email="", create=T
 
 
 @transaction.atomic
+def merge_session_cart_into_user(*, project, user, session_key):
+    """Fold an anonymous session's cart into the account's own cart right after
+    login/registration — otherwise whatever the shopper added while browsing
+    anonymously silently vanishes the moment they sign in (the view switches to
+    looking up the cart by ``user``, never ``session_key``, again)."""
+    if not session_key or user is None or not user.is_authenticated:
+        return
+    session_cart = (
+        Cart.objects.select_for_update()
+        .filter(project=project, is_active=True, session_key=session_key, user__isnull=True)
+        .first()
+    )
+    if session_cart is None or not session_cart.items.exists():
+        return
+
+    user_cart = (
+        Cart.objects.select_for_update()
+        .filter(project=project, is_active=True, user=user)
+        .order_by("-created_at")
+        .first()
+    )
+    if user_cart is None:
+        # No cart of their own yet — the session cart just becomes theirs.
+        session_cart.user = user
+        session_cart.session_key = ""
+        session_cart.save(update_fields=["user", "session_key", "updated_at"])
+        return
+
+    for item in session_cart.items.select_related("product", "variant"):
+        existing = CartItem.objects.select_for_update().filter(
+            cart=user_cart, product=item.product, variant=item.variant
+        ).first()
+        if existing is not None:
+            existing.quantity += item.quantity
+            existing.save(update_fields=["quantity", "updated_at"])
+        else:
+            item.cart = user_cart
+            item.save(update_fields=["cart", "updated_at"])
+    session_cart.is_active = False
+    session_cart.save(update_fields=["is_active", "updated_at"])
+
+
+@transaction.atomic
 def add_to_cart(*, cart, product, variant=None, quantity=1):
     if variant is not None and variant.product_id != product.id:
         raise ValueError("Variant does not belong to product.")

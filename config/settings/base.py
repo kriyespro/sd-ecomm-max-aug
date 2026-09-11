@@ -267,6 +267,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.ai.tasks.refresh_free_models_task",
         "schedule": 1800.0,   # every 30 min — keeps the 1h cache from ever going cold
     },
+    "expire-stale-pending-orders": {
+        "task": "apps.orders.tasks.expire_stale_pending_orders_task",
+        "schedule": 3600.0,   # hourly — releases stock reserved by an abandoned gateway payment
+    },
 }
 
 
