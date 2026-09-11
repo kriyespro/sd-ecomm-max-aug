@@ -7,14 +7,20 @@
 {% set saving = (product.price - product.current_price) if product.on_sale else 0 %}
 
 <div class="mx-auto max-w-7xl px-5 py-8 pb-28 lg:px-8 lg:pb-8"
-     x-data="{
+     x-data='{
        active: 0,
        total: {{ imgs | length }},
-       urls: [{% for i in imgs %}'{{ i.image.url }}'{{ ',' if not loop.last }}{% endfor %}],
+       urls: [{% for i in imgs %}{{ i.image.url | tojson }}{{ "," if not loop.last }}{% endfor %}],
        lb: false,
        next() { this.active = (this.active + 1) % this.total },
-       prev() { this.active = (this.active - 1 + this.total) % this.total }
-     }"
+       prev() { this.active = (this.active - 1 + this.total) % this.total },
+       hasAxes: {{ "true" if (variant_options and variant_options.axes) else "false" }},
+       sel: { {% if variant_options and variant_options.axes %}{% for ax in variant_options.axes %}{{ ax.name | tojson }}: {{ ax.options[0] | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %} },
+       map: {{ (variant_options.map if variant_options else {}) | tojson }},
+       get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
+       get cur() { return this.hasAxes ? (this.map[this.k] || null) : null; },
+       get avail() { return this.hasAxes ? (this.cur ? this.cur.stock : 0) : {{ available if available is not none else "null" }} },
+     }'
      @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
 
   <nav class="mb-6 break-words text-xs text-mute">
@@ -115,20 +121,18 @@
       </div>
       <p class="mt-1 text-xs text-mute">Inclusive of all taxes</p>
 
-      {% if available is not none %}
-        {% if available <= 0 %}
-        <p class="mt-4 inline-block bg-stone-100 px-3 py-1.5 text-xs font-medium text-mute">Out of stock</p>
-        {% elif available <= 5 %}
-        <div class="mt-4">
-          <p class="text-xs font-medium text-rose-600">Almost gone — only {{ available }} left</p>
-          <div class="mt-1.5 h-1 w-40 bg-line"><div class="h-1 bg-rose-500" style="width: {{ [available * 20, 100] | min }}%"></div></div>
+      <template x-if="avail !== null">
+        <div>
+          <p x-show="avail <= 0" x-cloak class="mt-4 inline-block bg-stone-100 px-3 py-1.5 text-xs font-medium text-mute">Out of stock</p>
+          <div x-show="avail > 0 && avail <= 5" x-cloak class="mt-4">
+            <p class="text-xs font-medium text-rose-600">Almost gone — only <span x-text="avail"></span> left</p>
+            <div class="mt-1.5 h-1 w-40 bg-line"><div class="h-1 bg-rose-500" :style="'width: ' + Math.min(avail * 20, 100) + '%'"></div></div>
+          </div>
+          <p x-show="avail > 5" x-cloak class="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span> In stock, ready to ship
+          </p>
         </div>
-        {% else %}
-        <p class="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
-          <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span> In stock, ready to ship
-        </p>
-        {% endif %}
-      {% endif %}
+      </template>
 
       {% if product.short_description %}<p class="mt-5 break-words text-[15px] leading-relaxed text-ink/75">{{ product.short_description }}</p>{% endif %}
 
@@ -143,8 +147,9 @@
             <input name="quantity" x-model="q" inputmode="numeric" class="w-11 border-x border-line bg-transparent py-3 text-center text-sm outline-none">
             <button type="button" @click="q++" class="px-3.5 text-mute hover:text-ink">+</button>
           </div>
-          <button class="htmx-hide flex-1 bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-accent {{ 'pointer-events-none opacity-40' if (available is not none and available <= 0) }}">
-            {{ 'Notify me' if (available is not none and available <= 0) else 'Add to bag' }}
+          <button class="htmx-hide flex-1 bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-accent"
+                  :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}">
+            <span x-text="(avail !== null && avail <= 0) ? 'Notify me' : 'Add to bag'"></span>
           </button>
         </div>
       </form>

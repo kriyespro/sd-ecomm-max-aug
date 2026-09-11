@@ -268,3 +268,24 @@ class StorefrontPickerRenderTests(TestCase):
         self.assertIn(">Color<", body)
         self.assertIn('sel["Size"] = "S"', body)  # axis button
         self.assertIn(combo_key("M", "White"), body)  # variant map key
+
+    def test_stock_badge_and_add_to_bag_share_the_pickers_selection_state(self):
+        """Regression: the top stock badge and the Add-to-bag button used to
+        be computed once server-side from an aggregate across every variant,
+        completely ignoring which size/colour the shopper picked. They must
+        now read the same live `avail`/`cur` the picker itself uses, from one
+        shared Alpine scope — not each carry their own disconnected copy."""
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        # One shared scope defines the derived stock state...
+        self.assertEqual(body.count("get avail()"), 1)
+        self.assertIn("hasAxes: true", body)
+        self.assertIn("get cur()", body)
+        # ...and the badge / button actually reference it, instead of a
+        # server-baked number frozen at page-render time.
+        self.assertIn('x-if="avail !== null"', body)
+        self.assertIn("avail !== null && avail <= 0", body)
+        # The picker no longer declares its own, disconnected copy of this
+        # state (that was the bug: two separate `sel`/`map` objects that
+        # couldn't see each other).
+        self.assertEqual(body.count('sel: {'), 1)

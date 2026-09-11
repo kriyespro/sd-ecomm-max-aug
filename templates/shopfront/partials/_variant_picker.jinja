@@ -4,13 +4,10 @@
    - otherwise: the flat variant list (swatches up to 6, else a <select>).
    Included inside the add-to-cart <form>. #}
 {% if variant_options and variant_options.axes %}
-<div x-data='{
-       sel: { {% for ax in variant_options.axes %}"{{ ax.name }}": {{ ax.options[0] | tojson }}{{ "," if not loop.last }}{% endfor %} },
-       map: {{ variant_options.map | tojson }},
-       get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
-       get cur() { return this.map[this.k] || null; }
-     }'
-     class="space-y-4">
+{# sel/map/k/cur live on the page's outer x-data (product.jinja) — shared with
+   the stock badge and the Add-to-bag button above, so picking a combo here
+   updates both instead of only this picker's own "N left" hint. #}
+<div class="space-y-4">
   <input type="hidden" name="variant" :value="cur ? cur.pk : ''">
   {% for ax in variant_options.axes %}
   <div>
