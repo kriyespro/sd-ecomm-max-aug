@@ -246,7 +246,10 @@ def delete_user(*, actor, target, request=None):
     ]
     if blocking:
         raise ValidationError(
-            "Reassign ownership first — " + ", ".join(blocking) + " would be left with no owner."
+            "Reassign ownership first — " + ", ".join(blocking) + " would be left with no "
+            "owner. On the store's page, add another user as Owner in the Team panel — the "
+            "\"DGC / marketing partner\" field only changes who earns commission, it does not "
+            "change store ownership."
         )
 
     identifier = target.email or target.get_username()
