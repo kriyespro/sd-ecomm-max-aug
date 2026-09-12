@@ -685,13 +685,35 @@ class AccountView(View):
         return render(request, "shopfront/account.jinja", ctx)
 
 
+def _storefront_username(email, project):
+    """Internal, never-shown username for a per-store shopper login — lets the
+    same email address hold an independent account (and password) at every
+    store, instead of one login shared platform-wide."""
+    return f"{email.strip().lower()}::store{project.pk}"
+
+
+def _resolve_storefront_user(email, project):
+    """The account to authenticate against email+project: this store's own
+    scoped account if one exists, else the pre-existing (legacy, unscoped)
+    global account — accounts created before per-store signup shipped keep
+    working everywhere they always did. Returns ``None`` if neither exists."""
+    email = (email or "").strip().lower()
+    scoped = User.objects.filter(username=_storefront_username(email, project)).first()
+    if scoped is not None:
+        return scoped
+    return User.objects.filter(username__iexact=email).first()
+
+
 class LoginView(View):
     def post(self, request):
         email = request.POST.get("email", "").strip()
         if login_ratelimit.is_locked(request, email):
             messages.error(request, login_ratelimit.LOCK_MESSAGE)
             return redirect(request.POST.get("next") or "shopfront:account")
-        user = authenticate(request, username=email, password=request.POST.get("password", ""))
+        project = current_project(request)
+        candidate = _resolve_storefront_user(email, project)
+        username = candidate.username if candidate is not None else email
+        user = authenticate(request, username=username, password=request.POST.get("password", ""))
         if user is None:
             login_ratelimit.record_failure(request, email)
             messages.error(request, "Invalid email or password.")
@@ -700,7 +722,7 @@ class LoginView(View):
             session_key = request.session.session_key
             login(request, user)
             cart_svc.merge_session_cart_into_user(
-                project=current_project(request), user=user, session_key=session_key,
+                project=project, user=user, session_key=session_key,
             )
             messages.success(request, "Signed in.")
         return redirect(request.POST.get("next") or "shopfront:account")
@@ -726,8 +748,11 @@ class RegisterView(View):
             messages.error(request, " ".join(exc.messages))
             return redirect("shopfront:account")
 
-        taken = (User.objects.filter(username__iexact=email).exists()
-                 or User.objects.filter(email__iexact=email).exists())
+        # Scoped to THIS store only — a shopper who already has an account at
+        # another store (or a legacy pre-scoping account) can still register
+        # an independent one here; only an existing account for this exact
+        # store blocks a re-registration.
+        taken = User.objects.filter(username=_storefront_username(email, project)).exists()
         if taken:
             # Don't confirm or deny — and cost an attempt so bulk probing trips
             # the same brake as password guessing.
@@ -736,7 +761,7 @@ class RegisterView(View):
             return redirect("shopfront:account")
 
         user = User.objects.create_user(
-            username=email, email=email, password=password,
+            username=_storefront_username(email, project), email=email, password=password,
             first_name=request.POST.get("first_name", "").strip(),
             last_name=request.POST.get("last_name", "").strip(),
         )

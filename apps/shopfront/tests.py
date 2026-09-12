@@ -181,6 +181,83 @@ class StorefrontCartCsrfBypassTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+class PerStoreSignupIsolationTests(TestCase):
+    """A shopper's login is scoped per store going forward — registering at
+    Store B with an email already used at Store A creates an independent
+    account there instead of being blocked (or, previously, silently sharing
+    the same global password across every store on the platform)."""
+
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.store_a = Project.objects.create(name="Store A", status="active", currency="INR")
+        Domain.objects.create(project=self.store_a, host="a.iso.test", is_verified=True)
+        self.store_b = Project.objects.create(name="Store B", status="active", currency="INR")
+        Domain.objects.create(project=self.store_b, host="b.iso.test", is_verified=True)
+
+    def _register(self, host, email, password):
+        return self.client.post(
+            "/account/register/", {"email": email, "password": password}, HTTP_HOST=host,
+        )
+
+    def _login(self, host, email, password):
+        return self.client.post(
+            "/account/login/", {"email": email, "password": password}, HTTP_HOST=host,
+        )
+
+    def test_same_email_can_register_independently_at_a_second_store(self):
+        r1 = self._register("a.iso.test", "shop@buy.test", "Str0ngPassw0rdA!")
+        self.assertEqual(r1.status_code, 302)
+        self.client.logout()
+        r2 = self._register("b.iso.test", "shop@buy.test", "Str0ngPassw0rdB!")
+        self.assertEqual(r2.status_code, 302)
+
+        User = get_user_model()
+        self.assertEqual(User.objects.filter(email__iexact="shop@buy.test").count(), 2)
+
+    def test_registering_twice_at_the_same_store_is_blocked(self):
+        self._register("a.iso.test", "dup@buy.test", "Str0ngPassw0rdA!")
+        self.client.logout()
+        self._register("a.iso.test", "dup@buy.test", "Str0ngPassw0rdB!")
+        resp = self.client.get("/account/", HTTP_HOST="a.iso.test")
+        self.assertContains(resp, "Check your inbox")
+
+        User = get_user_model()
+        self.assertEqual(User.objects.filter(email__iexact="dup@buy.test").count(), 1)
+
+    def test_passwords_are_fully_isolated_between_stores(self):
+        self._register("a.iso.test", "iso@buy.test", "Str0ngPassw0rdA!")
+        self.client.logout()
+        self._register("b.iso.test", "iso@buy.test", "Str0ngPassw0rdB!")
+        self.client.logout()
+
+        # Store A's password must not work at Store B.
+        self._login("b.iso.test", "iso@buy.test", "Str0ngPassw0rdA!")
+        resp = self.client.get("/account/", HTTP_HOST="b.iso.test")
+        self.assertNotContains(resp, "iso@buy.test")  # never actually got in
+
+        # Store B's own password does.
+        self._login("b.iso.test", "iso@buy.test", "Str0ngPassw0rdB!")
+        resp2 = self.client.get("/account/", HTTP_HOST="b.iso.test")
+        self.assertContains(resp2, "iso@buy.test")
+
+    def test_legacy_preexisting_account_still_logs_into_any_store(self):
+        """An account created before per-store signup shipped (plain email as
+        username, no store suffix) must keep working everywhere it always
+        did — only NEW registrations get isolated."""
+        User = get_user_model()
+        User.objects.create_user(
+            username="legacy@buy.test", email="legacy@buy.test", password="Str0ngPassw0rdL!",
+        )
+        resp_a = self._login("a.iso.test", "legacy@buy.test", "Str0ngPassw0rdL!")
+        self.assertEqual(resp_a.status_code, 302)
+        self.client.logout()
+        resp_b = self._login("b.iso.test", "legacy@buy.test", "Str0ngPassw0rdL!")
+        self.assertEqual(resp_b.status_code, 302)
+        page = self.client.get("/account/", HTTP_HOST="b.iso.test")
+        self.assertContains(page, "legacy@buy.test")
+
+
 class GuestCartMergeTests(TestCase):
     """Items added to an anonymous session cart must survive signing in or
     registering — the view looks the cart up by ``user`` afterward, never
