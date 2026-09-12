@@ -121,9 +121,13 @@ class GoogleCallbackView(View):
         return redirect("accounts:signup_complete")
 
 
-def _track_signup(request, *, project, email, plan):
+def _track_signup(request, *, project, email, plan, phone=""):
     """Fire the platform's own Meta CAPI "CompleteRegistration" event for a new
-    trial store. Best-effort — a broker hiccup must never break signup."""
+    trial store. No browser pixel covers this event (it's platform-level, not
+    per-store), so this server call is Meta's only signal for it — match
+    quality (ip/ua/fbp/fbc, not just a hashed email) directly affects whether
+    Meta can attribute the conversion to an ad click. Best-effort — a broker
+    hiccup must never break signup."""
     try:
         from apps.marketing.capi import hash_user_data
         from apps.marketing.models import PlatformTrackingSettings
@@ -134,7 +138,13 @@ def _track_signup(request, *, project, email, plan):
         send_platform_capi_event.delay(
             event_name="CompleteRegistration",
             event_id=f"signup-{project.pk}",
-            user_data=hash_user_data(email=email),
+            user_data=hash_user_data(
+                email=email, phone=phone, external_id=str(project.pk),
+                client_ip=request.META.get("REMOTE_ADDR", ""),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+                fbp=request.COOKIES.get("_fbp", ""),
+                fbc=request.COOKIES.get("_fbc", ""),
+            ),
             custom_data={"content_name": plan.name if plan else "trial"},
             event_source_url=request.build_absolute_uri("/accounts/signup/"),
         )
@@ -194,6 +204,6 @@ class SignupCompleteView(FormView):
 
         self.request.session.pop(_PENDING, None)
         _track_signup(self.request, project=_project, email=self.pending["email"],
-                     plan=plan)
+                     plan=plan, phone=form.cleaned_data["phone"])
         login(self.request, user)
         return redirect("control:onboarding")

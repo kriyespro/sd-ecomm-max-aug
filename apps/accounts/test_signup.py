@@ -207,15 +207,29 @@ class GoogleCallbackTests(TestCase):
                                "name": "Cap", "sub": "77"}
             self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
 
+        self.client.cookies["_fbp"] = "fb.1.111.222"
+        self.client.cookies["_fbc"] = "fb.1.111.333"
         with self.captureOnCommitCallbacks(execute=True), \
              patch("apps.marketing.tasks.send_platform_capi_event.delay") as delay:
-            self.client.post("/accounts/signup/complete/",
-                             {"store_name": "CapCo", "phone": "9"})
+            self.client.post(
+                "/accounts/signup/complete/",
+                {"store_name": "CapCo", "phone": "9876543210"},
+                HTTP_USER_AGENT="test-agent/1.0", REMOTE_ADDR="203.0.113.9",
+            )
         delay.assert_called_once()
         kw = delay.call_args.kwargs
         self.assertEqual(kw["event_name"], "CompleteRegistration")
         project = Project.objects.get(name="CapCo")
         self.assertEqual(kw["event_id"], f"signup-{project.pk}")
+        # match-quality fields — this is the whole point of a server-only
+        # event with no browser pixel behind it to fall back on.
+        ud = kw["user_data"]
+        self.assertIn("ph", ud)
+        self.assertIn("external_id", ud)
+        self.assertEqual(ud["client_ip_address"], "203.0.113.9")
+        self.assertEqual(ud["client_user_agent"], "test-agent/1.0")
+        self.assertEqual(ud["fbp"], "fb.1.111.222")
+        self.assertEqual(ud["fbc"], "fb.1.111.333")
 
     def test_completion_skips_capi_when_not_configured(self):
         state = self._start()
