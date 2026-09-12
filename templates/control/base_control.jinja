@@ -109,6 +109,15 @@
       </div>
 
       <div class="flex shrink-0 items-center gap-2 sm:gap-3">
+        {# Platform staff need a way back out of a selected store — otherwise
+           the session pick sticks forever and the platform-wide dashboard
+           (affiliate stats, cross-store billing, etc.) becomes unreachable. #}
+        {% if control_active_project and control_is_platform_staff %}
+        <form method="post" action="{{ url('control:leave_store') }}" class="hidden sm:block">
+          {{ csrf_input }}
+          <button class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50">Platform overview</button>
+        </form>
+        {% endif %}
         {# Store switcher — a dropdown for a handful of stores, a link once there are many #}
         {% if control_active_project %}
           {% if control_available_count and control_available_count <= 12 %}

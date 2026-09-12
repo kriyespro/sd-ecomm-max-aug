@@ -197,6 +197,20 @@ class SetProjectView(ControlAccessMixin, View):
         return redirect(request.POST.get("next") or "control:product_list")
 
 
+class LeaveStoreView(ControlAccessMixin, View):
+    """Clears the session's active-store pick. Without this, once platform
+    staff select any store there's no way back to the platform-wide
+    dashboard/overview — get_active_project() keeps re-resolving the same
+    session pick on every visit to /admin/, so the DGC "Top affiliates" panel
+    and platform stats card become permanently unreachable."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        request.session.pop(ACTIVE_PROJECT_SESSION_KEY, None)
+        return redirect("control:dashboard")
+
+
 class StatsCardsView(ControlAccessMixin, TemplateView):
     """HTMX partial — polled by the dashboard every 30s."""
 
