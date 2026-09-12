@@ -266,6 +266,29 @@ class BudgetBand(TenantScopedModel):
         return "&".join(parts)
 
 
+class BenefitItem(TenantScopedModel):
+    """One tile in the home page "Why it works" / benefit-band section —
+    an icon glyph, a short title and a one-line description. Owner-managed;
+    an empty list falls back to the skin's built-in defaults so an existing
+    store's home page never goes blank."""
+
+    icon = models.CharField(
+        max_length=4, blank=True, default="✦",
+        help_text="A single emoji or symbol, e.g. \U0001F33F or ✦.",
+    )
+    title = models.CharField(max_length=80)
+    description = models.CharField(max_length=200, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "benefit item"
+
+    def __str__(self):
+        return self.title
+
+
 class InstagramItem(TenantScopedModel):
     """One image pulled from (or uploaded for) the store's Instagram feed
     section. ``source_url`` is the public post link the image came from —

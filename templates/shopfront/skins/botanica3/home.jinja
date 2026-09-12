@@ -199,20 +199,22 @@
   </div>
 </section>
 
-{# ============ BENEFIT BAND ============ #}
+{# ============ BENEFIT BAND — "Why it works" (editable: /admin/cms/benefits/) ============ #}
+{% set _benefits = benefit_items if benefit_items else [
+  {'icon': '✦', 'title': 'Whole-plant actives', 'description': 'Extracts kept close to their natural form so nothing useful is lost.'},
+  {'icon': '✦', 'title': 'Clinically guided', 'description': 'Doses that reflect the research — not what fits the label.'},
+  {'icon': '✦', 'title': 'Made to be used', 'description': 'Textures and rituals you will actually reach for every day.'},
+] %}
 <section class="cv-auto bg-accent text-paper">
   <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
     <h2 class="text-center font-display text-2xl sm:text-3xl">Why it works</h2>
     <div class="mx-auto mt-3 h-px w-16 bg-paper/40"></div>
     <div class="mt-12 grid gap-10 sm:grid-cols-3">
-      {% for t, d in [
-        ('Whole-plant actives', 'Extracts kept close to their natural form so nothing useful is lost.'),
-        ('Clinically guided', 'Doses that reflect the research — not what fits the label.'),
-        ('Made to be used', 'Textures and rituals you will actually reach for every day.')] %}
+      {% for item in _benefits %}
       <div class="text-center">
-        <span class="mx-auto grid h-11 w-11 place-items-center rounded-full border border-paper/40 text-lg">&#10022;</span>
-        <p class="mt-4 font-display text-lg">{{ t }}</p>
-        <p class="mt-2 text-sm leading-relaxed text-paper/75">{{ d }}</p>
+        <span class="mx-auto grid h-11 w-11 place-items-center rounded-full border border-paper/40 text-lg">{{ item.icon or '✦' }}</span>
+        <p class="mt-4 font-display text-lg">{{ item.title }}</p>
+        {% if item.description %}<p class="mt-2 text-sm leading-relaxed text-paper/75">{{ item.description }}</p>{% endif %}
       </div>
       {% endfor %}
     </div>

@@ -18,6 +18,7 @@ from apps.cms.models import (
     FAQ,
     Banner,
     BannerPlacement,
+    BenefitItem,
     BudgetBand,
     ContentBlock,
     InstagramItem,
@@ -488,6 +489,12 @@ class BudgetBandForm(ProjectScopedForm):
         if lo is not None and hi is not None and lo > hi:
             self.add_error("max_price", "Highest price must be above the lowest.")
         return cleaned
+
+
+class BenefitItemForm(ProjectScopedForm):
+    class Meta:
+        model = BenefitItem
+        fields = ["icon", "title", "description", "order", "is_active"]
 
 
 class InstagramItemForm(ProjectScopedForm):

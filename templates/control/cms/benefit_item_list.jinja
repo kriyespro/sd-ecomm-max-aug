@@ -1,0 +1,39 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Why it works{% endblock %}
+
+{% block content %}
+<div class="rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="flex items-center justify-between border-b border-slate-200 p-4">
+    <div>
+      <h2 class="text-sm font-semibold text-slate-700">Why it works · {{ active_project.name }}</h2>
+      <p class="mt-1 text-xs text-slate-500">
+        The 3-tile benefit band on the home page ("Why it works"). Leave this
+        list empty to keep the skin's built-in defaults.
+      </p>
+    </div>
+    <a href="{{ url('control:cms_benefit_item_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New item</a>
+  </div>
+  <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr><th class="px-4 py-2"></th><th class="px-4 py-2">Title</th><th class="px-4 py-2">Description</th><th class="px-4 py-2">Order</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for i in items %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2 text-lg">{{ i.icon }}</td>
+        <td class="px-4 py-2"><a href="{{ url('control:cms_benefit_item_edit', kwargs={'pk': i.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ i.title }}</a></td>
+        <td class="px-4 py-2 text-slate-500">{{ i.description | truncate(60) }}</td>
+        <td class="px-4 py-2 text-slate-500">{{ i.order }}</td>
+        <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if i.is_active else 'bg-slate-200 text-slate-600' }}">{{ 'yes' if i.is_active else 'no' }}</span></td>
+        <td class="px-4 py-2 text-right">
+          <a href="{{ url('control:cms_benefit_item_edit', kwargs={'pk': i.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
+          <a href="{{ url('control:cms_benefit_item_delete', kwargs={'pk': i.pk}) }}" class="ml-2 text-red-600 hover:underline">Delete</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No items yet — showing the skin's built-in defaults. Add 3 like "Fast shipping", "Easy returns", "Secure checkout".</td></tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endblock %}
