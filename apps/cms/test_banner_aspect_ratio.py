@@ -101,3 +101,22 @@ class BannerAspectRatioTests(TestCase):
         self._banner(BannerPlacement.PROMO)
         home = self.client.get("/", HTTP_HOST="banner.test")
         self.assertContains(home, "aspect-[40/19]")
+
+    def test_default_skin_hero_uses_matching_aspect_ratio(self):
+        self._banner(BannerPlacement.HERO)
+        resp = self.client.get("/", HTTP_HOST="banner.test")
+        self.assertContains(resp, "aspect-[40/19]")
+        self.assertNotIn("min-h-[78vh]", resp.content.decode())
+
+    def test_botanica2_hero_uses_matching_aspect_ratio(self):
+        self._use_skin("botanica2")
+        self._banner(BannerPlacement.HERO)
+        resp = self.client.get("/", HTTP_HOST="banner.test")
+        self.assertContains(resp, "aspect-[40/19]")
+
+    def test_botanica3_hero_slider_uses_matching_aspect_ratio(self):
+        self._use_skin("botanica3")
+        self._banner(BannerPlacement.HERO)
+        resp = self.client.get("/", HTTP_HOST="banner.test")
+        self.assertContains(resp, "aspect-[40/19]")
+        self.assertNotIn("min-h-[50vh] items-end sm:min-h-[56vh]", resp.content.decode())
