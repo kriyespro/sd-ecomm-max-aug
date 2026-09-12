@@ -194,14 +194,23 @@ class Subscription(TimeStampedModel):
     trial_end = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)
 
-    # Platform manager credited for this store (nullable — direct signups have none).
+    # The DGC who *manages* this store — grants full Mission Control access
+    # (store list, dashboard, team, settings) via projects_for_user() and gets
+    # credited on every paid invoice. Set only two ways: a DGC provisioning
+    # the store themselves (store_services.create_store), or a platform admin
+    # hand-assigning one afterwards (set_store_manager). Never set by an
+    # affiliate-link signup — a referral must never grant store access.
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                 on_delete=models.SET_NULL, related_name="managed_subscriptions")
 
-    # The DGC affiliate code (Profile.affiliate_code) this store's owner signed
-    # up through, if any — distinguishes a genuine affiliate-link conversion
-    # from a store a platform admin later hand-assigned to a manager. Blank
-    # for both direct signups and manually-provisioned stores.
+    # An affiliate-link signup instead credits *only* commission, via these
+    # two fields — never `manager`, so the referring DGC gets no access to
+    # the store at all (see apps.projects.services.projects_for_user).
+    # `referred_by` drives commission accrual (billing.services._accrue_commission
+    # falls back to it when `manager` is unset) and the DGC's own referral
+    # table; `affiliate_ref` just remembers which code was used.
+    referred_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
+                                    on_delete=models.SET_NULL, related_name="affiliate_referrals")
     affiliate_ref = models.CharField(max_length=16, blank=True, db_index=True)
 
     # Optional per-store price override (deal pricing). Null = use the plan price.

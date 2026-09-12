@@ -68,21 +68,24 @@ def dashboard_stats(user):
     if admin:
         from apps.billing.models import Subscription
 
-        stats["affiliate_signups"] = Subscription.objects.exclude(affiliate_ref="").count()
+        stats["affiliate_signups"] = Subscription.objects.filter(referred_by__isnull=False).count()
     cache.set(cache_key, stats, _DASHBOARD_STATS_TTL)
     return stats
 
 
 def top_affiliates(limit=5):
     """Platform-admin dashboard: the DGCs with the most affiliate-link
-    signups, most recent first among ties."""
+    signups, most recent first among ties. ``referred_by`` only ever comes
+    from a genuine affiliate-link signup — never from a store a DGC created
+    or a platform admin hand-assigned (that's ``manager``, a different
+    relationship: access, not just a commission credit)."""
     from django.db.models import Count, Max
 
     from apps.billing.models import Subscription
 
     return (
-        Subscription.objects.exclude(affiliate_ref="")
-        .values("manager_id", "manager__username", "manager__email")
+        Subscription.objects.filter(referred_by__isnull=False)
+        .values("referred_by_id", "referred_by__username", "referred_by__email")
         .annotate(signups=Count("id"), latest=Max("created_at"))
         .order_by("-signups", "-latest")[:limit]
     )

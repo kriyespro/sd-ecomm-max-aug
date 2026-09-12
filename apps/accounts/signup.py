@@ -31,6 +31,9 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     ``ref_code`` is a DGC's ``Profile.affiliate_code`` lifted from the signup
     link's ``?ref=``. An unknown/blank code is silently ignored — a bad or
     stale code must never block signup, it just earns nobody a commission.
+    It only ever sets ``Subscription.referred_by`` (commission), never
+    ``manager`` (store access) — an affiliate link must never hand the
+    referring DGC access to a store they didn't set up.
     """
     email = (email or "").strip().lower()
     store_name = (store_name or "").strip()
@@ -108,9 +111,9 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
             is_banned=False, user__is_active=True,
         ).first()
         if referrer is not None:
-            sub.manager = referrer.user
+            sub.referred_by = referrer.user
             sub.affiliate_ref = ref_code
-            sub.save(update_fields=["manager", "affiliate_ref", "updated_at"])
+            sub.save(update_fields=["referred_by", "affiliate_ref", "updated_at"])
 
     record_audit(
         actor=user, project=project, action=AuditLog.Action.CREATE, target=project,

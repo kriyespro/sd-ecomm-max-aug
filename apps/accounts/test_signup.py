@@ -106,8 +106,9 @@ class SelfSignupServiceTests(TestCase):
         with self.assertRaises(ValidationError):
             self_signup(name="", email="dup@shop.test", store_name="D", phone="9", oauth=True)
 
-    def test_valid_ref_code_credits_the_dgc(self):
+    def test_valid_ref_code_credits_the_dgc_without_granting_access(self):
         from apps.accounts.models import PlatformRole, Profile
+        from apps.projects.services import projects_for_user
 
         dgc = User.objects.create_user("dgc", "dgc@t.test", "pw", is_staff=True)
         profile = Profile.objects.get(user=dgc)
@@ -120,8 +121,12 @@ class SelfSignupServiceTests(TestCase):
             oauth=True, ref_code=code,
         )
         sub = project.subscription
-        self.assertEqual(sub.manager_id, dgc.pk)
+        self.assertEqual(sub.referred_by_id, dgc.pk)
         self.assertEqual(sub.affiliate_ref, code)
+        # Commission only — an affiliate link must never grant Mission
+        # Control access to the store.
+        self.assertIsNone(sub.manager_id)
+        self.assertNotIn(project, projects_for_user(dgc))
 
     def test_unknown_ref_code_is_silently_ignored(self):
         project, _, _ = self_signup(
@@ -130,6 +135,7 @@ class SelfSignupServiceTests(TestCase):
         )
         sub = project.subscription
         self.assertIsNone(sub.manager_id)
+        self.assertIsNone(sub.referred_by_id)
         self.assertEqual(sub.affiliate_ref, "")
 
     def test_ref_code_from_a_non_manager_profile_is_ignored(self):
@@ -147,6 +153,7 @@ class SelfSignupServiceTests(TestCase):
             oauth=True, ref_code="PLAINCODE",
         )
         self.assertIsNone(project.subscription.manager_id)
+        self.assertIsNone(project.subscription.referred_by_id)
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -202,7 +209,8 @@ class AffiliateLinkSignupFlowTests(TestCase):
                 {"store_name": "RefFlow Co", "phone": "9"},
             )
         sub = Subscription.objects.get(project__name="RefFlow Co")
-        self.assertEqual(sub.manager_id, dgc.pk)
+        self.assertEqual(sub.referred_by_id, dgc.pk)
+        self.assertIsNone(sub.manager_id)
         self.assertEqual(sub.affiliate_ref, code)
         self.assertNotIn("signup_ref", self.client.session)
 
@@ -218,7 +226,9 @@ class AffiliateLinkSignupFlowTests(TestCase):
                 "/accounts/signup/complete/",
                 {"store_name": "NoRef Co", "phone": "9"},
             )
-        self.assertIsNone(Subscription.objects.get(project__name="NoRef Co").manager_id)
+        sub = Subscription.objects.get(project__name="NoRef Co")
+        self.assertIsNone(sub.manager_id)
+        self.assertIsNone(sub.referred_by_id)
 
 
 @override_settings(ALLOWED_HOSTS=["*"], **GOOGLE_ON)
