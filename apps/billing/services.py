@@ -269,14 +269,18 @@ def mark_invoice_paid(invoice, *, provider_payment_id=""):
 
 def _accrue_commission(invoice):
     sub = invoice.subscription
-    if sub.manager_id is None or hasattr(invoice, "commission"):
+    # A managing DGC wins if there is one; otherwise fall back to whoever's
+    # affiliate link the store signed up through. Either way this is the only
+    # place that FK is read for money — it never grants store access.
+    credited_id = sub.manager_id or sub.referred_by_id
+    if credited_id is None or hasattr(invoice, "commission"):
         return
     rate = sub.plan.commission_pct_for(sub.period)
     amount = (invoice.amount * rate / Decimal("100")).quantize(Decimal("0.01"))
     if amount <= 0:
         return
     ManagerCommission.objects.create(
-        manager_id=sub.manager_id, subscription=sub, invoice=invoice,
+        manager_id=credited_id, subscription=sub, invoice=invoice,
         period=sub.period, base_amount=invoice.amount, rate_pct=rate, amount=amount,
     )
 

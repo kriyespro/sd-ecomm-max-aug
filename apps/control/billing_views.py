@@ -198,8 +198,7 @@ class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
             f"{reverse_lazy('accounts:signup')}?ref={code}"
         )
         referrals = list(
-            Subscription.objects.filter(manager=self.request.user)
-            .exclude(affiliate_ref="")
+            Subscription.objects.filter(referred_by=self.request.user)
             .select_related("project", "plan")
             .order_by("-created_at")[:200]
         )

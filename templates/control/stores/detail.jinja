@@ -32,6 +32,7 @@
     <p class="mt-1 text-xs text-slate-500">
       {% if subscription.status == 'trialing' %}Trial{% if subscription.trial_end %} ends {{ subscription.trial_end.strftime('%d %b %Y') }}{% endif %}{% elif subscription.current_period_end %}{{ 'Active until' if subscription.is_comp else 'Renews' }} {{ subscription.current_period_end.strftime('%d %b %Y') }}{% endif %}
       {% if subscription.manager_id %} · DGC {{ subscription.manager.email }}{% endif %}
+      {% if subscription.referred_by_id %} · signed up via {{ subscription.referred_by.email }}'s affiliate link (commission only, no store access){% endif %}
     </p>
     {% else %}<p class="mt-1 text-sm text-slate-400">No subscription.</p>{% endif %}
 
