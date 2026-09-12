@@ -65,8 +65,27 @@ def dashboard_stats(user):
         # Revenue wiring lands with the orders app (Phase 5).
         "revenue_today": 0,
     }
+    if admin:
+        from apps.billing.models import Subscription
+
+        stats["affiliate_signups"] = Subscription.objects.exclude(affiliate_ref="").count()
     cache.set(cache_key, stats, _DASHBOARD_STATS_TTL)
     return stats
+
+
+def top_affiliates(limit=5):
+    """Platform-admin dashboard: the DGCs with the most affiliate-link
+    signups, most recent first among ties."""
+    from django.db.models import Count, Max
+
+    from apps.billing.models import Subscription
+
+    return (
+        Subscription.objects.exclude(affiliate_ref="")
+        .values("manager_id", "manager__username", "manager__email")
+        .annotate(signups=Count("id"), latest=Max("created_at"))
+        .order_by("-signups", "-latest")[:limit]
+    )
 
 
 def recent_activity(user, limit=20):

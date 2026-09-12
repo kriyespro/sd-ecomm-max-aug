@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.accounts.models import Membership, Profile, StoreRole
+from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.billing import services as billing_svc
 from apps.billing.models import BillingSettings
 from apps.core.models import AuditLog
@@ -21,12 +21,16 @@ User = get_user_model()
 
 @transaction.atomic
 def self_signup(*, name, email, store_name, phone, password=None, plan=None,
-                oauth=False, request=None):
+                oauth=False, request=None, ref_code=""):
     """Create the account + store. Returns ``(project, user, user_was_created)``.
 
     Public signup is Google-only, so ``oauth=True`` (no password) is the norm;
     ``password`` is still accepted for tests / a future email path. ``phone`` is
     mandatory. Raises ``ValidationError`` on bad input or a taken account.
+
+    ``ref_code`` is a DGC's ``Profile.affiliate_code`` lifted from the signup
+    link's ``?ref=``. An unknown/blank code is silently ignored — a bad or
+    stale code must never block signup, it just earns nobody a commission.
     """
     email = (email or "").strip().lower()
     store_name = (store_name or "").strip()
@@ -96,6 +100,17 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
         sub.plan = plan
         sub.save(update_fields=["plan", "updated_at"])
     billing_svc.reset_trial(sub, cfg.self_signup_trial_days)
+
+    ref_code = (ref_code or "").strip()[:16]
+    if ref_code:
+        referrer = Profile.objects.select_related("user").filter(
+            affiliate_code=ref_code, platform_role=PlatformRole.MANAGER,
+            is_banned=False, user__is_active=True,
+        ).first()
+        if referrer is not None:
+            sub.manager = referrer.user
+            sub.affiliate_ref = ref_code
+            sub.save(update_fields=["manager", "affiliate_ref", "updated_at"])
 
     record_audit(
         actor=user, project=project, action=AuditLog.Action.CREATE, target=project,

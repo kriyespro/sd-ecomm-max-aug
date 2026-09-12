@@ -14,7 +14,11 @@ from django.views.generic import DetailView, TemplateView, View
 from django.views.generic.base import TemplateResponseMixin
 
 from apps.accounts.models import PlatformRole
-from apps.accounts.permissions import dgc_without_membership, is_platform_staff
+from apps.accounts.permissions import (
+    dgc_without_membership,
+    is_platform_admin,
+    is_platform_staff,
+)
 from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
 from apps.projects.services import projects_for_user
 
@@ -61,6 +65,8 @@ class DashboardView(ControlAccessMixin, TemplateView):
             return ctx
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)
+        if is_platform_admin(self.request.user):
+            ctx["top_affiliates"] = services.top_affiliates()
         return ctx
 
     @staticmethod

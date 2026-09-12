@@ -106,6 +106,48 @@ class SelfSignupServiceTests(TestCase):
         with self.assertRaises(ValidationError):
             self_signup(name="", email="dup@shop.test", store_name="D", phone="9", oauth=True)
 
+    def test_valid_ref_code_credits_the_dgc(self):
+        from apps.accounts.models import PlatformRole, Profile
+
+        dgc = User.objects.create_user("dgc", "dgc@t.test", "pw", is_staff=True)
+        profile = Profile.objects.get(user=dgc)
+        profile.platform_role = PlatformRole.MANAGER
+        profile.save(update_fields=["platform_role"])
+        code = profile.ensure_affiliate_code()
+
+        project, _, _ = self_signup(
+            name="", email="ref1@shop.test", store_name="Ref1 Shop", phone="9",
+            oauth=True, ref_code=code,
+        )
+        sub = project.subscription
+        self.assertEqual(sub.manager_id, dgc.pk)
+        self.assertEqual(sub.affiliate_ref, code)
+
+    def test_unknown_ref_code_is_silently_ignored(self):
+        project, _, _ = self_signup(
+            name="", email="ref2@shop.test", store_name="Ref2 Shop", phone="9",
+            oauth=True, ref_code="NOSUCHCODE",
+        )
+        sub = project.subscription
+        self.assertIsNone(sub.manager_id)
+        self.assertEqual(sub.affiliate_ref, "")
+
+    def test_ref_code_from_a_non_manager_profile_is_ignored(self):
+        """A code can only ever belong to a DGC — but even if one somehow
+        stuck on a plain user's profile, it must not credit them."""
+        from apps.accounts.models import Profile
+
+        plain = User.objects.create_user("plain", "plain@t.test", "pw", is_staff=True)
+        profile = Profile.objects.get(user=plain)
+        profile.affiliate_code = "PLAINCODE"
+        profile.save(update_fields=["affiliate_code"])
+
+        project, _, _ = self_signup(
+            name="", email="ref3@shop.test", store_name="Ref3 Shop", phone="9",
+            oauth=True, ref_code="PLAINCODE",
+        )
+        self.assertIsNone(project.subscription.manager_id)
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class SignupPageTests(TestCase):
@@ -125,6 +167,58 @@ class SignupPageTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertTrue(resp["Location"].startswith("https://accounts.google.com/o/oauth2/v2/auth"))
         self.assertIn("client_id=cid", resp["Location"])
+
+
+@override_settings(ALLOWED_HOSTS=["*"], **GOOGLE_ON)
+class AffiliateLinkSignupFlowTests(TestCase):
+    """The ?ref= on the public signup link must survive the full Google OAuth
+    round trip — it's stashed in the session on the very first GET, long
+    before Google is even involved."""
+
+    def _dgc_code(self):
+        from apps.accounts.models import PlatformRole, Profile
+
+        dgc = User.objects.create_user("dgc", "dgc@t.test", "pw", is_staff=True)
+        profile = Profile.objects.get(user=dgc)
+        profile.platform_role = PlatformRole.MANAGER
+        profile.save(update_fields=["platform_role"])
+        return dgc, profile.ensure_affiliate_code()
+
+    def test_ref_survives_oauth_round_trip_and_credits_dgc(self):
+        dgc, code = self._dgc_code()
+        self.client.get(f"/accounts/signup/?ref={code}")
+        self.assertEqual(self.client.session["signup_ref"], code)
+
+        self.client.get("/accounts/google/start/")
+        state = self.client.session["google_oauth_flow"]["state"]
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "reflow@gmail.test", "email_verified": True,
+                               "name": "Ref Flow", "sub": "555"}
+            self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                "/accounts/signup/complete/",
+                {"store_name": "RefFlow Co", "phone": "9"},
+            )
+        sub = Subscription.objects.get(project__name="RefFlow Co")
+        self.assertEqual(sub.manager_id, dgc.pk)
+        self.assertEqual(sub.affiliate_ref, code)
+        self.assertNotIn("signup_ref", self.client.session)
+
+    def test_no_ref_means_no_manager(self):
+        self.client.get("/accounts/google/start/")
+        state = self.client.session["google_oauth_flow"]["state"]
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "noref@gmail.test", "email_verified": True,
+                               "name": "No Ref", "sub": "556"}
+            self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+        with self.captureOnCommitCallbacks(execute=True):
+            self.client.post(
+                "/accounts/signup/complete/",
+                {"store_name": "NoRef Co", "phone": "9"},
+            )
+        self.assertIsNone(Subscription.objects.get(project__name="NoRef Co").manager_id)
 
 
 @override_settings(ALLOWED_HOSTS=["*"], **GOOGLE_ON)

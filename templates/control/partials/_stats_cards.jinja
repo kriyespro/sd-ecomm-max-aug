@@ -6,6 +6,9 @@
   ("Active projects", stats.active_projects),
   ("Revenue today", stats.revenue_today),
 ] %}
+{% if control_is_platform_admin %}
+{% set cards = cards + [("Affiliate signups", stats.affiliate_signups)] %}
+{% endif %}
 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
   {% for label, value in cards %}
   <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">

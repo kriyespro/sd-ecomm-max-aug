@@ -25,6 +25,29 @@
     </div>
   </div>
 
+  {% if control_is_platform_admin and top_affiliates %}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700">Top affiliates</h2>
+      <a href="{{ url('control:billing_commissions') }}" class="text-xs text-slate-400 hover:text-slate-600">All commissions →</a>
+    </div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+      <thead class="text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="py-1 pr-4">DGC</th><th class="py-1 pr-4">Signups via link</th><th class="py-1">Last signup</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for a in top_affiliates %}
+        <tr>
+          <td class="py-1.5 pr-4">{{ a.manager__username }}</td>
+          <td class="py-1.5 pr-4 font-medium">{{ a.signups }}</td>
+          <td class="py-1.5 text-xs text-slate-500">{{ a.latest.strftime('%d %b %Y') if a.latest else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  {% endif %}
+
   {% if control_is_platform_admin %}
   <a href="{{ url('control:platform_backups') }}"
      class="flex items-center justify-between rounded-xl bg-white p-5 ring-1 ring-slate-200 hover:ring-slate-300">

@@ -198,6 +198,12 @@ class Subscription(TimeStampedModel):
     manager = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                 on_delete=models.SET_NULL, related_name="managed_subscriptions")
 
+    # The DGC affiliate code (Profile.affiliate_code) this store's owner signed
+    # up through, if any — distinguishes a genuine affiliate-link conversion
+    # from a store a platform admin later hand-assigned to a manager. Blank
+    # for both direct signups and manually-provisioned stores.
+    affiliate_ref = models.CharField(max_length=16, blank=True, db_index=True)
+
     # Optional per-store price override (deal pricing). Null = use the plan price.
     override_price = models.DecimalField(**_MONEY, null=True, blank=True)
 
