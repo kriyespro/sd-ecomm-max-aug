@@ -75,11 +75,11 @@ class BannerCropFieldTests(_AdminBase):
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode()
         self.assertIn(
-            "imageCropField('id_image', { aspectRatio: 2.1052631578947367, ratioKey: 'wide' })",
+            "imageCropField('id_image', { aspectRatio: 4, ratioKey: 'wide' })",
             body,
         )
         self.assertIn(
-            "imageCropField('id_mobile_image', { aspectRatio: 2.1052631578947367, ratioKey: 'wide' })",
+            "imageCropField('id_mobile_image', { aspectRatio: 4, ratioKey: 'wide' })",
             body,
         )
         self.assertIn("Crop image", body)

@@ -15,10 +15,10 @@
   {# CATEGORY BANNER — placement "category" bound to this category in /admin/cms/banners/ #}
   {% set _catban = category_banners.get(active_category) if active_category else none %}
   {% if _catban %}
-  <a href="{{ _catban.cta_url or '' }}" class="group relative mb-10 block aspect-[40/19] overflow-hidden bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
+  <a href="{{ _catban.cta_url or '' }}" class="group relative mb-10 block aspect-[4/1] overflow-hidden bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
     <picture>
       {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
-      <img src="{{ _catban.image | media_src(1600, 760, 'Category banner') }}" alt="{{ _catban.heading }}" loading="lazy" decoding="async"
+      <img src="{{ _catban.image | media_src(1600, 400, 'Category banner') }}" alt="{{ _catban.heading }}" loading="lazy" decoding="async"
            class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
     {% if _catban.heading or _catban.subheading %}
