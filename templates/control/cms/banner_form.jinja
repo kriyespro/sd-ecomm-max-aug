@@ -20,8 +20,7 @@
   {% endif %}
 
   {% set _banner_ratios = [
-       ('4:1 — promo/category/product', 4, 'wide'),
-       ('2.1:1 — hero', (1600/760), 'hero'),
+       ('4:1 — hero/promo/category/product', 4, 'wide'),
        ('1:1 — popup', 1, '1'),
        ('Free', 'NaN', 'free'),
      ] %}
@@ -31,7 +30,7 @@
          field, form.instance.image.url if form.instance.image else '',
          'Banner image', 320, 80,
          initial_ratio=4, initial_ratio_key='wide', ratio_choices=_banner_ratios,
-         help_text='1600×400px (4:1) fits the promo/category/product slots with no crop. Hero is taller (1600×760, 2.1:1) — pick that preset for a hero banner. Popup and announcement don’t force a shape — pick 1:1 or Free.'
+         help_text='1600×400px (4:1) fits the hero/promo/category/product slots with no crop. Popup and announcement don’t force a shape — pick 1:1 or Free.'
        ) }}
     {% elif field.name == 'mobile_image' %}
     {{ image_crop_field(
