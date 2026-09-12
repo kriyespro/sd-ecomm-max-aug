@@ -4,10 +4,11 @@ object-cover, wildly mismatched against any real upload and cropping the
 top/bottom hard, independent of the actual image shape. Category tiles and
 product cards never had this bug because they already use a proportional
 aspect-[W/H] container matching their own recommended upload ratio; banners
-now do the same: aspect-[4/1] (1600x400) for promo/category/product — a
-merchant found the first fix's 1600x760 (aspect-[40/19]) too tall for those
-— and aspect-[40/19] (1600x760) for hero, which keeps the taller box since
-it carries overlaid heading/CTA text and wasn't reported as too big."""
+now do the same: aspect-[4/1] (1600x400) for every placement — hero was
+initially left at the taller aspect-[40/19] (1600x760) for its overlaid
+heading/CTA text, but the merchant asked for one consistent size across
+hero/promo/category too, so hero's overlay copy was trimmed down (smaller
+heading, one CTA, no body paragraph) to fit the shorter box instead."""
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -106,18 +107,18 @@ class BannerAspectRatioTests(TestCase):
     def test_default_skin_hero_uses_matching_aspect_ratio(self):
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
         self.assertNotIn("min-h-[78vh]", resp.content.decode())
 
     def test_botanica2_hero_uses_matching_aspect_ratio(self):
         self._use_skin("botanica2")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
 
     def test_botanica3_hero_slider_uses_matching_aspect_ratio(self):
         self._use_skin("botanica3")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
         self.assertNotIn("min-h-[50vh] items-end sm:min-h-[56vh]", resp.content.decode())

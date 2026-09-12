@@ -20,32 +20,24 @@
 {# ============ HERO — full-bleed image with overlay ============ #}
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
-<section class="relative isolate flex aspect-[40/19] items-end overflow-hidden bg-ink">
+<section class="relative isolate flex aspect-[4/1] items-end overflow-hidden bg-ink">
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
-    <img src="{{ hero_img | media_src(1600, 760, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+    <img src="{{ hero_img | media_src(1600, 400, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
   </picture>
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
-  <div class="mx-auto w-full max-w-7xl px-5 pb-8 pt-12 sm:pb-10 sm:pt-16 lg:px-8 lg:pb-14">
-    <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
-      <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}</span>
+  <div class="mx-auto w-full max-w-7xl px-5 py-3 sm:py-5 lg:px-8">
+    <p class="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-luxe text-gold sm:flex">
+      <span class="h-px w-6 shrink-0 bg-gold"></span><span class="min-w-0">{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}</span>
     </p>
-    <h1 class="mt-4 max-w-3xl font-display text-[2rem] leading-[1.08] text-paper sm:text-6xl sm:leading-[1.05] lg:text-7xl">
-      {% if hero_banner and hero_banner.heading %}{{ hero_banner.heading }}{% else %}Rooted in nature,<br>made for the everyday.{% endif %}
+    <h1 class="mt-1 max-w-xl font-display text-lg leading-tight text-paper sm:text-2xl lg:text-4xl">
+      {% if hero_banner and hero_banner.heading %}{{ hero_banner.heading }}{% else %}Rooted in nature, made for the everyday.{% endif %}
     </h1>
-    <p class="mt-5 max-w-md text-[15px] leading-relaxed text-paper/80">
-      A considered edit of botanicals, tonics and rituals — formulated with what
-      works, and nothing that doesn't.
-    </p>
-    <div class="mt-9 flex flex-wrap gap-3">
+    <div class="mt-2 sm:mt-4">
       <a href="{{ hero_banner.cta_url if (hero_banner and hero_banner.cta_url) else url('shopfront:shop') }}"
-         class="bg-paper px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-9 sm:py-4">
+         class="inline-block bg-paper px-4 py-1.5 text-[10px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-6 sm:py-2.5">
         {{ hero_banner.cta_label if (hero_banner and hero_banner.cta_label) else 'Shop the collection' }}
-      </a>
-      <a href="{{ url('shopfront:shop') }}?sort=rating"
-         class="border border-paper/60 px-7 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-paper hover:text-ink sm:px-9 sm:py-4">
-        Best rated
       </a>
     </div>
   </div>
