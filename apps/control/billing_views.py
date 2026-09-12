@@ -178,6 +178,10 @@ class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
 
     def get_context_data(self, **kwargs):
         from django.db.models import Sum
+
+        from apps.accounts.models import Membership, StoreRole
+        from apps.accounts.utils import mask_email
+
         ctx = super().get_context_data(**kwargs)
         mine = ManagerCommission.objects.filter(manager=self.request.user)
         ctx["total_paid"] = (mine.filter(status=CommissionStatus.PAID)
@@ -187,6 +191,33 @@ class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
             .aggregate(t=Sum("amount"))["t"] or 0
         )
         ctx["payout_upi"] = getattr(self.request.user.profile, "payout_upi", "")
+
+        code = self.request.user.profile.ensure_affiliate_code()
+        ctx["affiliate_code"] = code
+        ctx["affiliate_link"] = self.request.build_absolute_uri(
+            f"{reverse_lazy('accounts:signup')}?ref={code}"
+        )
+        referrals = list(
+            Subscription.objects.filter(manager=self.request.user)
+            .exclude(affiliate_ref="")
+            .select_related("project", "plan")
+            .order_by("-created_at")[:200]
+        )
+        owner_emails = dict(
+            Membership.objects.filter(
+                project_id__in=[r.project_id for r in referrals],
+                role=StoreRole.OWNER, is_active=True,
+            ).values_list("project_id", "user__email")
+        )
+        ctx["referrals"] = [
+            {
+                "store_name": r.project.name,
+                "email": mask_email(owner_emails.get(r.project_id, "")),
+                "joined": r.project.created_at,
+                "status": r.status,
+            }
+            for r in referrals
+        ]
         return ctx
 
 

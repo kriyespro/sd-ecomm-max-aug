@@ -42,6 +42,11 @@ class Profile(TimeStampedModel):
     # on /admin/earnings/; the platform admin sees it on the commissions screen.
     payout_upi = models.CharField(max_length=120, blank=True)
 
+    # A DGC's own referral code — ?ref=<code> on the public signup link.
+    # Lazily generated (see ensure_affiliate_code) the first time their
+    # earnings screen needs one, so ordinary users never get one at all.
+    affiliate_code = models.CharField(max_length=16, unique=True, blank=True, null=True)
+
     def save(self, *args, **kwargs):
         from apps.media.services import shrink_image_field
 
@@ -66,6 +71,21 @@ class Profile(TimeStampedModel):
     @property
     def is_platform_manager(self):
         return self.platform_role == PlatformRole.MANAGER and not self.user.is_superuser
+
+    def ensure_affiliate_code(self):
+        """Return this DGC's referral code, minting one on first use."""
+        if self.affiliate_code:
+            return self.affiliate_code
+        from django.utils.crypto import get_random_string
+
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # no 0/O/1/I/l
+        for _ in range(10):
+            code = get_random_string(8, allowed_chars=alphabet)
+            if not Profile.objects.filter(affiliate_code=code).exists():
+                self.affiliate_code = code
+                self.save(update_fields=["affiliate_code", "updated_at"])
+                return code
+        raise RuntimeError("could not mint a unique affiliate code")
 
 
 class PartnerApplication(TimeStampedModel):

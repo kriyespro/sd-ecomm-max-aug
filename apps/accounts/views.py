@@ -61,6 +61,14 @@ class SignupView(TemplateView):
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
             return redirect("control:dashboard")
+        # A DGC affiliate link (?ref=<code>) — stashed in the session so it
+        # survives the Google OAuth round trip and is still there when
+        # SignupCompleteView finally creates the store. An absent or later
+        # invalid code is resolved (and silently dropped) inside self_signup,
+        # never here — a bad code must never block signup.
+        ref = (request.GET.get("ref") or "").strip()[:16]
+        if ref:
+            request.session["signup_ref"] = ref
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -196,6 +204,7 @@ class SignupCompleteView(FormView):
                 store_name=form.cleaned_data["store_name"],
                 phone=form.cleaned_data["phone"],
                 plan=plan, oauth=True, request=self.request,
+                ref_code=self.request.session.get("signup_ref", ""),
             )
         except ValidationError as exc:
             for msg in exc.messages:
@@ -203,6 +212,7 @@ class SignupCompleteView(FormView):
             return self.form_invalid(form)
 
         self.request.session.pop(_PENDING, None)
+        self.request.session.pop("signup_ref", None)
         _track_signup(self.request, project=_project, email=self.pending["email"],
                      plan=plan, phone=form.cleaned_data["phone"])
         login(self.request, user)
