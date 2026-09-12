@@ -1,0 +1,55 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_field %}
+{% from "control/_image_crop.jinja" import image_crop_field, image_crop_head, image_crop_scripts %}
+{% block page_title %}{{ "Edit banner" if form.instance.pk else "New banner" }}{% endblock %}
+
+{% block head %}{{ super() }}
+{{ image_crop_head() }}
+{% endblock %}
+
+{% block content %}
+<form method="post" enctype="multipart/form-data"
+      class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <h2 class="text-sm font-semibold text-slate-700">
+    {{ "Edit" if form.instance.pk else "New" }} banner
+  </h2>
+
+  {% if form.non_field_errors() %}
+  <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
+  {% endif %}
+
+  {% set _banner_ratios = [
+       ('2.1:1 — hero/promo/category/product', (1600/760), 'wide'),
+       ('1:1 — popup', 1, '1'),
+       ('Free', 'NaN', 'free'),
+     ] %}
+  {% for field in form.visible_fields() %}
+    {% if field.name == 'image' %}
+    {{ image_crop_field(
+         field, form.instance.image.url if form.instance.image else '',
+         'Banner image', 320, 152,
+         initial_ratio=(1600/760), initial_ratio_key='wide', ratio_choices=_banner_ratios,
+         help_text='1600×760px (2.1:1) fits the hero/promo/category/product slots with no crop. Popup and announcement banners don’t force a shape — pick 1:1 or Free for those.'
+       ) }}
+    {% elif field.name == 'mobile_image' %}
+    {{ image_crop_field(
+         field, form.instance.mobile_image.url if form.instance.mobile_image else '',
+         'Mobile image', 320, 152,
+         initial_ratio=(1600/760), initial_ratio_key='wide', ratio_choices=_banner_ratios,
+         help_text='Optional — shown instead of the image above on phone screens.'
+       ) }}
+    {% else %}
+    {{ render_field(field) }}
+    {% endif %}
+  {% endfor %}
+  {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
+
+  <div class="flex gap-2 pt-2">
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+    <a href="{{ request.META.get('HTTP_REFERER', url('control:cms_banners')) }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
+  </div>
+</form>
+
+{{ image_crop_scripts() }}
+{% endblock %}

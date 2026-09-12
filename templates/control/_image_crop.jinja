@@ -1,0 +1,183 @@
+{# Reusable crop/zoom uploader for an ImageField — built once for the store
+   logo, generalized here so any other image field (Banner, Category, ...) can
+   get the same tool. Include image_crop_head() once in {% block head %} and
+   image_crop_scripts() once near the end of the page; call image_crop_field()
+   once per field.
+
+   initial_ratio: numeric ratio (e.g. 1600/760) the cropper opens with —
+   just a starting point, not a lock; the merchant can still switch it via
+   ratio_choices. initial_ratio_key must match one of ratio_choices' keys so
+   that preset shows selected from the start. Leave both unset for a plain
+   free-form crop with no picker (like Category's fixed single-ratio field). #}
+
+{% macro image_crop_head() %}
+<link rel="stylesheet" href="{{ static('vendor/cropperjs/cropper.min.css') }}">
+{% endmacro %}
+
+{% macro image_crop_field(field, current_url, placeholder_label, placeholder_w=320, placeholder_h=160, initial_ratio=none, initial_ratio_key='free', ratio_choices=none, help_text=none) %}
+{% set fid = field.id_for_label %}
+<div class="space-y-2" x-data="imageCropField('{{ fid }}', { {{ 'aspectRatio: ' ~ initial_ratio ~ ', ratioKey: ' ~ initial_ratio_key | tojson if initial_ratio is not none }} })">
+  <label for="{{ fid }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+
+  <div class="flex items-start gap-4">
+    <div class="grid h-16 w-28 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-50 ring-1 ring-slate-200">
+      <img id="preview-{{ fid }}" alt="Preview" src="{{ current_url or '' }}"
+           class="max-h-full max-w-full object-contain {{ '' if current_url else 'hidden' }}">
+      <img id="placeholder-{{ fid }}" alt="" src="{{ placeholder(placeholder_w, placeholder_h, placeholder_label) }}"
+           class="max-h-full max-w-full object-contain {{ 'hidden' if current_url else '' }}">
+    </div>
+    <div class="min-w-0 flex-1 space-y-1">
+      {{ field.as_widget(attrs={"class": "block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200", "accept": "image/*", "@change": "onPick($event)"}) }}
+      {% if help_text %}<p class="text-xs text-slate-400">{{ help_text }}</p>{% endif %}
+      <p x-show="cropped" x-cloak class="text-xs font-medium text-emerald-600">
+        &#10003; Cropped — save the form to apply.
+        <button type="button" @click="recrop()" class="ml-1 underline">Re-crop</button>
+      </p>
+      {% for error in field.errors %}<p class="text-xs text-red-600">{{ error }}</p>{% endfor %}
+    </div>
+  </div>
+
+  {# ---- Cropper modal ---- #}
+  <div x-show="open" x-cloak
+       class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4"
+       @keydown.escape.window="cancel()">
+    <div class="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-xl bg-white shadow-xl">
+      <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <h3 class="text-sm font-semibold text-slate-700">Crop {{ field.label | lower }}</h3>
+        <button type="button" @click="cancel()" class="text-slate-400 hover:text-slate-700">&#10005;</button>
+      </div>
+
+      <div class="min-h-0 flex-1 overflow-hidden bg-slate-100 p-3">
+        <div class="mx-auto max-h-[52vh]"><img id="crop-src-{{ fid }}" alt="" class="block max-w-full"></div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2 border-t border-slate-200 px-4 py-3 text-xs">
+        {% if ratio_choices %}
+        <span class="text-slate-500">Ratio:</span>
+        {% for label, val, key in ratio_choices %}
+        <button type="button" @click="setRatio({{ val }})"
+                :class="ratioKey === '{{ key }}' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'"
+                class="rounded px-2 py-1 font-medium">{{ label }}</button>
+        {% endfor %}
+        <span class="mx-1 h-4 w-px bg-slate-200"></span>
+        {% endif %}
+        <button type="button" @click="zoom(0.1)" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Zoom +</button>
+        <button type="button" @click="zoom(-0.1)" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Zoom −</button>
+        <button type="button" @click="rot()" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Rotate</button>
+        <button type="button" @click="reset()" class="rounded bg-slate-100 px-2 py-1 hover:bg-slate-200">Reset</button>
+      </div>
+
+      <div class="flex justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3">
+        <button type="button" @click="cancel()" class="rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-200">Cancel</button>
+        <button type="button" @click="apply()" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Apply crop</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro image_crop_scripts() %}
+<script src="{{ static('vendor/cropperjs/cropper.min.js') }}"></script>
+<script>
+function imageCropField(fieldId, opts) {
+  // Kept out of Alpine's reactive state on purpose — Alpine's Proxy wrapper
+  // breaks Cropper's internal `this`.
+  opts = opts || {};
+  const startRatio = typeof opts.aspectRatio === 'number' ? opts.aspectRatio : NaN;
+  const startRatioKey = opts.ratioKey || 'free';
+  let cropper = null;
+  let lastFile = null;
+  let origName = fieldId;
+  const input = () => document.getElementById(fieldId);
+
+  function startCropper(file) {
+    lastFile = file;
+    const img = document.getElementById('crop-src-' + fieldId);
+    img.src = URL.createObjectURL(file);
+    return () => {
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(img, {
+        viewMode: 1, autoCropArea: 1, background: false,
+        responsive: true, checkOrientation: true,
+        aspectRatio: startRatio,
+      });
+    };
+  }
+
+  return {
+    open: false, cropped: false, ratioKey: startRatioKey,
+
+    onPick(e) {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      origName = (f.name || fieldId).replace(/\.[^.]+$/, '');
+      if (f.type === 'image/svg+xml' || /\.svg$/i.test(f.name || '')) {
+        this._preview(URL.createObjectURL(f));   // vector — nothing to crop
+        this.cropped = false;
+        return;
+      }
+      if (!f.type.startsWith('image/')) return;
+      const init = startCropper(f);
+      this.ratioKey = startRatioKey;
+      this.open = true;
+      this.$nextTick(init);
+    },
+
+    recrop() {
+      if (!lastFile) { input().click(); return; }
+      const init = startCropper(lastFile);
+      this.ratioKey = startRatioKey;
+      this.open = true;
+      this.$nextTick(init);
+    },
+
+    setRatio(r) {
+      this.ratioKey = isNaN(r) ? 'free' : (r === 1.7777 ? '16-9' : String(r));
+      if (cropper) cropper.setAspectRatio(r);
+    },
+    zoom(d) { if (cropper) cropper.zoom(d); },
+    rot() { if (cropper) cropper.rotate(-90); },
+    // Resets pan/zoom to fit the current ratio — doesn't change the ratio
+    // itself, that's what the picker buttons are for.
+    reset() { if (cropper) cropper.reset(); },
+
+    apply() {
+      if (!cropper) return;
+      const canvas = cropper.getCroppedCanvas({
+        maxWidth: opts.maxWidth || 1600, maxHeight: opts.maxHeight || 1600,
+        imageSmoothingEnabled: true, imageSmoothingQuality: 'high',
+      });
+      if (!canvas) return;
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], origName + '.png', { type: 'image/png' });
+        try {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          input().files = dt.files;
+        } catch (err) {
+          console.warn('crop: cannot assign cropped file, keeping original', err);
+        }
+        this._preview(URL.createObjectURL(blob));
+        this.cropped = true;
+        this._close();
+      }, 'image/png');
+    },
+
+    cancel() { this._close(); },
+
+    _close() {
+      this.open = false;
+      if (cropper) { cropper.destroy(); cropper = null; }
+    },
+
+    _preview(src) {
+      const p = document.getElementById('preview-' + fieldId);
+      const ph = document.getElementById('placeholder-' + fieldId);
+      p.src = src; p.classList.remove('hidden');
+      if (ph) ph.classList.add('hidden');
+    },
+  };
+}
+</script>
+{% endmacro %}
