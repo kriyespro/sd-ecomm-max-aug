@@ -154,6 +154,32 @@ class SuperadminAffiliateDashboardTests(TestCase):
         resp = self.client.get("/admin/")
         self.assertNotContains(resp, "Top affiliates")
 
+    def test_admin_nav_shows_affiliates_link(self):
+        su = User.objects.create_superuser("root", "root@t.test", "pw")
+        self.client.force_login(su)
+        resp = self.client.get("/admin/stores/")
+        self.assertContains(resp, 'href="/admin/affiliates/')
+
+    def test_dgc_nav_hides_affiliates_link(self):
+        self.client.force_login(self.dgc)
+        resp = self.client.get("/admin/earnings/")
+        self.assertNotContains(resp, 'href="/admin/affiliates/')
+
+    def test_affiliate_overview_page_lists_dgc_link_and_referred_store(self):
+        su = User.objects.create_superuser("root", "root@t.test", "pw")
+        self.client.force_login(su)
+        resp = self.client.get("/admin/affiliates/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, f"?ref={self.code}")
+        self.assertContains(resp, "Dash Ref Shop")
+        self.assertContains(resp, "dashref@gmail.com")
+        self.assertContains(resp, "1")  # signup count for this DGC
+
+    def test_affiliate_overview_page_is_admin_only(self):
+        self.client.force_login(self.dgc)
+        resp = self.client.get("/admin/affiliates/")
+        self.assertEqual(resp.status_code, 403)
+
     def test_manager_commission_falls_back_to_referrer_when_no_manager(self):
         """The money side of the split: an affiliate-referred store's paid
         invoices still accrue commission to the referring DGC even though

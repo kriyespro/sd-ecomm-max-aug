@@ -1,0 +1,62 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Affiliates{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div class="flex flex-wrap gap-4 text-xs">
+    <a href="{{ url('control:billing') }}" class="font-medium text-slate-500 hover:text-slate-900">Overview</a>
+    <a href="{{ url('control:billing_commissions') }}" class="font-medium text-slate-500 hover:text-slate-900">Commissions</a>
+    <a href="{{ url('control:affiliate_overview') }}" class="font-medium text-slate-900 underline">Affiliates</a>
+  </div>
+
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Total affiliate signups</p>
+    <p class="mt-1 text-2xl font-semibold text-slate-900">{{ total_signups }}</p>
+    <p class="text-xs text-slate-400">Stores that signed up through a DGC's own referral link — commission only, no store access.</p>
+  </div>
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">DGCs &amp; their referral links</div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[32rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">DGC</th><th class="px-4 py-2">Referral link</th><th class="px-4 py-2">Signups</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in dgcs %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">{{ p.user.email or p.user.username }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-500">
+            {% if p.affiliate_code %}{{ signup_base_url }}?ref={{ p.affiliate_code }}{% else %}not generated yet{% endif %}
+          </td>
+          <td class="px-4 py-2 font-medium">{{ p.signups }}</td>
+        </tr>
+        {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="3">No DGCs yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Referred stores</div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[32rem]">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Store</th><th class="px-4 py-2">DGC</th><th class="px-4 py-2">Owner email</th>
+          <th class="px-4 py-2">Joined</th><th class="px-4 py-2">Status</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in referrals %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">{{ r.store_name }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.dgc }}</td>
+          <td class="px-4 py-2 font-mono text-xs text-slate-600">{{ r.email }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.joined.strftime('%d %b %Y') }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if r.status == 'active' else 'bg-amber-100 text-amber-800' }}">{{ r.status }}</span>
+          </td>
+        </tr>
+        {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="5">No affiliate signups yet.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+</div>
+{% endblock %}
