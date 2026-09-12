@@ -127,7 +127,7 @@ class BannerListView(_ScopedList):
 class _BannerForm(_ScopedForm):
     model = Banner
     form_class = BannerForm
-    template_name = "control/_object_form.jinja"
+    template_name = "control/cms/banner_form.jinja"
     success_url = reverse_lazy("control:cms_banners")
 
 
