@@ -20,10 +20,10 @@
 {# ============ HERO — full-bleed image with overlay ============ #}
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
-<section class="relative isolate flex aspect-[4/1] items-end overflow-hidden bg-ink">
+<section class="relative isolate flex aspect-[40/13] items-end overflow-hidden bg-ink">
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
-    <img src="{{ hero_img | media_src(1600, 400, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+    <img src="{{ hero_img | media_src(1600, 520, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
   </picture>
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
