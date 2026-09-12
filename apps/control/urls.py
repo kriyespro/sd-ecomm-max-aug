@@ -244,6 +244,11 @@ urlpatterns = [
     path("cms/budget-bands/new/", cmsv.BudgetBandCreateView.as_view(), name="cms_budget_band_create"),
     path("cms/budget-bands/<int:pk>/", cmsv.BudgetBandUpdateView.as_view(), name="cms_budget_band_edit"),
     path("cms/budget-bands/<int:pk>/delete/", cmsv.BudgetBandDeleteView.as_view(), name="cms_budget_band_delete"),
+    # CMS — benefit items ("Why it works")
+    path("cms/benefits/", cmsv.BenefitItemListView.as_view(), name="cms_benefit_items"),
+    path("cms/benefits/new/", cmsv.BenefitItemCreateView.as_view(), name="cms_benefit_item_create"),
+    path("cms/benefits/<int:pk>/", cmsv.BenefitItemUpdateView.as_view(), name="cms_benefit_item_edit"),
+    path("cms/benefits/<int:pk>/delete/", cmsv.BenefitItemDeleteView.as_view(), name="cms_benefit_item_delete"),
     # CMS — Instagram feed
     path("cms/instagram/", cmsv.InstagramListView.as_view(), name="cms_instagram"),
     path("cms/instagram/fetch/", cmsv.InstagramFetchView.as_view(), name="cms_instagram_fetch"),

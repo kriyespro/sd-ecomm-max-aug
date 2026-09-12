@@ -20,6 +20,7 @@ from django.views.generic import (
 from apps.cms.models import (
     FAQ,
     Banner,
+    BenefitItem,
     BudgetBand,
     ContentBlock,
     InstagramItem,
@@ -36,6 +37,7 @@ from apps.core.services import record_audit
 
 from .forms import (
     BannerForm,
+    BenefitItemForm,
     BudgetBandForm,
     ContentBlockForm,
     FAQForm,
@@ -206,6 +208,37 @@ class BudgetBandUpdateView(_BudgetBandForm, UpdateView):
 class BudgetBandDeleteView(_ScopedDelete):
     model = BudgetBand
     success_url = reverse_lazy("control:cms_budget_bands")
+
+
+# --- Benefit items ("Why it works") -------------------------------
+
+class BenefitItemListView(_ScopedList):
+    model = BenefitItem
+    template_name = "control/cms/benefit_item_list.jinja"
+    context_object_name = "items"
+
+    def get_queryset(self):
+        return super().get_queryset().order_by("order", "id")
+
+
+class _BenefitItemForm(_ScopedForm):
+    model = BenefitItem
+    form_class = BenefitItemForm
+    template_name = "control/_object_form.jinja"
+    success_url = reverse_lazy("control:cms_benefit_items")
+
+
+class BenefitItemCreateView(_BenefitItemForm, CreateView):
+    pass
+
+
+class BenefitItemUpdateView(_BenefitItemForm, UpdateView):
+    pass
+
+
+class BenefitItemDeleteView(_ScopedDelete):
+    model = BenefitItem
+    success_url = reverse_lazy("control:cms_benefit_items")
 
 
 # --- Instagram feed --------------------------------------------
