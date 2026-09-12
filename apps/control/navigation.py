@@ -19,6 +19,7 @@ _SECTIONS = [
     ("platform", "Platform", "◆", [
         ("stores", "Stores", "\U0001f3e2"),
         ("my_commissions", "My earnings", "\U0001f4b5"),
+        ("affiliate_overview", "Affiliates", "\U0001f517"),
         ("billing", "Billing", "\U0001f4b0"),
         ("billing_plans", "Plans & pricing", "\U0001f3f7"),
         ("skin_list", "Skins", "\U0001f3ad"),
@@ -93,7 +94,7 @@ _SECTIONS = [
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
                         "partner_applications", "showcase_list", "platform_backups",
-                        "platform_tracking", "learning"}
+                        "platform_tracking", "learning", "affiliate_overview"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).

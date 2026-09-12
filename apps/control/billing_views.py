@@ -146,6 +146,54 @@ class CommissionListView(PlatformAdminRequiredMixin, ListView):
         return ctx
 
 
+class AffiliateOverviewView(PlatformAdminRequiredMixin, TemplateView):
+    """Superadmin's dedicated affiliate-program page — every DGC's own
+    referral code and how many signups it's brought in, plus every
+    individual referred store platform-wide. The dashboard's "Top
+    affiliates" panel is just a teaser for this."""
+
+    template_name = "control/billing/affiliates.jinja"
+
+    def get_context_data(self, **kwargs):
+        from django.db.models import Count
+
+        from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
+
+        ctx = super().get_context_data(**kwargs)
+
+        ctx["dgcs"] = (
+            Profile.objects.filter(platform_role=PlatformRole.MANAGER)
+            .select_related("user")
+            .annotate(signups=Count("user__affiliate_referrals", distinct=True))
+            .order_by("-signups", "user__username")
+        )
+        ctx["signup_base_url"] = self.request.build_absolute_uri(reverse_lazy("accounts:signup"))
+
+        referrals = list(
+            Subscription.objects.filter(referred_by__isnull=False)
+            .select_related("project", "referred_by")
+            .order_by("-created_at")[:200]
+        )
+        owner_emails = dict(
+            Membership.objects.filter(
+                project_id__in=[r.project_id for r in referrals],
+                role=StoreRole.OWNER, is_active=True,
+            ).values_list("project_id", "user__email")
+        )
+        ctx["referrals"] = [
+            {
+                "store_name": r.project.name,
+                "dgc": r.referred_by.username,
+                "email": owner_emails.get(r.project_id, ""),
+                "joined": r.project.created_at,
+                "status": r.status,
+            }
+            for r in referrals
+        ]
+        ctx["total_signups"] = len(referrals)
+        return ctx
+
+
 class MyCommissionsView(PlatformStaffRequiredMixin, ListView):
     """A DGC's own commission ledger — read-only, plus a self-serve payout-UPI
     field. Platform admins have the full cross-DGC view at

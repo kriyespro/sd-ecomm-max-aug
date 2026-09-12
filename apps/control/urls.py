@@ -335,6 +335,7 @@ urlpatterns = [
     path("billing/plans/<int:pk>/", billv.PlanEditView.as_view(), name="billing_plan_edit"),
     path("billing/subscriptions/", billv.SubscriptionListView.as_view(), name="billing_subscriptions"),
     path("billing/commissions/", billv.CommissionListView.as_view(), name="billing_commissions"),
+    path("affiliates/", billv.AffiliateOverviewView.as_view(), name="affiliate_overview"),
     path("billing/commissions/<int:pk>/paid/", billv.CommissionMarkPaidView.as_view(), name="billing_commission_paid"),
     path("earnings/", billv.MyCommissionsView.as_view(), name="my_commissions"),
     path("billing/settings/", billv.BillingSettingsView.as_view(), name="billing_settings"),
