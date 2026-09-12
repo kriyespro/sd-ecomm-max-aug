@@ -8,7 +8,10 @@ now do the same: aspect-[4/1] (1600x400) for every placement — hero was
 initially left at the taller aspect-[40/19] (1600x760) for its overlaid
 heading/CTA text, but the merchant asked for one consistent size across
 hero/promo/category too, so hero's overlay copy was trimmed down (smaller
-heading, one CTA, no body paragraph) to fit the shorter box instead."""
+heading, one CTA, no body paragraph) to fit the shorter box instead.
+
+Hero was later bumped 30% taller again — aspect-[40/13] (1600x520) — while
+promo/category/product stayed at aspect-[4/1]."""
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -107,18 +110,18 @@ class BannerAspectRatioTests(TestCase):
     def test_default_skin_hero_uses_matching_aspect_ratio(self):
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[4/1]")
+        self.assertContains(resp, "aspect-[40/13]")
         self.assertNotIn("min-h-[78vh]", resp.content.decode())
 
     def test_botanica2_hero_uses_matching_aspect_ratio(self):
         self._use_skin("botanica2")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[4/1]")
+        self.assertContains(resp, "aspect-[40/13]")
 
     def test_botanica3_hero_slider_uses_matching_aspect_ratio(self):
         self._use_skin("botanica3")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[4/1]")
+        self.assertContains(resp, "aspect-[40/13]")
         self.assertNotIn("min-h-[50vh] items-end sm:min-h-[56vh]", resp.content.decode())

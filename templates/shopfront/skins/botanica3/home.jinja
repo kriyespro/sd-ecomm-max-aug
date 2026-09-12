@@ -82,11 +82,11 @@
   {% for b in slides %}
   <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
        {% if not loop.first %}style="display:none"{% endif %}
-       class="relative flex aspect-[4/1] items-end">
+       class="relative flex aspect-[40/13] items-end">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 400, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
-           {{ 'fetchpriority=high' if loop.first else 'loading=lazy' }} width="1600" height="400" decoding="async"
+      <img src="{{ b.image | media_src(1600, 520, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
+           {{ 'fetchpriority=high' if loop.first else 'loading=lazy' }} width="1600" height="520" decoding="async"
            class="absolute inset-0 -z-10 h-full w-full object-cover">
     </picture>
     <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
