@@ -8,6 +8,8 @@ reusable macro (templates/control/_image_crop.jinja) and wired to:
 - Category image — hard-locked to 3:2, the storefront tile's one and only
   display shape, no ambiguity to pick from."""
 
+from html.parser import HTMLParser
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -16,6 +18,29 @@ from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
 from apps.projects.models import Project
 
 User = get_user_model()
+
+
+class _XDataCollector(HTMLParser):
+    """A real HTML parser — unlike a substring check, this actually resolves
+    attribute boundaries the way a browser does, so it catches a quote
+    collision a substring match would miss (the corrupted markup still
+    *contains* the expected substring, right up to the point a stray quote
+    truncates the attribute)."""
+
+    def __init__(self):
+        super().__init__()
+        self.values = []
+
+    def handle_starttag(self, tag, attrs):
+        for name, value in attrs:
+            if name == "x-data" and value and "imageCropField" in value:
+                self.values.append(value)
+
+
+def _x_data_values(html):
+    p = _XDataCollector()
+    p.feed(html)
+    return p.values
 
 
 class _AdminBase(TestCase):
@@ -50,11 +75,11 @@ class BannerCropFieldTests(_AdminBase):
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode()
         self.assertIn(
-            'imageCropField(\'id_image\', { aspectRatio: 2.1052631578947367, ratioKey: "wide" })',
+            "imageCropField('id_image', { aspectRatio: 2.1052631578947367, ratioKey: 'wide' })",
             body,
         )
         self.assertIn(
-            'imageCropField(\'id_mobile_image\', { aspectRatio: 2.1052631578947367, ratioKey: "wide" })',
+            "imageCropField('id_mobile_image', { aspectRatio: 2.1052631578947367, ratioKey: 'wide' })",
             body,
         )
         self.assertIn("Crop image", body)
@@ -98,7 +123,7 @@ class CategoryCropFieldTests(_AdminBase):
         resp = self.client.get("/admin/categories/new/")
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode()
-        self.assertIn("imageCropField('id_image', { aspectRatio: 1.5, ratioKey: \"free\" })", body)
+        self.assertIn("imageCropField('id_image', { aspectRatio: 1.5, ratioKey: 'free' })", body)
         self.assertIn("Crop image", body)
         # no picker offered — the tile only ever displays at 3:2
         self.assertNotIn('text-slate-500">Ratio:<', body)
@@ -111,3 +136,31 @@ class CategoryCropFieldTests(_AdminBase):
         from apps.categories.models import Category
 
         self.assertTrue(Category.objects.filter(project=self.project, name="Rings").exists())
+
+
+class RatioKeyAttributeQuotingTests(_AdminBase):
+    """Regression: initial_ratio_key was embedded via |tojson (double-quoted)
+    inside the double-quoted x-data="..." HTML attribute — e.g.
+    x-data="imageCropField('id_image', { ..., ratioKey: "wide" })". The
+    embedded double-quote closed the attribute early, truncating it right
+    before `wide"`, so Alpine got a syntactically invalid expression and
+    every reactive property on the component (open, cropped, ratioKey) came
+    back "not defined" in the browser console — the crop modal for a Banner
+    or Category image field with any initial_ratio was permanently broken:
+    stuck showing (open state undefined -> Alpine's x-show throws instead of
+    hiding it) with every button inert (no working scope to call into)."""
+
+    def test_banner_image_and_mobile_image_x_data_is_valid_js(self):
+        body = self.client.get("/admin/cms/banners/new/").content.decode()
+        values = _x_data_values(body)
+        self.assertEqual(len(values), 2)
+        for v in values:
+            self.assertIn("ratioKey: 'wide'", v)
+            self.assertTrue(v.endswith("})"), v)  # the attribute wasn't truncated
+
+    def test_category_image_x_data_is_valid_js(self):
+        body = self.client.get("/admin/categories/new/").content.decode()
+        values = _x_data_values(body)
+        self.assertEqual(len(values), 1)
+        self.assertIn("ratioKey: 'free'", values[0])
+        self.assertTrue(values[0].endswith("})"), values[0])

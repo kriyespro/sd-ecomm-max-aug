@@ -16,7 +16,7 @@
 
 {% macro image_crop_field(field, current_url, placeholder_label, placeholder_w=320, placeholder_h=160, initial_ratio=none, initial_ratio_key='free', ratio_choices=none, help_text=none) %}
 {% set fid = field.id_for_label %}
-<div class="space-y-2" x-data="imageCropField('{{ fid }}', { {{ 'aspectRatio: ' ~ initial_ratio ~ ', ratioKey: ' ~ initial_ratio_key | tojson if initial_ratio is not none }} })">
+<div class="space-y-2" x-data="imageCropField('{{ fid }}', { {% if initial_ratio is not none %}aspectRatio: {{ initial_ratio }}, ratioKey: '{{ initial_ratio_key }}'{% endif %} })">
   <label for="{{ fid }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
 
   <div class="flex items-start gap-4">
