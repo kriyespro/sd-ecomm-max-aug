@@ -48,11 +48,11 @@
 {# ── PROMO BANNERS — placement "promo" in /admin/cms/banners/ ── #}
 {% for b in promo_banners %}
 <section class="mx-auto max-w-7xl px-5 pt-14 lg:px-8">
-  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block overflow-hidden bg-[#080604]">
+  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[40/19] overflow-hidden bg-[#080604]">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 600, 'Promo banner') }}" alt="{{ b.heading }}" loading="lazy" decoding="async"
-           class="h-[280px] w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-[360px]">
+      <img src="{{ b.image | media_src(1600, 760, 'Promo banner') }}" alt="{{ b.heading }}" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
     {% if b.heading or b.subheading or b.cta_label %}
     <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-[#080604]/40 p-8 lg:p-14">

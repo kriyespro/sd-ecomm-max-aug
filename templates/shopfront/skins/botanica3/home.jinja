@@ -42,11 +42,11 @@
 
 {% macro promo_card(b) %}
 <section class="cv-auto mx-auto max-w-7xl px-5 pt-4 lg:px-8">
-  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block overflow-hidden rounded-3xl bg-ink">
+  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[40/19] overflow-hidden rounded-3xl bg-ink">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 600, 'Promo banner') }}" alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
-           class="h-[280px] w-full object-cover transition-transform duration-700 group-hover:scale-105 sm:h-[380px]">
+      <img src="{{ b.image | media_src(1600, 760, 'Promo banner') }}" alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
     {% if not b.text_hidden and (b.heading or b.subheading or b.cta_label) %}
     <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-ink/30 p-6 sm:p-8 lg:p-14">
