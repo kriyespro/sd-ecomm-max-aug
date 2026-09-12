@@ -39,6 +39,7 @@ urlpatterns = [
     # Store switcher
     path("choose-store/", views.ProjectPickerView.as_view(), name="project_picker"),
     path("set-store/", views.SetProjectView.as_view(), name="set_project"),
+    path("leave-store/", views.LeaveStoreView.as_view(), name="leave_store"),
 
     # First-run setup wizard (store owner / manager)
     path("start/", onbv.OnboardingView.as_view(), name="onboarding"),
