@@ -20,14 +20,14 @@
 {# ============ HERO — full-bleed image with overlay ============ #}
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
-<section class="relative isolate flex min-h-[72vh] items-end overflow-hidden bg-ink sm:min-h-[80vh] lg:min-h-[88vh]">
+<section class="relative isolate flex aspect-[40/19] items-end overflow-hidden bg-ink">
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
-    <img src="{{ hero_img | media_src(1600, 900, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+    <img src="{{ hero_img | media_src(1600, 760, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
   </picture>
   <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
-  <div class="mx-auto w-full max-w-7xl px-5 pb-12 pt-28 sm:pb-14 sm:pt-40 lg:px-8 lg:pb-20">
+  <div class="mx-auto w-full max-w-7xl px-5 pb-8 pt-12 sm:pb-10 sm:pt-16 lg:px-8 lg:pb-14">
     <p class="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-luxe text-gold">
       <span class="h-px w-8 shrink-0 bg-gold"></span><span class="min-w-0">{{ hero_banner.subheading if hero_banner else 'Clean, plant-powered wellness' }}</span>
     </p>

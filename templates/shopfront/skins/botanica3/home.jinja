@@ -66,7 +66,7 @@
 {{ category_row('Browse the shop', cat_tiles_top or cat_tiles, pad='pt-2 pb-4') }}
 {% endif %}
 
-{# ============ HERO — slider (all live hero banners); height cut ~30% ============ #}
+{# ============ HERO — slider (all live hero banners) ============ #}
 {% set slides = hero_slides %}
 {% if slides %}
 <section
@@ -82,7 +82,7 @@
   {% for b in slides %}
   <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
        {% if not loop.first %}style="display:none"{% endif %}
-       class="relative flex min-h-[50vh] items-end sm:min-h-[56vh] lg:min-h-[62vh]">
+       class="relative flex aspect-[40/19] items-end">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
       <img src="{{ b.image | media_src(1600, 760, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
@@ -92,7 +92,7 @@
     <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>
 
     {% if not b.text_hidden %}
-    <div class="mx-auto w-full max-w-7xl px-5 pb-9 pt-16 sm:pb-12 sm:pt-32 lg:px-8 lg:pb-16">
+    <div class="mx-auto w-full max-w-7xl px-5 pb-6 pt-8 sm:pb-8 sm:pt-12 lg:px-8 lg:pb-10">
       {% if b.subheading %}
       <p class="flex items-center gap-2.5 text-[10px] font-semibold uppercase tracking-luxe text-gold sm:gap-3 sm:text-[11px]">
         <span class="h-px w-6 shrink-0 bg-gold sm:w-8"></span><span class="min-w-0">{{ b.subheading }}</span>
