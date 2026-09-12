@@ -35,10 +35,10 @@
   {# PRODUCT BANNER — placement "product" (or the "category" banner for this product's category) #}
   {% set _pban = product_banner or (category_banners.get(product.category.slug) if product.category else none) %}
   {% if _pban %}
-  <a href="{{ _pban.cta_url or '' }}" class="group relative mb-8 block aspect-[40/19] overflow-hidden bg-ink {{ 'pointer-events-none' if not _pban.cta_url }}">
+  <a href="{{ _pban.cta_url or '' }}" class="group relative mb-8 block aspect-[4/1] overflow-hidden bg-ink {{ 'pointer-events-none' if not _pban.cta_url }}">
     <picture>
       {% if _pban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _pban.mobile_image.url }}">{% endif %}
-      <img src="{{ _pban.image | media_src(1600, 760, 'Product banner') }}" alt="{{ _pban.heading }}" loading="lazy" decoding="async"
+      <img src="{{ _pban.image | media_src(1600, 400, 'Product banner') }}" alt="{{ _pban.heading }}" loading="lazy" decoding="async"
            class="h-full w-full object-cover">
     </picture>
     {% if _pban.heading or _pban.cta_label %}

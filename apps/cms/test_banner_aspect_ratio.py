@@ -1,12 +1,13 @@
-"""Promo/category/product banner placements must display a widescreen upload
-(1600x760, the platform's documented banner size) uncropped. They used to be
-fixed-pixel-height boxes (h-28, h-40, h-[280px]...) with object-cover, wildly
-mismatched against 1600x760 (~2.1:1) and cropping the top/bottom hard —
-independent of the actual uploaded image, `object-cover` fills a box shaped
-nothing like the source. Category tiles and product cards never had this bug
-because they already use a proportional aspect-[W/H] container matching their
-own recommended upload ratio; banners now do the same (aspect-[40/19], the
-simplified form of 1600:760)."""
+"""Every Banner placement must display a matching-ratio upload uncropped.
+They used to be fixed-pixel-height boxes (h-28, h-40, h-[280px]...) with
+object-cover, wildly mismatched against any real upload and cropping the
+top/bottom hard, independent of the actual image shape. Category tiles and
+product cards never had this bug because they already use a proportional
+aspect-[W/H] container matching their own recommended upload ratio; banners
+now do the same: aspect-[4/1] (1600x400) for promo/category/product — a
+merchant found the first fix's 1600x760 (aspect-[40/19]) too tall for those
+— and aspect-[40/19] (1600x760) for hero, which keeps the taller box since
+it carries overlaid heading/CTA text and wasn't reported as too big."""
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -58,13 +59,13 @@ class BannerAspectRatioTests(TestCase):
     def test_default_skin_promo_banner_uses_matching_aspect_ratio(self):
         self._banner(BannerPlacement.PROMO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
         self.assertNotIn("h-[280px]", resp.content.decode())
 
     def test_default_skin_category_banner_uses_matching_aspect_ratio(self):
         self._banner(BannerPlacement.CATEGORY, category=self.category)
         resp = self.client.get("/shop/?category=rings", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
         self.assertNotIn("h-40 w-full", resp.content.decode())
 
     def test_default_skin_product_banner_uses_matching_aspect_ratio(self):
@@ -75,7 +76,7 @@ class BannerAspectRatioTests(TestCase):
             project=self.project, title="Ring", slug="ring", status="active", price="999",
         )
         resp = self.client.get("/p/ring/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/19]")
+        self.assertContains(resp, "aspect-[4/1]")
         self.assertNotIn("h-28 w-full", resp.content.decode())
 
     def test_botanica2_promo_and_category_banners_use_matching_aspect_ratio(self):
@@ -83,24 +84,24 @@ class BannerAspectRatioTests(TestCase):
         self._banner(BannerPlacement.PROMO)
         self._banner(BannerPlacement.CATEGORY, category=self.category)
         home = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(home, "aspect-[40/19]")
+        self.assertContains(home, "aspect-[4/1]")
         shop = self.client.get("/shop/?category=rings", HTTP_HOST="banner.test")
-        self.assertContains(shop, "aspect-[40/19]")
+        self.assertContains(shop, "aspect-[4/1]")
 
     def test_botanica3_promo_and_category_banners_use_matching_aspect_ratio(self):
         self._use_skin("botanica3")
         self._banner(BannerPlacement.PROMO)
         self._banner(BannerPlacement.CATEGORY, category=self.category)
         home = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(home, "aspect-[40/19]")
+        self.assertContains(home, "aspect-[4/1]")
         shop = self.client.get("/shop/?category=rings", HTTP_HOST="banner.test")
-        self.assertContains(shop, "aspect-[40/19]")
+        self.assertContains(shop, "aspect-[4/1]")
 
     def test_ornza_skin_promo_banner_uses_matching_aspect_ratio(self):
         self._use_skin("ornza")
         self._banner(BannerPlacement.PROMO)
         home = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(home, "aspect-[40/19]")
+        self.assertContains(home, "aspect-[4/1]")
 
     def test_default_skin_hero_uses_matching_aspect_ratio(self):
         self._banner(BannerPlacement.HERO)
