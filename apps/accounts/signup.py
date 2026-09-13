@@ -21,7 +21,7 @@ User = get_user_model()
 
 @transaction.atomic
 def self_signup(*, name, email, store_name, phone, password=None, plan=None,
-                oauth=False, request=None, ref_code=""):
+                oauth=False, request=None, ref_code="", city="", state="", postal_code=""):
     """Create the account + store. Returns ``(project, user, user_was_created)``.
 
     Public signup is Google-only, so ``oauth=True`` (no password) is the norm;
@@ -34,6 +34,12 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     It only ever sets ``Subscription.referred_by`` (commission), never
     ``manager`` (store access) — an affiliate link must never hand the
     referring DGC access to a store they didn't set up.
+
+    ``city``/``state``/``postal_code`` land on the store's own StoreProfile
+    (its address, shown in the storefront footer) — collected at signup
+    mainly so the platform's CompleteRegistration CAPI event can include
+    Meta's ct/st/zp match-quality fields, but genuinely useful as the store's
+    address regardless of that.
     """
     email = (email or "").strip().lower()
     store_name = (store_name or "").strip()
@@ -126,15 +132,21 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     from apps.control.store_services import _seed_demo
 
     transaction.on_commit(lambda: _seed_demo(project.pk))
-    transaction.on_commit(lambda: _fill_contact_phone(project.pk, phone))
+    transaction.on_commit(
+        lambda: _fill_contact_info(project.pk, phone, city, state, postal_code)
+    )
 
     return project, user, existing is None
 
 
-def _fill_contact_phone(project_id, phone):
+def _fill_contact_info(project_id, phone, city="", state="", postal_code=""):
     from apps.cms.models import StoreProfile
 
-    StoreProfile.objects.update_or_create(
-        project_id=project_id,
-        defaults={"support_phone": phone, "whatsapp": phone},
-    )
+    defaults = {"support_phone": phone, "whatsapp": phone}
+    if city:
+        defaults["city"] = city.strip()
+    if state:
+        defaults["state"] = state.strip()
+    if postal_code:
+        defaults["postal_code"] = postal_code.strip()
+    StoreProfile.objects.update_or_create(project_id=project_id, defaults=defaults)
