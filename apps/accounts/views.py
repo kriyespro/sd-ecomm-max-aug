@@ -87,34 +87,90 @@ class SignupView(TemplateView):
         ).values_list("code", flat=True).first() or ""
 
 
+class AffiliateJoinView(TemplateView):
+    """Public, open affiliate signup — anyone becomes a DGC instantly, no
+    application or admin review (that curated path is /partners/). Already
+    logged in? Join on the spot, no OAuth round trip needed — we already
+    know who they are."""
+
+    template_name = "accounts/affiliate_join.jinja"
+
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated and request.user.email:
+            from .affiliate_signup import join_as_affiliate
+
+            try:
+                _user, _created, upgraded = join_as_affiliate(
+                    name=request.user.get_full_name() or request.user.username,
+                    email=request.user.email, request=request,
+                )
+            except ValidationError as exc:
+                for msg in exc.messages:
+                    messages.error(request, msg)
+                return redirect("control:dashboard")
+            if upgraded:
+                messages.success(request, "You're in — here's your referral link.")
+            else:
+                messages.info(request, "You already have affiliate access.")
+            return redirect("control:my_commissions")
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["google_enabled"] = google_oauth.is_enabled()
+        return ctx
+
+
 class GoogleStartView(View):
     def get(self, request, *args, **kwargs):
+        kind = request.GET.get("kind") or "store"
         if not google_oauth.is_enabled():
             messages.error(request, "Google sign-in isn't configured yet.")
-            return redirect("accounts:signup")
+            return redirect("accounts:affiliate_join" if kind == "affiliate" else "accounts:signup")
         plan = request.GET.get("plan") or ""
         next_url = request.GET.get("next") or ""
-        return redirect(google_oauth.start(request, plan=plan, next_url=next_url))
+        return redirect(google_oauth.start(request, plan=plan, next_url=next_url, kind=kind))
 
 
 class GoogleCallbackView(View):
     def get(self, request, *args, **kwargs):
         flow = request.session.pop(google_oauth.SESSION_KEY, None) or {}
+        kind = flow.get("kind") or "store"
+        fallback = "accounts:affiliate_join" if kind == "affiliate" else "accounts:signup"
+
         if request.GET.get("error"):
             messages.error(request, "Google sign-in was cancelled.")
-            return redirect("accounts:signup")
+            return redirect(fallback)
         if not flow or not request.GET.get("state") or request.GET["state"] != flow.get("state"):
             messages.error(request, "Sign-in session expired — please try again.")
-            return redirect("accounts:signup")
+            return redirect(fallback)
         code = request.GET.get("code")
         if not code:
-            return redirect("accounts:signup")
+            return redirect(fallback)
 
         try:
             info = google_oauth.exchange_code(request, code)
         except google_oauth.OAuthError as exc:
             messages.error(request, str(exc))
-            return redirect("accounts:signup")
+            return redirect(fallback)
+
+        if kind == "affiliate":
+            from .affiliate_signup import join_as_affiliate
+
+            try:
+                user, created, upgraded = join_as_affiliate(
+                    name=info["name"], email=info["email"], request=request,
+                )
+            except ValidationError as exc:
+                for msg in exc.messages:
+                    messages.error(request, msg)
+                return redirect(fallback)
+            login(request, user)
+            if upgraded:
+                messages.success(request, "You're in — here's your referral link.")
+            else:
+                messages.info(request, "You already have affiliate access.")
+            return redirect("control:my_commissions")
 
         existing = User.objects.filter(email__iexact=info["email"]).first()
         if existing and (existing.has_usable_password() or existing.memberships.exists()
