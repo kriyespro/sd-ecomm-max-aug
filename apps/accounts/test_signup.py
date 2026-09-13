@@ -308,7 +308,7 @@ class GoogleCallbackTests(TestCase):
         state = self._start(plan="growth")
         with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
             ex.return_value = {"email": "cap@gmail.test", "email_verified": True,
-                               "name": "Cap", "sub": "77"}
+                               "name": "Cap Puchino", "sub": "77"}
             self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
 
         self.client.cookies["_fbp"] = "fb.1.111.222"
@@ -334,6 +334,12 @@ class GoogleCallbackTests(TestCase):
         self.assertEqual(ud["client_user_agent"], "test-agent/1.0")
         self.assertEqual(ud["fbp"], "fb.1.111.222")
         self.assertEqual(ud["fbc"], "fb.1.111.333")
+        # name (split first/last, same as the account itself) + the store's
+        # country — the two extra match-quality fields this signup flow can
+        # actually supply without asking for anything new.
+        self.assertIn("fn", ud)
+        self.assertIn("ln", ud)
+        self.assertIn("country", ud)
 
     def test_completion_skips_capi_when_not_configured(self):
         state = self._start()
