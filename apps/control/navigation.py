@@ -104,7 +104,12 @@ _STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding", "tra
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}
 # Hidden from a store's DGC — orders, customers and money belong to the store.
-_STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_providers"}
+# b2b_* and owner_backup are also owner-only (see _OWNER_ONLY) — both mixins
+# apply on those views (StoreDataAccessMixin + StoreRoleRequiredMixin), so an
+# item needing both must appear in both sets or the nav shows a dead link a
+# commission-only DGC gets 403'd on.
+_STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_providers",
+                    "owner_backup", "b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 
