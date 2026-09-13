@@ -51,9 +51,11 @@ class OnboardingGateTests(TestCase):
         resp = self.client.post(
             "/admin/start/",
             {
+                "store_name": "Fresh Co Renamed",
                 "contact_email": "hi@fresh.test",
                 "contact_phone": "+919812345678",
                 "address": "1 MG Road, Pune",
+                "city": "Pune", "state": "Maharashtra", "postal_code": "411001",
                 "vertical": "clothing",
             },
         )
@@ -62,13 +64,29 @@ class OnboardingGateTests(TestCase):
         self.project.refresh_from_db()
         self.assertTrue(self.project.feature_flags["onboarded"])
         self.assertEqual(self.project.feature_flags["vertical"], "clothing")
+        self.assertEqual(self.project.name, "Fresh Co Renamed")
 
         prof = StoreProfile.objects.get(project=self.project)
         self.assertEqual(prof.support_email, "hi@fresh.test")
         self.assertEqual(prof.whatsapp, "+919812345678")
+        self.assertEqual(prof.city, "Pune")
+        self.assertEqual(prof.state, "Maharashtra")
+        self.assertEqual(prof.postal_code, "411001")
 
         # gate now lets the owner through
         self.assertEqual(self.client.get("/admin/products/").status_code, 200)
+
+    def test_store_name_email_and_address_are_prefilled(self):
+        StoreProfile.objects.create(
+            project=self.project, city="Pune", state="Maharashtra", postal_code="411001",
+        )
+        resp = self.client.get("/admin/start/")
+        self.assertContains(resp, 'value="FreshCo"')
+        # no support_email saved yet — falls back to the logged-in owner's own email
+        self.assertContains(resp, 'value="own@fresh.test"')
+        self.assertContains(resp, 'value="Pune"')
+        self.assertContains(resp, 'value="Maharashtra"')
+        self.assertContains(resp, 'value="411001"')
 
     @override_settings(PLATFORM_BASE_DOMAIN="shopinaday.test")
     def test_subdomain_field_prefilled_and_editable(self):
@@ -83,7 +101,7 @@ class OnboardingGateTests(TestCase):
         resp = self.client.post(
             "/admin/start/",
             {
-                "contact_email": "hi@fresh.test", "vertical": "fmcg",
+                "store_name": "FreshCo", "contact_email": "hi@fresh.test", "vertical": "fmcg",
                 "subdomain": "fresh-market",
             },
         )
