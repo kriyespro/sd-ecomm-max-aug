@@ -206,7 +206,8 @@ class AffiliateLinkSignupFlowTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             self.client.post(
                 "/accounts/signup/complete/",
-                {"store_name": "RefFlow Co", "phone": "9"},
+                {"store_name": "RefFlow Co", "phone": "9", "city": "Pune",
+                 "state": "Maharashtra", "postal_code": "411001"},
             )
         sub = Subscription.objects.get(project__name="RefFlow Co")
         self.assertEqual(sub.referred_by_id, dgc.pk)
@@ -224,7 +225,8 @@ class AffiliateLinkSignupFlowTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             self.client.post(
                 "/accounts/signup/complete/",
-                {"store_name": "NoRef Co", "phone": "9"},
+                {"store_name": "NoRef Co", "phone": "9", "city": "Pune",
+                 "state": "Maharashtra", "postal_code": "411001"},
             )
         sub = Subscription.objects.get(project__name="NoRef Co")
         self.assertIsNone(sub.manager_id)
@@ -250,7 +252,8 @@ class GoogleCallbackTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True):
             resp = self.client.post(
                 "/accounts/signup/complete/",
-                {"store_name": "Newco", "phone": "+91 90000 11111"},
+                {"store_name": "Newco", "phone": "+91 90000 11111",
+                 "city": "Mumbai", "state": "Maharashtra", "postal_code": "400001"},
             )
         self.assertRedirects(resp, "/admin/start/", fetch_redirect_response=False)
         user = User.objects.get(email="new@gmail.test")
@@ -259,6 +262,12 @@ class GoogleCallbackTests(TestCase):
         self.assertEqual(
             Subscription.objects.get(project__name="Newco").plan.code, "growth"
         )
+        from apps.cms.models import StoreProfile
+
+        profile = StoreProfile.objects.get(project__name="Newco")
+        self.assertEqual(profile.city, "Mumbai")
+        self.assertEqual(profile.state, "Maharashtra")
+        self.assertEqual(profile.postal_code, "400001")
         # logged in + gated into the wizard
         self.assertRedirects(
             self.client.get("/admin/products/"), "/admin/start/",
@@ -317,7 +326,8 @@ class GoogleCallbackTests(TestCase):
              patch("apps.marketing.tasks.send_platform_capi_event.delay") as delay:
             self.client.post(
                 "/accounts/signup/complete/",
-                {"store_name": "CapCo", "phone": "9876543210"},
+                {"store_name": "CapCo", "phone": "9876543210", "city": "Delhi",
+                 "state": "Delhi", "postal_code": "110001"},
                 HTTP_USER_AGENT="test-agent/1.0", REMOTE_ADDR="203.0.113.9",
             )
         delay.assert_called_once()
@@ -340,6 +350,10 @@ class GoogleCallbackTests(TestCase):
         self.assertIn("fn", ud)
         self.assertIn("ln", ud)
         self.assertIn("country", ud)
+        # city/state/postal_code from the signup form's new address fields.
+        self.assertIn("ct", ud)
+        self.assertIn("st", ud)
+        self.assertIn("zp", ud)
 
     def test_completion_skips_capi_when_not_configured(self):
         state = self._start()
@@ -351,7 +365,8 @@ class GoogleCallbackTests(TestCase):
         with self.captureOnCommitCallbacks(execute=True), \
              patch("apps.marketing.tasks.send_platform_capi_event.delay") as delay:
             self.client.post("/accounts/signup/complete/",
-                             {"store_name": "NoCapCo", "phone": "9"})
+                             {"store_name": "NoCapCo", "phone": "9", "city": "Pune",
+                              "state": "Maharashtra", "postal_code": "411001"})
         delay.assert_not_called()
 
 

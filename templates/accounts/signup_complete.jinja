@@ -27,6 +27,29 @@
         {% for error in field.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
       </div>
       {% endfor %}
+      <div>
+        <label for="{{ form.city.id_for_label }}" class="block text-sm font-medium">
+          {{ form.city.label }}<span class="text-red-500">*</span>
+        </label>
+        {{ form.city }}
+        {% for error in form.city.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="{{ form.state.id_for_label }}" class="block text-sm font-medium">
+            {{ form.state.label }}<span class="text-red-500">*</span>
+          </label>
+          {{ form.state }}
+          {% for error in form.state.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+        <div>
+          <label for="{{ form.postal_code.id_for_label }}" class="block text-sm font-medium">
+            {{ form.postal_code.label }}<span class="text-red-500">*</span>
+          </label>
+          {{ form.postal_code }}
+          {% for error in form.postal_code.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
       <button type="submit"
               class="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
         Create my store

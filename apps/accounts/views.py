@@ -129,19 +129,19 @@ class GoogleCallbackView(View):
         return redirect("accounts:signup_complete")
 
 
-def _track_signup(request, *, project, email, plan, phone="", name=""):
+def _track_signup(request, *, project, email, plan, phone="", name="",
+                  city="", state="", postal_code=""):
     """Fire the platform's own Meta CAPI "CompleteRegistration" event for a new
     trial store. No browser pixel covers this event (it's platform-level, not
     per-store), so this server call is Meta's only signal for it — match
-    quality (ip/ua/fbp/fbc, name, country — not just a hashed email) directly
-    affects whether Meta can attribute the conversion to an ad click.
-    Best-effort — a broker hiccup must never break signup.
+    quality (ip/ua/fbp/fbc, name, address, country — not just a hashed email)
+    directly affects whether Meta can attribute the conversion to an ad
+    click. Best-effort — a broker hiccup must never break signup.
 
-    city/state/zip/gender/date-of-birth are Meta's other recommended match
-    fields but aren't collected anywhere in this signup flow (just name,
-    email, phone, store name) — sent only once the signup form actually asks
-    for them; hash_user_data() already accepts city/state/zip whenever that
-    lands."""
+    gender/date-of-birth are Meta's other two recommended match fields but
+    aren't collected anywhere in this signup flow — a store owner signing up
+    has no reason to give them, unlike name/phone/address which double as
+    real account and store data."""
     try:
         from apps.marketing.capi import hash_user_data
         from apps.marketing.models import PlatformTrackingSettings
@@ -156,6 +156,7 @@ def _track_signup(request, *, project, email, plan, phone="", name=""):
             user_data=hash_user_data(
                 email=email, phone=phone, external_id=str(project.pk),
                 first_name=first_name, last_name=last_name, country=project.country,
+                city=city, state=state, zip_code=postal_code,
                 client_ip=request.META.get("REMOTE_ADDR", ""),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 fbp=request.COOKIES.get("_fbp", ""),
@@ -178,6 +179,21 @@ class SignupCompleteForm(forms.Form):
         widget=forms.TextInput(attrs={
             "class": _INPUT, "placeholder": "+91 98xxxxxxxx",
             "autocomplete": "tel", "inputmode": "tel",
+        }),
+    )
+    city = forms.CharField(
+        label="City", max_length=80,
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "Mumbai", "autocomplete": "address-level2"}),
+    )
+    state = forms.CharField(
+        label="State", max_length=80,
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "Maharashtra", "autocomplete": "address-level1"}),
+    )
+    postal_code = forms.CharField(
+        label="Pincode", max_length=12,
+        widget=forms.TextInput(attrs={
+            "class": _INPUT, "placeholder": "400001",
+            "autocomplete": "postal-code", "inputmode": "numeric",
         }),
     )
 
@@ -213,6 +229,9 @@ class SignupCompleteView(FormView):
                 phone=form.cleaned_data["phone"],
                 plan=plan, oauth=True, request=self.request,
                 ref_code=self.request.session.get("signup_ref", ""),
+                city=form.cleaned_data["city"],
+                state=form.cleaned_data["state"],
+                postal_code=form.cleaned_data["postal_code"],
             )
         except ValidationError as exc:
             for msg in exc.messages:
@@ -223,6 +242,8 @@ class SignupCompleteView(FormView):
         self.request.session.pop("signup_ref", None)
         _track_signup(self.request, project=_project, email=self.pending["email"],
                      plan=plan, phone=form.cleaned_data["phone"],
-                     name=self.pending.get("name") or "")
+                     name=self.pending.get("name") or "",
+                     city=form.cleaned_data["city"], state=form.cleaned_data["state"],
+                     postal_code=form.cleaned_data["postal_code"])
         login(self.request, user)
         return redirect("control:onboarding")
