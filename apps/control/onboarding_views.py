@@ -26,6 +26,10 @@ TEXT = ("mt-1 block w-full rounded-lg border border-slate-300 bg-white px-3 py-2
 
 
 class OnboardingForm(forms.Form):
+    store_name = forms.CharField(
+        label="Store name", max_length=120, min_length=2,
+        widget=forms.TextInput(attrs={"class": TEXT}),
+    )
     subdomain = forms.CharField(
         label="Store web address", max_length=subdomains.MAX_LEN, required=False,
         widget=forms.TextInput(attrs={
@@ -43,9 +47,21 @@ class OnboardingForm(forms.Form):
         widget=forms.TextInput(attrs={"class": TEXT, "placeholder": "+91 98xxxxxxxx"}),
     )
     address = forms.CharField(
-        label="Business address", required=False,
-        widget=forms.Textarea(attrs={"class": TEXT, "rows": 3,
-                                     "placeholder": "Street, city, PIN"}),
+        label="Street address", required=False,
+        widget=forms.Textarea(attrs={"class": TEXT, "rows": 2,
+                                     "placeholder": "Building, street, area"}),
+    )
+    city = forms.CharField(
+        label="City", max_length=80, required=False,
+        widget=forms.TextInput(attrs={"class": TEXT}),
+    )
+    state = forms.CharField(
+        label="State", max_length=80, required=False,
+        widget=forms.TextInput(attrs={"class": TEXT}),
+    )
+    postal_code = forms.CharField(
+        label="Pincode", max_length=12, required=False,
+        widget=forms.TextInput(attrs={"class": TEXT, "inputmode": "numeric"}),
     )
     vertical = forms.ChoiceField(
         label="What do you sell?", choices=VERTICALS, widget=forms.RadioSelect,
@@ -83,9 +99,13 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
         p = self.active_project
         prof = StoreProfile.objects.filter(project=p).first()
         return {
-            "contact_email": (prof and prof.support_email) or "",
+            "store_name": p.name,
+            "contact_email": (prof and prof.support_email) or self.request.user.email,
             "contact_phone": (prof and (prof.support_phone or prof.whatsapp)) or "",
             "address": (prof and prof.address) or "",
+            "city": (prof and prof.city) or "",
+            "state": (prof and prof.state) or "",
+            "postal_code": (prof and prof.postal_code) or "",
             "vertical": vertical_of(p) or None,
             "subdomain": subdomains.current_slug(p),
         }
@@ -108,13 +128,17 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
                 profile.whatsapp = cd["contact_phone"]
         if cd.get("address"):
             profile.address = cd["address"]
+        profile.city = cd.get("city") or ""
+        profile.state = cd.get("state") or ""
+        profile.postal_code = cd.get("postal_code") or ""
         profile.save()
 
+        p.name = cd["store_name"]
         flags = p.feature_flags or {}
         flags["vertical"] = cd["vertical"]
         flags["onboarded"] = True
         p.feature_flags = flags
-        p.save(update_fields=["feature_flags"])
+        p.save(update_fields=["name", "feature_flags"])
 
         slug = cd.get("subdomain")
         if slug and slug != subdomains.current_slug(p):

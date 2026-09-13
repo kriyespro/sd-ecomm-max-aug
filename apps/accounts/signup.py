@@ -90,7 +90,7 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
         from apps.projects import subdomains
 
         if subdomains.base_domain():
-            slug = subdomains.unique_slug(email.split("@")[0] or store_name)
+            slug = subdomains.unique_slug(store_name or email.split("@")[0])
             subdomains.assign(project, slug)
     except Exception:  # noqa: BLE001
         import logging
