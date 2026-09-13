@@ -38,10 +38,17 @@ def redirect_uri(request):
     )
 
 
-def start(request, *, plan="", next_url=""):
-    """Stash a CSRF ``state`` in the session, return the Google consent URL."""
+def start(request, *, plan="", next_url="", kind="store"):
+    """Stash a CSRF ``state`` in the session, return the Google consent URL.
+
+    ``kind`` picks what the callback does with the Google profile: "store"
+    (default) sends a new email through the store-signup completion step;
+    "affiliate" joins them as a DGC immediately, no second form.
+    """
     state = secrets.token_urlsafe(24)
-    request.session[SESSION_KEY] = {"state": state, "plan": plan or "", "next": next_url or ""}
+    request.session[SESSION_KEY] = {
+        "state": state, "plan": plan or "", "next": next_url or "", "kind": kind or "store",
+    }
     params = {
         "client_id": settings.GOOGLE_OAUTH_CLIENT_ID,
         "redirect_uri": redirect_uri(request),
