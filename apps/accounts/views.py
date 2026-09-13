@@ -129,13 +129,19 @@ class GoogleCallbackView(View):
         return redirect("accounts:signup_complete")
 
 
-def _track_signup(request, *, project, email, plan, phone=""):
+def _track_signup(request, *, project, email, plan, phone="", name=""):
     """Fire the platform's own Meta CAPI "CompleteRegistration" event for a new
     trial store. No browser pixel covers this event (it's platform-level, not
     per-store), so this server call is Meta's only signal for it — match
-    quality (ip/ua/fbp/fbc, not just a hashed email) directly affects whether
-    Meta can attribute the conversion to an ad click. Best-effort — a broker
-    hiccup must never break signup."""
+    quality (ip/ua/fbp/fbc, name, country — not just a hashed email) directly
+    affects whether Meta can attribute the conversion to an ad click.
+    Best-effort — a broker hiccup must never break signup.
+
+    city/state/zip/gender/date-of-birth are Meta's other recommended match
+    fields but aren't collected anywhere in this signup flow (just name,
+    email, phone, store name) — sent only once the signup form actually asks
+    for them; hash_user_data() already accepts city/state/zip whenever that
+    lands."""
     try:
         from apps.marketing.capi import hash_user_data
         from apps.marketing.models import PlatformTrackingSettings
@@ -143,11 +149,13 @@ def _track_signup(request, *, project, email, plan, phone=""):
 
         if not PlatformTrackingSettings.load().capi_ready:
             return
+        first_name, _, last_name = (name or "").strip().partition(" ")
         send_platform_capi_event.delay(
             event_name="CompleteRegistration",
             event_id=f"signup-{project.pk}",
             user_data=hash_user_data(
                 email=email, phone=phone, external_id=str(project.pk),
+                first_name=first_name, last_name=last_name, country=project.country,
                 client_ip=request.META.get("REMOTE_ADDR", ""),
                 user_agent=request.META.get("HTTP_USER_AGENT", ""),
                 fbp=request.COOKIES.get("_fbp", ""),
@@ -214,6 +222,7 @@ class SignupCompleteView(FormView):
         self.request.session.pop(_PENDING, None)
         self.request.session.pop("signup_ref", None)
         _track_signup(self.request, project=_project, email=self.pending["email"],
-                     plan=plan, phone=form.cleaned_data["phone"])
+                     plan=plan, phone=form.cleaned_data["phone"],
+                     name=self.pending.get("name") or "")
         login(self.request, user)
         return redirect("control:onboarding")
