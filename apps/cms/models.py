@@ -649,6 +649,10 @@ class StoreProfile(TenantScopedModel):
     """
 
     logo = models.ImageField(upload_to="stores/logos/", blank=True)
+    favicon = models.ImageField(
+        upload_to="stores/favicons/", blank=True,
+        help_text="Small square image — the icon shown in the browser tab. Falls back to the logo if not set.",
+    )
     tagline = models.CharField(
         max_length=200, blank=True,
         help_text="Short line under the logo in the footer.",

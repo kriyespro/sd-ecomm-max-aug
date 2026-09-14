@@ -203,6 +203,10 @@ def _build_chrome(project):
         "accent": theme.primary_color if theme else "#b08d57",
         "profile": profile,
         "store_logo": profile.logo.url if (profile and profile.logo) else "",
+        "store_favicon": (
+            profile.favicon.url if (profile and profile.favicon)
+            else profile.logo.url if (profile and profile.logo) else ""
+        ),
         "demo": bool((project.feature_flags or {}).get("demo_seeded")),
         "categories": list(
             Category.objects.filter(project=project, is_active=True)[:10]
