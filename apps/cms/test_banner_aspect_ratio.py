@@ -11,7 +11,13 @@ hero/promo/category too, so hero's overlay copy was trimmed down (smaller
 heading, one CTA, no body paragraph) to fit the shorter box instead.
 
 Hero was later bumped 30% taller again — aspect-[40/13] (1600x520) — while
-promo/category/product stayed at aspect-[4/1]."""
+promo/category/product stayed at aspect-[4/1].
+
+Hero then dropped the fixed box entirely: it now renders the uploaded image
+at its own natural size (`w-full h-auto`, no `object-cover`, no `aspect-`
+class) so nothing ever gets cropped — the merchant's own upload dictates the
+banner's height. Promo/category/product still crop to aspect-[4/1] — only
+hero changed."""
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -107,21 +113,27 @@ class BannerAspectRatioTests(TestCase):
         home = self.client.get("/", HTTP_HOST="banner.test")
         self.assertContains(home, "aspect-[4/1]")
 
-    def test_default_skin_hero_uses_matching_aspect_ratio(self):
+    def test_default_skin_hero_shows_uploaded_image_uncropped(self):
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/13]")
-        self.assertNotIn("min-h-[78vh]", resp.content.decode())
+        content = resp.content.decode()
+        self.assertNotIn("aspect-[40/13]", content)
+        self.assertIn('class="block w-full h-auto"', content)
+        self.assertNotIn("min-h-[78vh]", content)
 
-    def test_botanica2_hero_uses_matching_aspect_ratio(self):
+    def test_botanica2_hero_shows_uploaded_image_uncropped(self):
         self._use_skin("botanica2")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/13]")
+        content = resp.content.decode()
+        self.assertNotIn("aspect-[40/13]", content)
+        self.assertIn('class="block w-full h-auto"', content)
 
-    def test_botanica3_hero_slider_uses_matching_aspect_ratio(self):
+    def test_botanica3_hero_slider_shows_uploaded_image_uncropped(self):
         self._use_skin("botanica3")
         self._banner(BannerPlacement.HERO)
         resp = self.client.get("/", HTTP_HOST="banner.test")
-        self.assertContains(resp, "aspect-[40/13]")
-        self.assertNotIn("min-h-[50vh] items-end sm:min-h-[56vh]", resp.content.decode())
+        content = resp.content.decode()
+        self.assertNotIn("aspect-[40/13]", content)
+        self.assertIn('class="block w-full h-auto"', content)
+        self.assertNotIn("min-h-[50vh] items-end sm:min-h-[56vh]", content)
