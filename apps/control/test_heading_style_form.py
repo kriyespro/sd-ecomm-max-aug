@@ -37,6 +37,7 @@ class HeadingStyleThemeFormTests(TestCase):
                 "primary_color": "#111111", "secondary_color": "#ffffff",
                 "accent_color": "#2563eb",
                 "heading_align": "center", "heading_size": "lg", "heading_font": "sans",
+                "products_per_row": "4",
             },
             follow=True,
         )

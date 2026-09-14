@@ -565,7 +565,7 @@ class ThemeSettingsForm(ProjectScopedForm):
             "font_body", "font_heading",
             "header_layout", "footer_layout", "button_style", "product_card_style",
             "category_above_hero", "show_category_headings",
-            "heading_align", "heading_size", "heading_font",
+            "heading_align", "heading_size", "heading_font", "products_per_row",
             "custom_css",
         ]
         widgets = {
@@ -583,6 +583,7 @@ class ThemeSettingsForm(ProjectScopedForm):
             "heading_align": "Alignment for every section heading storewide (Shop by category, New arrivals, testimonials, etc).",
             "heading_size": "“Medium” keeps each heading's own default size — pick another to resize them all.",
             "heading_font": "Uses one of the two fonts your skin already loads — no extra page weight.",
+            "products_per_row": "Desktop only — phones and tablets always show fewer per row regardless.",
         }
 
     def __init__(self, *args, **kwargs):
