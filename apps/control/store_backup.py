@@ -72,7 +72,7 @@ _REGISTRY: list[dict] = [
          fields=["group", "question", "answer", "order", "is_active"]),
     dict(key="banner", model="cms.Banner",
          fields=["name", "placement", "heading", "subheading", "cta_label", "cta_url",
-                 "priority", "is_active", "text_hidden"],
+                 "priority", "is_active", "text_hidden", "hide_cta", "hide_overlay"],
          fks={"category": "category"}, files=["image", "mobile_image"]),
     dict(key="budgetband", model="cms.BudgetBand",
          fields=["label", "min_price", "max_price", "order", "is_active"],

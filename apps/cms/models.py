@@ -147,7 +147,15 @@ class Banner(TenantScopedModel):
     is_active = models.BooleanField(default=True)
     text_hidden = models.BooleanField(
         default=False,
-        help_text="Show only the image — hide the heading, text and button.",
+        help_text="Hide the heading and subheading text. The button is controlled separately.",
+    )
+    hide_cta = models.BooleanField(
+        default=False,
+        help_text="Hide just the button — keep the heading/subheading if shown.",
+    )
+    hide_overlay = models.BooleanField(
+        default=False,
+        help_text="Show the image with no dark tint behind the text (may make text harder to read).",
     )
 
     class Meta:
