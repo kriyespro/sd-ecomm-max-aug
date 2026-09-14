@@ -84,7 +84,12 @@
   </div>
 </div>
 
-{# ── CATEGORIES ── #}
+{# ============ REORDERABLE HOMEPAGE SECTIONS (Theme → Homepage section order) ============
+   Only Shop by category / New arrivals are reorderable here — ornza's own
+   narrative below (Best sellers, the brand-statement callout, testimonials)
+   is more fixed by design and stays exactly where it is. #}
+
+{% macro _section_categories() %}
 {% if cat_tiles %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-10 {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">Shop by category</h2>
@@ -99,8 +104,9 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# ── NEW ARRIVALS ── #}
+{% macro _section_new_arrivals() %}
 {% if new_arrivals %}
 <section class="cv-auto bg-panel">
   <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
@@ -114,6 +120,10 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
+
+{% set _sections = {'categories': _section_categories, 'new_arrivals': _section_new_arrivals} %}
+{% for _key in section_order %}{% if _key in _sections %}{{ _sections[_key]() }}{% endif %}{% endfor %}
 
 {# ── BEST SELLERS ── #}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">

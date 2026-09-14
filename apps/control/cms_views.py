@@ -627,6 +627,44 @@ class ThemeSettingsView(ActiveProjectMixin, UpdateView):
         messages.success(self.request, "Theme saved.")
         return response
 
+    def get_context_data(self, **kwargs):
+        from apps.cms import homepage_sections
+        from apps.cms.skins import skin_for_project
+
+        ctx = super().get_context_data(**kwargs)
+        skin = skin_for_project(self.active_project)
+        slug = skin.slug if skin else "default"
+        order = homepage_sections.effective_order(slug, self.object.homepage_sections)
+        labels = dict(homepage_sections.sections_for_skin(slug))
+        ctx["section_order"] = [{"key": k, "label": labels.get(k, k)} for k in order]
+        return ctx
+
+
+class ThemeSectionMoveView(ActiveProjectMixin, View):
+    """Up/down reorder for the "Homepage section order" panel on the theme
+    screen — mirrors MenuItemMoveView's action-based POST, just against a
+    plain list on one row instead of sibling DB rows."""
+
+    http_method_names = ["post"]
+
+    def post(self, request, *args, **kwargs):
+        from apps.cms import homepage_sections
+        from apps.cms.skins import skin_for_project
+
+        theme, _ = ThemeSettings.objects.get_or_create(project=self.active_project)
+        skin = skin_for_project(self.active_project)
+        slug = skin.slug if skin else "default"
+        key = request.POST.get("key", "")
+        direction = request.POST.get("direction", "")
+        theme.homepage_sections = homepage_sections.move(
+            slug, theme.homepage_sections, key, direction
+        )
+        theme.save(update_fields=["homepage_sections", "updated_at"])
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=theme,
+                     changes={"homepage_sections": theme.homepage_sections}, request=request)
+        return redirect("control:cms_theme")
+
 
 class StoreProfileView(ActiveProjectMixin, UpdateView):
     form_class = StoreProfileForm

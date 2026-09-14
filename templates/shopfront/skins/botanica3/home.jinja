@@ -166,10 +166,18 @@
   </div>
 </div>
 
-{# ============ SHOP BY CATEGORY — below the hero (always) ============ #}
-{{ category_row() }}
+{# ============ REORDERABLE HOMEPAGE SECTIONS (Theme → Homepage section order) ============
+   Each is a self-contained macro so `section_order` (apps.cms.homepage_sections)
+   can dispatch them in whatever sequence the merchant picked. An untouched
+   store's `section_order` is this exact canonical order, so nothing changes
+   until Theme settings is actually edited.
 
-{# ============ SHOP BY BUDGET — up to 5 price-band tiles ============ #}
+   "promo" here is the *first* live promo banner only — any additional ones
+   stay pinned near the footer below, unchanged from before this existed. #}
+
+{% macro _section_categories() %}{{ category_row() }}{% endmacro %}
+
+{% macro _section_budget_bands() %}
 {% if budget_bands %}
 <section class="cv-auto mx-auto max-w-7xl px-5 pb-4 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
@@ -187,11 +195,13 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# ============ PROMO BANNER — first one here ============ #}
+{% macro _section_promo() %}
 {% for b in promo_banners[:1] %}{{ promo_card(b) }}{% endfor %}
+{% endmacro %}
 
-{# ============ FEATURED ============ #}
+{% macro _section_featured() %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <div>
@@ -204,8 +214,9 @@
     {% for p in featured %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
+{% endmacro %}
 
-{# ============ BENEFIT BAND — "Why it works" (editable: /admin/cms/benefits/) ============ #}
+{% macro _section_benefits() %}
 {% set _benefits = benefit_items if benefit_items else [
   {'icon': '✦', 'title': 'Whole-plant actives', 'description': 'Extracts kept close to their natural form so nothing useful is lost.'},
   {'icon': '✦', 'title': 'Clinically guided', 'description': 'Doses that reflect the research — not what fits the label.'},
@@ -226,8 +237,9 @@
     </div>
   </div>
 </section>
+{% endmacro %}
 
-{# ============ NEW ARRIVALS ============ #}
+{% macro _section_new_arrivals() %}
 {% if new_arrivals %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
@@ -239,8 +251,9 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# ============ TESTIMONIALS ============ #}
+{% macro _section_testimonials() %}
 {% if testimonials %}
 <section class="cv-auto border-y border-line bg-panel">
   <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
@@ -257,8 +270,9 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# ============ NEWSLETTER CTA ============ #}
+{% macro _section_newsletter() %}
 <section class="cv-auto mx-auto max-w-3xl px-5 py-20 text-center lg:px-8">
   <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">Join the ritual</p>
   <h2 class="mt-3 text-ink {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">Get 10% off your first order</h2>
@@ -269,8 +283,9 @@
     <button class="shrink-0 bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-ink">Join</button>
   </form>
 </section>
+{% endmacro %}
 
-{# ============ INSTAGRAM FEED ============ #}
+{% macro _section_instagram() %}
 {% if instagram_items %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <div class="mb-9 text-center">
@@ -291,6 +306,14 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
+
+{% set _sections = {
+  'categories': _section_categories, 'budget_bands': _section_budget_bands, 'promo': _section_promo,
+  'featured': _section_featured, 'benefits': _section_benefits, 'new_arrivals': _section_new_arrivals,
+  'testimonials': _section_testimonials, 'newsletter': _section_newsletter, 'instagram': _section_instagram,
+} %}
+{% for _key in section_order %}{% if _key in _sections %}{{ _sections[_key]() }}{% endif %}{% endfor %}
 
 {# ============ PROMO BANNER — 2nd and later, just above the footer ============ #}
 {% for b in promo_banners[1:] %}{{ promo_card(b) }}{% endfor %}

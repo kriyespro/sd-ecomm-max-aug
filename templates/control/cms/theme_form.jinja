@@ -3,11 +3,46 @@
 {% block page_title %}Theme{% endblock %}
 
 {% block content %}
-<form method="post" class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
-  {{ csrf_input }}
-  <h2 class="text-sm font-semibold text-slate-700">Theme · {{ active_project.name }}</h2>
-  <p class="text-xs text-slate-400">Consumed by the storefront at <code>/store/config/</code>.</p>
-  {{ render_form(form) }}
-  <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save theme</button>
-</form>
+<div class="mx-auto max-w-2xl space-y-4">
+  <form method="post" class="space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h2 class="text-sm font-semibold text-slate-700">Theme · {{ active_project.name }}</h2>
+    <p class="text-xs text-slate-400">Consumed by the storefront at <code>/store/config/</code>.</p>
+    {{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save theme</button>
+  </form>
+
+  {% if section_order %}
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-700">Homepage section order</h2>
+    <p class="mt-1 text-xs text-slate-400">
+      Move sections up or down to change what order they show on the home page. Hero (top banner) and the
+      popup always stay fixed; a couple of fixed strips your skin shows (trust badges, brand statement) aren't listed here.
+    </p>
+    <ol class="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+      {% for s in section_order %}
+      <li class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+        <span class="text-slate-700">{{ loop.index }}. {{ s.label }}</span>
+        <div class="flex shrink-0 gap-1">
+          <form method="post" action="{{ url('control:cms_theme_section_move') }}">
+            {{ csrf_input }}
+            <input type="hidden" name="key" value="{{ s.key }}">
+            <input type="hidden" name="direction" value="up">
+            <button type="submit" {{ 'disabled' if loop.first }}
+                    class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30">↑</button>
+          </form>
+          <form method="post" action="{{ url('control:cms_theme_section_move') }}">
+            {{ csrf_input }}
+            <input type="hidden" name="key" value="{{ s.key }}">
+            <input type="hidden" name="direction" value="down">
+            <button type="submit" {{ 'disabled' if loop.last }}
+                    class="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-30">↓</button>
+          </form>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% endif %}
+</div>
 {% endblock %}
