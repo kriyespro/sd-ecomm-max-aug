@@ -16,3 +16,11 @@
   {'sm': 'text-xl sm:text-2xl', 'md': default_size,
    'lg': 'text-3xl sm:text-4xl', 'xl': 'text-4xl sm:text-5xl'}[heading_size or 'md']
 }}{% endmacro %}
+
+{# Same alignment as heading_classes(), for a small eyebrow label above a
+   heading (e.g. botanica's "Best sellers" over "Loved by the community") —
+   it isn't itself an <h2> so heading_size/heading_font don't apply, but it
+   should still visually move with the heading it sits above. #}
+{% macro align_class(default='text-left') %}{{
+  {'left': 'text-left', 'center': 'text-center', 'right': 'text-right'}[heading_align] if heading_align else default
+}}{% endmacro %}

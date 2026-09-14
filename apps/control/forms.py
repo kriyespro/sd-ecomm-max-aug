@@ -564,7 +564,7 @@ class ThemeSettingsForm(ProjectScopedForm):
             "primary_color", "secondary_color", "accent_color",
             "font_body", "font_heading",
             "header_layout", "footer_layout", "button_style", "product_card_style",
-            "category_above_hero", "show_category_headings",
+            "category_above_hero", "show_category_headings", "hide_featured_eyebrow",
             "heading_align", "heading_size", "heading_font", "products_per_row",
             "custom_css",
         ]
@@ -574,12 +574,14 @@ class ThemeSettingsForm(ProjectScopedForm):
             "accent_color": forms.TextInput(attrs={"type": "color"}),
             "category_above_hero": forms.CheckboxInput(attrs={"class": CHECK}),
             "show_category_headings": forms.CheckboxInput(attrs={"class": CHECK}),
+            "hide_featured_eyebrow": forms.CheckboxInput(attrs={"class": CHECK}),
             "custom_css": forms.Textarea(attrs={"rows": 6, "class": TEXT, "spellcheck": "false"}),
         }
         help_texts = {
             "skin": "The storefront template bundle. Ask an admin to unlock more.",
             "category_above_hero": "Botanica 3.0 only — also show the “Shop by category” row above the hero.",
             "show_category_headings": "Botanica 3.0 only — show the text heading over the category rows (off = tiles only).",
+            "hide_featured_eyebrow": "Botanica skins only — hide the small “Best sellers” label above the Featured heading. To re-center it instead, use “Heading align” above.",
             "heading_align": "Alignment for every section heading storewide (Shop by category, New arrivals, testimonials, etc).",
             "heading_size": "“Medium” keeps each heading's own default size — pick another to resize them all.",
             "heading_font": "Uses one of the two fonts your skin already loads — no extra page weight.",
