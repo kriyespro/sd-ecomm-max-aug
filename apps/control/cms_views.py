@@ -621,6 +621,23 @@ class ThemeSettingsView(ActiveProjectMixin, UpdateView):
         return kwargs
 
     def form_valid(self, form):
+        from apps.cms import section_titles as section_titles_catalogue
+        from apps.cms.skins import skin_for_project
+
+        skin = skin_for_project(self.active_project)
+        slug = skin.slug if skin else "default"
+        titles = dict(form.instance.section_titles or {})
+        for key, _default in section_titles_catalogue.titles_for_skin(slug):
+            field_name = f"title__{key}"
+            if field_name not in self.request.POST:
+                continue
+            val = self.request.POST.get(field_name, "").strip()
+            if val:
+                titles[key] = val
+            else:
+                titles.pop(key, None)
+        form.instance.section_titles = titles
+
         response = super().form_valid(form)
         record_audit(actor=self.request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=self.object, request=self.request)
@@ -629,6 +646,7 @@ class ThemeSettingsView(ActiveProjectMixin, UpdateView):
 
     def get_context_data(self, **kwargs):
         from apps.cms import homepage_sections
+        from apps.cms import section_titles as section_titles_catalogue
         from apps.cms.skins import skin_for_project
 
         ctx = super().get_context_data(**kwargs)
@@ -637,6 +655,11 @@ class ThemeSettingsView(ActiveProjectMixin, UpdateView):
         order = homepage_sections.effective_order(slug, self.object.homepage_sections)
         labels = dict(homepage_sections.sections_for_skin(slug))
         ctx["section_order"] = [{"key": k, "label": labels.get(k, k)} for k in order]
+        saved_titles = self.object.section_titles or {}
+        ctx["title_fields"] = [
+            {"key": key, "default": default, "value": saved_titles.get(key, "")}
+            for key, default in section_titles_catalogue.titles_for_skin(slug)
+        ]
         return ctx
 
 

@@ -30,7 +30,7 @@ class HeadingStyleDefaultsTests(TestCase):
         body = self.client.get("/", HTTP_HOST="headingdefault.test").content.decode()
         self.assertIn('font-display text-left text-3xl">Featured</h2>', body)
 
-    def test_default_heading_link_row_stays_justify_between(self):
+    def test_default_heading_link_row_keeps_link_pinned_right(self):
         """"Featured" shares its row with a "View all" link — untouched
         stores must keep the link pinned to the far end, unchanged."""
         body = self.client.get("/", HTTP_HOST="headingdefault.test").content.decode()
@@ -79,19 +79,23 @@ class HeadingStyleOverrideTests(TestCase):
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
         self.assertIn('font-display text-right text-3xl">Featured</h2>', body)
 
-    def test_center_align_also_moves_the_heading_link_row(self):
+    def test_center_align_widens_heading_without_moving_the_link(self):
         """"Featured" sits in a flex row next to "View all" — as a flex item
-        it shrinks to its own text width, so text-center on the <h2> alone
-        has nothing to visibly center against. The row's own justify-* must
-        follow heading_align too, or centering silently does nothing."""
+        it used to shrink to its own text width, so text-center on the <h2>
+        had nothing to visibly center against. flex-1 gives the heading real
+        width to align within, while the row stays justify-between so "View
+        all" keeps its fixed spot at the far right regardless of align."""
         self._set_theme(heading_align="center")
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
-        self.assertIn('<div class="mb-8 flex items-end justify-center">', body)
+        self.assertIn('<div class="mb-8 flex items-end justify-between">', body)
+        self.assertIn('<h2 class="flex-1 font-display text-center text-3xl">Featured</h2>', body)
+        self.assertIn('>View all</a>', body)
 
-    def test_right_align_also_moves_the_heading_link_row(self):
+    def test_right_align_widens_heading_without_moving_the_link(self):
         self._set_theme(heading_align="right")
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
-        self.assertIn('<div class="mb-8 flex items-end justify-end">', body)
+        self.assertIn('<div class="mb-8 flex items-end justify-between">', body)
+        self.assertIn('<h2 class="flex-1 font-display text-right text-3xl">Featured</h2>', body)
 
     def test_size_override_replaces_the_heading_own_default_size(self):
         self._set_theme(heading_size="lg")
@@ -136,5 +140,5 @@ class HeadingStyleOverrideTests(TestCase):
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
         self.assertIn('font-display text-center text-2xl sm:text-3xl">Shop by category</h2>', body)
         self.assertIn(
-            '<div class="mb-9 flex flex-wrap items-end justify-center gap-x-4 gap-y-1">', body,
+            '<div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">', body,
         )

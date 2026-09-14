@@ -168,7 +168,7 @@ def _build_chrome(project):
         ThemeSettings.objects.filter(project=project)
         .only("primary_color", "project_id", "category_above_hero",
               "show_category_headings", "heading_align", "heading_size", "heading_font",
-              "homepage_sections", "products_per_row")
+              "homepage_sections", "products_per_row", "section_titles")
         .first()
     )
     profile = StoreProfile.objects.filter(project=project).first()
@@ -241,6 +241,7 @@ def _build_chrome(project):
         "heading_font": getattr(theme, "heading_font", "display") or "display",
         "homepage_sections": list(getattr(theme, "homepage_sections", None) or []),
         "products_per_row": getattr(theme, "products_per_row", 4) or 4,
+        "section_titles": dict(getattr(theme, "section_titles", None) or {}),
         "category_banners": category_banners,
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),
