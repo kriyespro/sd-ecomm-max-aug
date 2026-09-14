@@ -233,6 +233,9 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         status = self.request.GET.get("status", "").strip()
         if status and not self._show_trash():
             qs = qs.filter(status=status)
+        category = self.request.GET.get("category", "").strip()
+        if category:
+            qs = qs.filter(category_id=category)
         return qs
 
     def _show_trash(self):
@@ -249,6 +252,10 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         ctx = super().get_context_data(**kwargs)
         ctx["q"] = self.request.GET.get("q", "")
         ctx["status"] = self.request.GET.get("status", "")
+        ctx["category"] = self.request.GET.get("category", "")
+        ctx["categories"] = Category.objects.filter(
+            project=self.active_project, is_active=True
+        ).order_by("name")
         ctx["show_trash"] = self._show_trash()
         ctx["trash_count"] = Product.objects.filter(
             project=self.active_project, trashed_at__isnull=False

@@ -1,0 +1,9 @@
+{% macro catalog_tabs(active) %}
+<div class="mb-3 flex flex-wrap gap-4 text-xs">
+  {% for label, view in [('Products','control:product_list'), ('Types','control:product_type_list'),
+                         ('Tags','control:tag_list'), ('Brands','control:brand_list'),
+                         ('Categories','control:category_list')] %}
+  <a href="{{ url(view) }}" class="font-medium {{ 'text-slate-900 underline' if view == active else 'text-slate-500 hover:text-slate-900' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+{% endmacro %}

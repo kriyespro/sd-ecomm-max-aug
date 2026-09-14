@@ -1,14 +1,9 @@
 {% extends "control/base_control.jinja" %}
+{% from "control/catalog/_nav_tabs.jinja" import catalog_tabs %}
 {% block page_title %}Products{% endblock %}
 
 {% block content %}
-<div class="mb-3 flex flex-wrap gap-4 text-xs">
-  {% for label, view in [('Products','control:product_list'), ('Types','control:product_type_list'),
-                         ('Tags','control:tag_list'), ('Brands','control:brand_list'),
-                         ('Categories','control:category_list')] %}
-  <a href="{{ url(view) }}" class="font-medium {{ 'text-slate-900 underline' if view == 'control:product_list' else 'text-slate-500 hover:text-slate-900' }}">{{ label }}</a>
-  {% endfor %}
-</div>
+{{ catalog_tabs('control:product_list') }}
 <div class="rounded-xl bg-white ring-1 ring-slate-200">
   <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4">
     <h2 class="text-sm font-semibold text-slate-700">Products · {{ active_project.name }}</h2>
@@ -17,17 +12,27 @@
              hx-get="{{ url('control:product_list') }}"
              hx-trigger="input changed delay:300ms, search"
              hx-target="#product-rows" hx-swap="innerHTML"
-             hx-include="[name='status']"
+             hx-include="[name='status'],[name='category']"
              class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
       <select name="status"
               hx-get="{{ url('control:product_list') }}"
               hx-trigger="change" hx-target="#product-rows" hx-swap="innerHTML"
-              hx-include="[name='q']"
+              hx-include="[name='q'],[name='category']"
               class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
         <option value="">All status</option>
         <option value="draft" {{ 'selected' if status == 'draft' }}>Draft</option>
         <option value="active" {{ 'selected' if status == 'active' }}>Active</option>
         <option value="archived" {{ 'selected' if status == 'archived' }}>Archived</option>
+      </select>
+      <select name="category"
+              hx-get="{{ url('control:product_list') }}"
+              hx-trigger="change" hx-target="#product-rows" hx-swap="innerHTML"
+              hx-include="[name='q'],[name='status']"
+              class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+        <option value="">All categories</option>
+        {% for c in categories %}
+        <option value="{{ c.pk }}" {{ 'selected' if category == c.pk | string }}>{{ c.name }}</option>
+        {% endfor %}
       </select>
       <a href="{{ url('control:product_import') }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Import</a>
       <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
