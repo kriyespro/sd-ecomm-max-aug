@@ -101,7 +101,8 @@ _REGISTRY: list[dict] = [
          fields=["primary_color", "secondary_color", "accent_color", "font_body",
                  "font_heading", "header_layout", "footer_layout", "button_style",
                  "product_card_style", "homepage_sections", "tokens", "custom_css",
-                 "category_above_hero", "show_category_headings"]),
+                 "category_above_hero", "show_category_headings",
+                 "heading_align", "heading_size", "heading_font"]),
 ]
 
 

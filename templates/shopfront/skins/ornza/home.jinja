@@ -1,4 +1,5 @@
 {% extends "shopfront/base.jinja" %}
+{% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
 {% block title %}{{ store.name }} — Fine jewellery{% endblock %}
 {% block content %}
 
@@ -86,7 +87,7 @@
 {# ── CATEGORIES ── #}
 {% if cat_tiles %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <h2 class="mb-10 text-center font-display text-3xl sm:text-4xl">Shop by category</h2>
+  <h2 class="mb-10 {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">Shop by category</h2>
   <div class="grid grid-cols-2 gap-4 md:grid-cols-3">
     {% for t in cat_tiles[:6] %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group relative block aspect-[3/2] overflow-hidden bg-line/40">
@@ -104,7 +105,7 @@
 <section class="cv-auto bg-panel">
   <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
     <div class="mb-10 flex items-end justify-between">
-      <h2 class="font-display text-3xl sm:text-4xl">New arrivals</h2>
+      <h2 class="{{ heading_classes('text-3xl sm:text-4xl') }}">New arrivals</h2>
       <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
     </div>
     <div class="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
@@ -117,7 +118,7 @@
 {# ── BEST SELLERS ── #}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <div class="mb-10 flex items-end justify-between">
-    <h2 class="font-display text-3xl sm:text-4xl">Best sellers</h2>
+    <h2 class="{{ heading_classes('text-3xl sm:text-4xl') }}">Best sellers</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
   <div class="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 lg:grid-cols-4">
@@ -137,7 +138,7 @@
 {# ── TESTIMONIALS ── #}
 {% if testimonials %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <h2 class="mb-10 text-center font-display text-3xl sm:text-4xl">What our customers say</h2>
+  <h2 class="mb-10 {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">What our customers say</h2>
   <div class="grid gap-8 md:grid-cols-3">
     {% for r in testimonials %}
     <figure class="ornza-frame border border-line bg-panel p-10 text-center">

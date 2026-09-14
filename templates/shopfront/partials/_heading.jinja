@@ -1,0 +1,18 @@
+{# Storewide section-heading style (ThemeSettings.heading_align/size/font) —
+   NOT for merchant banner text (hero/promo/category/product), which has its
+   own text_hidden/hide_cta/hide_overlay controls.
+
+   `default_size` and `default_align` are that heading's own original
+   Tailwind classes — used as-is when heading_size is "md" / heading_align is
+   blank (every store's default), so an untouched store looks exactly as it
+   did before this existed. Some headings (testimonials, "Why it works") are
+   center-aligned by the skin's own design, not by any single default this
+   macro could otherwise safely pick. #}
+{% macro heading_classes(default_size='text-2xl sm:text-3xl', default_align='text-left') %}{{
+  'font-sans' if heading_font == 'sans' else 'font-display'
+}} {{
+  {'left': 'text-left', 'center': 'text-center', 'right': 'text-right'}[heading_align] if heading_align else default_align
+}} {{
+  {'sm': 'text-xl sm:text-2xl', 'md': default_size,
+   'lg': 'text-3xl sm:text-4xl', 'xl': 'text-4xl sm:text-5xl'}[heading_size or 'md']
+}}{% endmacro %}
