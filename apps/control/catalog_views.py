@@ -274,10 +274,11 @@ class _ProductSizeColorMixin:
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        from apps.projects.verticals import wants_size_color
+        from apps.projects.verticals import wants_jewellery_sizes, wants_size_color
 
         enabled = wants_size_color(self.active_project)
         ctx["size_color_enabled"] = enabled
+        ctx["jewellery_sizes"] = wants_jewellery_sizes(self.active_project)
         obj = ctx.get("object")
         if enabled and obj is not None:
             from apps.catalog.variants import size_color_of
