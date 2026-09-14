@@ -384,6 +384,10 @@ class CartAddView(View):
             variant = get_object_or_404(Variant, product=product, pk=request.POST["variant"])
         qty = max(1, int(request.POST.get("quantity") or 1))
         cart_svc.add_to_cart(cart=cart, product=product, variant=variant, quantity=qty)
+        if request.POST.get("buy_now"):
+            resp = HttpResponse(status=204)
+            resp["HX-Redirect"] = reverse("shopfront:checkout")
+            return resp
         resp = render(request, "shopfront/partials/_cart_fragments.jinja",
                       base_context(request, project))
         resp["HX-Trigger"] = json.dumps({
