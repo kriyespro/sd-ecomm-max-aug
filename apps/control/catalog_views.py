@@ -597,6 +597,28 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
         return redirect("control:product_edit", pk=clone.pk)
 
 
+class ProductFlagToggleView(_ScopedQuerysetMixin, View):
+    """Quick per-row checkboxes on the products list — which home page rail
+    (Featured/New arrivals) a product shows in, without opening the full
+    edit form. Each checkbox POSTs on its own (no wrapping <form>), so an
+    unchecked box sends no body at all — "state" present means checked."""
+
+    model = Product
+    ALLOWED_FLAGS = {"is_featured", "is_new_arrival"}
+
+    def post(self, request, pk, flag, *args, **kwargs):
+        if flag not in self.ALLOWED_FLAGS:
+            return HttpResponse(status=404)
+        product = get_object_or_404(self.get_queryset(), pk=pk)
+        value = "state" in request.POST
+        setattr(product, flag, value)
+        product.save(update_fields=[flag, "updated_at"])
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=product,
+                     changes={flag: value}, request=request)
+        return HttpResponse(status=204)
+
+
 class ProductAiGenerateView(ActiveProjectMixin, View):
     """"Write it for me" on the product form — one-line brief in, suggested
     title/description/SEO/tags out, using the store's own rotated OpenRouter
