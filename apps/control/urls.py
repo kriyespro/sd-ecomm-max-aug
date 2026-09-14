@@ -248,6 +248,7 @@ urlpatterns = [
     path("cms/budget-bands/<int:pk>/delete/", cmsv.BudgetBandDeleteView.as_view(), name="cms_budget_band_delete"),
     # CMS — benefit items ("Why it works")
     path("cms/benefits/", cmsv.BenefitItemListView.as_view(), name="cms_benefit_items"),
+    path("cms/benefits/heading/", cmsv.BenefitsHeadingUpdateView.as_view(), name="cms_benefits_heading"),
     path("cms/benefits/new/", cmsv.BenefitItemCreateView.as_view(), name="cms_benefit_item_create"),
     path("cms/benefits/<int:pk>/", cmsv.BenefitItemUpdateView.as_view(), name="cms_benefit_item_edit"),
     path("cms/benefits/<int:pk>/delete/", cmsv.BenefitItemDeleteView.as_view(), name="cms_benefit_item_delete"),
