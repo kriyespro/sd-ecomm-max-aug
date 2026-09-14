@@ -5,14 +5,14 @@
 {# HERO — full-bleed image with overlay #}
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
-<section class="relative isolate flex aspect-[40/13] items-end overflow-hidden bg-ink">
+<section class="relative isolate overflow-hidden bg-ink">
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
-    <img src="{{ hero_img | media_src(1600, 520, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="absolute inset-0 -z-10 h-full w-full object-cover">
+    <img src="{{ hero_img | media_src(1600, 520, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="block w-full h-auto">
   </picture>
-  <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink/85 via-ink/35 to-ink/10"></div>
+  <div class="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/35 to-ink/10"></div>
 
-  <div class="mx-auto w-full max-w-7xl px-5 py-3 sm:py-5 lg:px-8">
+  <div class="absolute inset-x-0 bottom-0 mx-auto w-full max-w-7xl px-5 py-3 sm:py-5 lg:px-8">
     <p class="hidden text-[10px] font-semibold uppercase tracking-luxe text-paper/70 sm:block">
       {{ hero_banner.subheading if hero_banner else 'New season' }}
     </p>
