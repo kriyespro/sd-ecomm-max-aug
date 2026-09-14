@@ -103,7 +103,8 @@ _REGISTRY: list[dict] = [
                  "product_card_style", "homepage_sections", "tokens", "custom_css",
                  "category_above_hero", "show_category_headings",
                  "heading_align", "heading_size", "heading_font", "products_per_row",
-                 "products_shown", "section_titles", "hide_featured_eyebrow"]),
+                 "products_shown", "section_titles", "hide_featured_eyebrow",
+                 "category_mobile_slider"]),
 ]
 
 

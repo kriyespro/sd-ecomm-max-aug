@@ -169,7 +169,7 @@ def _build_chrome(project):
         .only("primary_color", "project_id", "category_above_hero",
               "show_category_headings", "heading_align", "heading_size", "heading_font",
               "homepage_sections", "products_per_row", "products_shown", "section_titles",
-              "hide_featured_eyebrow")
+              "hide_featured_eyebrow", "category_mobile_slider")
         .first()
     )
     profile = StoreProfile.objects.filter(project=project).first()
@@ -249,6 +249,7 @@ def _build_chrome(project):
         "products_shown": getattr(theme, "products_shown", 8) or 8,
         "section_titles": dict(getattr(theme, "section_titles", None) or {}),
         "hide_featured_eyebrow": bool(getattr(theme, "hide_featured_eyebrow", False)),
+        "category_mobile_slider": bool(getattr(theme, "category_mobile_slider", False)),
         "category_banners": category_banners,
         "product_banner": banners.get("product"),
         "popup_banner": banners.get("popup"),

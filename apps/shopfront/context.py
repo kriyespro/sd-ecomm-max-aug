@@ -127,6 +127,7 @@ def base_context(request, project, **extra):
         "products_shown": chrome.get("products_shown", 8),
         "section_titles": chrome.get("section_titles", {}),
         "hide_featured_eyebrow": chrome.get("hide_featured_eyebrow", False),
+        "category_mobile_slider": chrome.get("category_mobile_slider", False),
         "promo_banners": chrome["promo_banners"],
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],
