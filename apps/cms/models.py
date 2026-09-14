@@ -615,6 +615,11 @@ class ThemeSettings(TenantScopedModel):
         default=8,
     )
 
+    # Mobile only — "Shop by category" as a swipeable single-row slider
+    # instead of a wrapping grid. Off by default: an untouched store's
+    # category tiles are unchanged. Desktop/tablet always stay a grid.
+    category_mobile_slider = models.BooleanField(default=False)
+
     # Custom text for home page section headings ({"featured": "Bestsellers"}
     # — see apps.cms.section_titles for each skin's editable keys + default
     # text). A key absent here renders that heading's own hardcoded default,

@@ -28,9 +28,9 @@
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
   {% endif %}
-  <div class="grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8">
+  <div class="{{ 'flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible lg:grid-cols-8' if category_mobile_slider else 'grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8' }}">
     {% for t in rows[:8] %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center">
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center {{ 'w-[30%] shrink-0 snap-start sm:w-auto' if category_mobile_slider }}">
       <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
         <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
       </div>
