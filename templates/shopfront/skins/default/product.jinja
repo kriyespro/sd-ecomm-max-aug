@@ -142,16 +142,25 @@
 
         {% include "shopfront/partials/_variant_picker.jinja" %}
 
-        <div class="flex items-stretch gap-3">
-          <div class="flex items-center border border-line">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+          <div class="flex items-center justify-center border border-line sm:justify-start">
             <button type="button" @click="q = Math.max(1, q-1)" class="px-3.5 text-mute hover:text-ink">−</button>
             <input name="quantity" x-model="q" inputmode="numeric" class="w-11 border-x border-line bg-transparent py-3 text-center text-sm outline-none">
             <button type="button" @click="q++" class="px-3.5 text-mute hover:text-ink">+</button>
           </div>
-          <button class="htmx-hide flex-1 bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-accent"
-                  :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}">
-            <span x-text="(avail !== null && avail <= 0) ? 'Notify me' : 'Add to bag'"></span>
-          </button>
+          <div class="flex flex-1 gap-3">
+            <button type="submit" name="buy_now" value="1"
+                    class="htmx-hide flex-1 border border-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-ink hover:text-paper"
+                    :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}"
+                    x-show="!(avail !== null && avail <= 0)">
+              Buy now
+            </button>
+            <button type="submit"
+                    class="htmx-hide flex-1 bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper transition-colors hover:bg-accent"
+                    :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}">
+              <span x-text="(avail !== null && avail <= 0) ? 'Notify me' : 'Add to bag'"></span>
+            </button>
+          </div>
         </div>
       </form>
 
@@ -240,9 +249,10 @@
       <p class="truncate font-medium">{{ product.title }}</p>
       <p class="text-accent">{{ product.current_price | money }}</p>
     </div>
-    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="shrink-0">
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="flex shrink-0 gap-2">
       <input type="hidden" name="product" value="{{ product.slug }}">
-      <button class="bg-ink px-5 py-3 text-[11px] font-semibold uppercase tracking-luxe text-paper sm:px-6">Add to bag</button>
+      <button type="submit" name="buy_now" value="1" class="border border-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink">Buy now</button>
+      <button type="submit" class="bg-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-paper">Add to bag</button>
     </form>
   </div>
 </div>
