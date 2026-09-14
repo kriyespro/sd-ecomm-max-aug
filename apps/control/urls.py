@@ -278,6 +278,7 @@ urlpatterns = [
     path("cms/menus/<int:pk>/items/<int:item_pk>/delete/", cmsv.MenuItemDeleteView.as_view(), name="cms_menu_item_delete"),
     # CMS — theme
     path("cms/theme/", cmsv.ThemeSettingsView.as_view(), name="cms_theme"),
+    path("cms/theme/sections/move/", cmsv.ThemeSectionMoveView.as_view(), name="cms_theme_section_move"),
     path("cms/store-profile/", cmsv.StoreProfileView.as_view(), name="cms_store_profile"),
     path("cms/demo-content/remove/", cmsv.DemoContentRemoveView.as_view(), name="demo_remove"),
     path("cms/demo-content/import/", cmsv.DemoContentImportView.as_view(), name="demo_import"),

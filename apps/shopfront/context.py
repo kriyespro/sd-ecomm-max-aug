@@ -11,6 +11,7 @@ from django.http import Http404
 from django.urls import reverse
 
 from apps.cart import services as cart_svc
+from apps.cms import homepage_sections
 from apps.core.store_resolver import store_chrome
 
 
@@ -119,6 +120,9 @@ def base_context(request, project, **extra):
         "heading_align": chrome.get("heading_align", ""),
         "heading_size": chrome.get("heading_size", "md"),
         "heading_font": chrome.get("heading_font", "display"),
+        "section_order": homepage_sections.effective_order(
+            getattr(request, "skin_slug", "default"), chrome.get("homepage_sections")
+        ),
         "promo_banners": chrome["promo_banners"],
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],

@@ -37,7 +37,13 @@
   {% endif %}
 </section>
 
-{# PROMO BANNERS — placement "promo" in /admin/cms/banners/ #}
+{# ============ REORDERABLE HOMEPAGE SECTIONS (Theme → Homepage section order) ============
+   Each is a self-contained macro so `section_order` (apps.cms.homepage_sections)
+   can dispatch them in whatever sequence the merchant picked. An untouched
+   store's `section_order` is this exact canonical order, so nothing changes
+   until Theme settings is actually edited. #}
+
+{% macro _section_promo() %}
 {% for b in promo_banners %}
 <section class="mx-auto max-w-7xl px-5 pt-14 lg:px-8">
   <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[4/1] overflow-hidden bg-ink">
@@ -59,8 +65,9 @@
   </a>
 </section>
 {% endfor %}
+{% endmacro %}
 
-{# CATEGORIES #}
+{% macro _section_categories() %}
 {% if cat_tiles %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-8 {{ heading_classes('text-3xl') }}">Shop by category</h2>
@@ -75,8 +82,9 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# FEATURED #}
+{% macro _section_featured() %}
 <section class="mx-auto max-w-7xl px-5 pb-8 lg:px-8">
   <div class="mb-8 flex items-end justify-between">
     <h2 class="{{ heading_classes('text-3xl') }}">Featured</h2>
@@ -86,8 +94,9 @@
     {% for p in featured %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
+{% endmacro %}
 
-{# NEW ARRIVALS #}
+{% macro _section_new_arrivals() %}
 {% if new_arrivals %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-8 {{ heading_classes('text-3xl') }}">New arrivals</h2>
@@ -96,8 +105,9 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
 
-{# TESTIMONIALS #}
+{% macro _section_testimonials() %}
 {% if testimonials %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-10 {{ heading_classes('text-3xl', 'text-center') }}">What people say</h2>
@@ -112,6 +122,13 @@
   </div>
 </section>
 {% endif %}
+{% endmacro %}
+
+{% set _sections = {
+  'promo': _section_promo, 'categories': _section_categories, 'featured': _section_featured,
+  'new_arrivals': _section_new_arrivals, 'testimonials': _section_testimonials,
+} %}
+{% for _key in section_order %}{% if _key in _sections %}{{ _sections[_key]() }}{% endif %}{% endfor %}
 
 {# VALUE PROPS #}
 <section class="cv-auto border-y border-line bg-panel">
@@ -125,9 +142,9 @@
   </div>
 </section>
 
-{# POPUP BANNER — placement "popup"; shown once per visitor (localStorage) #}
 {% include "shopfront/partials/_ugc_shorts.jinja" %}
 
+{# POPUP BANNER — placement "popup"; shown once per visitor (localStorage) #}
 {% if popup_banner %}
 <div x-data="{ open: false }"
      x-init="setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200)"
