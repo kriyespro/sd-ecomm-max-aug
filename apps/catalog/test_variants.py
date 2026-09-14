@@ -240,6 +240,40 @@ class StorefrontAxesTests(TestCase):
         self.assertEqual(
             Decimal(axes["map"][combo_key("S", "Red")]["price"]), Decimal("999")
         )
+        self.assertIsNone(axes["map"][combo_key("S", "Red")]["sale_price"])
+
+    def test_per_variant_price_override(self):
+        """Each size can have its own price — the map must carry each
+        variant's own regular/sale price, not the product's shared price."""
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=[],
+            matrix={
+                combo_key("S", ""): {"price": "1200"},
+                combo_key("M", ""): {"price": "1500", "sale_price": "1300"},
+            },
+        )
+        variants = list(
+            self.product.variants.filter(is_active=True)
+            .prefetch_related("attribute_values__attribute")
+        )
+        axes = storefront_axes(variants)
+        s = axes["map"][combo_key("S", "")]
+        m = axes["map"][combo_key("M", "")]
+        self.assertEqual(Decimal(s["price"]), Decimal("1200"))
+        self.assertIsNone(s["sale_price"])
+        self.assertEqual(Decimal(m["price"]), Decimal("1500"))
+        self.assertEqual(Decimal(m["sale_price"]), Decimal("1300"))
+
+    def test_variant_with_no_price_override_falls_back_to_product_price(self):
+        apply_size_color(self.product, sizes=["S"], colors=[])
+        variants = list(
+            self.product.variants.filter(is_active=True)
+            .prefetch_related("attribute_values__attribute")
+        )
+        axes = storefront_axes(variants)
+        self.assertEqual(
+            Decimal(axes["map"][combo_key("S", "")]["price"]), self.product.price,
+        )
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -289,3 +323,33 @@ class StorefrontPickerRenderTests(TestCase):
         # state (that was the bug: two separate `sel`/`map` objects that
         # couldn't see each other).
         self.assertEqual(body.count('sel: {'), 1)
+
+    def test_price_updates_with_the_selected_size_not_frozen_at_render_time(self):
+        """Regression: the price shown was always the product's own price,
+        server-baked once at render time — picking a size with its own
+        (different) price never changed what was on screen. The map must
+        carry each size's price, and the display must read it reactively."""
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=[],
+            matrix={
+                combo_key("S", ""): {"price": "699"},
+                combo_key("M", ""): {"price": "899", "sale_price": "799"},
+            },
+        )
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        # Each size's own price is in the shared map the picker also reads
+        # (exact price/sale_price values are covered precisely by
+        # StorefrontAxesTests — here just confirm both sizes' own combo keys
+        # made it into the page's map, each carrying a "price").
+        import re
+
+        for key in (combo_key("S", ""), combo_key("M", "")):
+            self.assertRegex(body, re.escape(f'"{key}"') + r'\s*:\s*\{[^}]*"price"')
+        self.assertIn('"sale_price": "799.00"', body)
+        # ...and the price shown on screen is computed reactively, not a
+        # single server-rendered current_price frozen at page load.
+        self.assertNotIn("{{ product.current_price", body)
+        self.assertIn("get regularPrice()", body)
+        self.assertIn("get salePrice()", body)
+        self.assertIn('x-text="fmt(displayPrice)"', body)

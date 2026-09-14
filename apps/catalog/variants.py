@@ -291,7 +291,13 @@ def storefront_axes(variants):
     back to the flat variant list). Otherwise::
 
         {"axes": [{"name": "Size", "values": ["S", "M"]}, ...],
-         "map": {"S|||Red": {"pk", "price", "sale_price", "stock"}}}
+         "map": {"S|||Red": {"pk", "price", "sale_price", "in_stock", "stock"}}}
+
+    ``price`` is the variant's own regular price (falling back to the
+    product's), ``sale_price`` the discounted price or ``null`` when this
+    variant isn't on sale — the product page uses both to keep the price
+    display (and its strikethrough/savings badge) in sync with the selected
+    size/colour instead of always showing the product's own price.
 
     A variant with real stock tracking on (``Product.track_variant_stock`` —
     see ``_sync_variant_stock_tracking``) reports live available-to-sell
@@ -333,9 +339,12 @@ def storefront_axes(variants):
             if av.value not in axes_values[aname]:
                 axes_values[aname].append(av.value)
         stock = tracked_stock[v.pk] if v.pk in tracked_stock else (v.stock or 0)
+        base_price = v.price if v.price is not None else v.product.price
+        on_sale = v.sale_price is not None and v.sale_price < base_price
         vmap[combo_key(s, c)] = {
             "pk": v.pk,
-            "price": str(v.effective_price),
+            "price": str(base_price),
+            "sale_price": str(v.sale_price) if on_sale else None,
             "in_stock": stock > 0,
             "stock": stock,
         }
