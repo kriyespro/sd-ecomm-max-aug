@@ -1,5 +1,5 @@
 {% extends "shopfront/base.jinja" %}
-{% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
+{% from "shopfront/partials/_heading.jinja" import heading_classes, heading_row_class with context %}
 {% block title %}{{ store.name }} — Fine everyday jewellery{% endblock %}
 
 {% block content %}
@@ -86,7 +86,7 @@
 
 {% macro _section_featured() %}
 <section class="mx-auto max-w-7xl px-5 pb-8 lg:px-8">
-  <div class="mb-8 flex items-end justify-between">
+  <div class="mb-8 flex items-end {{ heading_row_class() }}">
     <h2 class="{{ heading_classes('text-3xl') }}">Featured</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>

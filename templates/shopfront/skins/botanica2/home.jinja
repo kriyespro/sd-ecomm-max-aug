@@ -1,5 +1,5 @@
 {% extends "shopfront/base.jinja" %}
-{% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
+{% from "shopfront/partials/_heading.jinja" import heading_classes, heading_row_class with context %}
 {% block title %}{{ store.name }} — Rooted in nature, made for you{% endblock %}
 
 {% block content %}
@@ -76,7 +76,7 @@
 {% macro _section_categories() %}
 {% if cat_tiles %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+  <div class="mb-9 flex flex-wrap items-end {{ heading_row_class() }} gap-x-4 gap-y-1">
     <h2 class="{{ heading_classes() }}">Shop by category</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
@@ -120,7 +120,7 @@
 
 {% macro _section_featured() %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+  <div class="mb-9 flex flex-wrap items-end {{ heading_row_class() }} gap-x-4 gap-y-1">
     <div>
       <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">Best sellers</p>
       <h2 class="mt-1 {{ heading_classes() }}">Loved by the community</h2>
@@ -159,7 +159,7 @@
 {% macro _section_new_arrivals() %}
 {% if new_arrivals %}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
+  <div class="mb-9 flex flex-wrap items-end {{ heading_row_class() }} gap-x-4 gap-y-1">
     <h2 class="{{ heading_classes() }}">New arrivals</h2>
     <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
