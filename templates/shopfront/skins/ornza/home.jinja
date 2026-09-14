@@ -51,14 +51,17 @@
   <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[4/1] overflow-hidden bg-[#080604]">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}" alt="{{ b.heading }}" loading="lazy" decoding="async"
+      <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}" alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
            class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
-    {% if b.heading or b.subheading or b.cta_label %}
-    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 bg-[#080604]/40 p-8 lg:p-14">
+    {% if not b.hide_overlay %}<div class="absolute inset-0 bg-[#080604]/40"></div>{% endif %}
+    {% if (not b.text_hidden and (b.heading or b.subheading)) or (not b.hide_cta and b.cta_label) %}
+    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 p-8 lg:p-14">
+      {% if not b.text_hidden %}
       {% if b.subheading %}<p class="text-[10px] font-medium uppercase tracking-[0.35em] text-accent">{{ b.subheading }}</p>{% endif %}
       {% if b.heading %}<h2 class="max-w-xl font-display text-3xl text-[#FFFFF0] sm:text-4xl">{{ b.heading }}</h2>{% endif %}
-      {% if b.cta_label %}<span class="mt-2 rounded-sm bg-accent px-8 py-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604] transition group-hover:bg-[#E8D5A0]">{{ b.cta_label }}</span>{% endif %}
+      {% endif %}
+      {% if not b.hide_cta and b.cta_label %}<span class="mt-2 rounded-sm bg-accent px-8 py-3.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604] transition group-hover:bg-[#E8D5A0]">{{ b.cta_label }}</span>{% endif %}
     </div>
     {% endif %}
   </a>
@@ -173,12 +176,14 @@
             @click="open = false; try { localStorage.setItem('sd_popup_{{ popup_banner.id }}', '1') } catch (e) {}"
             class="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center bg-paper/80 text-lg text-ink hover:bg-paper">&times;</button>
     <a href="{{ popup_banner.cta_url or url('shopfront:shop') }}">
-      {% if popup_banner.image %}<img src="{{ popup_banner.image.url }}" alt="{{ popup_banner.heading }}" class="w-full object-cover">{% endif %}
-      {% if popup_banner.heading or popup_banner.subheading or popup_banner.cta_label %}
+      {% if popup_banner.image %}<img src="{{ popup_banner.image.url }}" alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
+      {% if not popup_banner.text_hidden and (popup_banner.heading or popup_banner.subheading) or (not popup_banner.hide_cta and popup_banner.cta_label) %}
       <div class="p-6 text-center">
+        {% if not popup_banner.text_hidden %}
         {% if popup_banner.heading %}<h3 class="font-display text-2xl text-ink">{{ popup_banner.heading }}</h3>{% endif %}
         {% if popup_banner.subheading %}<p class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
-        {% if popup_banner.cta_label %}<span class="mt-4 inline-block bg-accent px-6 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604]">{{ popup_banner.cta_label }}</span>{% endif %}
+        {% endif %}
+        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span class="mt-4 inline-block bg-accent px-6 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604]">{{ popup_banner.cta_label }}</span>{% endif %}
       </div>
       {% endif %}
     </a>

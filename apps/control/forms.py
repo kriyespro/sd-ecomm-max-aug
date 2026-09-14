@@ -438,7 +438,8 @@ class BannerForm(ProjectScopedForm):
         model = Banner
         fields = [
             "name", "placement", "image", "mobile_image",
-            "heading", "subheading", "cta_label", "cta_url", "text_hidden",
+            "heading", "subheading", "cta_label", "cta_url",
+            "text_hidden", "hide_cta", "hide_overlay",
             "category", "starts_at", "ends_at", "priority", "is_active",
         ]
         widgets = {

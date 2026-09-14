@@ -18,11 +18,12 @@
   <a href="{{ _catban.cta_url or '' }}" class="group relative mb-10 block aspect-[4/1] overflow-hidden bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
     <picture>
       {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
-      <img src="{{ _catban.image | media_src(1600, 400, 'Category banner') }}" alt="{{ _catban.heading }}" loading="lazy" decoding="async"
+      <img src="{{ _catban.image | media_src(1600, 400, 'Category banner') }}" alt="{{ '' if _catban.text_hidden else _catban.heading }}" loading="lazy" decoding="async"
            class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
-    {% if _catban.heading or _catban.subheading %}
-    <div class="absolute inset-0 flex flex-col justify-end gap-1 bg-gradient-to-t from-ink/75 to-transparent p-6">
+    {% if not _catban.hide_overlay %}<div class="absolute inset-0 bg-gradient-to-t from-ink/75 to-transparent"></div>{% endif %}
+    {% if not _catban.text_hidden and (_catban.heading or _catban.subheading) %}
+    <div class="absolute inset-0 flex flex-col justify-end gap-1 p-6">
       {% if _catban.heading %}<h2 class="font-display text-2xl text-paper">{{ _catban.heading }}</h2>{% endif %}
       {% if _catban.subheading %}<p class="text-sm text-paper/80">{{ _catban.subheading }}</p>{% endif %}
     </div>
