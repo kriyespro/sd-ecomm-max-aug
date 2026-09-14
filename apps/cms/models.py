@@ -610,6 +610,12 @@ class ThemeSettings(TenantScopedModel):
     # so an untouched store's headings are unchanged.
     section_titles = models.JSONField(default=dict, blank=True)
 
+    # botanica2/botanica3 only — the small "Best sellers" label above the
+    # Featured heading. Left-aligned by default regardless of heading_align
+    # (it's a plain <p>, not one of the storewide headings); this lets a
+    # merchant hide it outright instead of just re-centering it.
+    hide_featured_eyebrow = models.BooleanField(default=False)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["project"], name="uniq_theme_per_project"),
