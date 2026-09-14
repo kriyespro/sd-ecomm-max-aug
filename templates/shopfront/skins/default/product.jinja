@@ -4,7 +4,6 @@
 
 {% block content %}
 {% set imgs = product.images.all() | list %}
-{% set saving = (product.price - product.current_price) if product.on_sale else 0 %}
 
 <div class="mx-auto max-w-7xl px-5 py-8 pb-28 lg:px-8 lg:pb-8"
      x-data='{
@@ -20,6 +19,10 @@
        get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
        get cur() { return this.hasAxes ? (this.map[this.k] || null) : null; },
        get avail() { return this.hasAxes ? (this.cur ? this.cur.stock : 0) : {{ available if available is not none else "null" }} },
+       get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
+       get salePrice() { return this.cur ? (this.cur.sale_price !== null ? Number(this.cur.sale_price) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
+       get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
+       fmt(n) { return {{ currency | tojson }} + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
      }'
      @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
 
@@ -112,13 +115,14 @@
       {% endif %}
 
       <div class="mt-5 flex flex-wrap items-baseline gap-3">
-        <span class="font-display text-3xl {{ 'text-accent' if product.on_sale }}">{{ product.current_price | money }}</span>
-        {% if product.on_sale %}
-        <span class="text-mute line-through">{{ product.price | money }}</span>
-        <span class="bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent">
-          Save {{ saving | money }} ({{ (saving / product.price * 100) | round | int }}%)
-        </span>
-        {% endif %}
+        <span class="font-display text-3xl" :class="{'text-accent': salePrice !== null}" x-text="fmt(displayPrice)"></span>
+        <template x-if="salePrice !== null">
+          <span class="text-mute line-through" x-text="fmt(regularPrice)"></span>
+        </template>
+        <template x-if="salePrice !== null">
+          <span class="bg-accent-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent"
+                x-text="'Save ' + fmt(regularPrice - salePrice) + ' (' + Math.round((regularPrice - salePrice) / regularPrice * 100) + '%)'"></span>
+        </template>
       </div>
       <p class="mt-1 text-xs text-mute">Inclusive of all taxes</p>
 
@@ -247,7 +251,7 @@
   <div class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line bg-panel/95 px-4 py-3 backdrop-blur sm:px-5 lg:hidden">
     <div class="min-w-0 flex-1 text-sm">
       <p class="truncate font-medium">{{ product.title }}</p>
-      <p class="text-accent">{{ product.current_price | money }}</p>
+      <p class="text-accent" x-text="fmt(displayPrice)"></p>
     </div>
     <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="flex shrink-0 gap-2">
       <input type="hidden" name="product" value="{{ product.slug }}">
