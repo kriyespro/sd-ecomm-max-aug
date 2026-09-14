@@ -16,6 +16,24 @@
          else 'bg-amber-100 text-amber-700' }}">{{ p.get_status_display() }}</span>
   </td>
   <td class="px-4 py-2 text-slate-500">{{ p.category.name if p.category else "—" }}</td>
+  <td class="px-4 py-2 whitespace-nowrap">
+    {% if not show_trash %}
+    <div hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' class="flex items-center gap-3">
+      <label class="inline-flex items-center gap-1 text-xs text-slate-600" title="Show in Featured / Best sellers">
+        <input type="checkbox" name="state" value="1" {{ 'checked' if p.is_featured }}
+               hx-post="{{ url('control:product_flag_toggle', kwargs={'pk': p.pk, 'flag': 'is_featured'}) }}"
+               hx-trigger="change" hx-swap="none" class="h-3.5 w-3.5 rounded border-slate-300">
+        Featured
+      </label>
+      <label class="inline-flex items-center gap-1 text-xs text-slate-600" title="Show in New arrivals">
+        <input type="checkbox" name="state" value="1" {{ 'checked' if p.is_new_arrival }}
+               hx-post="{{ url('control:product_flag_toggle', kwargs={'pk': p.pk, 'flag': 'is_new_arrival'}) }}"
+               hx-trigger="change" hx-swap="none" class="h-3.5 w-3.5 rounded border-slate-300">
+        New
+      </label>
+    </div>
+    {% else %}—{% endif %}
+  </td>
   <td class="px-4 py-2 text-right whitespace-nowrap">
     {% if show_trash %}
       {% if can_manage_trash %}
@@ -32,7 +50,7 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" class="px-4 py-8 text-center text-sm text-slate-400">
+<tr><td colspan="7" class="px-4 py-8 text-center text-sm text-slate-400">
   {% if q or status or category %}
   No products match this filter in <span class="font-medium text-slate-600">{{ active_project.name }}</span>.
   {% else %}

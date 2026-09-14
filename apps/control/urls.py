@@ -116,6 +116,7 @@ urlpatterns = [
     path("products/<int:pk>/restore/", cat.ProductRestoreView.as_view(), name="product_restore"),
     path("products/<int:pk>/purge/", cat.ProductPurgeView.as_view(), name="product_purge"),
     path("products/<int:pk>/duplicate/", cat.ProductDuplicateView.as_view(), name="product_duplicate"),
+    path("products/<int:pk>/flags/<str:flag>/", cat.ProductFlagToggleView.as_view(), name="product_flag_toggle"),
     path("products/ai-generate/", cat.ProductAiGenerateView.as_view(), name="product_ai_generate"),
     path("products/<int:pk>/images/", cat.ProductImagePanelView.as_view(), name="product_images"),
     path("products/<int:pk>/images/upload/", cat.ProductImageUploadView.as_view(), name="product_image_upload"),
