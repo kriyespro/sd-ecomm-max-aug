@@ -601,7 +601,18 @@ class ThemeSettings(TenantScopedModel):
     # phones and 3 on tablets regardless of this; it only changes the
     # widest (lg+) breakpoint.
     products_per_row = models.PositiveSmallIntegerField(
-        choices=[(4, "4 per row"), (5, "5 per row")], default=4,
+        choices=[(3, "3 per row"), (4, "4 per row"), (5, "5 per row"), (6, "6 per row")],
+        default=4,
+    )
+
+    # How many products load into each home page product rail (Featured/New
+    # arrivals/Best sellers) — the first `products_per_row` are visible, the
+    # rest slide into view. 8 isn't offered in the dropdown (it's the
+    # platform's original hardcoded rail size) but stays the default so an
+    # untouched store's rail size doesn't silently change.
+    products_shown = models.PositiveSmallIntegerField(
+        choices=[(5, "5"), (8, "8 (default)"), (10, "10"), (15, "15"), (20, "20")],
+        default=8,
     )
 
     # Custom text for home page section headings ({"featured": "Bestsellers"}

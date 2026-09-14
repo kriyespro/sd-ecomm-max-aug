@@ -50,9 +50,11 @@ def _htmx(request):
 
 class HomeView(View):
     def get(self, request):
+        from apps.core.store_resolver import store_chrome
         from apps.reviews.models import Review
 
         project = current_project(request)
+        rail_size = (store_chrome(project) or {}).get("products_shown", 8) or 8
 
         # Only the columns _card.jinja reads — skips the description / SEO blobs.
         base = (
@@ -64,8 +66,8 @@ class HomeView(View):
         )
 
         def _rail(qs):
-            rows = list(qs[:8])
-            return rows or list(base[:8])
+            rows = list(qs[:rail_size])
+            return rows or list(base[:rail_size])
 
         featured = _rail(base.filter(is_featured=True))
         new_arrivals = _rail(base.filter(is_new_arrival=True))

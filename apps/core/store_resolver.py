@@ -168,7 +168,7 @@ def _build_chrome(project):
         ThemeSettings.objects.filter(project=project)
         .only("primary_color", "project_id", "category_above_hero",
               "show_category_headings", "heading_align", "heading_size", "heading_font",
-              "homepage_sections", "products_per_row", "section_titles",
+              "homepage_sections", "products_per_row", "products_shown", "section_titles",
               "hide_featured_eyebrow")
         .first()
     )
@@ -246,6 +246,7 @@ def _build_chrome(project):
         "heading_font": getattr(theme, "heading_font", "display") or "display",
         "homepage_sections": list(getattr(theme, "homepage_sections", None) or []),
         "products_per_row": getattr(theme, "products_per_row", 4) or 4,
+        "products_shown": getattr(theme, "products_shown", 8) or 8,
         "section_titles": dict(getattr(theme, "section_titles", None) or {}),
         "hide_featured_eyebrow": bool(getattr(theme, "hide_featured_eyebrow", False)),
         "category_banners": category_banners,
