@@ -1,5 +1,6 @@
 {% extends "shopfront/base.jinja" %}
 {% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
+{% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
 {% block title %}{{ store.name }} — Fine jewellery{% endblock %}
 {% block content %}
 
@@ -114,9 +115,7 @@
       <h2 class="flex-1 {{ heading_classes('text-3xl sm:text-4xl') }}">{{ section_titles.get('new_arrivals', 'New arrivals') }}</h2>
       <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
     </div>
-    <div class="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 {{ 'lg:grid-cols-5' if products_per_row == 5 else 'lg:grid-cols-4' }}">
-      {% for p in new_arrivals %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
-    </div>
+    {{ product_slider(new_arrivals, ref='newArrivalsSlider', gap='gap-x-6') }}
   </div>
 </section>
 {% endif %}
@@ -131,9 +130,7 @@
     <h2 class="flex-1 {{ heading_classes('text-3xl sm:text-4xl') }}">{{ section_titles.get('bestsellers', 'Best sellers') }}</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-2 gap-x-6 gap-y-10 md:grid-cols-3 {{ 'lg:grid-cols-5' if products_per_row == 5 else 'lg:grid-cols-4' }}">
-    {% for p in featured %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
-  </div>
+  {{ product_slider(featured, ref='bestsellersSlider', gap='gap-x-6') }}
 </section>
 
 {# ── DARK CALLOUT ── #}

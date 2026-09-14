@@ -565,7 +565,7 @@ class ThemeSettingsForm(ProjectScopedForm):
             "font_body", "font_heading",
             "header_layout", "footer_layout", "button_style", "product_card_style",
             "category_above_hero", "show_category_headings", "hide_featured_eyebrow",
-            "heading_align", "heading_size", "heading_font", "products_per_row",
+            "heading_align", "heading_size", "heading_font", "products_per_row", "products_shown",
             "custom_css",
         ]
         widgets = {
@@ -586,6 +586,7 @@ class ThemeSettingsForm(ProjectScopedForm):
             "heading_size": "“Medium” keeps each heading's own default size — pick another to resize them all.",
             "heading_font": "Uses one of the two fonts your skin already loads — no extra page weight.",
             "products_per_row": "Desktop only — phones and tablets always show fewer per row regardless.",
+            "products_shown": "Total products loaded into Featured/New arrivals/Best sellers. The first row (see Products per row) is visible; the rest slide into view.",
         }
 
     def __init__(self, *args, **kwargs):

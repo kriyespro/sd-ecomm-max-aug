@@ -30,7 +30,7 @@ class ThemeSectionTitlesFormTests(TestCase):
             "primary_color": "#111111", "secondary_color": "#ffffff",
             "accent_color": "#2563eb",
             "heading_align": "", "heading_size": "md", "heading_font": "display",
-            "products_per_row": "4",
+            "products_per_row": "4", "products_shown": "8",
         }
         payload.update(extra)
         return payload
