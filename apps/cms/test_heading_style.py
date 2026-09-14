@@ -30,6 +30,12 @@ class HeadingStyleDefaultsTests(TestCase):
         body = self.client.get("/", HTTP_HOST="headingdefault.test").content.decode()
         self.assertIn('font-display text-left text-3xl">Featured</h2>', body)
 
+    def test_default_heading_link_row_stays_justify_between(self):
+        """"Featured" shares its row with a "View all" link — untouched
+        stores must keep the link pinned to the far end, unchanged."""
+        body = self.client.get("/", HTTP_HOST="headingdefault.test").content.decode()
+        self.assertIn('<div class="mb-8 flex items-end justify-between">', body)
+
     def test_center_by_design_headings_stay_centered(self):
         from apps.catalog.models import Product
         from apps.reviews.models import Review, ReviewStatus
@@ -73,6 +79,20 @@ class HeadingStyleOverrideTests(TestCase):
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
         self.assertIn('font-display text-right text-3xl">Featured</h2>', body)
 
+    def test_center_align_also_moves_the_heading_link_row(self):
+        """"Featured" sits in a flex row next to "View all" — as a flex item
+        it shrinks to its own text width, so text-center on the <h2> alone
+        has nothing to visibly center against. The row's own justify-* must
+        follow heading_align too, or centering silently does nothing."""
+        self._set_theme(heading_align="center")
+        body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
+        self.assertIn('<div class="mb-8 flex items-end justify-center">', body)
+
+    def test_right_align_also_moves_the_heading_link_row(self):
+        self._set_theme(heading_align="right")
+        body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
+        self.assertIn('<div class="mb-8 flex items-end justify-end">', body)
+
     def test_size_override_replaces_the_heading_own_default_size(self):
         self._set_theme(heading_size="lg")
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
@@ -115,3 +135,6 @@ class HeadingStyleOverrideTests(TestCase):
         self._set_theme(heading_align="center")
         body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
         self.assertIn('font-display text-center text-2xl sm:text-3xl">Shop by category</h2>', body)
+        self.assertIn(
+            '<div class="mb-9 flex flex-wrap items-end justify-center gap-x-4 gap-y-1">', body,
+        )

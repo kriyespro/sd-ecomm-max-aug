@@ -1,5 +1,5 @@
 {% extends "shopfront/base.jinja" %}
-{% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
+{% from "shopfront/partials/_heading.jinja" import heading_classes, heading_row_class with context %}
 {% block title %}{{ store.name }} — Fine jewellery{% endblock %}
 {% block content %}
 
@@ -110,7 +110,7 @@
 {% if new_arrivals %}
 <section class="cv-auto bg-panel">
   <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-    <div class="mb-10 flex items-end justify-between">
+    <div class="mb-10 flex items-end {{ heading_row_class() }}">
       <h2 class="{{ heading_classes('text-3xl sm:text-4xl') }}">New arrivals</h2>
       <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
     </div>
@@ -127,7 +127,7 @@
 
 {# ── BEST SELLERS ── #}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <div class="mb-10 flex items-end justify-between">
+  <div class="mb-10 flex items-end {{ heading_row_class() }}">
     <h2 class="{{ heading_classes('text-3xl sm:text-4xl') }}">Best sellers</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[12px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
