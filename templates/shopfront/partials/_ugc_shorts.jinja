@@ -3,10 +3,15 @@
    (apps/core/store_resolver.py -> apps/shopfront/context.py). Deliberately
    uses plain Tailwind color classes (black/white/neutral), not a skin's own
    custom tokens (e.g. default's "ink"/"paper") — this partial is included by
-   skins with different token sets and must render sanely in all of them. #}
+   skins with different token sets and must render sanely in all of them.
+   Same reason it uses align_class() (alignment only, storewide heading_align
+   override) rather than the fuller heading_classes() — the latter also
+   switches font-family/weight via heading_font/heading_size, which this
+   partial's plain-everywhere styling deliberately doesn't otherwise touch. #}
+{% from "shopfront/partials/_heading.jinja" import align_class with context %}
 {% if ugc_videos %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
-  <h2 class="mb-6 text-2xl font-semibold">Shorts</h2>
+  <h2 class="mb-6 {{ align_class('text-center') }} text-2xl font-semibold">Shorts</h2>
   <div class="-mx-5 flex snap-x snap-mandatory gap-4 overflow-x-auto px-5 pb-2 lg:mx-0 lg:px-0">
     {% for v in ugc_videos if v.embed_url %}
     <div class="relative aspect-[9/16] w-[200px] shrink-0 snap-start overflow-hidden rounded-2xl bg-black sm:w-[240px]">
