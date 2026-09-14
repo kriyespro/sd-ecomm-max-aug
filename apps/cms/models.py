@@ -571,6 +571,31 @@ class ThemeSettings(TenantScopedModel):
     # Botanica 3.0: show the text heading over the category rows (off = tiles only).
     show_category_headings = models.BooleanField(default=False)
 
+    # Storewide look for every section heading (Shop by category, New
+    # arrivals, testimonials, etc — not merchant-entered banner text, which
+    # has its own text_hidden/hide_cta/hide_overlay controls). One control
+    # for the whole store rather than per-heading, applied via the
+    # heading_classes() macro in shopfront/partials/_heading.jinja. "Medium"
+    # size and blank alignment both reproduce each heading's own original
+    # look, so an untouched store renders exactly as before — some headings
+    # (testimonials, "Why it works") are center-aligned by the skin's own
+    # design, not by any default this field could safely pick.
+    heading_align = models.CharField(
+        max_length=10, blank=True,
+        choices=[("", "Default (skin's own)"), ("left", "Left"), ("center", "Center"), ("right", "Right")],
+        default="",
+    )
+    heading_size = models.CharField(
+        max_length=6,
+        choices=[("sm", "Small"), ("md", "Medium (default)"), ("lg", "Large"), ("xl", "Extra large")],
+        default="md",
+    )
+    heading_font = models.CharField(
+        max_length=10,
+        choices=[("display", "Skin's display font (default)"), ("sans", "Skin's body font")],
+        default="display",
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["project"], name="uniq_theme_per_project"),
