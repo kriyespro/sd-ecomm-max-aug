@@ -353,3 +353,47 @@ class StorefrontPickerRenderTests(TestCase):
         self.assertIn("get regularPrice()", body)
         self.assertIn("get salePrice()", body)
         self.assertIn('x-text="fmt(displayPrice)"', body)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class QuickviewPriceTests(TestCase):
+    """The quickview modal (opened from a product card's "Quick view" button)
+    has its own price summary above the variant <select> — it used to just
+    show the product's own price regardless of which variant was picked."""
+
+    def setUp(self):
+        cache.clear()
+        self.project = Project.objects.create(
+            name="QuickRack", status="active", feature_flags={"onboarded": True},
+        )
+        Domain.objects.create(
+            project=self.project, host="quick.rack.test", is_verified=True, is_primary=True,
+        )
+        self.product = Product.objects.create(
+            project=self.project, title="Lamp", price=Decimal("500"), status="active",
+        )
+        self.small = Variant.objects.create(
+            product=self.product, name="Small", price=Decimal("400"), is_active=True,
+        )
+        self.large = Variant.objects.create(
+            product=self.product, name="Large", price=Decimal("900"),
+            sale_price=Decimal("750"), is_active=True,
+        )
+
+    def test_price_summary_reads_from_the_same_scope_the_select_updates(self):
+        resp = self.client.get(f"/quick/{self.product.slug}/", HTTP_HOST="quick.rack.test")
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode()
+        # Each variant's own regular/sale price is available to Alpine...
+        self.assertIn(f'"pk": {self.small.pk}, "price": 400.00', body)
+        self.assertIn(f'"pk": {self.large.pk}, "price": 900.00, "sale": 750.00', body)
+        # ...the <select> drives the same `sel` the price reads...
+        self.assertIn('x-model.number="sel"', body)
+        # ...and the summary is reactive, not a frozen server-rendered price.
+        self.assertIn('x-text="fmt(displayPrice)"', body)
+        self.assertNotIn("{{ product.current_price", body)
+
+    def test_defaults_to_the_first_variant_not_the_product_price(self):
+        resp = self.client.get(f"/quick/{self.product.slug}/", HTTP_HOST="quick.rack.test")
+        body = resp.content.decode()
+        self.assertIn(f"sel: {self.small.pk}", body)
