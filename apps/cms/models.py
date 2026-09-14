@@ -604,6 +604,12 @@ class ThemeSettings(TenantScopedModel):
         choices=[(4, "4 per row"), (5, "5 per row")], default=4,
     )
 
+    # Custom text for home page section headings ({"featured": "Bestsellers"}
+    # — see apps.cms.section_titles for each skin's editable keys + default
+    # text). A key absent here renders that heading's own hardcoded default,
+    # so an untouched store's headings are unchanged.
+    section_titles = models.JSONField(default=dict, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["project"], name="uniq_theme_per_project"),

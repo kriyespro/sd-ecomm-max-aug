@@ -124,6 +124,7 @@ def base_context(request, project, **extra):
             getattr(request, "skin_slug", "default"), chrome.get("homepage_sections")
         ),
         "products_per_row": chrome.get("products_per_row", 4),
+        "section_titles": chrome.get("section_titles", {}),
         "promo_banners": chrome["promo_banners"],
         "category_banners": chrome["category_banners"],
         "product_banner": chrome["product_banner"],

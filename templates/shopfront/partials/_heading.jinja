@@ -16,14 +16,3 @@
   {'sm': 'text-xl sm:text-2xl', 'md': default_size,
    'lg': 'text-3xl sm:text-4xl', 'xl': 'text-4xl sm:text-5xl'}[heading_size or 'md']
 }}{% endmacro %}
-
-{# A heading that shares its row with a "View all" / "All products" link sits
-   in a flex row — as a flex item it shrinks to its own text width, so
-   heading_classes()'s text-center/text-right has nothing to visibly center
-   or push against. This picks the row's justify-* to match, so the heading
-   (grouped with its link) actually moves as heading_align says. Pass the
-   row's own default justify class (almost always "justify-between") so an
-   untouched store's layout is byte-for-byte unchanged. #}
-{% macro heading_row_class(default='justify-between') %}{{
-  {'left': default, 'center': 'justify-center', 'right': 'justify-end'}[heading_align] if heading_align else default
-}}{% endmacro %}
