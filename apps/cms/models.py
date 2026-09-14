@@ -596,6 +596,14 @@ class ThemeSettings(TenantScopedModel):
         default="display",
     )
 
+    # Desktop-only — every product grid (home page Featured/New arrivals,
+    # the shop "all products" grid) always stacks down to 2 columns on
+    # phones and 3 on tablets regardless of this; it only changes the
+    # widest (lg+) breakpoint.
+    products_per_row = models.PositiveSmallIntegerField(
+        choices=[(4, "4 per row"), (5, "5 per row")], default=4,
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["project"], name="uniq_theme_per_project"),

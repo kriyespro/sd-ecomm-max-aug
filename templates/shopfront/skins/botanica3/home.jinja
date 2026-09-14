@@ -210,7 +210,7 @@
     </div>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 {{ 'lg:grid-cols-5' if products_per_row == 5 else 'lg:grid-cols-4' }}">
     {% for p in featured %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
@@ -246,7 +246,7 @@
     <h2 class="{{ heading_classes() }}">New arrivals</h2>
     <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
   </div>
-  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 lg:grid-cols-4">
+  <div class="grid grid-cols-2 gap-x-4 gap-y-8 sm:gap-x-5 sm:gap-y-9 md:grid-cols-3 {{ 'lg:grid-cols-5' if products_per_row == 5 else 'lg:grid-cols-4' }}">
     {% for p in new_arrivals %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
   </div>
 </section>
