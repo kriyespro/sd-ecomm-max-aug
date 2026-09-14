@@ -220,6 +220,34 @@ class BenefitItemListView(_ScopedList):
     def get_queryset(self):
         return super().get_queryset().order_by("order", "id")
 
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        theme = ThemeSettings.objects.filter(project=self.active_project).first()
+        ctx["heading_value"] = (theme.section_titles or {}).get("benefits", "") if theme else ""
+        return ctx
+
+
+class BenefitsHeadingUpdateView(ActiveProjectMixin, View):
+    """The "Why it works" main heading — same storage as the Theme settings
+    "Section titles" panel (ThemeSettings.section_titles['benefits']), just
+    editable right here where the tiles themselves are managed."""
+
+    def post(self, request, *args, **kwargs):
+        theme, _ = ThemeSettings.objects.get_or_create(project=self.active_project)
+        titles = dict(theme.section_titles or {})
+        val = request.POST.get("heading", "").strip()
+        if val:
+            titles["benefits"] = val
+        else:
+            titles.pop("benefits", None)
+        theme.section_titles = titles
+        theme.save(update_fields=["section_titles", "updated_at"])
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=theme,
+                     changes={"section_titles.benefits": val}, request=request)
+        messages.success(request, "Heading saved.")
+        return redirect("control:cms_benefit_items")
+
 
 class _BenefitItemForm(_ScopedForm):
     model = BenefitItem

@@ -13,6 +13,15 @@
     </div>
     <a href="{{ url('control:cms_benefit_item_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New item</a>
   </div>
+  <form method="post" action="{{ url('control:cms_benefits_heading') }}" class="flex flex-wrap items-end gap-3 border-b border-slate-200 p-4">
+    {{ csrf_input }}
+    <label class="flex-1 min-w-[14rem]">
+      <span class="text-xs font-medium text-slate-500">Section heading</span>
+      <input type="text" name="heading" value="{{ heading_value }}" placeholder="Why it works"
+             class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
+    </label>
+    <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Save</button>
+  </form>
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr><th class="px-4 py-2"></th><th class="px-4 py-2">Title</th><th class="px-4 py-2">Description</th><th class="px-4 py-2">Order</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
