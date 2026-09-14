@@ -664,10 +664,16 @@ class AdminSetPasswordForm(SetPasswordForm):
 
 
 class StoreProfileForm(ProjectScopedForm):
+    store_name = forms.CharField(
+        max_length=120, min_length=2,
+        widget=forms.TextInput(attrs={"class": TEXT}),
+        help_text="Shown in the browser tab title and the storefront header (falls back to this when there's no logo).",
+    )
+
     class Meta:
         model = StoreProfile
         fields = [
-            "logo", "tagline",
+            "logo", "favicon", "tagline",
             "support_email", "support_phone", "whatsapp",
             "address", "gstin",
             "instagram_url", "facebook_url", "youtube_url", "x_url",
@@ -680,7 +686,23 @@ class StoreProfileForm(ProjectScopedForm):
         help_texts = {
             "logo": "PNG or SVG with a transparent background works best. "
                     "Shown in the storefront header; falls back to the store name.",
+            "favicon": "Small square image — the icon shown in the browser tab. Falls back to the logo if not set.",
         }
+
+    field_order = ["store_name", "logo", "favicon"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.project is not None:
+            self.fields["store_name"].initial = self.project.name
+
+    def save(self, commit=True):
+        obj = super().save(commit=commit)
+        if self.project is not None:
+            self.project.name = self.cleaned_data["store_name"].strip()
+            if commit:
+                self.project.save(update_fields=["name"])
+        return obj
 
 
 class SkinUploadForm(forms.Form):

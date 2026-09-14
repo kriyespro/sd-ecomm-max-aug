@@ -30,6 +30,7 @@ class StoreProfileViewTests(TestCase):
         resp = self.client.post(
             "/admin/cms/store-profile/",
             {
+                "store_name": "CtlStore",
                 "tagline": "Handmade in Pune",
                 "support_email": "help@ctlstore.test",
                 "support_phone": "+919812345678",
@@ -55,6 +56,7 @@ class StoreProfileViewTests(TestCase):
             self.client.post(
                 "/admin/cms/store-profile/",
                 {
+                    "store_name": "CtlStore",
                     "tagline": tag, "support_email": "", "support_phone": "",
                     "whatsapp": "", "address": "", "gstin": "",
                     "instagram_url": "", "facebook_url": "", "youtube_url": "",

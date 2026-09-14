@@ -96,7 +96,7 @@ _REGISTRY: list[dict] = [
          fields=["tagline", "support_email", "support_phone", "whatsapp", "address",
                  "gstin", "instagram_url", "facebook_url", "youtube_url", "x_url",
                  "copyright_text", "show_payment_icons"],
-         files=["logo"]),
+         files=["logo", "favicon"]),
     dict(key="themesettings", model="cms.ThemeSettings", singleton=True,
          fields=["primary_color", "secondary_color", "accent_color", "font_body",
                  "font_heading", "header_layout", "footer_layout", "button_style",

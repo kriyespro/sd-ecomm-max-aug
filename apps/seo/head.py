@@ -36,6 +36,10 @@ def build(*, project, path, seo, base_url):
 
     meta = seo_svc.meta_for(project, path=path, obj=obj, obj_type=kind if obj else "")
 
+    from apps.core.store_resolver import store_chrome
+
+    favicon = (store_chrome(project) or {}).get("store_favicon") or ""
+
     title = seo.get("title") or meta["title"] or project.name
     description = seo.get("description") or meta["description"] or ""
     canonical = _abs(base_url, meta["canonical"] or path)
@@ -64,6 +68,8 @@ def build(*, project, path, seo, base_url):
     if image:
         out.append(f'<meta property="og:image" content="{_esc(image)}">')
         out.append(f'<meta name="twitter:image" content="{_esc(image)}">')
+    if favicon:
+        out.append(f'<link rel="icon" href="{_esc(_abs(base_url, favicon))}">')
 
     settings_obj = seo_svc._settings(project)
     handle = getattr(settings_obj, "twitter_handle", "") if settings_obj else ""
