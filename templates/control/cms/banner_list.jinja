@@ -9,11 +9,28 @@
   </div>
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-      <tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Placement</th><th class="px-4 py-2">Window</th><th class="px-4 py-2">Live</th><th class="px-4 py-2 text-right">Actions</th></tr>
+      <tr><th class="px-4 py-2">Preview</th><th class="px-4 py-2">Name</th><th class="px-4 py-2">Placement</th><th class="px-4 py-2">Window</th><th class="px-4 py-2">Live</th><th class="px-4 py-2 text-right">Actions</th></tr>
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for b in banners %}
       <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2">
+          <div class="flex items-center gap-3">
+            {% if b.image %}
+            <div class="shrink-0 text-center">
+              <img src="{{ b.image.url }}" alt="" class="h-10 w-16 rounded object-cover ring-1 ring-slate-200">
+              <p class="mt-0.5 whitespace-nowrap text-[10px] text-slate-400">{{ b.image.width }}×{{ b.image.height }}</p>
+            </div>
+            {% endif %}
+            {% if b.mobile_image %}
+            <div class="shrink-0 text-center">
+              <img src="{{ b.mobile_image.url }}" alt="" class="h-10 w-8 rounded object-cover ring-1 ring-slate-200">
+              <p class="mt-0.5 whitespace-nowrap text-[10px] text-slate-400">{{ b.mobile_image.width }}×{{ b.mobile_image.height }} <span class="text-slate-300">mobile</span></p>
+            </div>
+            {% endif %}
+            {% if not b.image and not b.mobile_image %}<span class="text-xs text-slate-300">No image</span>{% endif %}
+          </div>
+        </td>
         <td class="px-4 py-2"><a href="{{ url('control:cms_banner_edit', kwargs={'pk': b.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ b.name }}</a></td>
         <td class="px-4 py-2 text-slate-500">{{ b.get_placement_display() }}</td>
         <td class="px-4 py-2 text-xs text-slate-400">{{ b.starts_at.strftime("%b %d") if b.starts_at else "—" }} → {{ b.ends_at.strftime("%b %d") if b.ends_at else "—" }}</td>
@@ -24,7 +41,7 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No banners.</td></tr>
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No banners.</td></tr>
       {% endfor %}
     </tbody>
   </table></div>
