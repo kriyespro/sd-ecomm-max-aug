@@ -1,0 +1,21 @@
+{# Auto-advances a horizontal-scroll slider (the category-row overflow case),
+   looping back to the start and pausing on hover/touch. Pure scrollLeft
+   nudges — no dependency on tile width, works for any skin's slider. #}
+{% macro auto_scroll_attrs(step=180, interval=2600) %}
+x-data="{
+  paused: false,
+  init() {
+    this.$el.addEventListener('mouseenter', () => this.paused = true);
+    this.$el.addEventListener('mouseleave', () => this.paused = false);
+    this.$el.addEventListener('touchstart', () => this.paused = true, { passive: true });
+    this.$el.addEventListener('touchend', () => setTimeout(() => this.paused = false, 3000), { passive: true });
+    setInterval(() => {
+      if (this.paused) return;
+      const max = this.$el.scrollWidth - this.$el.clientWidth;
+      if (max <= 0) return;
+      if (this.$el.scrollLeft >= max - 4) this.$el.scrollTo({ left: 0, behavior: 'smooth' });
+      else this.$el.scrollBy({ left: {{ step }}, behavior: 'smooth' });
+    }, {{ interval }});
+  }
+}"
+{% endmacro %}

@@ -52,6 +52,21 @@ class CategoryRowOverflowTests(TestCase):
         self.assertIn("overflow-x-auto", html)
         self.assertIn("snap-mandatory", html)
 
+    _AUTO_SCROLL_MARKER = "this.$el.scrollWidth - this.$el.clientWidth"
+
+    def test_auto_scroll_wired_on_overflow(self):
+        for skin_slug in ("default", "botanica2", "botanica3", "ornza"):
+            html = self._render(skin_slug)
+            self.assertIn(self._AUTO_SCROLL_MARKER, html, skin_slug)
+
+    def test_no_auto_scroll_without_overflow(self):
+        Category.objects.filter(project=self.project).exclude(
+            slug__in=[f"cat-{i}" for i in range(8)]
+        ).delete()
+        for skin_slug in ("default", "botanica2", "botanica3", "ornza"):
+            html = self._render(skin_slug)
+            self.assertNotIn(self._AUTO_SCROLL_MARKER, html, skin_slug)
+
     def test_default_skin_shows_all_11(self):
         html = self._render("default")
         for i in range(11):

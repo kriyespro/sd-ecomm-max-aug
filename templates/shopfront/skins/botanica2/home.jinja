@@ -2,6 +2,7 @@
 {% from "shopfront/partials/_heading.jinja" import heading_classes, align_class with context %}
 {% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
 {% from "shopfront/partials/_hero_video.jinja" import hero_video %}
+{% from "shopfront/partials/_auto_scroll.jinja" import auto_scroll_attrs %}
 {% block title %}{{ store.name }} — Rooted in nature, made for you{% endblock %}
 
 {% block content %}
@@ -94,7 +95,8 @@
     <h2 class="flex-1 {{ heading_classes() }}">{{ section_titles.get('categories', 'Shop by category') }}</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
-  <div class="{% if overflow %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-6 sm:gap-6 sm:overflow-visible{% else %}grid grid-cols-3 gap-4 sm:grid-cols-6 sm:gap-6{% endif %}">
+  <div class="{% if overflow %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-6 sm:gap-6 sm:overflow-visible{% else %}grid grid-cols-3 gap-4 sm:grid-cols-6 sm:gap-6{% endif %}"
+       {%- if overflow %} {{ auto_scroll_attrs(step=150) }}{% endif %}>
     {% for t in (cat_tiles if overflow else cat_tiles[:8]) %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"
        class="group text-center {% if overflow %}w-28 shrink-0 snap-start sm:w-32{% elif category_mobile_slider %}w-[30%] shrink-0 snap-start sm:w-auto{% endif %}">
