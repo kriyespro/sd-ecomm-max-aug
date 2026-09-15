@@ -1,0 +1,79 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Support tickets{% endblock %}
+
+{% set status_badge = {
+  'open':        'bg-sky-100 text-sky-700',
+  'in_progress': 'bg-amber-100 text-amber-700',
+  'planned':     'bg-indigo-100 text-indigo-700',
+  'resolved':    'bg-emerald-100 text-emerald-700',
+  'closed':      'bg-slate-200 text-slate-600',
+} %}
+{% set priority_badge = {
+  'urgent': 'bg-red-100 text-red-700',
+  'high':   'bg-amber-100 text-amber-700',
+  'normal': 'bg-slate-100 text-slate-600',
+  'low':    'bg-slate-100 text-slate-400',
+} %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <h2 class="text-sm font-semibold text-slate-700">Support tickets &middot; {{ open_count }} open</h2>
+    <form method="get" class="flex flex-wrap gap-2 text-sm">
+      <select name="kind" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+        <option value="">All types</option>
+        {% for value, label in kind_choices %}
+        <option value="{{ value }}" {{ 'selected' if current_kind == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" onchange="this.form.submit()" class="rounded-lg border border-slate-300 px-2 py-1 text-sm">
+        <option value="">All statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {{ 'selected' if current_status == value }}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label class="flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1">
+        <input type="checkbox" name="mine" value="1" onchange="this.form.submit()" {{ 'checked' if request.GET.mine }}> Mine
+      </label>
+      <label class="flex items-center gap-1 rounded-lg border border-slate-300 px-2 py-1">
+        <input type="checkbox" name="unassigned" value="1" onchange="this.form.submit()" {{ 'checked' if request.GET.unassigned }}> Unassigned
+      </label>
+    </form>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Subject</th><th class="px-4 py-2">Store</th>
+          <th class="px-4 py-2">Type</th><th class="px-4 py-2">Priority</th>
+          <th class="px-4 py-2">Status</th><th class="px-4 py-2">Assigned</th>
+          <th class="px-4 py-2">Votes</th><th class="px-4 py-2">Opened</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in tickets %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2"><a href="{{ url('control:support_queue_detail', kwargs={'pk': t.pk}) }}" class="font-medium text-slate-800 hover:underline">{{ t.subject }}</a></td>
+          <td class="px-4 py-2 text-slate-500">{{ t.project.name }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ t.get_kind_display() }}</td>
+          <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ priority_badge.get(t.priority, 'bg-slate-100 text-slate-600') }}">{{ t.get_priority_display() }}</span></td>
+          <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ status_badge.get(t.status, 'bg-slate-200 text-slate-600') }}">{{ t.get_status_display() }}</span></td>
+          <td class="px-4 py-2 text-slate-500">{{ t.assigned_to.email if t.assigned_to else '—' }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ t.vote_count if t.kind == 'feature_request' else '—' }}</td>
+          <td class="px-4 py-2 text-slate-400">{{ t.created_at.strftime('%d %b %Y') }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No tickets match this filter.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if is_paginated %}
+  <div class="flex justify-center gap-2 text-sm">
+    {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}" class="text-slate-600 hover:underline">&larr; Prev</a>{% endif %}
+    <span class="text-slate-400">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}" class="text-slate-600 hover:underline">Next &rarr;</a>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -89,6 +89,7 @@ LOCAL_APPS = [
     "apps.social",
     "apps.certificates",
     "apps.learning",
+    "apps.support",
     "apps.ai",
     "apps.storefront",
     "apps.shopfront",

@@ -25,6 +25,7 @@ from . import showcase_views as showv
 from . import skin_views as skinv
 from . import store_views as storev
 from . import social_views as socv
+from . import support_views as supv
 from . import team_views as teamv
 from . import views
 from . import whatsapp_views as wav
@@ -367,6 +368,19 @@ urlpatterns = [
     path("learning/new/", learnv.LearningCreateView.as_view(), name="learning_create"),
     path("learning/<int:pk>/", learnv.LearningUpdateView.as_view(), name="learning_edit"),
     path("learning/<int:pk>/delete/", learnv.LearningDeleteView.as_view(), name="learning_delete"),
+
+    # Support — feature requests + tickets (owner / manager / DGC)
+    path("support/", supv.SupportListView.as_view(), name="support"),
+    path("support/new/", supv.SupportCreateView.as_view(), name="support_create"),
+    path("support/<int:pk>/", supv.SupportDetailView.as_view(), name="support_detail"),
+    path("support/<int:pk>/reply/", supv.SupportReplyView.as_view(), name="support_reply"),
+    path("support/<int:pk>/vote/", supv.SupportVoteView.as_view(), name="support_vote"),
+
+    # Support — platform admin triage queue, every store
+    path("tickets/", supv.SupportQueueListView.as_view(), name="support_queue"),
+    path("tickets/<int:pk>/", supv.SupportQueueDetailView.as_view(), name="support_queue_detail"),
+    path("tickets/<int:pk>/reply/", supv.SupportQueueReplyView.as_view(), name="support_queue_reply"),
+    path("tickets/<int:pk>/update/", supv.SupportQueueUpdateView.as_view(), name="support_queue_update"),
 
     # WhatsApp (per-store add-on)
     path("settings/whatsapp/", wav.WhatsAppSettingsView.as_view(), name="whatsapp"),
