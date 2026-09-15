@@ -219,7 +219,7 @@
 {% endmacro %}
 
 {% macro _section_featured() %}
-<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <div class="flex-1">
       {% if not hide_featured_eyebrow %}
@@ -240,7 +240,7 @@
   {'icon': '✦', 'title': 'Made to be used', 'description': 'Textures and rituals you will actually reach for every day.'},
 ] %}
 <section class="cv-auto bg-accent text-paper">
-  <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  <div class="mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
     <h2 class="{{ heading_classes(default_align='text-center') }}">{{ section_titles.get('benefits', 'Why it works') }}</h2>
     <div class="mx-auto mt-3 h-px w-16 bg-paper/40"></div>
     <div class="mt-12 grid gap-10 sm:grid-cols-3">
@@ -258,7 +258,7 @@
 
 {% macro _section_new_arrivals() %}
 {% if new_arrivals %}
-<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="flex-1 {{ heading_classes() }}">{{ section_titles.get('new_arrivals', 'New arrivals') }}</h2>
     <a href="{{ url('shopfront:shop') }}?sort=new" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
@@ -271,7 +271,7 @@
 {% macro _section_testimonials() %}
 {% if testimonials %}
 <section class="cv-auto border-y border-line bg-panel">
-  <div class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  <div class="mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
     <h2 class="mb-10 {{ heading_classes(default_align='text-center') }}">{{ section_titles.get('testimonials', 'What people say') }}</h2>
     <div class="grid gap-6 md:grid-cols-3">
       {% for r in testimonials %}
@@ -288,7 +288,7 @@
 {% endmacro %}
 
 {% macro _section_newsletter() %}
-<section class="cv-auto mx-auto max-w-3xl px-5 py-20 text-center lg:px-8">
+<section class="cv-auto mx-auto max-w-3xl px-5 pt-14 pb-20 text-center lg:px-8">
   <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ section_titles.get('newsletter_eyebrow', 'Join the ritual') }}</p>
   <h2 class="mt-3 text-ink {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">{{ section_titles.get('newsletter', 'Get 10% off your first order') }}</h2>
   <p class="mt-3 text-sm text-mute">Slow beauty notes, restocks and members-only drops. No spam.</p>
@@ -302,7 +302,7 @@
 
 {% macro _section_instagram() %}
 {% if instagram_items %}
-<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
   <div class="mb-9 text-center">
     <h2 class="{{ heading_classes() }}">{{ section_titles.get('instagram', 'From our Instagram') }}</h2>
     {% if store_profile and store_profile.instagram_url %}

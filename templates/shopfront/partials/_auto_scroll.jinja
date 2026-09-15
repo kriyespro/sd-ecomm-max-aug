@@ -1,7 +1,7 @@
 {# Auto-advances a horizontal-scroll slider (the category-row overflow case),
    looping back to the start and pausing on hover/touch. Pure scrollLeft
    nudges — no dependency on tile width, works for any skin's slider. #}
-{% macro auto_scroll_attrs(step=180, interval=2600) %}
+{% macro auto_scroll_attrs(step=180, interval=1200) %}
 x-data="{
   paused: false,
   init() {
