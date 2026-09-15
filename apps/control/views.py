@@ -29,6 +29,22 @@ from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 User = get_user_model()
 
 
+class UiModeToggleView(ControlAccessMixin, View):
+    """Flips the signed-in user's own Mission Control sidebar mode — a
+    personal preference (Profile.ui_mode), not a store setting."""
+
+    def post(self, request, *args, **kwargs):
+        from apps.accounts.models import Profile, UiMode
+
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        profile.ui_mode = (
+            UiMode.EXPERT if profile.ui_mode == UiMode.EASY else UiMode.EASY
+        )
+        profile.save(update_fields=["ui_mode", "updated_at"])
+        nxt = request.POST.get("next") or request.META.get("HTTP_REFERER")
+        return redirect(nxt or "control:dashboard")
+
+
 class DashboardView(ControlAccessMixin, TemplateView):
     """``/admin/`` — a store's "Today" numbers when one is active (owner,
     manager, staff, or a platform admin looking at that store); the
@@ -62,6 +78,11 @@ class DashboardView(ControlAccessMixin, TemplateView):
 
             ctx["active_project"] = self.active_project
             ctx["today"] = today_dashboard(self.active_project)
+            profile = getattr(self.request.user, "profile", None)
+            if getattr(profile, "ui_mode", "expert") == "easy":
+                from .quick_launch import quick_launch_steps
+
+                ctx["quick_launch"] = quick_launch_steps(self.active_project)
             return ctx
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)

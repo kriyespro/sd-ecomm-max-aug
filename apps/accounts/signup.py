@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
+from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole, UiMode
 from apps.billing import services as billing_svc
 from apps.billing.models import BillingSettings
 from apps.core.models import AuditLog
@@ -74,7 +74,13 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     # cached it on ``user`` — mutate that instance so ``user.profile`` stays fresh.
     profile = getattr(user, "profile", None) or Profile.objects.get_or_create(user=user)[0]
     profile.phone = phone
-    profile.save(update_fields=["phone"])
+    # A brand-new self-serve owner starts in the trimmed "Easy" Mission
+    # Control nav — see apps.control.navigation._EASY_MODE_ITEMS. Everyone
+    # else (team members, partner/DGC-provisioned stores, test fixtures)
+    # keeps the Profile model default (Expert) — this is the one deliberate
+    # opt-in, not a blanket default.
+    profile.ui_mode = UiMode.EASY
+    profile.save(update_fields=["phone", "ui_mode"])
 
     project = Project.objects.create(
         name=store_name, status=Project.Status.ACTIVE, currency="INR", country="IN",

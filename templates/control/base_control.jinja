@@ -69,6 +69,16 @@
           to manage its catalog, orders and settings.
         </div>
       {% endif %}
+
+      {% if control_active_project %}
+      <form method="post" action="{{ url('control:ui_mode_toggle') }}" x-show="sidebar" x-cloak class="mt-2 px-1">
+        {{ csrf_input }}
+        <input type="hidden" name="next" value="{{ request.get_full_path() }}">
+        <button class="w-full rounded-lg px-3 py-1.5 text-left text-xs {{ _side_hover }} hover:text-white">
+          {% if control_easy_mode %}⚡ Switch to Expert mode{% else %}✨ Switch to Easy mode{% endif %}
+        </button>
+      </form>
+      {% endif %}
     </nav>
     {% if request.user.is_superuser %}
     <a href="/sd/" class="border-t {{ _side_border }} px-4 py-3 text-xs hover:text-white">

@@ -87,6 +87,9 @@ def control(request):
     dgc_managed = bool(active and is_dgc_managed(active))
     can_manage_billing = platform_staff or (can_manage and not dgc_managed)
 
+    profile = getattr(user, "profile", None)
+    easy_mode = getattr(profile, "ui_mode", "expert") == "easy"
+
     nav = build_nav(
         platform_staff=platform_staff,
         platform_admin=admin,
@@ -96,6 +99,7 @@ def control(request):
         can_manage_billing=can_manage_billing,
         can_manage_owner=can_manage_owner,
         store_data_ok=store_data_ok,
+        easy_mode=easy_mode,
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 
@@ -129,6 +133,7 @@ def control(request):
         "control_can_manage_store": can_manage,
         "control_store_role": role,
         "control_can_upload_skin": can_upload,
+        "control_easy_mode": easy_mode,
         "control_demo_seeded": bool(
             can_manage and active and (active.feature_flags or {}).get("demo_seeded")
         ),

@@ -27,6 +27,13 @@ class StoreRole(models.TextChoices):
     CUSTOMER = "customer", "Customer"
 
 
+class UiMode(models.TextChoices):
+    """Mission Control sidebar density — a personal preference, not a store
+    setting. See apps.control.navigation._EASY_MODE_ITEMS."""
+    EASY = "easy", "Easy"
+    EXPERT = "expert", "Expert"
+
+
 class Profile(TimeStampedModel):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile"
@@ -46,6 +53,12 @@ class Profile(TimeStampedModel):
     # Lazily generated (see ensure_affiliate_code) the first time their
     # earnings screen needs one, so ordinary users never get one at all.
     affiliate_code = models.CharField(max_length=16, unique=True, blank=True, null=True)
+
+    # Mission Control sidebar mode. Expert by default for everyone (team
+    # members, partner/DGC-provisioned stores, existing accounts) — the one
+    # deliberate exception is apps.accounts.signup.self_signup, which opts a
+    # brand-new self-serve owner into Easy explicitly.
+    ui_mode = models.CharField(max_length=6, choices=UiMode.choices, default=UiMode.EXPERT)
 
     def save(self, *args, **kwargs):
         from apps.media.services import shrink_image_field

@@ -116,6 +116,16 @@ _STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 
+# Easy mode (Profile.ui_mode == "easy"): only what a brand-new owner needs to
+# get their first sale live — everything else is still reachable by direct
+# URL, just off the sidebar. Never applied to the "platform" section (DGC/
+# admin tooling is a different audience from this owner-facing declutter).
+_EASY_MODE_ITEMS = {
+    "dashboard", "onboarding", "order_list", "training", "support",
+    "product_list", "cms_store_profile", "cms_theme",
+    "shipping_zones", "payment_providers",
+}
+
 
 @lru_cache(maxsize=1)
 def _resolved_sections():
@@ -148,7 +158,7 @@ def dashboard_url():
 
 def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
               can_upload_skin, can_manage_billing=True, can_manage_owner=False,
-              store_data_ok=True):
+              store_data_ok=True, easy_mode=False):
     """Permission-filtered sidebar tree (URLs come pre-resolved and cached)."""
     nav = []
     for key, label, icon, resolved_items in _resolved_sections():
@@ -166,6 +176,7 @@ def build_nav(*, platform_staff, platform_admin, active_project, can_manage,
             and not (it["name"] in _STORE_DATA_ONLY and not store_data_ok)
             and not (it["name"] in _BILLING_ONLY and not can_manage_billing)
             and not (it["name"] == "skin_upload" and not can_upload_skin)
+            and not (easy_mode and key != "platform" and it["name"] not in _EASY_MODE_ITEMS)
         ]
         if not items:
             continue
