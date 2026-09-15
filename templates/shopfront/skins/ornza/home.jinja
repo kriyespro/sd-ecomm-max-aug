@@ -100,11 +100,15 @@
 
 {% macro _section_categories() %}
 {% if cat_tiles %}
+{# More than 8: keep the first 8's normal size, scroll to reach the rest
+   instead of silently dropping them off a fixed grid. #}
+{% set overflow = cat_tiles|length > 8 %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <h2 class="mb-10 {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }}">{{ section_titles.get('categories', 'Shop by category') }}</h2>
-  <div class="{{ 'flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible' if category_mobile_slider else 'grid grid-cols-2 gap-4 md:grid-cols-3' }}">
-    {% for t in cat_tiles[:6] %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group relative block aspect-[3/2] overflow-hidden bg-line/40 {{ 'w-[45%] shrink-0 snap-start md:w-auto' if category_mobile_slider }}">
+  <div class="{% if overflow %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible{% else %}grid grid-cols-2 gap-4 md:grid-cols-3{% endif %}">
+    {% for t in (cat_tiles if overflow else cat_tiles[:8]) %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"
+       class="group relative block aspect-[3/2] overflow-hidden bg-line/40 {% if overflow %}w-52 shrink-0 snap-start{% elif category_mobile_slider %}w-[45%] shrink-0 snap-start md:w-auto{% endif %}">
       <img src="{{ t.image | media_src(900, 600, 'Category') }}" alt="{{ t.category.name }}" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
       <div class="absolute inset-0 bg-ink/30 transition-colors group-hover:bg-ink/40"></div>
       <span class="absolute inset-0 flex items-center justify-center px-2 text-center font-display text-lg leading-tight text-paper sm:text-2xl">{{ t.category.name }}</span>

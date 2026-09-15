@@ -82,7 +82,7 @@ class HomeView(View):
             )
             .exclude(home_row="none")
             .only("id", "name", "slug", "image", "home_row")
-            .distinct().order_by("order", "name")[:12]
+            .distinct().order_by("order", "name")[:40]
         )
         # One query for a representative photo per image-less category, instead
         # of one query per tile.
@@ -113,7 +113,8 @@ class HomeView(View):
                 tiles.append(tile)
             if cat.home_row in ("top", "both"):
                 tiles_top.append(tile)
-        tiles, tiles_top = tiles[:8], tiles_top[:8]
+        # No further cap here — each skin's home.jinja shows the first 8 and
+        # puts any rest on a horizontal-scroll slider (see category_row()).
 
         testimonials = list(
             Review.objects.filter(project=project, status=ReviewStatus.APPROVED)

@@ -86,14 +86,18 @@
 
 {% macro _section_categories() %}
 {% if cat_tiles %}
+{# More than 8: keep the first 8's normal size, scroll to reach the rest
+   instead of silently dropping them off a fixed grid. #}
+{% set overflow = cat_tiles|length > 8 %}
 <section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
   <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
     <h2 class="flex-1 {{ heading_classes() }}">{{ section_titles.get('categories', 'Shop by category') }}</h2>
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
-  <div class="{{ 'flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-6 sm:gap-6 sm:overflow-visible' if category_mobile_slider else 'grid grid-cols-3 gap-4 sm:grid-cols-6 sm:gap-6' }}">
-    {% for t in cat_tiles[:6] %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center {{ 'w-[30%] shrink-0 snap-start sm:w-auto' if category_mobile_slider }}">
+  <div class="{% if overflow %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-6 sm:gap-6 sm:overflow-visible{% else %}grid grid-cols-3 gap-4 sm:grid-cols-6 sm:gap-6{% endif %}">
+    {% for t in (cat_tiles if overflow else cat_tiles[:8]) %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"
+       class="group text-center {% if overflow %}w-28 shrink-0 snap-start sm:w-32{% elif category_mobile_slider %}w-[30%] shrink-0 snap-start sm:w-auto{% endif %}">
       <div class="mx-auto aspect-square w-full overflow-hidden rounded-full border border-line bg-line/40 b2-card">
         <img src="{{ t.image | media_src(800, 800, 'Category') }}" alt="{{ t.category.name }}" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
       </div>

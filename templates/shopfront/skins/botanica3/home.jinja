@@ -22,6 +22,9 @@
 {% macro category_row(heading='Shop by category', tiles=none, pad='py-6', title_key='categories') %}
 {% set rows = tiles if tiles is not none else cat_tiles %}
 {% if rows %}
+{# More than 8 categories: keep the first 8's normal size but scroll to reach
+   the rest, instead of silently dropping them off a fixed 8-col grid. #}
+{% set overflow = rows|length > 8 %}
 <section class="mx-auto max-w-7xl px-5 {{ pad }} lg:px-8">
   {% if show_category_headings %}
   <div class="mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
@@ -29,9 +32,10 @@
     <a href="{{ url('shopfront:shop') }}" class="text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">All products</a>
   </div>
   {% endif %}
-  <div class="{{ 'flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible lg:grid-cols-8' if category_mobile_slider else 'grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8' }}">
-    {% for t in rows[:8] %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group text-center {{ 'w-[30%] shrink-0 snap-start sm:w-auto' if category_mobile_slider }}">
+  <div class="{% if overflow %}flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible lg:grid-cols-8{% else %}grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8{% endif %}">
+    {% for t in (rows if overflow else rows[:8]) %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"
+       class="group text-center {% if overflow %}w-32 shrink-0 snap-start sm:w-36{% elif category_mobile_slider %}w-[30%] shrink-0 snap-start sm:w-auto{% endif %}">
       <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
         <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
       </div>
