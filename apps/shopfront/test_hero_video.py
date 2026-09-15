@@ -47,6 +47,15 @@ class HeroVideoRenderTests(TestCase):
     def test_ornza_skin(self):
         self._render("ornza")
 
+    def test_ornza_skin_plays_on_mobile_too(self):
+        # Split hero: a desktop column (lg:block) and a separate mobile
+        # background (lg:hidden) — both must carry the video, not just one.
+        resp = self._render("ornza")
+        self.assertEqual(
+            resp.content.decode().count("youtube-nocookie.com/embed/dQw4w9WgXcQ"), 2,
+        )
+        self.assertContains(resp, 'class="absolute inset-0 z-0 lg:hidden"')
+
     def test_no_video_falls_back_to_image(self):
         self.banner.video_url = ""
         self.banner.save()
