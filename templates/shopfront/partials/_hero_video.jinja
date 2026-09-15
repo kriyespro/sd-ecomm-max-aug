@@ -1,0 +1,12 @@
+{# Muted, looping YouTube background for a hero banner. ``fill_height`` when
+   the hero box already has an explicit height from its layout (e.g. a split
+   hero column) — otherwise this establishes one itself via an aspect box
+   matching the hero image crop (1600×520). #}
+{% macro hero_video(youtube_id, fill_height=False) %}
+<div class="{{ 'relative h-full w-full overflow-hidden' if fill_height else 'relative w-full aspect-[1600/520] overflow-hidden' }}">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/{{ youtube_id }}?autoplay=1&mute=1&loop=1&playlist={{ youtube_id }}&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&iv_load_policy=3"
+    class="pointer-events-none absolute left-1/2 top-1/2 h-[56.25vw] min-h-full w-[177.78vh] min-w-full -translate-x-1/2 -translate-y-1/2"
+    title="" frameborder="0" allow="autoplay; encrypted-media" loading="lazy"></iframe>
+</div>
+{% endmacro %}

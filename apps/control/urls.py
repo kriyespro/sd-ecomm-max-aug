@@ -72,6 +72,7 @@ urlpatterns = [
 
     # "Live stores" home-page showcase
     path("showcase/", showv.ShowcaseListView.as_view(), name="showcase_list"),
+    path("showcase/add/", showv.ShowcaseAdminAddView.as_view(), name="showcase_add"),
     path("showcase/<int:pk>/review/", showv.ShowcaseReviewView.as_view(), name="showcase_review"),
     path("users/<int:pk>/", views.UserDetailView.as_view(), name="user_detail"),
     path("users/<int:pk>/role/", views.UserRoleChangeView.as_view(), name="user_role_change"),

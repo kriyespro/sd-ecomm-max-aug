@@ -53,7 +53,26 @@ class ShowcaseListView(PlatformAdminRequiredMixin, TemplateView):
         ctx["projects"] = services.list_showcase_submissions(status)
         ctx["status"] = status
         ctx["pending_count"] = services.list_showcase_submissions("pending").count()
+        ctx["addable_projects"] = (
+            Project.objects.exclude(showcase_status=Project.ShowcaseStatus.APPROVED)
+            .exclude(primary_domain__isnull=True).exclude(primary_domain="")
+            .order_by("name")
+        )
         return ctx
+
+
+class ShowcaseAdminAddView(PlatformAdminRequiredMixin, View):
+    """Feature a store directly — skips the owner-submits / admin-approves flow."""
+
+    def post(self, request, *args, **kwargs):
+        project = get_object_or_404(Project, pk=request.POST.get("project"))
+        try:
+            services.admin_add_to_showcase(actor=request.user, project=project, request=request)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, f"{project.name} added to Live Stores.")
+        return redirect("control:showcase_list")
 
 
 class ShowcaseReviewView(PlatformAdminRequiredMixin, View):

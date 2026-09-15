@@ -1,6 +1,7 @@
 {% extends "shopfront/base.jinja" %}
 {% from "shopfront/partials/_heading.jinja" import heading_classes, align_class with context %}
 {% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
+{% from "shopfront/partials/_hero_video.jinja" import hero_video %}
 {% block title %}{{ store.name }} — Rooted in nature, made for you{% endblock %}
 
 {% block content %}
@@ -88,12 +89,16 @@
   <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
        {% if not loop.first %}style="display:none"{% endif %}
        class="relative">
+    {% if b.video_youtube_id %}
+    {{ hero_video(b.video_youtube_id) }}
+    {% else %}
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
       <img src="{{ b.image | media_src(1600, 520, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
            {{ 'fetchpriority=high' if loop.first else 'loading=lazy' }} decoding="async"
            class="block w-full h-auto">
     </picture>
+    {% endif %}
     {% if not b.hide_overlay %}<div class="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/40 to-ink/10"></div>{% endif %}
 
     {% if not (b.text_hidden and b.hide_cta) %}

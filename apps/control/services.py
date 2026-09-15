@@ -434,3 +434,30 @@ def review_showcase_submission(*, actor, project, decision, note="", request=Non
         changes={"decision": decision, "project": project.name}, request=request,
     )
     return project
+
+
+def admin_add_to_showcase(*, actor, project, request=None):
+    """Platform admin features a store on Live Stores directly, skipping the
+    owner-submits / admin-approves flow entirely."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can add a store to the showcase.")
+    if project.showcase_status == Project.ShowcaseStatus.APPROVED:
+        raise ValidationError("Already on Live Stores.")
+    if not (project.primary_domain or "").strip():
+        raise ValidationError("That store has no domain set up yet.")
+
+    now = timezone.now()
+    project.showcase_status = Project.ShowcaseStatus.APPROVED
+    project.showcase_submitted_at = now
+    project.showcase_reviewed_by = actor
+    project.showcase_reviewed_at = now
+    project.showcase_review_note = "Added directly by a platform admin."
+    project.save(update_fields=[
+        "showcase_status", "showcase_submitted_at", "showcase_reviewed_by",
+        "showcase_reviewed_at", "showcase_review_note", "updated_at",
+    ])
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=project,
+        changes={"decision": "admin_add", "project": project.name}, request=request,
+    )
+    return project

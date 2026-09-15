@@ -1,6 +1,7 @@
 {% extends "shopfront/base.jinja" %}
 {% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
 {% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
+{% from "shopfront/partials/_hero_video.jinja" import hero_video %}
 {% block title %}{{ store.name }} — Fine everyday jewellery{% endblock %}
 
 {% block content %}
@@ -8,10 +9,14 @@
 {% set hero_img = (hero_banner.image.url if (hero_banner and hero_banner.image)
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
 <section class="relative isolate overflow-hidden bg-ink">
+  {% if hero_banner and hero_banner.video_youtube_id %}
+  {{ hero_video(hero_banner.video_youtube_id) }}
+  {% else %}
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}
     <img src="{{ hero_img | media_src(1600, 520, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="block w-full h-auto">
   </picture>
+  {% endif %}
   {% if not (hero_banner and hero_banner.hide_overlay) %}
   <div class="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/35 to-ink/10"></div>
   {% endif %}

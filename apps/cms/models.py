@@ -157,6 +157,12 @@ class Banner(TenantScopedModel):
         default=False,
         help_text="Show the image with no dark tint behind the text (may make text harder to read).",
     )
+    video_url = models.URLField(
+        max_length=300, blank=True,
+        help_text="Hero placement only — paste a YouTube link to play a muted, "
+                  "looping video behind the text instead of the image.",
+    )
+    video_youtube_id = models.CharField(max_length=20, blank=True, editable=False)
 
     class Meta:
         ordering = ["placement", "priority", "id"]
@@ -169,6 +175,7 @@ class Banner(TenantScopedModel):
 
         shrink_image_field(self.image, target_kb=170, max_edge=1920)
         shrink_image_field(self.mobile_image, target_kb=90, max_edge=900)
+        self.video_youtube_id = _extract_youtube_id(self.video_url)
         super().save(*args, **kwargs)
 
     @property

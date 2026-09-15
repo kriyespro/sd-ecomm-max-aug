@@ -1,6 +1,7 @@
 {% extends "shopfront/base.jinja" %}
 {% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
 {% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
+{% from "shopfront/partials/_hero_video.jinja" import hero_video %}
 {% block title %}{{ store.name }} — Fine jewellery{% endblock %}
 {% block content %}
 
@@ -43,7 +44,11 @@
     </div>
   </div>
   <div class="ornza-hero-img relative hidden lg:block">
+    {% if hero_banner and hero_banner.video_youtube_id %}
+    {{ hero_video(hero_banner.video_youtube_id, fill_height=True) }}
+    {% else %}
     <img src="{{ hero_img | media_src(1000, 1300, 'Hero banner') }}" alt="" fetchpriority="high" decoding="async" class="h-full w-full object-cover object-[center_top]">
+    {% endif %}
   </div>
 </section>
 

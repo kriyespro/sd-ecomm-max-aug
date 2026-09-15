@@ -2,6 +2,20 @@
 {% block page_title %}Live stores{% endblock %}
 
 {% block content %}
+<form method="post" action="{{ url('control:showcase_add') }}"
+      class="mb-4 flex flex-wrap items-center gap-2 rounded-xl bg-white p-3 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <label class="text-sm font-medium text-slate-700">Add a store directly</label>
+  <select name="project" required class="rounded-lg border border-slate-300 px-2 py-1.5 text-sm">
+    <option value="">Choose a store…</option>
+    {% for p in addable_projects %}
+    <option value="{{ p.pk }}">{{ p.name }} ({{ p.primary_domain }})</option>
+    {% endfor %}
+  </select>
+  <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800">Add to Live Stores</button>
+  <p class="w-full text-xs text-slate-400">Skips owner submission — goes straight to Approved.</p>
+</form>
+
 <div class="mb-4 flex flex-wrap items-center gap-2 text-sm">
   {% for key, label in [('', 'All'), ('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected')] %}
   <a href="{{ url('control:showcase_list') }}{% if key %}?status={{ key }}{% endif %}"
