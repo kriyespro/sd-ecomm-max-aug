@@ -241,7 +241,7 @@ class ProductView(View):
         related = list(
             Product.objects.filter(project=project, status="active", category=product.category)
             .exclude(pk=product.pk)
-            .select_related("brand", "category").prefetch_related("images")[:4]
+            .select_related("brand", "category").prefetch_related("images")[:5]
         )
 
         # recently viewed (session) — only maintained once the visitor already
