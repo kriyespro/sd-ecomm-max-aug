@@ -163,6 +163,12 @@ class Banner(TenantScopedModel):
                   "looping video behind the text instead of the image.",
     )
     video_youtube_id = models.CharField(max_length=20, blank=True, editable=False)
+    mobile_video_url = models.URLField(
+        max_length=300, blank=True,
+        help_text="Optional — a different YouTube link for phone screens. "
+                  "Leave blank to use the video above on mobile too.",
+    )
+    mobile_video_youtube_id = models.CharField(max_length=20, blank=True, editable=False)
 
     class Meta:
         ordering = ["placement", "priority", "id"]
@@ -176,7 +182,12 @@ class Banner(TenantScopedModel):
         shrink_image_field(self.image, target_kb=170, max_edge=1920)
         shrink_image_field(self.mobile_image, target_kb=90, max_edge=900)
         self.video_youtube_id = _extract_youtube_id(self.video_url)
+        self.mobile_video_youtube_id = _extract_youtube_id(self.mobile_video_url)
         super().save(*args, **kwargs)
+
+    @property
+    def effective_mobile_video_youtube_id(self):
+        return self.mobile_video_youtube_id or self.video_youtube_id
 
     @property
     def is_live(self):

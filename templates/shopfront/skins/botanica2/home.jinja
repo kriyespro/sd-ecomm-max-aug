@@ -25,7 +25,12 @@
                    else ((featured[0].images.all() | first).image.url if (featured and featured[0].images.all()) else '')) %}
 <section class="relative isolate overflow-hidden bg-ink">
   {% if hero_banner and hero_banner.video_youtube_id %}
-  {{ hero_video(hero_banner.video_youtube_id) }}
+    {% if hero_banner.mobile_video_youtube_id %}
+    <div class="sm:hidden">{{ hero_video(hero_banner.mobile_video_youtube_id) }}</div>
+    <div class="hidden sm:block">{{ hero_video(hero_banner.video_youtube_id) }}</div>
+    {% else %}
+    {{ hero_video(hero_banner.video_youtube_id) }}
+    {% endif %}
   {% else %}
   <picture>
     {% if hero_banner and hero_banner.mobile_image %}<source media="(max-width: 640px)" srcset="{{ hero_banner.mobile_image.url }}">{% endif %}

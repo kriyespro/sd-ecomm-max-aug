@@ -90,7 +90,12 @@
        {% if not loop.first %}style="display:none"{% endif %}
        class="relative">
     {% if b.video_youtube_id %}
-    {{ hero_video(b.video_youtube_id) }}
+      {% if b.mobile_video_youtube_id %}
+      <div class="sm:hidden">{{ hero_video(b.mobile_video_youtube_id) }}</div>
+      <div class="hidden sm:block">{{ hero_video(b.video_youtube_id) }}</div>
+      {% else %}
+      {{ hero_video(b.video_youtube_id) }}
+      {% endif %}
     {% else %}
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}

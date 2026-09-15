@@ -439,7 +439,7 @@ class BannerForm(ProjectScopedForm):
         fields = [
             "name", "placement", "image", "mobile_image",
             "heading", "subheading", "cta_label", "cta_url",
-            "text_hidden", "hide_cta", "hide_overlay", "video_url",
+            "text_hidden", "hide_cta", "hide_overlay", "video_url", "mobile_video_url",
             "category", "starts_at", "ends_at", "priority", "is_active",
         ]
         widgets = {
@@ -463,14 +463,24 @@ class BannerForm(ProjectScopedForm):
             "Hero placement only — paste a YouTube link to autoplay a muted, "
             "looping video behind the text instead of the image above."
         )
+        self.fields["mobile_video_url"].help_text = (
+            "Optional — a different YouTube link for phone screens. Leave blank "
+            "to play the video above on mobile too."
+        )
 
-    def clean_video_url(self):
+    def _clean_youtube_url(self, field):
         from apps.cms.models import _extract_youtube_id
 
-        url = self.cleaned_data.get("video_url", "").strip()
+        url = self.cleaned_data.get(field, "").strip()
         if url and not _extract_youtube_id(url):
             raise forms.ValidationError("Couldn't find a YouTube video id in that link.")
         return url
+
+    def clean_video_url(self):
+        return self._clean_youtube_url("video_url")
+
+    def clean_mobile_video_url(self):
+        return self._clean_youtube_url("mobile_video_url")
 
     def clean(self):
         cleaned = super().clean()

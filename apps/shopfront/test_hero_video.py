@@ -56,6 +56,27 @@ class HeroVideoRenderTests(TestCase):
         )
         self.assertContains(resp, 'class="absolute inset-0 z-0 lg:hidden"')
 
+    def test_distinct_mobile_video_on_default_skin(self):
+        self.banner.mobile_video_url = "https://youtu.be/oHg5SJYRHA0"
+        self.banner.save()
+        resp = self._render("default")
+        self.assertContains(resp, "youtube-nocookie.com/embed/dQw4w9WgXcQ")  # desktop
+        self.assertContains(resp, "youtube-nocookie.com/embed/oHg5SJYRHA0")  # mobile
+
+    def test_distinct_mobile_video_on_ornza_skin(self):
+        self.banner.mobile_video_url = "https://youtu.be/oHg5SJYRHA0"
+        self.banner.save()
+        resp = self._render("ornza")
+        self.assertContains(resp, "youtube-nocookie.com/embed/dQw4w9WgXcQ")  # desktop
+        self.assertContains(resp, "youtube-nocookie.com/embed/oHg5SJYRHA0")  # mobile
+
+    def test_no_mobile_override_reuses_desktop_video(self):
+        # unchanged from before this field existed: one video, both breakpoints
+        resp = self._render("default")
+        self.assertEqual(
+            resp.content.decode().count("youtube-nocookie.com/embed/dQw4w9WgXcQ"), 1,
+        )
+
     def test_no_video_falls_back_to_image(self):
         self.banner.video_url = ""
         self.banner.save()
