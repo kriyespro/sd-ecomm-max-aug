@@ -77,7 +77,8 @@ _SECTIONS = [
         ("shipping_zones", "Shipping", "\U0001f69a"),
         ("webhooks", "Webhooks", "\U0001f517"),
         ("whatsapp", "WhatsApp", "\U0001f4ac"),
-        ("ai_keys", "AI", "✨"),
+        # AI on hold — nav entry pulled, see product_form.jinja too. Re-add
+        # ("ai_keys", "AI", "✨") here to bring it back.
         ("payment_providers", "Payments", "\U0001f4b3"),
         ("domains", "Domains", "\U0001f310"),
         ("team", "Team", "\U0001f465"),
