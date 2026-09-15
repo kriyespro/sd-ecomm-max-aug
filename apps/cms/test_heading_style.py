@@ -142,3 +142,45 @@ class HeadingStyleOverrideTests(TestCase):
         self.assertIn(
             '<div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">', body,
         )
+
+    def test_botanica3_center_align_truly_centers_heading_with_a_link(self):
+        """Botanica3's row-with-a-link headings (Shop by category, Featured,
+        New arrivals) take the link out of flex flow when centered — a plain
+        flex-1 heading only centers within the space left after the link,
+        which visually reads as shifted left. The link becomes absolutely
+        positioned instead, so the heading gets the full row width."""
+        from apps.catalog.models import Product
+
+        cat = Category.objects.create(
+            project=self.project, name="Rings", slug="rings", is_active=True,
+        )
+        Product.objects.create(
+            project=self.project, title="Ring", slug="ring", status="active",
+            price="999", category=cat,
+        )
+        self._use_skin("botanica3")
+        self._set_theme(heading_align="center", show_category_headings=True)
+        body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
+        self.assertIn(
+            '<div class="relative mb-5 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">',
+            body,
+        )
+        self.assertIn('<h2 class="w-full font-display text-center', body)
+        self.assertIn('sm:absolute sm:bottom-0 sm:right-0', body)
+
+    def test_botanica3_left_align_keeps_the_old_flex_layout(self):
+        """Default (left) alignment is unaffected — link stays in normal
+        flex flow, heading keeps flex-1."""
+        cat = Category.objects.create(
+            project=self.project, name="Rings", slug="rings", is_active=True,
+        )
+        from apps.catalog.models import Product
+
+        Product.objects.create(
+            project=self.project, title="Ring", slug="ring", status="active",
+            price="999", category=cat,
+        )
+        self._use_skin("botanica3")
+        body = self.client.get("/", HTTP_HOST="headingoverride.test").content.decode()
+        self.assertIn('<h2 class="flex-1 font-display text-left', body)
+        self.assertNotIn('sm:absolute sm:bottom-0 sm:right-0', body)
