@@ -15,3 +15,10 @@ def suspend_overdue_task():
     from .services import suspend_overdue
 
     suspend_overdue()
+
+
+@shared_task(name="apps.billing.tasks.send_trial_ending_reminders_task")
+def send_trial_ending_reminders_task():
+    from .services import send_trial_ending_reminders
+
+    send_trial_ending_reminders()

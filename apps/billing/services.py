@@ -314,6 +314,63 @@ def suspend_overdue():
     return hit
 
 
+def trial_ending_soon(within_days=3):
+    """Trialing subscriptions whose trial ends within ``within_days`` and
+    haven't been reminded yet. DGC-managed stores are excluded — their team
+    never sees the plan/billing screen (the DGC owns that relationship), so
+    an "upgrade before you lose access" email to the store owner would point
+    them at a page they can't use."""
+    now = timezone.now()
+    cutoff = now + timedelta(days=within_days)
+    return Subscription.objects.filter(
+        status=SubscriptionStatus.TRIALING,
+        trial_end__isnull=False,
+        trial_end__gte=now,
+        trial_end__lte=cutoff,
+        trial_reminder_sent_at__isnull=True,
+        is_comp=False,
+        manager__isnull=True,
+    ).select_related("project")
+
+
+def send_trial_ending_reminders(within_days=3):
+    """Email the owner of each trial ending soon, once. Best-effort per
+    subscription — one bad store (no owner email resolvable, provider
+    hiccup) must never block the rest of the batch."""
+    from apps.notifications.models import Event
+    from apps.notifications.services import notify
+    from apps.projects.services import owner_notification_email
+
+    sent = []
+    for sub in trial_ending_soon(within_days):
+        try:
+            project = sub.project
+            to = owner_notification_email(project)
+            if not to:
+                continue
+            days_left = max(0, (sub.trial_end - timezone.now()).days)
+            notify(
+                project=project, event=Event.TRIAL_ENDING, to=to,
+                context={
+                    "name": "there",
+                    "store_name": project.name,
+                    "days_left": str(days_left),
+                    "plan_name": sub.plan.name,
+                },
+                related=sub,
+            )
+            sub.trial_reminder_sent_at = timezone.now()
+            sub.save(update_fields=["trial_reminder_sent_at", "updated_at"])
+            sent.append(sub)
+        except Exception:  # noqa: BLE001 - one bad store must never sink the batch
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "trial-ending reminder failed for subscription %s", sub.pk,
+            )
+    return sent
+
+
 # --- platform-admin overrides ---------------------------------------
 
 @transaction.atomic

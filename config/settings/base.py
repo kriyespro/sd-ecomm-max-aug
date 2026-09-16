@@ -263,6 +263,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.billing.tasks.suspend_overdue_task",
         "schedule": 3600.0 * 6,
     },
+    "billing-trial-ending-reminders": {
+        "task": "apps.billing.tasks.send_trial_ending_reminders_task",
+        "schedule": 3600.0 * 12,   # twice daily — plenty for a 3-day-out, once-only reminder
+    },
     "trash-purge": {
         "task": "apps.control.tasks.purge_trashed_task",
         "schedule": 3600.0 * 24,   # daily — empties Trash older than 30 days

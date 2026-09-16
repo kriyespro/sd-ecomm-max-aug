@@ -27,6 +27,7 @@ class Event(models.TextChoices):
     PASSWORD_RESET = "password_reset", "Password reset"
     LOW_STOCK_ALERT = "low_stock_alert", "Low stock alert"
     CART_ABANDONED = "cart_abandoned", "Abandoned cart"
+    TRIAL_ENDING = "trial_ending", "Trial ending soon"
 
 
 class NotificationSettings(TenantScopedModel):

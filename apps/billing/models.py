@@ -192,6 +192,10 @@ class Subscription(TimeStampedModel):
     current_period_start = models.DateTimeField()
     current_period_end = models.DateTimeField(db_index=True)
     trial_end = models.DateTimeField(null=True, blank=True)
+    # Set once the trial-ending-soon reminder goes out (see
+    # apps.billing.services.send_trial_ending_reminders) so it never repeats
+    # for the same trial.
+    trial_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     cancel_at_period_end = models.BooleanField(default=False)
 
     # The DGC who *manages* this store — grants full Mission Control access

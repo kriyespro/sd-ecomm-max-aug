@@ -49,4 +49,10 @@ DEFAULTS = {
         "waiting in your cart at {store_name}.\n\nCome back and finish checking out: "
         "{cart_url}",
     ),
+    "trial_ending": (
+        "Your {store_name} trial ends in {days_left} day(s)",
+        "Hi {name},\n\nYour free trial of {store_name} on the {plan_name} plan ends in "
+        "{days_left} day(s). Add a payment method from Mission Control to keep your "
+        "store live without interruption.",
+    ),
 }
