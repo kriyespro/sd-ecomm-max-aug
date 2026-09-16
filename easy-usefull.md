@@ -57,10 +57,11 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 ## RELIABLE
 
-- [ ] [SAFE] Trial-ending-soon reminder — Subscription.trial_end exists,
-      auto-suspend-when-overdue exists (Celery), but nothing warns the
-      owner *before* it happens. First one to build — smallest, safest,
-      proves the pattern.
+- [x] Trial-ending-soon reminder — done 2026-09-16 (41e0721). Twice-daily
+      Celery task, owner email once 3 days out (matches the existing
+      Mission Control banner's own threshold), reuses the low-stock
+      alert's owner_notification_email fallback chain. Skips DGC-managed
+      stores on purpose — their team never sees the billing screen.
 - [x] Fixed 2026-09-16 — the old note was still accurate. verify_payment's
       `@transaction.atomic` rolled back the failure-path save (Payment.FAILED
       + PaymentEvent + the payment.failed domain event) on the very `raise`
@@ -90,8 +91,8 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 ## COMMERCIAL
 
-- [ ] [SAFE] Trial-ending reminder (see RELIABLE) doubles as a conversion
-      moment — same build, listed twice deliberately.
+- [x] Trial-ending reminder (see RELIABLE) — same build, doubles as a
+      conversion moment.
 - [x] Upgrade nudge on plan limits — done 2026-09-16. Products and Domains
       screens had NO usage display at all before (only Team did, and only
       as passive text). All three now show "X/Y used" and, at cap, a
