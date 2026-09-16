@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views import View
 from django.views.generic import FormView, TemplateView
 
@@ -17,6 +18,17 @@ User = get_user_model()
 
 _INPUT = ("mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm "
           "focus:border-slate-900 focus:outline-none")
+
+
+def _safe_next(request, next_url):
+    """``next`` round-trips through the Google OAuth session flow — still
+    attacker-supplied (it started as ``?next=`` on the sign-in link), so it
+    must be revalidated right before use, same as apps.control.store_views."""
+    if next_url and url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return next_url
+    return settings.LOGIN_REDIRECT_URL
 
 # Where the pending Google profile lives between the callback and the
 # "finish signup" form.
@@ -177,7 +189,7 @@ class GoogleCallbackView(View):
                          or existing.is_superuser):
             # Known account — treat this as a sign-in.
             login(request, existing)
-            return redirect(flow.get("next") or settings.LOGIN_REDIRECT_URL)
+            return redirect(_safe_next(request, flow.get("next")))
 
         request.session[_PENDING] = {
             "email": info["email"], "name": info["name"], "plan": flow.get("plan") or "",

@@ -305,6 +305,32 @@ class GoogleCallbackTests(TestCase):
         self.assertNotIn("/accounts/signup", resp["Location"])
         self.assertEqual(int(self.client.session["_auth_user_id"]), u.pk)
 
+    def test_existing_account_next_param_open_redirect_is_blocked(self):
+        """?next= on the Google sign-in link round-trips through the OAuth
+        session flow untouched — still attacker-supplied. An external host
+        must fall back to LOGIN_REDIRECT_URL, not be redirected to."""
+        u = User.objects.create_user("ex2", email="ex2@gmail.test", password="pw", is_staff=True)
+        self.client.get("/accounts/google/start/?next=https://evil.example.com/phish")
+        state = self.client.session["google_oauth_flow"]["state"]
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "ex2@gmail.test", "email_verified": True,
+                               "name": "Ex2", "sub": "10"}
+            resp = self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+        self.assertEqual(resp.status_code, 302)
+        self.assertNotIn("evil.example.com", resp["Location"])
+        self.assertEqual(int(self.client.session["_auth_user_id"]), u.pk)
+
+    def test_existing_account_next_param_same_host_is_honoured(self):
+        u = User.objects.create_user("ex3", email="ex3@gmail.test", password="pw", is_staff=True)
+        self.client.get("/accounts/google/start/?next=/admin/orders/")
+        state = self.client.session["google_oauth_flow"]["state"]
+        with patch("apps.accounts.views.google_oauth.exchange_code") as ex:
+            ex.return_value = {"email": "ex3@gmail.test", "email_verified": True,
+                               "name": "Ex3", "sub": "11"}
+            resp = self.client.get(f"/accounts/google/callback/?code=abc&state={state}")
+        self.assertRedirects(resp, "/admin/orders/", fetch_redirect_response=False)
+        self.assertEqual(int(self.client.session["_auth_user_id"]), u.pk)
+
     def test_completion_fires_platform_capi_when_configured(self):
         from apps.marketing.models import PlatformTrackingSettings
 
