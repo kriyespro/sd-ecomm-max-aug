@@ -15,9 +15,16 @@ Working one at a time, safest first. Test + confirm before moving to the next.
       doesn't ask for one before checkout starts). Follow-up if wanted:
       capture email earlier in the cart/checkout flow — UI-touching,
       bigger scope, not done now.
-- [ ] [MODERATE] Real courier integration (Shiprocket/Delhivery) — shipping
-      app already has a `Courier` ABC + registry, only `ManualCourier`
-      exists. Add one real adapter behind the same interface.
+- [x] Real courier integration — done 2026-09-16 (48bed0d). Shiprocket +
+      Delhivery adapters (urllib, no SDK, same convention as Razorpay),
+      test mode default (synthetic tracking, no network call) so it's safe
+      with zero keys — site owner adds real ones at
+      /admin/shipping/couriers/ whenever ready. Fixed two real bugs found
+      while wiring it: create_shipment() built the courier with no config
+      (self.config always {}), and the live API call had no error
+      handling inside the atomic block — a courier failure would have
+      rolled back the Shipment it just created. Both fixed + regression
+      tested. 18 new tests, full suite (996) green.
 - [x] Low-stock alert to the owner — done 2026-09-16 (64eb648). Turned out
       to be half-built already: Events.INVENTORY_LOW fired, template
       existed, but nothing mapped it to a send + the recipient lookup was
