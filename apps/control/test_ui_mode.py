@@ -62,6 +62,13 @@ class BuildNavEasyModeTests(TestCase):
         self.assertNotIn("inventory_list", item_names)
         self.assertNotIn("team", item_names)
 
+    def test_easy_mode_includes_expanded_set(self):
+        nav = self._nav(easy_mode=True, store_data_ok=True, can_manage_billing=True)
+        item_names = {it["name"] for s in nav for it in s["items"]}
+        for name in ("order_list", "cms_banners", "category_list", "cms_store_profile",
+                     "analytics", "reports", "domains", "store_plan"):
+            self.assertIn(name, item_names, name)
+
     def test_expert_mode_unchanged(self):
         easy_names = {it["name"] for s in self._nav(easy_mode=True) for it in s["items"]}
         expert_names = {it["name"] for s in self._nav(easy_mode=False) for it in s["items"]}
@@ -94,6 +101,24 @@ class UiModeViewTests(TestCase):
         resp = self.client.get("/admin/")
         self.assertContains(resp, "Switch to Expert mode")
         self.assertNotContains(resp, 'href="/admin/coupons/"')
+
+    def test_easy_mode_shows_expanded_items(self):
+        resp = self.client.get("/admin/")
+        for href in ("/admin/orders/", "/admin/cms/banners/", "/admin/categories/",
+                    "/admin/cms/store-profile/", "/admin/analytics/", "/admin/reports/",
+                    "/admin/domains/", "/admin/plan/"):
+            self.assertContains(resp, f'href="{href}"', msg_prefix=href)
+
+    def test_easy_mode_sidebar_is_green_not_role_emerald(self):
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "bg-green-600")
+        self.assertNotContains(resp, "bg-emerald-950")
+
+    def test_expert_mode_keeps_role_colour(self):
+        Profile.objects.filter(user=self.owner).update(ui_mode=UiMode.EXPERT)
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "bg-emerald-950")
+        self.assertNotContains(resp, "bg-green-600")
 
     def test_expert_only_url_still_reachable_in_easy_mode(self):
         for url in _EXPERT_ONLY_URLS:

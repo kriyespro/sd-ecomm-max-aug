@@ -9,13 +9,23 @@
 {# Mission Control colour scheme by the viewer's highest role:
    platform (superuser / Platform Owner) = indigo, DGC (Platform Manager) =
    orange, store owner = green, store manager = pink, staff = slate. #}
-{% set _hue = {'platform':'indigo','dgc':'orange','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
 {% set _badge = {'platform':'Platform','dgc':'DGC','owner':'Owner','manager':'Manager','staff':''}[control_chrome_theme] %}
 {% set _plat = control_platform_scope %}
+{# Easy mode gets its own bright, lighter green sidebar — an unmissable
+   at-a-glance cue distinct from every role's usual dark theme. #}
+{% if control_easy_mode %}
+{% set _hue = 'green' %}
+{% set _side = 'bg-green-600' %}
+{% set _side_hover = 'hover:bg-green-500' %}
+{% set _side_active = 'bg-green-500 text-white' %}
+{% set _side_border = 'border-green-500' %}
+{% else %}
+{% set _hue = {'platform':'indigo','dgc':'orange','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
 {% set _side = 'bg-' ~ _hue ~ '-950' %}
 {% set _side_hover = 'hover:bg-' ~ _hue ~ '-900' %}
 {% set _side_active = 'bg-' ~ _hue ~ '-900 text-white' %}
 {% set _side_border = 'border-' ~ _hue ~ '-900' %}
+{% endif %}
 <div x-data="{ sidebar: true, nav: false }" class="flex min-h-screen bg-{{ _hue }}-50">
 
   {# backdrop behind the mobile drawer #}

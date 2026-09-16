@@ -122,8 +122,9 @@ _BILLING_ONLY = {"store_plan"}
 # admin tooling is a different audience from this owner-facing declutter).
 _EASY_MODE_ITEMS = {
     "dashboard", "onboarding", "order_list", "training", "support",
-    "product_list", "cms_store_profile", "cms_theme",
-    "shipping_zones", "payment_providers",
+    "product_list", "category_list", "cms_store_profile", "cms_banners", "cms_theme",
+    "shipping_zones", "payment_providers", "domains",
+    "analytics", "reports", "store_plan",
 }
 
 

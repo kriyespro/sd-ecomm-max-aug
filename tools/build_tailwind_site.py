@@ -49,7 +49,9 @@ CONTENT = [
 # Mission Control (templates/control/base_control.jinja) builds its colour
 # classes at render time by string-concatenating a hue name
 # (`'bg-' ~ _hue ~ '-950'`), so Tailwind's content scan never sees them.
-_HUES = "indigo|orange|emerald|rose|slate"
+# "green" is Easy mode's sidebar tint (bg-green-600 etc, not just -950/-900
+# like the rest — Easy mode is meant to look obviously different).
+_HUES = "indigo|orange|emerald|rose|slate|green"
 # Emitted as JS RegExp literals (Tailwind's safelist wants real regexes, not
 # strings). The `/` inside the opacity pattern is escaped for the literal.
 _SAFELIST_JS = (
