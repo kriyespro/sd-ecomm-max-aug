@@ -188,7 +188,29 @@
         </p>
         {% endif %}
 
+        {% set can_ship_now = order.fulfillment_status != 'unfulfilled' or order.status in ['packed', 'processing', 'confirmed'] %}
         {% if order.status not in ['delivered', 'cancelled', 'refunded', 'failed'] %}
+        {% if can_ship_now and not shipments %}
+        {# No shipment yet on a ready order — the common case. One submit
+           picks the method and books the shipment, instead of two. #}
+        <form method="post" action="{{ url('control:order_shipping_set_and_ship', kwargs={'pk': order.pk}) }}" class="space-y-2 text-sm">
+          {{ csrf_input }}
+          <select name="method" class="w-full rounded-lg border border-slate-300 px-2 py-2">
+            {% for method, quote in shipping_methods %}
+            <option value="{{ method.pk }}">{{ method.name }} — {{ order.currency }} {{ quote }} ({{ method.estimate_label() }})</option>
+            {% else %}
+            <option disabled>No method matches this address</option>
+            {% endfor %}
+          </select>
+          <input type="text" name="tracking_number" placeholder="Tracking # (optional — leave blank for an integrated courier)" class="w-full rounded-lg border border-slate-300 px-2 py-2">
+          <label class="flex items-center gap-2 text-xs text-slate-500">
+            <input type="checkbox" name="cod" value="1"> quote with COD fee
+          </label>
+          {% if shipping_methods %}
+          <button class="w-full rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-50">Set shipping &amp; ship</button>
+          {% endif %}
+        </form>
+        {% else %}
         <form method="post" action="{{ url('control:order_shipping_set', kwargs={'pk': order.pk}) }}" class="space-y-2 text-sm">
           {{ csrf_input }}
           <select name="method" class="w-full rounded-lg border border-slate-300 px-2 py-2">
@@ -205,6 +227,7 @@
           <button class="w-full rounded-lg border border-slate-300 px-3 py-2 hover:bg-slate-50">Set shipping method</button>
           {% endif %}
         </form>
+        {% endif %}
         {% endif %}
 
         {% for s in shipments %}

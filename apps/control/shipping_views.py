@@ -178,6 +178,32 @@ class OrderSetShippingView(_OrderScoped, View):
         return redirect("control:order_detail", pk=order.pk)
 
 
+class OrderSetShippingAndShipView(_OrderScoped, View):
+    """Set the shipping method and book the shipment in one submit — was
+    two separate forms/clicks for what's almost always one sequential
+    decision on a ready-to-fulfill order. create_shipment() already
+    resolves the method + carrier from order.shipping_method when not
+    passed explicitly, so this just calls both services back to back."""
+
+    def post(self, request, *args, **kwargs):
+        order = self.get_order()
+        method = get_object_or_404(
+            ShippingMethod, pk=request.POST.get("method"), project=self.active_project
+        )
+        cod = request.POST.get("cod") == "1"
+        try:
+            ship.set_order_shipping(order=order, method=method, cod=cod, actor=request.user)
+            ship.create_shipment(
+                order=order,
+                tracking_number=request.POST.get("tracking_number", "").strip(),
+                actor=request.user,
+            )
+            messages.success(request, f"Shipping set and shipment created: {method.name}.")
+        except ship.ShippingError as exc:
+            messages.error(request, str(exc))
+        return redirect("control:order_detail", pk=order.pk)
+
+
 class OrderCreateShipmentView(_OrderScoped, View):
     def post(self, request, *args, **kwargs):
         order = self.get_order()
