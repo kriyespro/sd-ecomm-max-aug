@@ -35,6 +35,7 @@ app_name = "control"
 urlpatterns = [
     path("", views.DashboardView.as_view(), name="dashboard"),
     path("ui-mode/toggle/", views.UiModeToggleView.as_view(), name="ui_mode_toggle"),
+    path("guides/toggle/", views.GuideToggleView.as_view(), name="guide_toggle"),
     path("stats/", views.StatsCardsView.as_view(), name="stats_cards"),
     path("activity/", views.ActivityFeedView.as_view(), name="activity_feed"),
 

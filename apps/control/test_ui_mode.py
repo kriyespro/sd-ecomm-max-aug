@@ -100,7 +100,12 @@ class UiModeViewTests(TestCase):
     def test_easy_mode_owner_sees_trimmed_nav(self):
         resp = self.client.get("/admin/")
         self.assertContains(resp, "Switch to Expert mode")
-        self.assertNotContains(resp, 'href="/admin/coupons/"')
+        # coupons isn't in the sidebar whitelist — but the checklist card can
+        # still link there directly ("Create a launch coupon"), so scope the
+        # check to the sidebar <nav> itself, not the whole page.
+        html = resp.content.decode()
+        nav = html[html.index("<nav x-data"):html.index("</nav>")]
+        self.assertNotIn('href="/admin/coupons/"', nav)
 
     def test_easy_mode_shows_expanded_items(self):
         resp = self.client.get("/admin/")

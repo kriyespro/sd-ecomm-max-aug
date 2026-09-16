@@ -26,7 +26,7 @@
         Click a store to manage its team, plan, or to start working in it.
       </p>
     </div>
-    <a href="{{ url('control:store_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New store</a>
+    <a data-tour="stores-add" href="{{ url('control:store_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New store</a>
   </div>
 
   {# filters #}
@@ -85,7 +85,7 @@
           <th class="px-3 py-2"></th>
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-100">
+      <tbody data-tour="stores-list" class="divide-y divide-slate-100">
         {% for s in stores %}
         {% set sub = s.subscription if s.subscription else None %}
         {% set st = 'archived' if s.status == 'archived' else (sub.status if sub else s.status) %}

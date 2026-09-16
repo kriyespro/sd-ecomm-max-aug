@@ -45,6 +45,20 @@ class UiModeToggleView(ControlAccessMixin, View):
         return redirect(nxt or "control:dashboard")
 
 
+class GuideToggleView(ControlAccessMixin, View):
+    """Flips the signed-in user's own on-page guided-tour master switch
+    (Profile.show_guides)."""
+
+    def post(self, request, *args, **kwargs):
+        from apps.accounts.models import Profile
+
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        profile.show_guides = not profile.show_guides
+        profile.save(update_fields=["show_guides", "updated_at"])
+        nxt = request.POST.get("next") or request.META.get("HTTP_REFERER")
+        return redirect(nxt or "control:dashboard")
+
+
 class DashboardView(ControlAccessMixin, TemplateView):
     """``/admin/`` — a store's "Today" numbers when one is active (owner,
     manager, staff, or a platform admin looking at that store); the
@@ -73,17 +87,31 @@ class DashboardView(ControlAccessMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
+        profile = getattr(self.request.user, "profile", None)
+        easy = getattr(profile, "ui_mode", "expert") == "easy"
+
         if getattr(self, "active_project", None) is not None:
+            from apps.accounts.permissions import OWNER_MANAGER, store_role
             from apps.analytics.services import today_dashboard
 
             ctx["active_project"] = self.active_project
             ctx["today"] = today_dashboard(self.active_project)
-            profile = getattr(self.request.user, "profile", None)
-            if getattr(profile, "ui_mode", "expert") == "easy":
-                from .quick_launch import quick_launch_steps
+            if easy:
+                from . import quick_launch
 
-                ctx["quick_launch"] = quick_launch_steps(self.active_project)
+                role = store_role(self.request.user, self.active_project)
+                if role in OWNER_MANAGER:
+                    ctx["quick_launch"] = quick_launch.owner_steps(self.active_project)
+                    ctx["quick_launch_tracked"] = True
+                elif role == "staff":
+                    ctx["quick_launch"] = quick_launch.staff_steps()
             return ctx
+
+        if easy and is_platform_staff(self.request.user) and not is_platform_admin(self.request.user):
+            from . import quick_launch
+
+            ctx["quick_launch"] = quick_launch.dgc_steps()
+
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)
         if is_platform_admin(self.request.user):

@@ -1,0 +1,29 @@
+{# Dashboard onboarding checklist — owner/manager gets real progress
+   tracking (checkmarks, N/M count); staff/DGC get a plain orientation list
+   (their steps are all done: False — there's nothing to "complete"). #}
+{% if quick_launch %}
+<div data-tour="quick-launch" class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">
+      {{ 'Quick launch checklist' if quick_launch_tracked else 'Get oriented' }}
+    </h2>
+    {% if quick_launch_tracked %}
+    {% set done_count = quick_launch | selectattr('done') | list | length %}
+    <span class="text-xs text-slate-400">{{ done_count }} / {{ quick_launch | length }}</span>
+    {% endif %}
+  </div>
+  <div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-{{ '5' if quick_launch | length > 4 else quick_launch | length }}">
+    {% for step in quick_launch %}
+    <a href="{{ step.url }}"
+       class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm ring-1
+              {{ 'bg-emerald-50 text-emerald-700 ring-emerald-200' if (quick_launch_tracked and step.done) else 'text-slate-600 ring-slate-200 hover:bg-slate-50' }}">
+      {% if quick_launch_tracked %}<span>{{ '✔' if step.done else '○' }}</span>{% else %}<span>→</span>{% endif %}
+      <span class="truncate">{{ step.label }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% if quick_launch_tracked and (quick_launch | selectattr('done') | list | length) == quick_launch | length %}
+  <p class="mt-3 text-xs text-emerald-700">You're set up — ready to share your store and start selling.</p>
+  {% endif %}
+</div>
+{% endif %}

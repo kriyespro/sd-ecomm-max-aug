@@ -7,7 +7,7 @@
     <h2 class="text-sm font-semibold text-slate-700">Shipping zones · {{ active_project.name }}</h2>
     <div class="flex gap-2">
       <a href="{{ url('control:shipping_method_create') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Add method</a>
-      <a href="{{ url('control:shipping_zone_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add zone</a>
+      <a data-tour="shipping-new" href="{{ url('control:shipping_zone_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add zone</a>
     </div>
   </div>
 

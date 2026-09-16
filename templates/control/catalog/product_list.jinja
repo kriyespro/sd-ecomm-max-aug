@@ -34,8 +34,8 @@
         <option value="{{ c.pk }}" {{ 'selected' if category == c.pk | string }}>{{ c.name }}</option>
         {% endfor %}
       </select>
-      <a href="{{ url('control:product_import') }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Import</a>
-      <a href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
+      <a data-tour="product-import-btn" href="{{ url('control:product_import') }}" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Import</a>
+      <a data-tour="product-new-btn" href="{{ url('control:product_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New product</a>
     </div>
   </div>
   <div class="flex items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs">

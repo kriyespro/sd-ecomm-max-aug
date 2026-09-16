@@ -12,7 +12,7 @@
              hx-target="#order-rows" hx-swap="innerHTML"
              hx-include="[name='status'],[name='payment']"
              class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
-      <select name="status"
+      <select data-tour="order-filters" name="status"
               hx-get="{{ url('control:order_list') }}"
               hx-trigger="change" hx-target="#order-rows" hx-swap="innerHTML"
               hx-include="[name='q'],[name='payment']"

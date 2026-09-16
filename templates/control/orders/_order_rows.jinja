@@ -19,7 +19,7 @@
   "partially_refunded": "bg-amber-100 text-amber-700",
 } %}
 {% for o in orders %}
-<tr class="hover:bg-slate-50">
+<tr {% if loop.first %}data-tour="order-row"{% endif %} class="hover:bg-slate-50">
   <td class="px-4 py-2">
     <a href="{{ url('control:order_detail', kwargs={'pk': o.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ o.number }}</a>
   </td>

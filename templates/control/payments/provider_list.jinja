@@ -7,7 +7,7 @@
     <h2 class="text-sm font-semibold text-slate-700">Payment providers · {{ active_project.name }}</h2>
     <div class="flex gap-2">
       <a href="{{ url('control:payment_reconcile') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Reconcile</a>
-      <a href="{{ url('control:payment_provider_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add provider</a>
+      <a data-tour="payment-add" href="{{ url('control:payment_provider_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add provider</a>
     </div>
   </div>
 

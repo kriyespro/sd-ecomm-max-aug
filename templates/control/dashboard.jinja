@@ -5,6 +5,8 @@
 {% block content %}
 <div class="space-y-6">
 
+  {% include "control/partials/_quick_launch.jinja" %}
+
   <div id="stats"
        hx-get="{{ url('control:stats_cards') }}"
        hx-trigger="every 30s"

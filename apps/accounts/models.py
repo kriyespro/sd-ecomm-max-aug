@@ -60,6 +60,10 @@ class Profile(TimeStampedModel):
     # brand-new self-serve owner into Easy explicitly.
     ui_mode = models.CharField(max_length=6, choices=UiMode.choices, default=UiMode.EXPERT)
 
+    # Master switch for the on-page guided tours (see apps.control.tours) —
+    # on by default for every role, one flip turns every tour off everywhere.
+    show_guides = models.BooleanField(default=True)
+
     def save(self, *args, **kwargs):
         from apps.media.services import shrink_image_field
 

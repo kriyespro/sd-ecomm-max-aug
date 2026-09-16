@@ -70,6 +70,7 @@
   {% endif %}
 
   {# ---- Logo field with crop ---- #}
+  <div data-tour="profile-logo">
   {{ image_crop_field(
        form.logo,
        form.instance.logo.url if form.instance.logo else '',
@@ -77,10 +78,16 @@
        ratio_choices=[('Free', 'NaN', 'free'), ('1:1', '1', '1'), ('16:9', '1.7777', '16-9'), ('3:1', '3', '3'), ('4:1', '4', '4')],
        help_text='PNG or SVG with a transparent background works best. Raster images open a cropper; the final logo is stored at up to 512 px.'
      ) }}
+  </div>
 
   {# ---- Remaining fields ---- #}
   {% for field in form.visible_fields() %}
-    {% if field.name != 'logo' %}{{ render_field(field) }}{% endif %}
+    {% if field.name == 'logo' %}
+    {% elif field.name == 'support_email' %}
+    <div data-tour="profile-contact">{{ render_field(field) }}</div>
+    {% else %}
+    {{ render_field(field) }}
+    {% endif %}
   {% endfor %}
   {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
 

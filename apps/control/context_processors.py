@@ -89,6 +89,14 @@ def control(request):
 
     profile = getattr(user, "profile", None)
     easy_mode = getattr(profile, "ui_mode", "expert") == "easy"
+    show_guides = getattr(profile, "show_guides", True)
+
+    tour_steps = None
+    if show_guides:
+        from .tours import tour_for
+
+        url_name = getattr(getattr(request, "resolver_match", None), "url_name", None)
+        tour_steps = tour_for(url_name)
 
     nav = build_nav(
         platform_staff=platform_staff,
@@ -134,6 +142,8 @@ def control(request):
         "control_store_role": role,
         "control_can_upload_skin": can_upload,
         "control_easy_mode": easy_mode,
+        "control_show_guides": show_guides,
+        "control_tour_steps": tour_steps,
         "control_demo_seeded": bool(
             can_manage and active and (active.feature_flags or {}).get("demo_seeded")
         ),
