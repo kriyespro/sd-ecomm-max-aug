@@ -87,6 +87,21 @@ def control(request):
     dgc_managed = bool(active and is_dgc_managed(active))
     can_manage_billing = platform_staff or (can_manage and not dgc_managed)
 
+    # Trial-ending nudge — only for the owner/manager who'd actually act on
+    # it (not a platform admin idly browsing stores, not a DGC-managed
+    # store's own team, who never see billing anyway).
+    trial_days_left = None
+    if active is not None and role in OWNER_MANAGER and not dgc_managed:
+        from apps.billing.models import SubscriptionStatus
+
+        sub = getattr(active, "subscription", None)
+        if sub and sub.status == SubscriptionStatus.TRIALING and sub.trial_end:
+            from django.utils import timezone
+
+            days = (sub.trial_end - timezone.now()).days
+            if 0 <= days <= 3:
+                trial_days_left = days
+
     profile = getattr(user, "profile", None)
     easy_mode = getattr(profile, "ui_mode", "expert") == "easy"
     show_guides = getattr(profile, "show_guides", True)
@@ -144,6 +159,7 @@ def control(request):
         "control_easy_mode": easy_mode,
         "control_show_guides": show_guides,
         "control_tour_steps": tour_steps,
+        "control_trial_days_left": trial_days_left,
         "control_demo_seeded": bool(
             can_manage and active and (active.feature_flags or {}).get("demo_seeded")
         ),

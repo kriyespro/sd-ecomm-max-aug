@@ -209,6 +209,19 @@
     </div>
     {% endif %}
 
+    {% if control_trial_days_left is not none %}
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
+      <span>
+        {% if control_trial_days_left == 0 %}Your trial ends today.
+        {% elif control_trial_days_left == 1 %}Your trial ends tomorrow.
+        {% else %}Your trial ends in {{ control_trial_days_left }} days.{% endif %}
+      </span>
+      <a href="{{ url('control:store_plan') }}" class="rounded bg-amber-900 px-2 py-1 text-xs font-medium text-white hover:bg-amber-800">
+        Upgrade now
+      </a>
+    </div>
+    {% endif %}
+
     {% if control_host_project %}
     <div class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
       <span>This domain is <strong>{{ control_host_project.name }}</strong>, but you're managing
