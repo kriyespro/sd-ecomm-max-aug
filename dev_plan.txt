@@ -146,7 +146,8 @@ PHASE 12 — INFRA / DEPLOY                                              [DONE]
 - Live: shopinaday.com / mnxstore.com, HTTPS via Cloudflare              [DONE]
 - Security hardening pass 2026-09 (payment fraud, webhook SSRF,
   login brute-force, host injection, open redirect — see dev.txt)       [DONE]
-- Note: 2FA for admins still not done
+- Note: 2FA for platform admins done 2026-09-16 (mandatory, TOTP+backup
+  codes, gated to /admin/) — see dev.txt
 
 ======================================================================
 POST-LAUNCH — FEATURE LOG (not phased, just running work)
