@@ -1,7 +1,8 @@
-"""Dashboard onboarding checklist — different per role, since an owner sets
-up a store, staff and a DGC don't. Owner/manager only shown in Easy mode
-(see apps.control.context_processors.control); staff/DGC always show theirs
-until they dismiss it (no setup actions to "complete" for those roles)."""
+"""Dashboard onboarding checklist — different per role. Owner and DGC both
+have real one-time setup and get tracked progress (checkmarks, N/M count).
+Staff has nothing to configure, so theirs stays a plain orientation list.
+Shown in Easy mode (see apps.control.context_processors.control) or once
+a user toggles into it — /admin/ui-mode/toggle/."""
 
 from django.urls import reverse
 
@@ -77,16 +78,29 @@ def staff_steps():
     ]
 
 
-def dgc_steps():
-    """A DGC manages other people's stores, not their own — orientation
-    toward the platform-wide tools, not a single store's setup."""
+def dgc_steps(user):
+    """A DGC manages other people's stores, not their own — but unlike
+    staff, they do have real one-time setup: a store to manage, a payout
+    UPI so commissions can actually be paid, and their own referral link.
+    Tracked, same as the owner list. (The old build pointed the third step
+    at control:affiliate_overview, which is PlatformAdminRequiredMixin —
+    a DGC who isn't also a superuser got a 403. That page is a superadmin
+    view of every DGC; a DGC's own link lives on their own earnings page,
+    control:my_commissions, same place the payout field is.)"""
+    from apps.billing.models import Subscription
+
+    profile = user.profile
+    manages_store = Subscription.objects.filter(manager=user).exists()
+    has_payout = bool(profile.payout_upi)
+    has_shared_link = bool(profile.affiliate_code)
+
     return [
-        {"label": "Add or pick a store to manage", "done": False,
+        {"label": "Add or pick a store to manage", "done": manages_store,
          "url": reverse("control:stores")},
-        {"label": "Check your commissions", "done": False,
+        {"label": "Set your payout UPI", "done": has_payout,
          "url": reverse("control:my_commissions")},
-        {"label": "Review your affiliate tools", "done": False,
-         "url": reverse("control:affiliate_overview")},
+        {"label": "Get your affiliate link", "done": has_shared_link,
+         "url": reverse("control:my_commissions")},
     ]
 
 

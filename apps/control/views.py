@@ -111,7 +111,8 @@ class DashboardView(ControlAccessMixin, TemplateView):
         if easy and is_platform_staff(self.request.user) and not is_platform_admin(self.request.user):
             from . import quick_launch
 
-            ctx["quick_launch"] = quick_launch.dgc_steps()
+            ctx["quick_launch"] = quick_launch.dgc_steps(self.request.user)
+            ctx["quick_launch_tracked"] = True
 
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)

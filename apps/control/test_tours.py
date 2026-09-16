@@ -134,8 +134,8 @@ class RoleChecklistTests(TestCase):
         s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         s.save()
         resp = self.client.get("/admin/")
-        self.assertContains(resp, "Get oriented")
-        self.assertContains(resp, "Check your commissions")
+        self.assertContains(resp, "Quick launch checklist")
+        self.assertContains(resp, "Set your payout UPI")
 
     def test_no_checklist_in_expert_mode(self):
         owner = User.objects.create_user("o3", "o3@t.test", "pw", is_staff=True)
