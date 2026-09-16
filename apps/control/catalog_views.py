@@ -22,7 +22,7 @@ from django.views.generic import (
 )
 
 from apps.catalog import importer as product_importer
-from apps.catalog.models import Brand, Product, ProductImage, ProductType, Tag
+from apps.catalog.models import Brand, Product, ProductImage, ProductStatus, ProductType, Tag
 from apps.categories.models import Category
 from apps.core.events import Events, emit
 from apps.core.models import AuditLog
@@ -274,6 +274,41 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         return ctx
 
 
+class ProductBulkStatusView(_ScopedQuerysetMixin, View):
+    """Bulk activate/deactivate/archive from the product list — was
+    edit-one-at-a-time only. One audit-log entry for the whole batch, not
+    one per row. Uses a bulk .update() (no per-row Events.PRODUCT_UPDATED
+    webhook fan-out) — Product has no other save()-time side effects to
+    replicate; a merchant's webhook integration won't see individual
+    events for a bulk change, only the audit trail."""
+
+    http_method_names = ["post"]
+    model = Product
+    _ACTIONS = {
+        "activate": ProductStatus.ACTIVE,
+        "deactivate": ProductStatus.DRAFT,
+        "archive": ProductStatus.ARCHIVED,
+    }
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action", "")
+        new_status = self._ACTIONS.get(action)
+        pks = request.POST.getlist("pks")
+        if new_status is None or not pks:
+            messages.error(request, "Pick at least one product and an action.")
+            return redirect("control:product_list")
+
+        qs = self.get_queryset().filter(pk__in=pks)
+        count = qs.update(status=new_status)
+        record_audit(
+            actor=request.user, project=self.active_project, action=AuditLog.Action.UPDATE,
+            target=None, changes={"bulk_status": new_status, "count": count, "pks": pks},
+            request=request,
+        )
+        messages.success(request, f"{count} product(s) set to {new_status}.")
+        return redirect("control:product_list")
+
+
 class _ProductSizeColorMixin:
     """Apparel stores (see ``apps.projects.verticals``) get the Size & Colour
     quick builder on the product form. On save the two comma lists + per-combo
@@ -413,6 +448,21 @@ class ProductImportView(ActiveProjectMixin, View):
         return redirect("control:product_list")
 
 
+def _attach_product_images(product, files, *, alt=""):
+    """Shared by the create form's own file input and the AJAX uploader on
+    the edit screen — same ProductImage.objects.create() either way, so
+    the post_save optimize-to-WebP signal (apps.catalog.signals) fires
+    the same for both."""
+    start = product.images.order_by("-order").values_list("order", flat=True).first() or 0
+    has_primary = product.images.filter(is_primary=True).exists()
+    for i, f in enumerate(files):
+        ProductImage.objects.create(
+            product=product, image=f, alt=alt,
+            order=start + i + 1, is_primary=(not has_primary and i == 0),
+        )
+    return len(files)
+
+
 class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
     model = Product
     form_class = ProductForm
@@ -422,6 +472,17 @@ class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
         from apps.billing import limits
         limits.check_can_add_product(self.active_project)
         return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        # Was a hard requirement to save first, reload, then attach images
+        # on a second screen — the create form is already multipart, so a
+        # file field here lets a merchant do both in the one Save.
+        response = super().form_valid(form)
+        files = self.request.FILES.getlist("images")
+        if files:
+            count = _attach_product_images(self.object, files)
+            messages.success(self.request, f"Added {count} image(s).")
+        return response
 
     def get_success_url(self):
         return reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
@@ -471,13 +532,7 @@ class ProductImageUploadView(_ProductImageBase):
     def post(self, request, *args, **kwargs):
         product = self.get_product()
         files = request.FILES.getlist("images")
-        start = product.images.order_by("-order").values_list("order", flat=True).first() or 0
-        has_primary = product.images.filter(is_primary=True).exists()
-        for i, f in enumerate(files):
-            ProductImage.objects.create(
-                product=product, image=f, alt=request.POST.get("alt", "").strip(),
-                order=start + i + 1, is_primary=(not has_primary and i == 0),
-            )
+        _attach_product_images(product, files, alt=request.POST.get("alt", "").strip())
         if files:
             record_audit(actor=request.user, project=self.active_project,
                          action=AuditLog.Action.UPDATE, target=product,

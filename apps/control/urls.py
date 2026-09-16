@@ -113,6 +113,7 @@ urlpatterns = [
 
     # Products
     path("products/", cat.ProductListView.as_view(), name="product_list"),
+    path("products/bulk-status/", cat.ProductBulkStatusView.as_view(), name="product_bulk_status"),
     path("products/import/", cat.ProductImportView.as_view(), name="product_import"),
     path("products/import/sample.csv", cat.ProductImportSampleView.as_view(), name="product_import_sample"),
     path("products/new/", cat.ProductCreateView.as_view(), name="product_create"),
@@ -183,6 +184,7 @@ urlpatterns = [
 
     # Shipping — per order
     path("orders/<int:pk>/shipping/set/", shipv.OrderSetShippingView.as_view(), name="order_shipping_set"),
+    path("orders/<int:pk>/shipping/set-and-ship/", shipv.OrderSetShippingAndShipView.as_view(), name="order_shipping_set_and_ship"),
     path("orders/<int:pk>/shipping/ship/", shipv.OrderCreateShipmentView.as_view(), name="order_shipment_create"),
     path("orders/<int:pk>/shipping/<int:shipment_pk>/status/", shipv.ShipmentStatusView.as_view(), name="order_shipment_status"),
 

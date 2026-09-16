@@ -54,13 +54,47 @@
     </a>
     {% if show_trash %}<span class="ml-auto text-slate-400">Items are deleted for good {{ trash_retention_days }} days after trashing.</span>{% endif %}
   </div>
+  {% if not show_trash %}
+  <form id="bulk-status-form" method="post" action="{{ url('control:product_bulk_status') }}"
+        class="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2 text-xs">
+    {{ csrf_input }}
+    <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
+    <button name="action" value="activate" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Activate</button>
+    <button name="action" value="deactivate" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Deactivate</button>
+    <button name="action" value="archive" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Archive</button>
+  </form>
+  {% endif %}
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-      <tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">SKU</th><th class="px-4 py-2">Price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Category</th><th class="px-4 py-2">Home page</th><th class="px-4 py-2 text-right">Actions</th></tr>
+      <tr>
+        <th class="px-4 py-2 w-8">
+          {% if not show_trash %}<input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300">{% endif %}
+        </th>
+        <th class="px-4 py-2">Title</th><th class="px-4 py-2">SKU</th><th class="px-4 py-2">Price</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Category</th><th class="px-4 py-2">Home page</th><th class="px-4 py-2 text-right">Actions</th></tr>
     </thead>
     <tbody id="product-rows" class="divide-y divide-slate-100">
       {% include "control/catalog/_product_rows.jinja" %}
     </tbody>
   </table></div>
 </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var container = document.querySelector(".rounded-xl.bg-white.ring-1.ring-slate-200");
+    if (!container) return;
+    var selectAll = document.getElementById("bulk-select-all");
+    var countEl = document.getElementById("bulk-selected-count");
+    function updateCount() {
+      if (countEl) countEl.textContent = document.querySelectorAll(".bulk-row-check:checked").length + " selected";
+    }
+    container.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        document.querySelectorAll(".bulk-row-check").forEach(function (cb) { cb.checked = selectAll.checked; });
+      }
+      if (e.target.classList && e.target.classList.contains("bulk-row-check")) updateCount();
+      if (e.target === selectAll) updateCount();
+    });
+    document.body.addEventListener("htmx:afterSwap", updateCount);
+    updateCount();
+  });
+</script>
 {% endblock %}
