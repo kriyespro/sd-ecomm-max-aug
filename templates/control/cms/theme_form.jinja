@@ -8,7 +8,7 @@
     {{ csrf_input }}
     <h2 class="text-sm font-semibold text-slate-700">Theme · {{ active_project.name }}</h2>
     <p class="text-xs text-slate-400">Consumed by the storefront at <code>/store/config/</code>.</p>
-    {{ render_form(form) }}
+    <div data-tour="theme-colors">{{ render_form(form) }}</div>
 
     {% if title_fields %}
     <div class="border-t border-slate-100 pt-4">
@@ -30,7 +30,7 @@
   </form>
 
   {% if section_order %}
-  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  <div data-tour="theme-section-order" class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
     <h2 class="text-sm font-semibold text-slate-700">Homepage section order</h2>
     <p class="mt-1 text-xs text-slate-400">
       Move sections up or down to change what order they show on the home page. Hero (top banner) and the

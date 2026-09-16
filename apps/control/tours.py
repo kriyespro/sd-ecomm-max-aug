@@ -53,6 +53,29 @@ TOURS = {
          "text": "Click any row for the full order — items, address, "
                  "payment and fulfilment actions."},
     ],
+    "coupon_list": [
+        {"target": "coupon-new", "title": "Create a coupon",
+         "text": "Percent off, a flat amount, or free shipping — set a code "
+                 "customers type at checkout."},
+    ],
+    "domains": [
+        {"target": "domain-add", "title": "Connect your own domain",
+         "text": "Paste a hostname you own — you'll get DNS records to add "
+                 "at your registrar, then verify."},
+    ],
+    "team": [
+        {"target": "team-add", "title": "Add a team member",
+         "text": "Enter their email and pick a role — they get a one-time "
+                 "password to sign in with."},
+    ],
+    "cms_theme": [
+        {"target": "theme-colors", "title": "Your brand colours",
+         "text": "These drive every button, link and accent across your "
+                 "storefront — no code required."},
+        {"target": "theme-section-order", "title": "Reorder your home page",
+         "text": "Move sections up or down to change what shoppers see "
+                 "first."},
+    ],
     "stores": [
         {"target": "stores-add", "title": "Add a store",
          "text": "Set up a new store for a client — you become its DGC "

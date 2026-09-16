@@ -5,7 +5,7 @@
 <div class="rounded-xl bg-white ring-1 ring-slate-200">
   <div class="flex items-center justify-between border-b border-slate-200 p-4">
     <h2 class="text-sm font-semibold text-slate-700">Coupons · {{ active_project.name }}</h2>
-    <a href="{{ url('control:coupon_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New coupon</a>
+    <a data-tour="coupon-new" href="{{ url('control:coupon_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New coupon</a>
   </div>
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">

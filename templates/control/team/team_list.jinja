@@ -49,7 +49,7 @@
     {% endfor %}
   </div>
 
-  <form method="post" action="{{ url('control:team_add') }}"
+  <form data-tour="team-add" method="post" action="{{ url('control:team_add') }}"
         class="flex flex-wrap gap-2 rounded-xl bg-white p-4 ring-1 ring-slate-200">
     {{ csrf_input }}
     <input name="name" type="text" placeholder="Full name (optional)"

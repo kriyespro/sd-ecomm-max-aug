@@ -17,7 +17,8 @@ User = get_user_model()
 class TourRegistryTests(TestCase):
     def test_known_pages_have_tours(self):
         for name in ("dashboard", "product_list", "cms_store_profile",
-                    "payment_providers", "shipping_zones", "order_list", "stores"):
+                    "payment_providers", "shipping_zones", "order_list", "stores",
+                    "coupon_list", "domains", "team", "cms_theme"):
             self.assertTrue(tour_for(name), name)
 
     def test_unknown_page_has_no_tour(self):
@@ -50,6 +51,17 @@ class TourRenderingTests(TestCase):
     def test_no_tour_markup_on_a_page_without_one(self):
         resp = self.client.get("/admin/inventory/")
         self.assertNotContains(resp, "pageTour(")
+
+    def test_newly_extended_tours_render(self):
+        for path, target in [
+            ("/admin/coupons/", "coupon-new"),
+            ("/admin/domains/", "domain-add"),
+            ("/admin/team/", "team-add"),
+            ("/admin/cms/theme/", "theme-colors"),
+        ]:
+            resp = self.client.get(path)
+            self.assertContains(resp, "pageTour(", msg_prefix=path)
+            self.assertContains(resp, f'data-tour="{target}"', msg_prefix=path)
 
     def test_master_switch_off_suppresses_every_tour(self):
         Profile.objects.filter(user=self.owner).update(show_guides=False)
