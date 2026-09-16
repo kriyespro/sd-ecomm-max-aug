@@ -14,7 +14,7 @@ from django.views.generic import FormView, View
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.cms.models import StoreProfile
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import record_audit, safe_next
 from apps.projects import subdomains
 from apps.projects.verticals import VERTICALS, vertical_of
 
@@ -175,4 +175,4 @@ class OnboardingSkipView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
         p.feature_flags = flags
         p.save(update_fields=["feature_flags"])
         messages.info(request, "Setup skipped. Finish it anytime from Store profile.")
-        return redirect(request.POST.get("next") or reverse("control:product_list"))
+        return redirect(safe_next(request, request.POST.get("next"), reverse("control:product_list")))

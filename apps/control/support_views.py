@@ -22,7 +22,7 @@ from apps.accounts.models import PlatformRole
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.mixins import PlatformAdminRequiredMixin
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import record_audit, safe_next
 from apps.support import services as support_svc
 from apps.support.models import (
     ReporterRole,
@@ -176,8 +176,7 @@ class SupportVoteView(_SupportBase, View):
     def post(self, request, pk):
         ticket = get_object_or_404(Ticket, pk=pk, kind=TicketKind.FEATURE_REQUEST)
         support_svc.toggle_vote(ticket, request.user)
-        nxt = request.POST.get("next")
-        return redirect(nxt or "control:support")
+        return redirect(safe_next(request, request.POST.get("next"), "control:support"))
 
 
 # --------------------------------------------------------------- admin queue

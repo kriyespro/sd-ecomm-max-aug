@@ -33,7 +33,7 @@ from apps.cms.models import (
 )
 from apps.categories.models import Category
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import record_audit, safe_next
 
 from .forms import (
     BannerForm,
@@ -757,7 +757,7 @@ class DemoContentRemoveView(ActiveProjectMixin, View):
                          action=AuditLog.Action.DELETE, target=self.active_project,
                          changes={"demo_content": "removed"}, request=request)
             messages.success(request, "Demo content removed.")
-        return redirect(request.POST.get("next") or "control:product_list")
+        return redirect(safe_next(request, request.POST.get("next"), "control:product_list"))
 
 
 class DemoContentImportView(ActiveProjectMixin, View):
@@ -771,7 +771,7 @@ class DemoContentImportView(ActiveProjectMixin, View):
 
         if (request.POST.get("confirm") or "").strip() != "DELETE":
             messages.error(request, 'Type DELETE to confirm — nothing was changed.')
-            return redirect(request.POST.get("next") or "control:cms_store_profile")
+            return redirect(safe_next(request, request.POST.get("next"), "control:cms_store_profile"))
 
         counts = reset_and_seed(self.active_project)
         record_audit(actor=request.user, project=self.active_project,

@@ -28,6 +28,7 @@ from apps.catalog.variants import storefront_axes as variant_axes
 from apps.categories.models import Category
 from apps.checkout import services as checkout_svc
 from apps.cms.models import Page
+from apps.core.services import safe_next
 from apps.coupons import services as coupons_svc
 from apps.customers import services as customers_svc
 from apps.orders.models import Order
@@ -716,7 +717,7 @@ class LoginView(View):
         email = request.POST.get("email", "").strip()
         if login_ratelimit.is_locked(request, email):
             messages.error(request, login_ratelimit.LOCK_MESSAGE)
-            return redirect(request.POST.get("next") or "shopfront:account")
+            return redirect(safe_next(request, request.POST.get("next"), "shopfront:account"))
         project = current_project(request)
         candidate = _resolve_storefront_user(email, project)
         username = candidate.username if candidate is not None else email
@@ -732,7 +733,7 @@ class LoginView(View):
                 project=project, user=user, session_key=session_key,
             )
             messages.success(request, "Signed in.")
-        return redirect(request.POST.get("next") or "shopfront:account")
+        return redirect(safe_next(request, request.POST.get("next"), "shopfront:account"))
 
 
 class RegisterView(View):

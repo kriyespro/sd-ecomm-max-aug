@@ -16,6 +16,7 @@ from apps.catalog.models import Product, Variant
 from apps.categories.models import Category
 from apps.checkout import services as checkout_svc
 from apps.cms.models import Page
+from apps.core.services import safe_next
 from apps.orders.models import Order
 from apps.reviews import services as reviews_svc
 from apps.reviews.models import ReviewStatus
@@ -118,7 +119,7 @@ class CartAddView(View):
         qty = max(1, int(request.POST.get("quantity") or 1))
         cart_svc.add_to_cart(cart=cart, product=product, variant=variant, quantity=qty)
         messages.success(request, f"Added {product.title} to your cart.")
-        return redirect(request.POST.get("next") or "storefront:cart")
+        return redirect(safe_next(request, request.POST.get("next"), "storefront:cart"))
 
 
 class CartUpdateView(View):

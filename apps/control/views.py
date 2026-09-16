@@ -20,6 +20,7 @@ from apps.accounts.permissions import (
     is_platform_staff,
 )
 from apps.core.mixins import ControlAccessMixin, PlatformAdminRequiredMixin
+from apps.core.services import safe_next
 from apps.projects.services import projects_for_user
 
 from . import services
@@ -42,7 +43,7 @@ class UiModeToggleView(ControlAccessMixin, View):
         )
         profile.save(update_fields=["ui_mode", "updated_at"])
         nxt = request.POST.get("next") or request.META.get("HTTP_REFERER")
-        return redirect(nxt or "control:dashboard")
+        return redirect(safe_next(request, nxt, "control:dashboard"))
 
 
 class GuideToggleView(ControlAccessMixin, View):
@@ -56,7 +57,7 @@ class GuideToggleView(ControlAccessMixin, View):
         profile.show_guides = not profile.show_guides
         profile.save(update_fields=["show_guides", "updated_at"])
         nxt = request.POST.get("next") or request.META.get("HTTP_REFERER")
-        return redirect(nxt or "control:dashboard")
+        return redirect(safe_next(request, nxt, "control:dashboard"))
 
 
 class DashboardView(ControlAccessMixin, TemplateView):
@@ -243,7 +244,7 @@ class SetProjectView(ControlAccessMixin, View):
         if target is None:
             return HttpResponseBadRequest("Not an accessible project.")
         request.session[ACTIVE_PROJECT_SESSION_KEY] = target.pk
-        return redirect(request.POST.get("next") or "control:product_list")
+        return redirect(safe_next(request, request.POST.get("next"), "control:product_list"))
 
 
 class LeaveStoreView(ControlAccessMixin, View):

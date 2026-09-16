@@ -8,13 +8,13 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.generic import DetailView, FormView, ListView, View
 
 from apps.accounts.models import PlatformRole, StoreRole
 from apps.accounts.permissions import is_platform_admin
 from apps.billing.models import BillingPeriod, Plan, SubscriptionStatus
 from apps.core.mixins import PlatformStaffRequiredMixin
+from apps.core.services import safe_next
 from apps.projects import subdomains
 from apps.projects.models import Project
 from apps.projects.services import projects_for_user
@@ -342,12 +342,10 @@ class StoreOwnerTransferView(_StoreScope, View):
         else:
             note = f" — one-time password {temp_password}" if temp_password else ""
             messages.success(request, f"{new_owner.email} is now the owner of {store.name}{note}.")
-        next_url = request.POST.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-        ):
-            return redirect(next_url)
-        return redirect("control:store_detail", pk=pk)
+        return redirect(safe_next(
+            request, request.POST.get("next"),
+            reverse("control:store_detail", kwargs={"pk": pk}),
+        ))
 
 
 class StoreManagerAssignView(_StoreScope, View):
@@ -366,12 +364,10 @@ class StoreManagerAssignView(_StoreScope, View):
                 messages.success(request, f"Manager updated for {store.name}.")
         else:
             messages.error(request, "Pick a valid DGC account.")
-        next_url = request.POST.get("next")
-        if next_url and url_has_allowed_host_and_scheme(
-            next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-        ):
-            return redirect(next_url)
-        return redirect("control:store_detail", pk=pk)
+        return redirect(safe_next(
+            request, request.POST.get("next"),
+            reverse("control:store_detail", kwargs={"pk": pk}),
+        ))
 
 
 class StoreMemberAddView(_StoreScope, View):
@@ -446,7 +442,7 @@ class StoreSwitchView(_StoreScope, View):
         store = self.get_store(pk)
         request.session[ACTIVE_PROJECT_SESSION_KEY] = store.pk
         messages.info(request, f"Now working on {store.name}.")
-        return redirect(request.POST.get("next") or "control:dashboard")
+        return redirect(safe_next(request, request.POST.get("next"), "control:dashboard"))
 
 
 class StoreBackupView(_StoreScope, View):

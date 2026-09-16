@@ -10,12 +10,13 @@ from django.contrib import messages
 from django.db.models import Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
+from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import DetailView, ListView, View
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import record_audit, safe_next
 from apps.orders import services as orders
 from apps.orders.models import Order, OrderStatus, PaymentStatus
 
@@ -105,7 +106,7 @@ class OrderArchiveView(_OrderManageMixin, View):
                          action=AuditLog.Action.UPDATE, target=order,
                          changes={"archived": True}, request=request)
         messages.success(request, f"Order {order.number} archived.")
-        return redirect(request.POST.get("next") or "control:order_list")
+        return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
 
 
 class OrderUnarchiveView(_OrderManageMixin, View):
@@ -116,8 +117,10 @@ class OrderUnarchiveView(_OrderManageMixin, View):
             order.archived_at = None
             order.save(update_fields=["is_archived", "archived_at", "updated_at"])
         messages.success(request, f"Order {order.number} restored to the active list.")
-        nxt = request.POST.get("next")
-        return redirect(nxt) if nxt else redirect("control:order_detail", pk=order.pk)
+        return redirect(safe_next(
+            request, request.POST.get("next"),
+            reverse("control:order_detail", kwargs={"pk": order.pk}),
+        ))
 
 
 _EXPORT_COLUMNS = [
