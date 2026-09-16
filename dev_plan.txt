@@ -140,7 +140,24 @@ PHASE 11 — NOTIFICATIONS + WEBHOOKS + MEDIA + ANALYTICS + REPORTS        [DONE
   traffic (retry_due() is the worker entrypoint); Excel/PDF export deferred
 
 ======================================================================
-PHASE 12 — INFRA / DEPLOY
+PHASE 12 — INFRA / DEPLOY                                              [DONE]
 ======================================================================
-- Docker, Nginx, Postgres, Redis, Celery worker + beat, object storage
-- 2FA for admins, security hardening pass
+- Docker stack, Nginx, Postgres, Redis, Celery worker+beat, pg backups   [DONE]
+- Live: shopinaday.com / mnxstore.com, HTTPS via Cloudflare              [DONE]
+- Security hardening pass 2026-09 (payment fraud, webhook SSRF,
+  login brute-force, host injection, open redirect — see dev.txt)       [DONE]
+- Note: 2FA for admins still not done
+
+======================================================================
+POST-LAUNCH — FEATURE LOG (not phased, just running work)
+======================================================================
+See dev.txt for the full list — 30+ features shipped since Phase 12:
+billing/plans, B2B marketplace, product import, order archive+trash,
+store backup/restore, Razorpay checkout, DGC fixes, main menu, Meta
+pixel, WhatsApp, SEO, social auto-share, certificates, learning videos,
+today dashboard, AI product copy (on hold), botanica3 skin, support
+tickets, hero video banners, Easy/Expert mode, guided tours + onboarding
+checklist, security hardening rounds.
+
+Entries below this point are terse (caveman-short) — one line per done
+item, no verbose walkthroughs. Match that format going forward.
