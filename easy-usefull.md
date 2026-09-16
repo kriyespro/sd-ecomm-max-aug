@@ -37,9 +37,12 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 - [x] Extend guided-tour coverage — done 2026-09-16 (2770c9b). Coupons,
       Domains, Team, Theme — 11 tours total now.
-- [ ] [MODERATE] Onboarding wizard is owner/manager only, one-time. Staff
-      and DGC get a checklist now (this session) but never a wizard —
-      low priority, checklist already covers it reasonably.
+- [x] Onboarding wizard extension — done 2026-09-16 (b4d3dec). Staff
+      genuinely has nothing to configure, left as-is. DGC's checklist now
+      tracks real progress (store managed, payout UPI, affiliate link) —
+      was hardcoded to always-incomplete. Found + fixed a real dead end
+      along the way: the checklist's third step linked to a superuser-only
+      page, 403ing any plain DGC who followed their own checklist.
 
 ## FAST
 
