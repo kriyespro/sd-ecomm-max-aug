@@ -32,6 +32,15 @@
       {% include "control/catalog/_size_color.jinja" %}
     {% endif %}
 
+    {% if not object %}
+    <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+      <label for="id_images" class="block text-sm font-medium text-slate-700">Images</label>
+      <input type="file" id="id_images" name="images" multiple accept="image/*"
+             class="mt-1 block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200">
+      <p class="mt-1 text-xs text-slate-400">Optional — attach photos now, or add them after saving.</p>
+    </div>
+    {% endif %}
+
     <p class="text-xs text-slate-400">
       Type, brand, category and tags are optional. Manage them under
       <a href="{{ url('control:product_type_list') }}" class="underline">Types</a>,
@@ -50,10 +59,6 @@
 
   {% if object %}
   {% include "control/catalog/_product_images.jinja" %}
-  {% else %}
-  <div class="rounded-xl bg-white p-6 text-sm text-slate-500 ring-1 ring-slate-200">
-    Save the product first — then you can upload images here.
-  </div>
   {% endif %}
 </div>
 
