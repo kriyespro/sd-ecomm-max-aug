@@ -36,7 +36,7 @@ from apps.inventory.models import InventoryItem, Warehouse
 from apps.notifications.models import NotificationSettings, NotificationTemplate
 from apps.payments.models import PaymentProviderConfig
 from apps.seo.models import Redirect, SeoMeta, SeoSettings
-from apps.shipping.models import ShippingMethod, ShippingZone
+from apps.shipping.models import CourierConfig, ShippingMethod, ShippingZone
 from apps.webhooks.models import WebhookEndpoint
 
 TEXT = "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
@@ -323,6 +323,94 @@ class PaymentProviderForm(ProjectScopedForm):
         new_secret = (self.cleaned_data.get("key_secret") or "").strip()
         if new_secret:
             creds["key_secret"] = new_secret
+        obj.credentials = creds
+        if commit:
+            obj.save()
+        return obj
+
+
+class CourierConfigForm(ProjectScopedForm):
+    """Courier API credentials, same convention as PaymentProviderForm: raw
+    keys live in the model's ``credentials`` JSON, exposed here as plain
+    fields and packed/unpacked. Shiprocket needs email+password, Delhivery
+    needs a single API token — both share a pickup_location field."""
+
+    email = forms.CharField(
+        required=False, label="Account email",
+        widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false"}),
+        help_text="Shiprocket: the email you log into shiprocket.in with.",
+    )
+    password = forms.CharField(
+        required=False, label="Account password", strip=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        help_text="Shiprocket: your account password (used to fetch an API token).",
+    )
+    api_token = forms.CharField(
+        required=False, label="API token", strip=False,
+        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        help_text="Delhivery: the API token from your Delhivery partner dashboard.",
+    )
+    pickup_location = forms.CharField(
+        required=False, label="Pickup location name",
+        widget=forms.TextInput(attrs={"autocomplete": "off"}),
+        help_text="Must match a pickup location already registered with the courier. Defaults to \"Primary\".",
+    )
+
+    class Meta:
+        model = CourierConfig
+        fields = ["courier", "is_enabled", "is_test_mode"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # courier is fixed once created (it's half of the unique key).
+        if self.instance.pk:
+            self.fields["courier"].disabled = True
+        creds = self.instance.credentials or {}
+        self.fields["email"].initial = creds.get("email", "")
+        self.fields["pickup_location"].initial = creds.get("pickup_location", "")
+        # password / api_token are never echoed back — a blank field on save
+        # means "keep the current one" (see save(), below).
+        self._has_password = bool(creds.get("password"))
+        self._has_token = bool(creds.get("api_token"))
+        if self._has_password:
+            self.fields["password"].help_text = "A password is already saved. Leave blank to keep it."
+        if self._has_token:
+            self.fields["api_token"].help_text = "A token is already saved. Leave blank to keep it."
+
+    def clean(self):
+        cleaned = super().clean()
+        courier = cleaned.get("courier")
+        if courier and not self.instance.pk and self.project is not None:
+            dup = CourierConfig.objects.filter(project=self.project, courier=courier).exists()
+            if dup:
+                self.add_error(
+                    "courier",
+                    "This courier is already set up. Edit the existing entry instead.",
+                )
+        if cleaned.get("is_enabled"):
+            if courier == "shiprocket" and not (
+                cleaned.get("email") and (cleaned.get("password") or self._has_password)
+            ):
+                self.add_error("is_enabled", "Add the account email and password before enabling Shiprocket.")
+            if courier == "delhivery" and not (cleaned.get("api_token") or self._has_token):
+                self.add_error("is_enabled", "Add the API token before enabling Delhivery.")
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        creds = dict(obj.credentials or {})
+        creds["email"] = (self.cleaned_data.get("email") or "").strip() or None
+        if creds["email"] is None:
+            creds.pop("email", None)
+        creds["pickup_location"] = (self.cleaned_data.get("pickup_location") or "").strip() or None
+        if creds["pickup_location"] is None:
+            creds.pop("pickup_location", None)
+        new_password = (self.cleaned_data.get("password") or "").strip()
+        if new_password:
+            creds["password"] = new_password
+        new_token = (self.cleaned_data.get("api_token") or "").strip()
+        if new_token:
+            creds["api_token"] = new_token
         obj.credentials = creds
         if commit:
             obj.save()

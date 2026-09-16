@@ -9,14 +9,15 @@ from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView, View
 
+from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.orders.models import Order
 from apps.shipping import services as ship
-from apps.shipping.models import Shipment, ShippingMethod, ShippingZone
+from apps.shipping.models import CourierConfig, Shipment, ShippingMethod, ShippingZone
 
-from .forms import ShippingMethodForm, ShippingZoneForm
-from .mixins import ActiveProjectMixin
+from .forms import CourierConfigForm, ShippingMethodForm, ShippingZoneForm
+from .mixins import ActiveProjectMixin, StoreDataAccessMixin
 
 
 class _ScopedForm(ActiveProjectMixin):
@@ -96,6 +97,57 @@ class MethodDeleteView(ActiveProjectMixin, DeleteView):
 
     def get_queryset(self):
         return ShippingMethod.objects.filter(project=self.active_project)
+
+
+# --- courier credentials ----------------------------------------
+
+class _CourierAdminMixin(StoreDataAccessMixin, StoreRoleRequiredMixin):
+    """Owner/manager (or platform admin) only — same gate as payment
+    credentials, since these are API keys with money-moving consequences
+    (booking real shipments)."""
+
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage courier settings."
+
+
+class CourierConfigListView(_CourierAdminMixin, ActiveProjectMixin, ListView):
+    template_name = "control/shipping/courier_list.jinja"
+    context_object_name = "configs"
+
+    def get_queryset(self):
+        return CourierConfig.objects.filter(project=self.active_project)
+
+
+class _CourierConfigForm(_CourierAdminMixin, ActiveProjectMixin):
+    form_class = CourierConfigForm
+    template_name = "control/shipping/courier_form.jinja"
+    success_url = reverse_lazy("control:courier_configs")
+
+    def get_queryset(self):
+        return CourierConfig.objects.filter(project=self.active_project)
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs["project"] = self.active_project
+        return kwargs
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        record_audit(
+            actor=self.request.user, project=self.active_project,
+            action=AuditLog.Action.CREATE if isinstance(self, CreateView) else AuditLog.Action.UPDATE,
+            target=self.object, request=self.request,
+        )
+        messages.success(self.request, "Courier settings saved.")
+        return response
+
+
+class CourierConfigCreateView(_CourierConfigForm, CreateView):
+    pass
+
+
+class CourierConfigUpdateView(_CourierConfigForm, UpdateView):
+    pass
 
 
 # --- per-order actions ---------------------------------------

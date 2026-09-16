@@ -176,6 +176,9 @@ urlpatterns = [
     path("shipping/methods/new/", shipv.MethodCreateView.as_view(), name="shipping_method_create"),
     path("shipping/methods/<int:pk>/", shipv.MethodUpdateView.as_view(), name="shipping_method_edit"),
     path("shipping/methods/<int:pk>/delete/", shipv.MethodDeleteView.as_view(), name="shipping_method_delete"),
+    path("shipping/couriers/", shipv.CourierConfigListView.as_view(), name="courier_configs"),
+    path("shipping/couriers/new/", shipv.CourierConfigCreateView.as_view(), name="courier_config_create"),
+    path("shipping/couriers/<int:pk>/", shipv.CourierConfigUpdateView.as_view(), name="courier_config_edit"),
 
     # Shipping — per order
     path("orders/<int:pk>/shipping/set/", shipv.OrderSetShippingView.as_view(), name="order_shipping_set"),

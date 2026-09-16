@@ -17,7 +17,9 @@ from apps.core.services import record_audit
 from apps.orders import services as orders
 
 from .couriers import get_courier_class
+from .couriers.base import CourierError
 from .models import (
+    CourierConfig,
     Shipment,
     ShipmentEvent,
     ShipmentItem,
@@ -150,12 +152,21 @@ def create_shipment(*, order, method=None, carrier="", tracking_number="",
             if oi.quantity > 0:
                 ShipmentItem.objects.create(shipment=shipment, order_item=oi, quantity=oi.quantity)
 
-    courier = get_courier_class(carrier)()
+    courier_config = CourierConfig.objects.filter(project=order.project, courier=carrier).first()
+    courier = get_courier_class(carrier)(courier_config)
     if courier.integrated:
-        result = courier.create_shipment(shipment)
-        shipment.tracking_number = result.get("tracking_number", "") or shipment.tracking_number
-        shipment.tracking_url = result.get("tracking_url", "") or shipment.tracking_url
-        shipment.label_url = result.get("label_url", "") or shipment.label_url
+        try:
+            result = courier.create_shipment(shipment)
+        except CourierError as exc:
+            # Booking failed at the courier (bad/missing creds, their API
+            # down, etc). Don't let it roll back the shipment we already
+            # created — fall back to a manual/pending shipment the admin can
+            # retry or book by hand, and leave a visible trail of why.
+            shipment.notes = f"Courier booking failed: {exc}"[:255]
+        else:
+            shipment.tracking_number = result.get("tracking_number", "") or shipment.tracking_number
+            shipment.tracking_url = result.get("tracking_url", "") or shipment.tracking_url
+            shipment.label_url = result.get("label_url", "") or shipment.label_url
 
     if method and (method.min_days or method.max_days):
         shipment.estimated_delivery = (timezone.now() + timedelta(days=method.max_days or method.min_days)).date()

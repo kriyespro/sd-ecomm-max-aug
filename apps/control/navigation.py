@@ -75,6 +75,7 @@ _SECTIONS = [
     ]),
     ("settings", "Settings", "⚙", [
         ("shipping_zones", "Shipping", "\U0001f69a"),
+        ("courier_configs", "Courier accounts", "\U0001f4e6"),
         ("webhooks", "Webhooks", "\U0001f517"),
         ("whatsapp", "WhatsApp", "\U0001f4ac"),
         # AI on hold — nav entry pulled, see product_form.jinja too. Re-add
@@ -101,7 +102,7 @@ _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
-_STORE_MANAGE_ONLY = {"payment_providers", "domains", "team", "onboarding", "tracking",
+_STORE_MANAGE_ONLY = {"payment_providers", "courier_configs", "domains", "team", "onboarding", "tracking",
                       "whatsapp", "social", "ai_keys", "support"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
@@ -112,6 +113,7 @@ _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
 # item needing both must appear in both sets or the nav shows a dead link a
 # commission-only DGC gets 403'd on.
 _STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_providers",
+                    "courier_configs",
                     "owner_backup", "b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}

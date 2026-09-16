@@ -28,6 +28,40 @@ def _norm(value):
     return str(value or "").strip().lower()
 
 
+class Courier(models.TextChoices):
+    MANUAL = "manual", "Manual / offline"
+    SHIPROCKET = "shiprocket", "Shiprocket"
+    DELHIVERY = "delhivery", "Delhivery"
+
+
+class CourierConfig(TenantScopedModel):
+    """Per-store courier API credentials — the site owner's own account, set
+    from Mission Control. Mirrors apps.payments.PaymentProviderConfig
+    exactly: raw keys live in ``credentials`` (packed by the control form,
+    never echoed back to the browser once set)."""
+
+    courier = models.CharField(max_length=20, choices=Courier.choices)
+    is_enabled = models.BooleanField(default=False)
+    is_test_mode = models.BooleanField(
+        default=True,
+        help_text="Test mode uses synthetic tracking numbers — no real API "
+                  "call, nothing gets booked at the courier. Turn off once "
+                  "your credentials are live and verified.",
+    )
+    credentials = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["courier"]
+        constraints = [
+            models.UniqueConstraint(fields=["project", "courier"], name="uniq_courierconfig_per_project"),
+        ]
+        verbose_name = "courier config"
+        verbose_name_plural = "courier configs"
+
+    def __str__(self):
+        return f"{self.get_courier_display()} ({self.project_id})"
+
+
 class ShippingZone(TenantScopedModel):
     name = models.CharField(max_length=120)
     is_active = models.BooleanField(default=True)
