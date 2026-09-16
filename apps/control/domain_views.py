@@ -6,6 +6,7 @@ traffic once its TXT record is verified.
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
 from django.views.generic import TemplateView, View
@@ -51,7 +52,10 @@ class DomainListView(_DomainAccess, TemplateView):
 class DomainAddView(_DomainAccess, View):
     def post(self, request, *args, **kwargs):
         self._guard()
+        from apps.billing import limits as billing_limits
+
         try:
+            billing_limits.check_can_add_domain(self.active_project)
             domain = domain_svc.add_domain(
                 project=self.active_project,
                 host=request.POST.get("host", ""),
@@ -59,7 +63,7 @@ class DomainAddView(_DomainAccess, View):
             record_audit(actor=request.user, project=self.active_project,
                          action=AuditLog.Action.CREATE, target=domain, request=request)
             messages.success(request, f"Added {domain.host}. Add the TXT record, then verify.")
-        except domain_svc.DomainError as exc:
+        except (domain_svc.DomainError, PermissionDenied) as exc:
             messages.error(request, str(exc))
         return redirect("control:domains")
 

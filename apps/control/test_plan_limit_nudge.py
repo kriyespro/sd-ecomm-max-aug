@@ -69,6 +69,22 @@ class PlanLimitNudgeTests(TestCase):
         resp = self.client.get("/admin/domains/")
         self.assertNotContains(resp, "Domains:")
 
+    def test_domain_cap_is_actually_enforced_now(self):
+        """check_can_add_domain() existed but was never called anywhere —
+        the cap had no display AND no enforcement. This closes the second
+        half; the display half is covered by test_domains_shows_upgrade_cta_at_cap."""
+        plan = self._plan()
+        plan.max_custom_domains = 1
+        plan.save(update_fields=["max_custom_domains"])
+        Domain.objects.create(project=self.project, host="already-have-one.test")
+
+        resp = self.client.post("/admin/domains/add/", {"host": "second.test"}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(
+            Domain.objects.filter(project=self.project, host="second.test").exists()
+        )
+        self.assertContains(resp, "custom domains")  # the limits._check() message
+
     def test_team_upgrade_cta_at_cap(self):
         plan = self._plan()
         plan.max_staff = 1  # owner alone already fills it

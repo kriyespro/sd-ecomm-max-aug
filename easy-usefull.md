@@ -84,10 +84,10 @@ Working one at a time, safest first. Test + confirm before moving to the next.
       as passive text). All three now show "X/Y used" and, at cap, a
       clickable "Upgrade plan" link to Plan & billing — same
       billing_limits.usage() already used for server-side enforcement.
-      Found in passing, not fixed (separate concern, flagged not touched):
-      check_can_add_domain() exists in apps/billing/limits.py but is never
-      called anywhere — the custom-domain cap has a display now but isn't
-      actually enforced server-side. Worth a follow-up.
+      Follow-up closed same session: check_can_add_domain() existed but
+      was never called anywhere — wired it into DomainAddView (mirrors
+      the existing product/staff pattern exactly), so the domain cap is
+      now actually enforced, not just displayed.
 
 ## MAINTAINABLE
 
