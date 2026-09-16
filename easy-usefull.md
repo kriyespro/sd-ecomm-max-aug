@@ -8,11 +8,13 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 ## USEFUL
 
-- [ ] [SAFE] Abandoned-cart recovery email — classic high-ROI automation,
-      explicitly named in CLAUDE_GENERAL_SAAS.md's own example. Cart rows
-      already track `updated_at`; a Celery task finds carts idle N hours
-      with items + an email, sends one reminder (never twice). Zero touch
-      to checkout/order code — pure read + notify.
+- [x] Abandoned-cart recovery email — done 2026-09-16 (a7e17d9). Hourly
+      Celery task, one email max per cart. Scope limit: only reaches a
+      registered shopper's account email or a Cart.email some flow set —
+      a guest cart with no captured email can't be reached yet (storefront
+      doesn't ask for one before checkout starts). Follow-up if wanted:
+      capture email earlier in the cart/checkout flow — UI-touching,
+      bigger scope, not done now.
 - [ ] [MODERATE] Real courier integration (Shiprocket/Delhivery) — shipping
       app already has a `Courier` ABC + registry, only `ManualCourier`
       exists. Add one real adapter behind the same interface.
