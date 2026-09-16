@@ -80,6 +80,7 @@ urlpatterns = [
     path("users/<int:pk>/role/", views.UserRoleChangeView.as_view(), name="user_role_change"),
     path("users/<int:pk>/set-password/", views.UserSetPasswordView.as_view(), name="user_set_password"),
     path("users/<int:pk>/ban/", views.UserBanView.as_view(), name="user_ban"),
+    path("users/<int:pk>/2fa-reset/", views.UserTwoFactorResetView.as_view(), name="user_2fa_reset"),
     path("users/<int:pk>/unban/", views.UserUnbanView.as_view(), name="user_unban"),
     path("users/<int:pk>/impersonate/", views.ImpersonateView.as_view(), name="user_impersonate"),
     path("users/<int:pk>/delete/", views.UserDeleteView.as_view(), name="user_delete"),

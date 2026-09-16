@@ -1,0 +1,97 @@
+"""TOTP two-factor auth for platform admins.
+
+Mandatory for every platform admin (superuser or Platform Owner — see
+``apps.accounts.permissions.is_platform_admin``), enforced by
+``TwoFactorEnforcementMiddleware``: an admin without a confirmed TOTP
+secret is redirected to setup on every request until they finish it.
+
+Codes are checked with ``pyotp`` (30s window, ±1 step of clock drift
+tolerated). Backup codes are single-use, stored hashed with Django's own
+password hasher — never plaintext, never logged, shown to the admin exactly
+once at generation time.
+"""
+
+import secrets
+
+import pyotp
+from django.contrib.auth.hashers import check_password, make_password
+from django.utils import timezone
+
+ISSUER = "Mission Control"
+BACKUP_CODE_COUNT = 10
+
+
+def is_enabled(user) -> bool:
+    profile = getattr(user, "profile", None)
+    return bool(profile and profile.totp_enabled and profile.totp_secret)
+
+
+def generate_secret() -> str:
+    return pyotp.random_base32()
+
+
+def provisioning_uri(user, secret: str) -> str:
+    return pyotp.totp.TOTP(secret).provisioning_uri(name=user.email or user.get_username(), issuer_name=ISSUER)
+
+
+def verify_totp(secret: str, code: str) -> bool:
+    code = (code or "").strip().replace(" ", "")
+    if not secret or not code:
+        return False
+    try:
+        return pyotp.totp.TOTP(secret).verify(code, valid_window=1)
+    except Exception:  # noqa: BLE001 - malformed input, not a valid code
+        return False
+
+
+def generate_backup_codes(n: int = BACKUP_CODE_COUNT) -> list[str]:
+    """Plaintext codes to show the admin once. Caller must hash+store via
+    ``hash_backup_codes`` — these are never persisted as-is."""
+    return [f"{secrets.token_hex(4)}" for _ in range(n)]
+
+
+def hash_backup_codes(codes: list[str]) -> list[str]:
+    return [make_password(c) for c in codes]
+
+
+def consume_backup_code(profile, code: str) -> bool:
+    """Check ``code`` against the profile's stored hashes; if it matches,
+    remove that hash (single use) and save. Returns whether it matched."""
+    code = (code or "").strip().replace(" ", "").replace("-", "")
+    if not code:
+        return False
+    for hashed in list(profile.backup_codes or []):
+        if check_password(code, hashed):
+            profile.backup_codes = [h for h in profile.backup_codes if h != hashed]
+            profile.save(update_fields=["backup_codes", "updated_at"])
+            return True
+    return False
+
+
+def enable(profile, *, secret: str, code: str) -> list[str] | None:
+    """Confirm setup with a real code from the authenticator app. On
+    success, enables 2FA and returns the plaintext backup codes to show
+    once; on a bad code, returns None and nothing is persisted."""
+    if not verify_totp(secret, code):
+        return None
+    plain_codes = generate_backup_codes()
+    profile.totp_secret = secret
+    profile.totp_enabled = True
+    profile.totp_confirmed_at = timezone.now()
+    profile.backup_codes = hash_backup_codes(plain_codes)
+    profile.save(update_fields=[
+        "totp_secret", "totp_enabled", "totp_confirmed_at", "backup_codes", "updated_at",
+    ])
+    return plain_codes
+
+
+def reset(profile) -> None:
+    """Platform-admin recovery path: another platform admin clears a
+    locked-out admin's 2FA so they can set it up again from scratch."""
+    profile.totp_secret = ""
+    profile.totp_enabled = False
+    profile.totp_confirmed_at = None
+    profile.backup_codes = []
+    profile.save(update_fields=[
+        "totp_secret", "totp_enabled", "totp_confirmed_at", "backup_codes", "updated_at",
+    ])

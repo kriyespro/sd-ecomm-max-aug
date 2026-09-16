@@ -14,6 +14,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
+from apps.accounts import twofactor
 from apps.accounts.models import PartnerApplication, PlatformRole, StoreRole
 from apps.accounts.permissions import assert_store_role, is_platform_admin
 from apps.core.models import AuditLog
@@ -225,6 +226,22 @@ def set_user_banned(*, actor, target, banned, request=None):
         target=target,
         changes={"is_banned": banned},
         request=request,
+    )
+    return target
+
+
+def reset_two_factor(*, actor, target, request=None):
+    """Recovery path for a platform admin locked out of TOTP (device lost
+    along with the backup codes): another platform admin clears it here so
+    the target can run through setup again on their next request — 2FA is
+    mandatory, so TwoFactorEnforcementMiddleware routes them straight back
+    into it."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can reset another admin's 2FA.")
+    twofactor.reset(target.profile)
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=target,
+        changes={"totp_enabled": False}, request=request,
     )
     return target
 

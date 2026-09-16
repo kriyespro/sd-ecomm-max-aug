@@ -1,0 +1,36 @@
+{% extends "base.jinja" %}
+
+{% block title %}Verification code{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen items-center justify-center px-4">
+  <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+    <h1 class="text-lg font-semibold">Verification code</h1>
+    <p class="mt-1 text-sm text-slate-500">Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+
+    {% if form.non_field_errors() or form.code.errors %}
+    <div class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+      {{ (form.non_field_errors() + form.code.errors)|join(" ") }}
+    </div>
+    {% endif %}
+
+    <form method="post" class="mt-6 space-y-4">
+      {{ csrf_input }}
+      <div>
+        <label for="id_code" class="block text-sm font-medium">Code</label>
+        <input id="id_code" name="code" type="text" autocomplete="one-time-code" inputmode="numeric" autofocus required
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tracking-widest focus:border-slate-900 focus:outline-none">
+      </div>
+      <button type="submit"
+              class="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        Verify
+      </button>
+    </form>
+
+    <p class="mt-4 text-xs text-slate-500">
+      Lost your device and backup codes? Ask another platform admin to reset your 2FA from
+      Mission Control → Users.
+    </p>
+  </div>
+</div>
+{% endblock %}

@@ -41,6 +41,25 @@
        class="mt-2 inline-block rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
       Reset password
     </a>
+
+    {% if target.profile.is_platform_admin %}
+    <div class="mt-4 border-t border-slate-100 pt-4">
+      <div class="flex items-center gap-2 text-sm">
+        <span class="text-slate-400">2FA:</span>
+        <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if target.profile.totp_enabled else 'bg-amber-100 text-amber-700' }}">
+          {{ "enabled" if target.profile.totp_enabled else "not set up yet" }}
+        </span>
+      </div>
+      {% if target.profile.totp_enabled %}
+      <form method="post" action="{{ url('control:user_2fa_reset', kwargs={'pk': target.pk}) }}" class="mt-2">
+        {{ csrf_input }}
+        <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50">
+          Reset 2FA (locked out / lost device)
+        </button>
+      </form>
+      {% endif %}
+    </div>
+    {% endif %}
   </div>
 
   <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">

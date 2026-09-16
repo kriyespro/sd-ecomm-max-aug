@@ -108,6 +108,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    # Mandatory 2FA for platform admins — must run after auth (needs
+    # request.user) and before anything else that could let an admin act.
+    "apps.accounts.middleware.TwoFactorEnforcementMiddleware",
     # Resolves request.project from the Host header. Must run after auth so it
     # can fall back to the authenticated user's memberships.
     "apps.core.middleware.ProjectResolverMiddleware",

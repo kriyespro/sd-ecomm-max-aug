@@ -3,15 +3,18 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.core.exceptions import ValidationError
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
 
 from apps.billing.models import Plan
 from apps.core.services import safe_next
 
-from . import google_oauth, ratelimit
+from . import google_oauth, ratelimit, twofactor
+from .permissions import is_platform_admin
 from .signup import self_signup
 
 User = get_user_model()
@@ -42,7 +45,15 @@ class LoginView(auth_views.LoginView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        ratelimit.clear(self.request, form.get_user().get_username())
+        user = form.get_user()
+        ratelimit.clear(self.request, user.get_username())
+        if is_platform_admin(user) and twofactor.is_enabled(user):
+            # Password check passed, but a platform admin with 2FA enabled
+            # isn't logged in yet — stash the pending user + intended
+            # destination and require the TOTP/backup code first.
+            self.request.session["2fa_user_id"] = user.pk
+            self.request.session["2fa_next"] = self.get_success_url()
+            return redirect("accounts:2fa_verify")
         return super().form_valid(form)
 
     def form_invalid(self, form):
@@ -52,6 +63,97 @@ class LoginView(auth_views.LoginView):
 
 class LogoutView(auth_views.LogoutView):
     pass
+
+
+class TwoFactorCodeForm(forms.Form):
+    code = forms.CharField(
+        label="Code", max_length=32,
+        widget=forms.TextInput(attrs={
+            "autocomplete": "one-time-code", "inputmode": "numeric",
+            "autofocus": True, "class": _INPUT,
+        }),
+    )
+
+
+class TwoFactorSetupView(LoginRequiredMixin, FormView):
+    """Mandatory for every platform admin — TwoFactorEnforcementMiddleware
+    routes them here on every request until it's confirmed. The secret is
+    held in the session (never the DB) until the admin proves they can
+    generate a real code with it; only then is it persisted + enabled."""
+
+    template_name = "accounts/2fa_setup.jinja"
+    form_class = TwoFactorCodeForm
+
+    def get(self, request, *args, **kwargs):
+        profile = request.user.profile
+        if profile.totp_enabled:
+            return self.render_to_response(self.get_context_data(already_enabled=True))
+        secret = request.session.get("2fa_setup_secret") or twofactor.generate_secret()
+        request.session["2fa_setup_secret"] = secret
+        return self.render_to_response(self.get_context_data(
+            form=self.get_form(), secret=secret,
+            uri=twofactor.provisioning_uri(request.user, secret),
+        ))
+
+    def post(self, request, *args, **kwargs):
+        profile = request.user.profile
+        if profile.totp_enabled:
+            return redirect("control:dashboard")
+        secret = request.session.get("2fa_setup_secret")
+        form = self.get_form()
+        if not (secret and form.is_valid()):
+            form.add_error(None, "Session expired — reload the page and scan the code again.")
+            return self.render_to_response(self.get_context_data(
+                form=form, secret=secret, uri=twofactor.provisioning_uri(request.user, secret) if secret else "",
+            ))
+        codes = twofactor.enable(profile, secret=secret, code=form.cleaned_data["code"])
+        if codes is None:
+            form.add_error("code", "Incorrect code — check your authenticator app and try again.")
+            return self.render_to_response(self.get_context_data(
+                form=form, secret=secret, uri=twofactor.provisioning_uri(request.user, secret),
+            ))
+        del request.session["2fa_setup_secret"]
+        return self.render_to_response(self.get_context_data(enabled=True, backup_codes=codes))
+
+
+class TwoFactorVerifyView(FormView):
+    """Second step of login for a platform admin with 2FA enabled. Reached
+    only via LoginView.form_valid stashing a pending user id in the session
+    — never reachable with a valid session of its own."""
+
+    template_name = "accounts/2fa_verify.jinja"
+    form_class = TwoFactorCodeForm
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.session.get("2fa_user_id"):
+            return redirect("accounts:login")
+        return super().dispatch(request, *args, **kwargs)
+
+    def _pending_user(self):
+        return User.objects.filter(
+            pk=self.request.session.get("2fa_user_id")
+        ).select_related("profile").first()
+
+    def form_valid(self, form):
+        user = self._pending_user()
+        if user is None:
+            return redirect("accounts:login")
+        ident = f"2fa:{user.get_username()}"
+        if ratelimit.is_locked(self.request, ident):
+            form.add_error(None, ratelimit.LOCK_MESSAGE)
+            return self.form_invalid(form)
+        profile = user.profile
+        code = form.cleaned_data["code"]
+        ok = twofactor.verify_totp(profile.totp_secret, code) or twofactor.consume_backup_code(profile, code)
+        if not ok:
+            ratelimit.record_failure(self.request, ident)
+            form.add_error("code", "Incorrect code.")
+            return self.form_invalid(form)
+        ratelimit.clear(self.request, ident)
+        del self.request.session["2fa_user_id"]
+        next_url = self.request.session.pop("2fa_next", None) or reverse("control:dashboard")
+        login(self.request, user, backend="django.contrib.auth.backends.ModelBackend")
+        return redirect(safe_next(self.request, next_url, reverse("control:dashboard")))
 
 
 # --- Public self-signup: Google only --------------------------------

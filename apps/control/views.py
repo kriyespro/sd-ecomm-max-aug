@@ -455,6 +455,20 @@ class UserUnbanView(_UserRowActionView):
         services.set_user_banned(actor=request.user, target=target, banned=False, request=request)
 
 
+class UserTwoFactorResetView(PlatformAdminRequiredMixin, View):
+    http_method_names = ["post"]
+
+    def post(self, request, pk, *args, **kwargs):
+        target = get_object_or_404(User.objects.select_related("profile"), pk=pk)
+        try:
+            services.reset_two_factor(actor=request.user, target=target, request=request)
+        except PermissionDenied as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"2FA reset for {target.get_username()} — they'll set it up again on next sign-in.")
+        return redirect("control:user_detail", pk=target.pk)
+
+
 class UserDeleteView(PlatformAdminRequiredMixin, View):
     http_method_names = ["post"]
 
