@@ -15,7 +15,12 @@ _MAP = {
     Events.SHIPMENT_CREATED: Event.SHIPMENT,
     Events.SHIPMENT_DELIVERED: Event.DELIVERY,
     Events.CUSTOMER_CREATED: Event.WELCOME,
+    Events.INVENTORY_LOW: Event.LOW_STOCK_ALERT,
 }
+
+# Events whose recipient is the store OWNER, not a customer — resolved via
+# apps.projects.services.owner_notification_email instead of payload["email"].
+_OWNER_FACING = {Events.INVENTORY_LOW}
 
 
 @receiver(domain_event)
@@ -25,7 +30,12 @@ def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
         return
     from .tasks import send_notification_task
 
-    to = payload.get("email") or payload.get("to") or ""
+    if event in _OWNER_FACING:
+        from apps.projects.services import owner_notification_email
+
+        to = owner_notification_email(project)
+    else:
+        to = payload.get("email") or payload.get("to") or ""
     context = {
         "name": payload.get("name") or payload.get("customer_name") or "there",
         "store_name": project.name,
@@ -35,6 +45,10 @@ def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
         "amount": str(payload.get("amount", "")),
         "carrier": str(payload.get("carrier", "")),
         "tracking": str(payload.get("tracking", "")),
+        "product": str(payload.get("product", "")),
+        "warehouse": str(payload.get("warehouse", "")),
+        "available": str(payload.get("available", "")),
+        "threshold": str(payload.get("threshold", "")),
         "event": event,
     }
     label = instance._meta.label if instance is not None else ""

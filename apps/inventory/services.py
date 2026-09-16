@@ -78,7 +78,6 @@ def record_movement(*, item, reason, quantity_delta=0, reserved_delta=0, referen
                 "warehouse": wh.name,
                 "available": locked.available,
                 "threshold": locked.low_stock_threshold,
-                "email": (getattr(wh.project, "notification_config", None) or {}).get("low_stock_email", ""),
             }
             transaction.on_commit(
                 lambda: emit(Events.INVENTORY_LOW, project=wh.project, payload=payload, instance=locked)
