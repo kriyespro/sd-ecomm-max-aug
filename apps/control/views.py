@@ -495,7 +495,7 @@ class ImpersonateActiveView(TemplateResponseMixin, View):
         return self.response_class(
             request=request,
             template=[self.template_name],
-            context={},
+            context={"target_is_staff": request.user.is_staff},
             using=self.template_engine,
         )
 

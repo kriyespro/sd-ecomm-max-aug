@@ -485,6 +485,43 @@ class ImpersonateSelfTests(TestCase):
         self.assertContains(resp, "Not allowed to impersonate this user.")
 
 
+class ImpersonateActiveScreenTests(TestCase):
+    """The impersonation landing page used to be a dead end — Stop was the
+    only button, even when impersonating a staff account that could
+    obviously continue straight into Mission Control."""
+
+    def setUp(self):
+        self.admin = get_user_model().objects.create_superuser(
+            username="root6", email="root6@t.test", password="pw"
+        )
+        self.client.force_login(self.admin)
+
+    def test_staff_target_gets_a_continue_button(self):
+        staff = get_user_model().objects.create_user(
+            username="staffee", email="staffee@t.test", password="pw", is_staff=True,
+        )
+        self.client.post(f"/admin/users/{staff.pk}/impersonate/")
+        resp = self.client.get("/admin/impersonate/active/")
+        self.assertContains(resp, "Continue to Mission Control")
+        self.assertContains(resp, f'href="{"/admin/"}"')
+
+    def test_non_staff_target_has_no_dead_end_continue_button(self):
+        customer = get_user_model().objects.create_user(
+            username="cust", email="cust@t.test", password="pw", is_staff=False,
+        )
+        self.client.post(f"/admin/users/{customer.pk}/impersonate/")
+        resp = self.client.get("/admin/impersonate/active/")
+        self.assertNotContains(resp, "Continue to Mission Control")
+
+    def test_stop_button_always_present(self):
+        staff = get_user_model().objects.create_user(
+            username="staffee2", email="staffee2@t.test", password="pw", is_staff=True,
+        )
+        self.client.post(f"/admin/users/{staff.pk}/impersonate/")
+        resp = self.client.get("/admin/impersonate/active/")
+        self.assertContains(resp, "Stop impersonating")
+
+
 class UserDeleteTests(TestCase):
     def setUp(self):
         User = get_user_model()
