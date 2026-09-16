@@ -1,8 +1,9 @@
 """Cart business logic. Views/APIs call these, never manipulate rows directly."""
 
+from datetime import timedelta
 from decimal import Decimal
 
-from django.db import transaction
+from django.db import models, transaction
 
 from apps.catalog.models import Product, Variant
 
@@ -148,3 +149,37 @@ def cart_summary(cart):
         "item_count": cart.item_count,
         "currency": cart.project.currency,
     }
+
+
+def recoverable_carts(*, idle_hours=3, max_age_days=14):
+    """Carts worth sending an abandoned-cart email for right now: active,
+    never converted, has at least one item, idle at least ``idle_hours``
+    (but not older than ``max_age_days`` — a truly stale cart is dead, not
+    "abandoned"), never already recovered, and belongs to a *known* email —
+    a registered shopper's account, or ``Cart.email`` if some other flow set
+    it. A guest cart with no email captured anywhere can't be reached; that's
+    a real gap, not a bug here.
+    """
+    from django.utils import timezone
+
+    now = timezone.now()
+    cutoff = now - timedelta(hours=idle_hours)
+    floor = now - timedelta(days=max_age_days)
+    return (
+        Cart.objects.filter(
+            is_active=True, converted_order_id__isnull=True,
+            recovery_sent_at__isnull=True,
+            updated_at__lte=cutoff, updated_at__gte=floor,
+        )
+        .filter(models.Q(user__isnull=False) | ~models.Q(email=""))
+        .exclude(items__isnull=True)
+        .select_related("project", "user")
+        .distinct()
+    )
+
+
+def mark_recovery_sent(cart):
+    from django.utils import timezone
+
+    cart.recovery_sent_at = timezone.now()
+    cart.save(update_fields=["recovery_sent_at", "updated_at"])

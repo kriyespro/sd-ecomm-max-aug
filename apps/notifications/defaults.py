@@ -43,4 +43,10 @@ DEFAULTS = {
         "Low stock: {product}",
         "{product} at {warehouse} is low: {available} left (threshold {threshold}).",
     ),
+    "cart_abandoned": (
+        "You left something in your cart at {store_name}",
+        "Hi {name},\n\nYou still have {item_count} item(s) worth {currency} {total} "
+        "waiting in your cart at {store_name}.\n\nCome back and finish checking out: "
+        "{cart_url}",
+    ),
 }

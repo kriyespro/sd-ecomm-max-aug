@@ -272,6 +272,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.orders.tasks.expire_stale_pending_orders_task",
         "schedule": 3600.0,   # hourly — releases stock reserved by an abandoned gateway payment
     },
+    "abandoned-cart-recovery": {
+        "task": "apps.cart.tasks.send_abandoned_cart_emails_task",
+        "schedule": 3600.0,   # hourly — recovers carts idle 3h+ with a known email, once each
+    },
 }
 
 

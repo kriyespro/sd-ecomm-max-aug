@@ -31,6 +31,9 @@ class Cart(TimeStampedModel):
     email = models.EmailField(blank=True)
     is_active = models.BooleanField(default=True)
     converted_order_id = models.PositiveIntegerField(null=True, blank=True)
+    # Set once a recovery email has gone out — never send a second one for
+    # the same cart, even if items are added/removed afterward.
+    recovery_sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

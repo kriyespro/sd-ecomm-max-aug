@@ -16,9 +16,11 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 - [ ] [MODERATE] Real courier integration (Shiprocket/Delhivery) — shipping
       app already has a `Courier` ABC + registry, only `ManualCourier`
       exists. Add one real adapter behind the same interface.
-- [ ] [SAFE] Low-stock alert to the owner (not just the dashboard badge) —
-      inventory already computes `low_stock_items`; wire a daily digest
-      notification so it doesn't require someone to open Mission Control.
+- [x] Low-stock alert to the owner — done 2026-09-16 (64eb648). Turned out
+      to be half-built already: Events.INVENTORY_LOW fired, template
+      existed, but nothing mapped it to a send + the recipient lookup was
+      dead code. Wired the map entry + a real owner-email fallback chain
+      (apps.projects.services.owner_notification_email).
 - [x] AI product copy — built, currently on hold (UI hidden). Re-enable
       once ready; no work needed, just a flag flip.
 
