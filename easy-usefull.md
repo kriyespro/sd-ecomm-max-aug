@@ -79,10 +79,15 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 - [ ] [SAFE] Trial-ending reminder (see RELIABLE) doubles as a conversion
       moment — same build, listed twice deliberately.
-- [ ] [MODERATE] "Upgrade" nudge when a store hits a plan limit (seat cap,
-      etc.) — billing_limits.usage() already exists and is used to gray
-      out the "add team member" button; extend the same signal into a
-      visible upsell instead of just a disabled state.
+- [x] Upgrade nudge on plan limits — done 2026-09-16. Products and Domains
+      screens had NO usage display at all before (only Team did, and only
+      as passive text). All three now show "X/Y used" and, at cap, a
+      clickable "Upgrade plan" link to Plan & billing — same
+      billing_limits.usage() already used for server-side enforcement.
+      Found in passing, not fixed (separate concern, flagged not touched):
+      check_can_add_domain() exists in apps/billing/limits.py but is never
+      called anywhere — the custom-domain cap has a display now but isn't
+      actually enforced server-side. Worth a follow-up.
 
 ## MAINTAINABLE
 

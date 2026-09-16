@@ -29,9 +29,13 @@
       {% endif %}
     </p>
     {% if seat_cap is not none %}
-    <p class="mt-1 text-xs {{ 'text-red-600' if seat_full else 'text-slate-400' }}">
-      Team seats: {{ seat_used }} / {{ seat_cap }} used{% if seat_full %} — upgrade under Plan &amp; billing to add more{% endif %}.
-    </p>
+    <div class="mt-2 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs
+                {{ 'bg-red-50 text-red-700' if seat_full else 'text-slate-400' }}">
+      <span>Team seats: {{ seat_used }} / {{ seat_cap }} used{% if seat_full %} — you're at your plan's limit.{% endif %}</span>
+      {% if seat_full %}
+      <a href="{{ url('control:store_plan') }}" class="rounded-lg bg-red-600 px-2.5 py-1 font-semibold text-white hover:bg-red-700">Upgrade plan</a>
+      {% endif %}
+    </div>
     {% endif %}
   </div>
 

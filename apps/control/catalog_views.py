@@ -264,6 +264,13 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
             self.request.user, self.active_project, OWNER_MANAGER
         )
         ctx["trash_retention_days"] = TRASH_RETENTION_DAYS
+
+        from apps.billing import limits as billing_limits
+
+        used, cap = billing_limits.usage(self.active_project)["products"]
+        ctx["product_used"] = used
+        ctx["product_cap"] = cap
+        ctx["product_cap_full"] = cap is not None and used >= cap
         return ctx
 
 

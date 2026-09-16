@@ -38,6 +38,13 @@ class DomainListView(_DomainAccess, TemplateView):
         ctx["domains"] = domain_svc.domains_for(self.active_project)
         ctx["app_host"] = self.request.get_host()
         ctx["platform_ip"] = getattr(settings, "PLATFORM_PUBLIC_IP", "") or ""
+
+        from apps.billing import limits as billing_limits
+
+        used, cap = billing_limits.usage(self.active_project)["custom_domains"]
+        ctx["domain_used"] = used
+        ctx["domain_cap"] = cap
+        ctx["domain_cap_full"] = cap is not None and used >= cap
         return ctx
 
 
