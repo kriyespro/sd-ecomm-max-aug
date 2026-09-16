@@ -12,4 +12,27 @@
     <a href="{{ url('control:coupon_list') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
   </div>
 </form>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var codeInput = document.getElementById("id_code");
+    if (!codeInput || codeInput.dataset.generateWired) return;
+    codeInput.dataset.generateWired = "1";
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Generate";
+    btn.className = "mt-1 shrink-0 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50";
+    btn.addEventListener("click", function () {
+      var alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no 0/O/1/I/l
+      var code = "";
+      for (var i = 0; i < 8; i++) code += alphabet[Math.floor(Math.random() * alphabet.length)];
+      codeInput.value = code;
+      codeInput.focus();
+    });
+    var row = document.createElement("div");
+    row.className = "flex items-start gap-2";
+    codeInput.parentNode.insertBefore(row, codeInput);
+    row.appendChild(codeInput);
+    row.appendChild(btn);
+  });
+</script>
 {% endblock %}
