@@ -75,10 +75,16 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 ## SECURE
 
 - [x] Open redirect — found + fixed project-wide this session (2026-09-16).
-- [ ] [CAREFUL] 2FA for platform admins — flagged since Phase 12, still
-      not built. Real value (admin accounts are the highest-privilege
-      target) but needs a proper plan first: TOTP + backup codes + no
-      lockout risk. Not a "just add it" task.
+- [x] 2FA for platform admins — done 2026-09-16 (b564bfb). Confirmed scope
+      first: TOTP + backup codes (not TOTP alone), mandatory from day one
+      (not opt-in), recovery = backup codes or another platform admin
+      resetting it from /admin/users/. Gate is scoped to /admin/ only
+      (Mission Control) — a superuser's incidental storefront/API request
+      isn't blocked, only actual platform-admin tooling. Existing sessions
+      aren't force-logged-out, just routed to setup on next /admin/ hit —
+      avoids a self-inflicted lockout of every admin at once. 20 dedicated
+      tests (service, setup flow, login handshake, middleware gate, admin
+      reset), full suite (1016) green.
 - [x] Webhook signature verification, payment credential handling, XSS/IDOR
       spot checks — all clean, verified this session.
 
