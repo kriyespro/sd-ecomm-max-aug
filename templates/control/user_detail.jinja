@@ -42,7 +42,7 @@
       Reset password
     </a>
 
-    {% if target.profile.is_platform_admin %}
+    {% if target.is_staff %}
     <div class="mt-4 border-t border-slate-100 pt-4">
       <div class="flex items-center gap-2 text-sm">
         <span class="text-slate-400">2FA:</span>

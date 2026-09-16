@@ -14,7 +14,6 @@ from apps.billing.models import Plan
 from apps.core.services import safe_next
 
 from . import google_oauth, ratelimit, twofactor
-from .permissions import is_platform_admin
 from .signup import self_signup
 
 User = get_user_model()
@@ -47,9 +46,10 @@ class LoginView(auth_views.LoginView):
     def form_valid(self, form):
         user = form.get_user()
         ratelimit.clear(self.request, user.get_username())
-        if is_platform_admin(user) and twofactor.is_enabled(user):
-            # Password check passed, but a platform admin with 2FA enabled
-            # isn't logged in yet — stash the pending user + intended
+        if user.is_staff and twofactor.is_enabled(user):
+            # Password check passed, but any Mission Control account
+            # (platform admin, store owner/manager/staff, DGC) with 2FA
+            # enabled isn't logged in yet — stash the pending user + intended
             # destination and require the TOTP/backup code first.
             self.request.session["2fa_user_id"] = user.pk
             self.request.session["2fa_next"] = self.get_success_url()
@@ -76,7 +76,7 @@ class TwoFactorCodeForm(forms.Form):
 
 
 class TwoFactorSetupView(LoginRequiredMixin, FormView):
-    """Mandatory for every platform admin — TwoFactorEnforcementMiddleware
+    """Mandatory for every Mission Control account (is_staff) — TwoFactorEnforcementMiddleware
     routes them here on every request until it's confirmed. The secret is
     held in the session (never the DB) until the admin proves they can
     generate a real code with it; only then is it persisted + enabled."""
@@ -90,9 +90,10 @@ class TwoFactorSetupView(LoginRequiredMixin, FormView):
             return self.render_to_response(self.get_context_data(already_enabled=True))
         secret = request.session.get("2fa_setup_secret") or twofactor.generate_secret()
         request.session["2fa_setup_secret"] = secret
+        uri = twofactor.provisioning_uri(request.user, secret)
         return self.render_to_response(self.get_context_data(
-            form=self.get_form(), secret=secret,
-            uri=twofactor.provisioning_uri(request.user, secret),
+            form=self.get_form(), secret=secret, uri=uri,
+            qr_data_uri=twofactor.qr_data_uri(uri),
         ))
 
     def post(self, request, *args, **kwargs):
@@ -103,23 +104,26 @@ class TwoFactorSetupView(LoginRequiredMixin, FormView):
         form = self.get_form()
         if not (secret and form.is_valid()):
             form.add_error(None, "Session expired — reload the page and scan the code again.")
+            uri = twofactor.provisioning_uri(request.user, secret) if secret else ""
             return self.render_to_response(self.get_context_data(
-                form=form, secret=secret, uri=twofactor.provisioning_uri(request.user, secret) if secret else "",
+                form=form, secret=secret, uri=uri,
+                qr_data_uri=twofactor.qr_data_uri(uri) if uri else "",
             ))
         codes = twofactor.enable(profile, secret=secret, code=form.cleaned_data["code"])
         if codes is None:
             form.add_error("code", "Incorrect code — check your authenticator app and try again.")
+            uri = twofactor.provisioning_uri(request.user, secret)
             return self.render_to_response(self.get_context_data(
-                form=form, secret=secret, uri=twofactor.provisioning_uri(request.user, secret),
+                form=form, secret=secret, uri=uri, qr_data_uri=twofactor.qr_data_uri(uri),
             ))
         del request.session["2fa_setup_secret"]
         return self.render_to_response(self.get_context_data(enabled=True, backup_codes=codes))
 
 
 class TwoFactorVerifyView(FormView):
-    """Second step of login for a platform admin with 2FA enabled. Reached
-    only via LoginView.form_valid stashing a pending user id in the session
-    — never reachable with a valid session of its own."""
+    """Second step of login for any Mission Control account with 2FA
+    enabled. Reached only via LoginView.form_valid stashing a pending user
+    id in the session — never reachable with a valid session of its own."""
 
     template_name = "accounts/2fa_verify.jinja"
     form_class = TwoFactorCodeForm

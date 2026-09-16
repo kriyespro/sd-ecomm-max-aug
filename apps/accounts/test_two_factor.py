@@ -1,10 +1,11 @@
-"""Mandatory TOTP 2FA for platform admins.
+"""Mandatory TOTP 2FA for every Mission Control account (is_staff) — not
+just platform admins: store owner/manager/staff and DGC too.
 
 The enforcement middleware is stripped out of MIDDLEWARE for the test
 settings module (see config/settings/development.py — it's exercised
 directly here via override_settings instead) so the other ~1000 tests in
-the suite don't all need a confirmed TOTP secret on every superuser/
-platform-admin fixture just to reach an /admin/ page."""
+the suite don't all need a confirmed TOTP secret on every is_staff
+fixture just to reach an /admin/ page."""
 
 import pyotp
 from django.conf import settings
@@ -83,6 +84,14 @@ class TwoFactorServiceTests(TestCase):
         self.assertEqual(profile.totp_secret, "")
         self.assertEqual(profile.backup_codes, [])
 
+    def test_qr_data_uri_is_an_inline_png(self):
+        user = User.objects.create_user("u4", "u4@t.test", "pw")
+        secret = twofactor.generate_secret()
+        uri = twofactor.provisioning_uri(user, secret)
+        data_uri = twofactor.qr_data_uri(uri)
+        self.assertTrue(data_uri.startswith("data:image/png;base64,"))
+        self.assertGreater(len(data_uri), 100)
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class TwoFactorSetupViewTests(TestCase):
@@ -95,6 +104,10 @@ class TwoFactorSetupViewTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Manual entry key")
         self.assertTrue(self.client.session.get("2fa_setup_secret"))
+
+    def test_get_shows_a_scannable_qr_code(self):
+        resp = self.client.get("/accounts/2fa/setup/")
+        self.assertContains(resp, "data:image/png;base64,")
 
     def test_wrong_code_does_not_enable(self):
         self.client.get("/accounts/2fa/setup/")
@@ -124,9 +137,9 @@ class TwoFactorSetupViewTests(TestCase):
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class LoginFlowTwoFactorTests(TestCase):
-    """The password-then-code login handshake for a platform admin with
-    2FA enabled. Doesn't need the /admin/ gate middleware — this is the
-    login view's own branch."""
+    """The password-then-code login handshake for any Mission Control
+    account with 2FA enabled. Doesn't need the /admin/ gate middleware —
+    this is the login view's own branch."""
 
     def setUp(self):
         self.user = User.objects.create_superuser("admin2", "admin2@t.test", "pw")
@@ -162,13 +175,21 @@ class LoginFlowTwoFactorTests(TestCase):
         resp = self.client.post("/accounts/2fa/verify/", {"code": plain[0]})
         self.assertEqual(resp.status_code, 302)
 
-    def test_non_platform_admin_skips_2fa_even_if_enabled(self):
-        # A store owner is never gated by this — only is_platform_admin.
+    def test_non_staff_account_skips_2fa_even_if_enabled(self):
+        # A storefront customer (is_staff=False) is never gated — 2FA is
+        # Mission Control only.
         plain_user = User.objects.create_user("owner1", "owner1@t.test", "pw")
         secret = twofactor.generate_secret()
         twofactor.enable(plain_user.profile, secret=secret, code=pyotp.TOTP(secret).now())
         resp = self.client.post("/accounts/login/", {"username": "owner1", "password": "pw"})
         self.assertNotEqual(resp.get("Location", ""), "/accounts/2fa/verify/")
+
+    def test_staff_account_also_gets_the_second_step(self):
+        staff = User.objects.create_user("staffer1", "staffer1@t.test", "pw", is_staff=True)
+        secret = twofactor.generate_secret()
+        twofactor.enable(staff.profile, secret=secret, code=pyotp.TOTP(secret).now())
+        resp = self.client.post("/accounts/login/", {"username": "staffer1", "password": "pw"})
+        self.assertRedirects(resp, "/accounts/2fa/verify/", fetch_redirect_response=False)
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -193,7 +214,7 @@ class MiddlewareGateTests(TestCase):
             resp = self.client.get("/admin/users/")
         self.assertEqual(resp.status_code, 200)
 
-    def test_store_owner_never_gated(self):
+    def test_store_owner_is_gated_too(self):
         project = Project.objects.create(name="GateCo", status="active", feature_flags={"onboarded": True})
         owner = User.objects.create_user("owner2", "owner2@t.test", "pw", is_staff=True)
         Membership.objects.create(project=project, user=owner, role=StoreRole.OWNER)
@@ -201,6 +222,25 @@ class MiddlewareGateTests(TestCase):
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
         s.save()
+        with _with_gate():
+            resp = self.client.get("/admin/")
+        self.assertRedirects(resp, "/accounts/2fa/setup/", fetch_redirect_response=False)
+
+    def test_store_staff_is_gated_too(self):
+        project = Project.objects.create(name="GateCo2", status="active", feature_flags={"onboarded": True})
+        staff = User.objects.create_user("staff3", "staff3@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=project, user=staff, role=StoreRole.STAFF)
+        self.client.force_login(staff)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
+        s.save()
+        with _with_gate():
+            resp = self.client.get("/admin/")
+        self.assertRedirects(resp, "/accounts/2fa/setup/", fetch_redirect_response=False)
+
+    def test_non_staff_customer_never_gated(self):
+        customer = User.objects.create_user("cust1", "cust1@t.test", "pw")  # is_staff defaults False
+        self.client.force_login(customer)
         with _with_gate():
             resp = self.client.get("/admin/")
         self.assertNotEqual(resp.get("Location", ""), "/accounts/2fa/setup/")
@@ -243,3 +283,15 @@ class AdminResetTwoFactorTests(TestCase):
         with self.assertRaises(Exception):
             services.reset_two_factor(actor=regular, target=self.locked)
         self.assertFalse(is_platform_admin(regular))
+
+    def test_reset_button_shown_for_any_staff_account_not_just_platform_admins(self):
+        """The scope broadened from platform-admin-only to every Mission
+        Control account — the recovery button must follow, or a locked-out
+        store owner/staff/DGC has no visible way back in."""
+        store_staff = User.objects.create_user(
+            "storestaff1", "storestaff1@t.test", "pw", is_staff=True,
+        )
+        secret = twofactor.generate_secret()
+        twofactor.enable(store_staff.profile, secret=secret, code=pyotp.TOTP(secret).now())
+        resp = self.client.get(f"/admin/users/{store_staff.pk}/")
+        self.assertContains(resp, "Reset 2FA")

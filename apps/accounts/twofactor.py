@@ -1,9 +1,12 @@
-"""TOTP two-factor auth for platform admins.
+"""TOTP two-factor auth for every Mission Control account.
 
-Mandatory for every platform admin (superuser or Platform Owner — see
-``apps.accounts.permissions.is_platform_admin``), enforced by
-``TwoFactorEnforcementMiddleware``: an admin without a confirmed TOTP
-secret is redirected to setup on every request until they finish it.
+Mandatory for anyone who can reach ``/admin/`` — platform admin, store
+owner, manager, staff, DGC (in this codebase that's exactly ``User.is_staff``,
+kept in sync with store membership by ``apps.accounts.team``). Enforced by
+``TwoFactorEnforcementMiddleware``: an account without a confirmed TOTP
+secret is redirected to setup on every ``/admin/`` request until they
+finish it. Storefront shoppers are never touched — they don't have
+``is_staff`` and never hit this gate.
 
 Codes are checked with ``pyotp`` (30s window, ±1 step of clock drift
 tolerated). Backup codes are single-use, stored hashed with Django's own
@@ -11,9 +14,12 @@ password hasher — never plaintext, never logged, shown to the admin exactly
 once at generation time.
 """
 
+import base64
+import io
 import secrets
 
 import pyotp
+import qrcode
 from django.contrib.auth.hashers import check_password, make_password
 from django.utils import timezone
 
@@ -32,6 +38,15 @@ def generate_secret() -> str:
 
 def provisioning_uri(user, secret: str) -> str:
     return pyotp.totp.TOTP(secret).provisioning_uri(name=user.email or user.get_username(), issuer_name=ISSUER)
+
+
+def qr_data_uri(uri: str) -> str:
+    """A scannable QR code for ``uri``, rendered server-side (no third-party
+    request — the secret never leaves the server) as an inline data: URI."""
+    img = qrcode.make(uri, box_size=6, border=2)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
 
 def verify_totp(secret: str, code: str) -> bool:
@@ -86,8 +101,10 @@ def enable(profile, *, secret: str, code: str) -> list[str] | None:
 
 
 def reset(profile) -> None:
-    """Platform-admin recovery path: another platform admin clears a
-    locked-out admin's 2FA so they can set it up again from scratch."""
+    """Recovery path: a platform admin clears a locked-out account's 2FA
+    (device + backup codes both lost) so they can set it up again from
+    scratch. Only a platform admin may trigger this — see
+    apps.control.services.reset_two_factor for the authorization check."""
     profile.totp_secret = ""
     profile.totp_enabled = False
     profile.totp_confirmed_at = None

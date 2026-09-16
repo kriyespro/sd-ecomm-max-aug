@@ -1,23 +1,23 @@
-"""Mandatory 2FA enforcement for platform admins.
+"""Mandatory 2FA enforcement for every Mission Control account.
 
 Gated surface is Mission Control (``/admin/`` — see ``apps.control.navigation.
-MOUNT``) — that's where platform-admin privilege is actually exercised
-(billing, the user directory, impersonation, every store). A superuser
-session touching the public storefront or the API incidentally (a skin
-preview, a webhook) is not what this is protecting.
+MOUNT``) for every account that can reach it: platform admin, store owner,
+manager, staff, DGC. In this codebase that's exactly ``User.is_staff`` —
+``apps.accounts.team`` keeps it in sync with active store membership, and
+it's the same flag ``ControlAccessMixin`` requires for every Mission
+Control view. A non-staff account (a storefront shopper) never has it and
+is never touched by this gate.
 
-A platform admin (superuser or Platform Owner — the highest-privilege
-account on the whole platform) who has not yet confirmed a TOTP secret is
-redirected to setup on their next Mission Control request until they do.
-This does not force a logout of already-active sessions — there is no way
-to demand a code from a session that predates 2FA without a forced logout
-of every admin, which is its own outage risk.
+An account without a confirmed TOTP secret is redirected to setup on its
+next Mission Control request until it finishes. This does not force a
+logout of already-active sessions — there is no way to demand a code from
+a session that predates 2FA without a forced logout of every account at
+once, which is its own outage risk.
 """
 
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from .permissions import is_platform_admin
 from .twofactor import is_enabled
 
 _GATED_PREFIX = "/admin/"
@@ -35,8 +35,7 @@ class TwoFactorEnforcementMiddleware:
         if (
             request.path.startswith(_GATED_PREFIX)
             and not request.path.startswith(_EXEMPT_PREFIXES)
-            and user and user.is_authenticated
-            and is_platform_admin(user)
+            and user and user.is_authenticated and user.is_staff
             and not is_enabled(user)
         ):
             return redirect(reverse("accounts:2fa_setup"))

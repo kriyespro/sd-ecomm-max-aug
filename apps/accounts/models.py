@@ -64,10 +64,11 @@ class Profile(TimeStampedModel):
     # on by default for every role, one flip turns every tour off everywhere.
     show_guides = models.BooleanField(default=True)
 
-    # TOTP 2FA — mandatory for platform admins (see apps.accounts.twofactor +
-    # TwoFactorEnforcementMiddleware). totp_secret is blank until setup is
-    # confirmed with a real code; backup_codes holds hashed (never plaintext)
-    # single-use recovery codes, each removed once consumed.
+    # TOTP 2FA — mandatory for every Mission Control account (is_staff; see
+    # apps.accounts.twofactor + TwoFactorEnforcementMiddleware). totp_secret
+    # is blank until setup is confirmed with a real code; backup_codes holds
+    # hashed (never plaintext) single-use recovery codes, each removed once
+    # consumed.
     totp_secret = models.CharField(max_length=32, blank=True)
     totp_enabled = models.BooleanField(default=False)
     totp_confirmed_at = models.DateTimeField(null=True, blank=True)

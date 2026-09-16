@@ -19,8 +19,9 @@ celery>=5.4,<6
 # Prometheus metrics at /metrics (token-gated)
 django-prometheus>=2.3,<3
 
-# TOTP 2FA for platform admins (apps.accounts.twofactor)
+# TOTP 2FA (apps.accounts.twofactor)
 pyotp>=2.9,<3
+qrcode>=7,<8
 
 # Production — installed in the Docker image (see Dockerfile / requirements-prod.txt)
 # psycopg[binary], redis, gunicorn, whitenoise
