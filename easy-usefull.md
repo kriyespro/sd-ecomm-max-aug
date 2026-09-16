@@ -28,18 +28,23 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 ## EASY
 
-- [ ] [SAFE] Extend guided-tour coverage past the 7 shipped pages (Coupons,
-      Domains, Team, Theme customization) — same engine, just more
-      `data-tour` attributes + registry entries.
+- [x] Extend guided-tour coverage — done 2026-09-16 (2770c9b). Coupons,
+      Domains, Team, Theme — 11 tours total now.
 - [ ] [MODERATE] Onboarding wizard is owner/manager only, one-time. Staff
       and DGC get a checklist now (this session) but never a wizard —
       low priority, checklist already covers it reasonably.
 
 ## FAST
 
-- [ ] [MODERATE] Re-check PDP query count — a years-old dev.txt note says
-      "~24 queries", but Celery + caching landed since. Needs fresh
-      measurement (django-prometheus is wired), not a guess.
+- [x] Re-checked PDP query count 2026-09-16 — measured with
+      CaptureQueriesContext: 31 queries, but every one is a single fixed
+      lookup (chrome bits: theme/skin/banners/menu/budget-bands/benefits/
+      Instagram/shorts/SEO/reviews/related/shipping/inventory) — no N+1
+      loop anywhere. Reasonable for how many independent CMS content types
+      the page assembles; not a real problem right now. Per
+      CLAUDE_GENERAL_SAAS.md's own PERFORMANCE rule ("measure before
+      introducing complicated optimization infrastructure") — measured,
+      no action taken. Revisit only if real traffic data says otherwise.
 - [x] Storefront perf cache (Host→store + chrome), edge cache, asset perf —
       already done.
 
@@ -49,11 +54,16 @@ Working one at a time, safest first. Test + confirm before moving to the next.
       auto-suspend-when-overdue exists (Celery), but nothing warns the
       owner *before* it happens. First one to build — smallest, safest,
       proves the pattern.
-- [ ] [MODERATE] Payment-webhook failure path note from early dev.txt: a
-      failed verify_payment leaves Payment PENDING with no payment.failed
-      event (rolled back inside the same atomic block). Worth re-verifying
-      still true before touching — payments code is the highest-risk
-      surface in the app.
+- [x] Fixed 2026-09-16 — the old note was still accurate. verify_payment's
+      `@transaction.atomic` rolled back the failure-path save (Payment.FAILED
+      + PaymentEvent + the payment.failed domain event) on the very `raise`
+      that reported the failure — a bad signature looked identical, in the
+      database, to a verification that was never attempted. Fixed by
+      dropping the outer atomic (success path stays atomic via _settle()'s
+      own decorator). Confirmed the regression test fails on the old code,
+      passes on the fix. This was apps.payments' *first* test file — a real
+      gap the RELIABLE/TESTING sections both called out. Full suite (972
+      tests) green before pushing, given the blast radius.
 
 ## SECURE
 

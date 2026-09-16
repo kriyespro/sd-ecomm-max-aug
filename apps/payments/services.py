@@ -144,9 +144,17 @@ def _settle(payment, *, actor=None, reference="", event_kind=PaymentEvent.Kind.C
     return payment
 
 
-@transaction.atomic
 def verify_payment(*, payment, data, actor=None):
-    """Validate the client-side callback and settle on success."""
+    """Validate the client-side callback and settle on success.
+
+    Deliberately NOT @transaction.atomic at this level: on a bad-signature
+    failure this saves Payment.FAILED and then raises PaymentError so the
+    view can turn it into a 400 — wrapping the whole function would have
+    rolled that save back along with the raise, silently leaving a failed
+    verification looking exactly like an untouched PENDING payment (no
+    failure record, no payment.failed event, nobody notified). The success
+    path's own writes are still atomic via _settle()'s own decorator.
+    """
     provider, _ = get_provider(payment.project, payment.provider)
     ok = provider.verify(payment, data)
     _log(payment, kind=PaymentEvent.Kind.VERIFY, project=payment.project,
