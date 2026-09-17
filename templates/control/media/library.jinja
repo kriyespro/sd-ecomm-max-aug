@@ -42,9 +42,26 @@
     {% if show_trash %}<span class="ml-auto text-slate-400">Deleted for good {{ trash_retention_days }} days after trashing.</span>{% endif %}
   </div>
 
+  {% if can_manage_trash and not show_trash and assets %}
+  <form id="bulk-media-form" method="post" action="{{ url('control:media_bulk_delete') }}"
+        class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3 text-xs ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300">
+    <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
+    <button class="rounded-lg border border-red-300 px-2.5 py-1 text-red-600 hover:bg-red-50"
+            onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0 && confirm('Move selected files to Trash?')">
+      Trash selected
+    </button>
+  </form>
+  {% endif %}
+
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
     {% for a in assets %}
-    <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="relative overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+      {% if can_manage_trash and not show_trash %}
+      <input type="checkbox" name="pks" value="{{ a.pk }}" form="bulk-media-form"
+             class="bulk-row-check absolute left-1.5 top-1.5 z-10 h-4 w-4 rounded border-slate-300 bg-white/90">
+      {% endif %}
       <div class="grid h-28 place-items-center bg-slate-50">
         {% if a.kind == 'image' %}
         <img src="{{ a.thumbnails.get('sm') or a.url }}" alt="{{ a.alt }}" class="h-full w-full object-cover">
@@ -78,4 +95,23 @@
     {% endfor %}
   </div>
 </div>
+{% if can_manage_trash and not show_trash %}
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var selectAll = document.getElementById("bulk-select-all");
+    var countEl = document.getElementById("bulk-selected-count");
+    if (!selectAll) return;
+    function updateCount() {
+      if (countEl) countEl.textContent = document.querySelectorAll(".bulk-row-check:checked").length + " selected";
+    }
+    document.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        document.querySelectorAll(".bulk-row-check").forEach(function (cb) { cb.checked = selectAll.checked; });
+      }
+      if (e.target === selectAll || (e.target.classList && e.target.classList.contains("bulk-row-check"))) updateCount();
+    });
+    updateCount();
+  });
+</script>
+{% endif %}
 {% endblock %}

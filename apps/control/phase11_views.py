@@ -329,6 +329,28 @@ class MediaDeleteView(_MediaTrashBase, View):
         return redirect("control:media")
 
 
+class MediaBulkDeleteView(_MediaTrashBase, View):
+    """Bulk trash from the library — upload already accepted multiple files
+    in one submit, delete didn't. Reversible (30-day Trash), same as the
+    single-asset action — just loops trash_asset() per selected row."""
+
+    def post(self, request, *args, **kwargs):
+        from .trash import trash_asset
+
+        pks = request.POST.getlist("pks")
+        if not pks:
+            messages.error(request, "Pick at least one file.")
+            return redirect("control:media")
+
+        assets = MediaAsset.objects.filter(project=self.active_project, pk__in=pks, trashed_at__isnull=True)
+        count = 0
+        for asset in assets:
+            trash_asset(asset)
+            count += 1
+        messages.success(request, f"Moved {count} file(s) to Trash.")
+        return redirect("control:media")
+
+
 class MediaRestoreView(_MediaTrashBase, View):
     def post(self, request, *args, **kwargs):
         from .trash import restore_asset

@@ -238,6 +238,7 @@ urlpatterns = [
     path("media/", p11.MediaLibraryView.as_view(), name="media"),
     path("media/upload/", p11.MediaUploadView.as_view(), name="media_upload"),
     path("media/<int:pk>/delete/", p11.MediaDeleteView.as_view(), name="media_delete"),
+    path("media/bulk-delete/", p11.MediaBulkDeleteView.as_view(), name="media_bulk_delete"),
     path("media/<int:pk>/restore/", p11.MediaRestoreView.as_view(), name="media_restore"),
     path("media/<int:pk>/purge/", p11.MediaPurgeView.as_view(), name="media_purge"),
 
