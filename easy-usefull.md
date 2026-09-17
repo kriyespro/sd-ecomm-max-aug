@@ -178,14 +178,14 @@ if greenlit: the four SAFE ones first (same proven pattern, low risk,
 quick), media bulk-delete and inventory bulk-restock after (need a bit
 more design care each).
 
-## ROUND 3 — remaining CLAUDE_GENERAL_SAAS.md pillars (planning only, not built yet)
+## ROUND 3 — remaining CLAUDE_GENERAL_SAAS.md pillars
 
 Audited sections not yet specifically checked this session: 13 (UX
 states), 14 (forms), 22 (error handling), 32 (accessibility), 33
-(responsive), 38 (docs currency). Grounded via code read — file:line in
-each note.
+(responsive), 38 (docs currency). All 3 real gaps built same session —
+see git log ad5634c..27cb434:
 
-- [ ] [MODERATE] Courier booking failure is invisible to the merchant.
+- [x] Courier booking failure is invisible to the merchant.
       `create_shipment()` (`apps/shipping/services.py:158-165`) already
       catches `CourierError` and degrades gracefully — correct — but the
       reason it stores in `shipment.notes` is never displayed anywhere
@@ -197,7 +197,7 @@ each note.
       merchant, to a working one. Fix: surface `shipment.notes` on the
       order detail page when present; have the view check for it and
       show a warning-tier message instead of success.
-- [ ] [SAFE] Bulk-select checkboxes have no accessible name. Every
+- [x] Bulk-select checkboxes have no accessible name. Every
       checkbox added this session (product/order/customer/review/media/
       inventory — 6 templates) is a bare `<input>` outside the labeled
       `_forms.jinja` macro (which itself is confirmed clean — every real
@@ -205,7 +205,7 @@ each note.
       reader announces only "checkbox, not checked." Fix:
       `aria-label="Select {{ row }}"` per row, `aria-label="Select all"`
       on each header checkbox — same six templates.
-- [ ] [SAFE] DEPLOY.md is stale. Grepped for pyotp/qrcode/2FA/idle/
+- [x] DEPLOY.md is stale. Grepped for pyotp/qrcode/2FA/idle/
       courier/Shiprocket/Delhivery — zero hits on all of them, despite
       DEPLOY.md already maintaining a "what's in the box" table and a
       Celery task table listing the other scheduled jobs. A fresh deploy
