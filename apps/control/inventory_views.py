@@ -144,6 +144,37 @@ class InventoryItemCreateView(ActiveProjectMixin, CreateView):
         return response
 
 
+class InventoryBulkReceiveView(ActiveProjectMixin, View):
+    """Restock several SKUs from one shipment in one submit — was one
+    "Adjust" click per row. Adds the same quantity to every selected item
+    (a shared shipment batch, e.g. "50 units of this restock run landed").
+    Loops inv.receive_stock() per item rather than a bulk .update() — each
+    call locks the row and appends a real StockMovement ledger entry,
+    which a raw queryset update can't do."""
+
+    def post(self, request, *args, **kwargs):
+        pks = request.POST.getlist("pks")
+        raw_qty = (request.POST.get("quantity") or "").strip()
+        try:
+            qty = int(raw_qty)
+        except ValueError:
+            qty = 0
+        if not pks or qty <= 0:
+            messages.error(request, "Pick at least one item and a positive quantity.")
+            return redirect("control:inventory_list")
+
+        items = InventoryItem.objects.filter(warehouse__project=self.active_project, pk__in=pks)
+        count = 0
+        for item in items:
+            inv.receive_stock(item=item, quantity=qty, actor=request.user, note="Bulk restock")
+            count += 1
+        record_audit(actor=request.user, project=self.active_project, action=AuditLog.Action.UPDATE,
+                     target=None, changes={"bulk_receive_qty": qty, "count": count, "pks": pks},
+                     request=request)
+        messages.success(request, f"Added {qty} unit(s) to {count} item(s).")
+        return redirect("control:inventory_list")
+
+
 class _ItemScopedMixin(ActiveProjectMixin, TemplateResponseMixin, View):
     def get_item(self):
         item = get_object_or_404(

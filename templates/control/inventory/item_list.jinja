@@ -32,9 +32,19 @@
       <a href="{{ url('control:inventory_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add stock record</a>
     </div>
   </div>
+  <form id="bulk-receive-form" method="post" action="{{ url('control:inventory_bulk_receive') }}"
+        class="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2 text-xs">
+    {{ csrf_input }}
+    <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
+    <span class="text-slate-400">Add</span>
+    <input type="number" name="quantity" min="1" placeholder="qty" class="w-20 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+    <span class="text-slate-400">units to each selected item (e.g. one restock shipment)</span>
+    <button class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Restock selected</button>
+  </form>
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr>
+        <th class="px-4 py-2 w-8"><input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300"></th>
         <th class="px-4 py-2">Product</th><th class="px-4 py-2">Warehouse</th>
         <th class="px-4 py-2 text-right">On hand</th><th class="px-4 py-2 text-right">Reserved</th>
         <th class="px-4 py-2 text-right">Available</th><th class="px-4 py-2">Threshold</th>
@@ -48,4 +58,22 @@
 </div>
 
 <div id="modal"></div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var selectAll = document.getElementById("bulk-select-all");
+    var countEl = document.getElementById("bulk-selected-count");
+    if (!selectAll) return;
+    function updateCount() {
+      if (countEl) countEl.textContent = document.querySelectorAll(".bulk-row-check:checked").length + " selected";
+    }
+    document.body.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        document.querySelectorAll(".bulk-row-check").forEach(function (cb) { cb.checked = selectAll.checked; });
+      }
+      if (e.target === selectAll || (e.target.classList && e.target.classList.contains("bulk-row-check"))) updateCount();
+    });
+    document.body.addEventListener("htmx:afterSwap", updateCount);
+    updateCount();
+  });
+</script>
 {% endblock %}

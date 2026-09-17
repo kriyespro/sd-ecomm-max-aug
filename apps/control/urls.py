@@ -144,6 +144,7 @@ urlpatterns = [
 
     # Inventory
     path("inventory/", invv.InventoryListView.as_view(), name="inventory_list"),
+    path("inventory/bulk-receive/", invv.InventoryBulkReceiveView.as_view(), name="inventory_bulk_receive"),
     path("inventory/new/", invv.InventoryItemCreateView.as_view(), name="inventory_create"),
     path("inventory/<int:pk>/adjust/", invv.InventoryAdjustView.as_view(), name="inventory_adjust"),
     path("inventory/<int:pk>/movements/", invv.ItemMovementsView.as_view(), name="inventory_movements"),
