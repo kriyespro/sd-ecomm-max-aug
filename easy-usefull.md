@@ -91,6 +91,11 @@ Working one at a time, safest first. Test + confirm before moving to the next.
       reset), full suite (1016) green.
 - [x] Webhook signature verification, payment credential handling, XSS/IDOR
       spot checks — all clean, verified this session.
+- [x] 2FA follow-ups — done 2026-09-17. Broadened from platform-admin-only
+      to every Mission Control account (is_staff — owner/manager/staff/
+      DGC too), added a real scannable QR code to setup (was manual-key
+      only), and no 2FA wall on signup — a brand-new Google signup gets
+      one grace session, then it's mandatory from the very next login.
 
 ## COMMERCIAL
 
@@ -132,48 +137,27 @@ built same session — see git log 6a59edb..bcb6330:
 
 Team invite, domain verify, Today dashboard: already good, no change.
 
-## LESS FRICTION — round 2 (planning only, not built yet)
+## LESS FRICTION — round 2
 
-Audited 10 more areas not covered by round 1. Each recommendation below
-is the same proven shape as round 1's bulk-product fix (checkbox +
-toolbar + one audit-log row for the batch) unless noted. Grounded via
-code read, not guessed — file:line in each note.
+Audited 10 more areas not covered by round 1. All 6 real gaps found were
+built same session — see git log ab796d5..3ee2a9a:
 
-- [ ] [SAFE] Bulk archive on the order list. `OrderListView`
-      (`apps/control/order_views.py:55`) already has search + status +
-      payment filters + CSV export; row action is Archive/Unarchive
-      one-at-a-time. A merchant clearing a month of delivered orders does
-      it one row at a time today. Same checkbox+toolbar shape as the
-      product list.
-- [ ] [SAFE] CSV export on the customer list. `CustomerListView`
-      (`apps/control/customer_views.py:25`) has search + segment filter
-      but no export — orders already have one, customers don't. Common
-      ask for marketing/CRM tools. Pure addition, mirrors the existing
-      order export exactly.
-- [ ] [SAFE] Bulk assign customers to a group. Same screen — moving many
-      existing customers into a new `CustomerGroup` is one-at-a-time via
-      `CustomerUpdateView` today.
-- [ ] [SAFE] Bulk approve/reject on review moderation.
-      `ReviewModerateView` (`apps/control/review_views.py:36`) approves
-      one review per POST; the list already shows a pending count and
-      status filter, so a merchant with 10 pending reviews clicks 10
-      times. Same shape as the product bulk-status fix.
-- [ ] [MODERATE] Bulk delete on the media library.
-      `MediaDeleteView`/`MediaRestoreView`/`MediaPurgeView`
-      (`apps/control/phase11_views.py:240,277,321`) are strictly
-      one-asset-per-request, no checkbox UI in `library.jinja` at all —
-      asymmetric, since upload already accepts multiple files in one
-      submit. Tagged MODERATE not SAFE because delete is destructive
-      (media may be in use on live product pages) — needs a confirm step
-      and a check for in-use assets before batching, not just a raw bulk
-      `.update()`/delete.
-- [ ] [MODERATE] Bulk restock (quantity add, not a status toggle) on
-      Inventory. Already has search + warehouse + low-stock filter and
-      an inline HTMX adjust row (no page nav) — already fairly good.
-      Lower priority: unlike a status flip, "add N units" is a per-row
-      value, not one action applied to every selected row, so the UI
-      needs a per-row quantity input inside the bulk form, not just a
-      dropdown — more design work than the others on this list.
+- [x] Bulk archive/unarchive on the order list.
+- [x] CSV export on the customer list (orders already had one).
+- [x] Bulk assign customers to a group.
+- [x] Bulk approve/reject on review moderation — loops moderate_review()
+      per row (not a raw bulk update) since each review touches its own
+      product's rating aggregate, and a batch can span several products.
+- [x] Bulk trash on the media library — upload already took multiple
+      files in one submit, delete was one-at-a-time until now.
+- [x] Bulk restock on Inventory — adds a shared quantity to every
+      selected item in one submit (one shipment batch landing across
+      several SKUs), loops inv.receive_stock() per item since each call
+      locks the row and writes a real StockMovement ledger entry.
+
+Category/Brand/Tag CRUD, Reports/export, Store profile/theme, Notification
+setup, duplicate data entry: already good, no change (see round-2 audit
+notes in git history for why).
 
 Audited and already good, no gap found: Category/Brand/Tag CRUD (low
 cardinality, ~5-20 rows per store — bulk actions here would be
