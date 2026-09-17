@@ -191,6 +191,8 @@ urlpatterns = [
 
     # Customers
     path("customers/", custv.CustomerListView.as_view(), name="customers"),
+    path("customers/export/", custv.CustomerExportView.as_view(), name="customer_export"),
+    path("customers/bulk-group/", custv.CustomerBulkGroupAssignView.as_view(), name="customer_bulk_group"),
     path("customers/<int:pk>/", custv.CustomerDetailView.as_view(), name="customer_detail"),
     path("customers/<int:pk>/edit/", custv.CustomerUpdateView.as_view(), name="customer_edit"),
     path("customers/<int:pk>/block/", custv.CustomerBlockView.as_view(), name="customer_block"),
@@ -210,6 +212,7 @@ urlpatterns = [
 
     # Reviews
     path("reviews/", revv.ReviewListView.as_view(), name="review_list"),
+    path("reviews/bulk-moderate/", revv.ReviewBulkModerateView.as_view(), name="review_bulk_moderate"),
     path("reviews/<int:pk>/moderate/", revv.ReviewModerateView.as_view(), name="review_moderate"),
 
     # Analytics + reports

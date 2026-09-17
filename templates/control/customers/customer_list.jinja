@@ -18,13 +18,31 @@
         <option value="{{ value }}" {{ 'selected' if segment == value }}>{{ label }}</option>
         {% endfor %}
       </select>
+      {% if can_export_customers %}
+      <a href="{{ url('control:customer_export') }}?q={{ q|urlencode }}&segment={{ segment|urlencode }}"
+         class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">Export CSV</a>
+      {% endif %}
       <a href="{{ url('control:customer_groups') }}" class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100">Groups</a>
     </div>
   </div>
+  <form id="bulk-group-form" method="post" action="{{ url('control:customer_bulk_group') }}"
+        class="flex flex-wrap items-center gap-2 border-b border-slate-200 px-4 py-2 text-xs">
+    {{ csrf_input }}
+    <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
+    <select name="group" class="rounded-lg border border-slate-300 px-2 py-1 text-xs">
+      <option value="">No group</option>
+      {% for g in groups %}
+      <option value="{{ g.pk }}">{{ g.name }}</option>
+      {% endfor %}
+    </select>
+    <button class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Move to group</button>
+  </form>
   <div class="overflow-x-auto">
     <table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-2">Customer</th><th class="px-4 py-2">Segment</th>
+        <tr>
+          <th class="px-4 py-2 w-8"><input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300"></th>
+          <th class="px-4 py-2">Customer</th><th class="px-4 py-2">Segment</th>
           <th class="px-4 py-2">Group</th><th class="px-4 py-2 text-right">Orders</th>
           <th class="px-4 py-2 text-right">Spent</th><th class="px-4 py-2">Status</th></tr>
       </thead>
@@ -34,4 +52,23 @@
     </table>
   </div>
 </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var container = document.querySelector(".rounded-xl.bg-white.ring-1.ring-slate-200");
+    if (!container) return;
+    var selectAll = document.getElementById("bulk-select-all");
+    var countEl = document.getElementById("bulk-selected-count");
+    function updateCount() {
+      if (countEl) countEl.textContent = document.querySelectorAll(".bulk-row-check:checked").length + " selected";
+    }
+    container.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        document.querySelectorAll(".bulk-row-check").forEach(function (cb) { cb.checked = selectAll.checked; });
+      }
+      updateCount();
+    });
+    document.body.addEventListener("htmx:afterSwap", updateCount);
+    updateCount();
+  });
+</script>
 {% endblock %}

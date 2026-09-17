@@ -1,6 +1,9 @@
 {% for cst in customers %}
 <tr class="hover:bg-slate-50">
   <td class="px-4 py-2">
+    <input type="checkbox" name="pks" value="{{ cst.pk }}" form="bulk-group-form" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
+  </td>
+  <td class="px-4 py-2">
     <a href="{{ url('control:customer_detail', kwargs={'pk': cst.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ cst.full_name or cst.email }}</a>
     {% if cst.full_name %}<span class="block text-xs text-slate-400">{{ cst.email }}</span>{% endif %}
   </td>
@@ -14,5 +17,5 @@
   </td>
 </tr>
 {% else %}
-<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No customers found.</td></tr>
+<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">No customers found.</td></tr>
 {% endfor %}
