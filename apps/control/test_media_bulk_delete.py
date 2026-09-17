@@ -85,3 +85,13 @@ class MediaBulkDeleteTests(TestCase):
         MediaAsset.objects.filter(pk=self.a1.pk).update(trashed_at=timezone.now())
         resp = self.client.get("/admin/media/?trash=1")
         self.assertNotContains(resp, "bulk-media-form")
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        too_many = [str(self.a1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/media/bulk-delete/", {"pks": too_many}, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.a1.refresh_from_db()
+        self.assertIsNone(self.a1.trashed_at)

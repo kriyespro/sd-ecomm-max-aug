@@ -36,7 +36,7 @@ from .forms import (
     ProductTypeForm,
     TagForm,
 )
-from .mixins import ActiveProjectMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin
 from .trash import (
     TRASH_RETENTION_DAYS,
     purge_product,
@@ -271,6 +271,7 @@ class ProductListView(_ScopedQuerysetMixin, ListView):
         ctx["product_used"] = used
         ctx["product_cap"] = cap
         ctx["product_cap_full"] = cap is not None and used >= cap
+        ctx["product_cap_near"] = billing_limits.is_near_cap(used, cap)
         return ctx
 
 
@@ -296,6 +297,9 @@ class ProductBulkStatusView(_ScopedQuerysetMixin, View):
         pks = request.POST.getlist("pks")
         if new_status is None or not pks:
             messages.error(request, "Pick at least one product and an action.")
+            return redirect("control:product_list")
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect("control:product_list")
 
         qs = self.get_queryset().filter(pk__in=pks)

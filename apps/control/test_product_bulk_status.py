@@ -86,3 +86,17 @@ class ProductBulkStatusTests(TestCase):
     def test_trash_view_has_no_bulk_toolbar(self):
         resp = self.client.get("/admin/products/?trash=1")
         self.assertNotContains(resp, "bulk-status-form")
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        # p1's real pk is in the batch — if the cap didn't actually reject
+        # the whole request, this would prove it by getting activated.
+        too_many = [str(self.p1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/products/bulk-status/", {
+            "action": "activate", "pks": too_many,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.p1.refresh_from_db()
+        self.assertEqual(self.p1.status, "draft")

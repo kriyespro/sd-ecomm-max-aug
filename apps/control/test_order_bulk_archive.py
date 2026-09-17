@@ -101,3 +101,15 @@ class OrderBulkArchiveTests(TestCase):
             "action": "archive", "pks": [self.o1.pk],
         })
         self.assertEqual(resp.status_code, 403)
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        too_many = [str(self.o1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/orders/bulk-archive/", {
+            "action": "archive", "pks": too_many,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.o1.refresh_from_db()
+        self.assertFalse(self.o1.is_archived)

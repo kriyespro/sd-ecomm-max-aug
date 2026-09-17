@@ -32,7 +32,7 @@ from .forms import (
     NotificationTemplateForm,
     WebhookEndpointForm,
 )
-from .mixins import ActiveProjectMixin, StoreDataAccessMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin, StoreDataAccessMixin
 
 # --- Analytics / reports -------------------------------------
 
@@ -340,6 +340,9 @@ class MediaBulkDeleteView(_MediaTrashBase, View):
         pks = request.POST.getlist("pks")
         if not pks:
             messages.error(request, "Pick at least one file.")
+            return redirect("control:media")
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect("control:media")
 
         assets = MediaAsset.objects.filter(project=self.active_project, pk__in=pks, trashed_at__isnull=True)

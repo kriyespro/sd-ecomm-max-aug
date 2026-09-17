@@ -23,7 +23,7 @@ from apps.customers import services as cust
 from apps.customers.models import Customer, CustomerGroup, Segment
 
 from .forms import CustomerForm, CustomerGroupForm
-from .mixins import ActiveProjectMixin, StoreDataAccessMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin, StoreDataAccessMixin
 
 
 def _filtered_customers(project, params):
@@ -112,6 +112,9 @@ class CustomerBulkGroupAssignView(StoreDataAccessMixin, ActiveProjectMixin, View
         group_id = (request.POST.get("group") or "").strip()
         if not pks:
             messages.error(request, "Pick at least one customer.")
+            return redirect("control:customers")
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect("control:customers")
 
         group = None

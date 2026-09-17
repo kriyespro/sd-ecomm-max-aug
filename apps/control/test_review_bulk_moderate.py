@@ -99,3 +99,15 @@ class ReviewBulkModerateTests(TestCase):
         resp = self.client.get("/admin/reviews/?status=pending")
         self.assertContains(resp, 'aria-label="Select all reviews"')
         self.assertContains(resp, 'aria-label="Select review by A"')
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        too_many = [str(self.r1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/reviews/bulk-moderate/", {
+            "status": "approved", "pks": too_many,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.r1.refresh_from_db()
+        self.assertEqual(self.r1.status, ReviewStatus.PENDING)

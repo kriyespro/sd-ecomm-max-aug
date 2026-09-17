@@ -89,3 +89,15 @@ class InventoryBulkReceiveTests(TestCase):
         resp = self.client.get("/admin/inventory/")
         self.assertContains(resp, 'aria-label="Select all inventory items"')
         self.assertContains(resp, 'aria-label="Select Shirt"')
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        too_many = [str(self.i1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/inventory/bulk-receive/", {
+            "quantity": "20", "pks": too_many,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.i1.refresh_from_db()
+        self.assertEqual(self.i1.quantity, 10)

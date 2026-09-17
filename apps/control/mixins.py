@@ -8,6 +8,16 @@ from apps.projects.services import projects_for_user
 
 ACTIVE_PROJECT_SESSION_KEY = "active_project_id"
 
+# Shared cap for every "select many rows, apply one action" bulk endpoint
+# (products/orders/customers/reviews/media/inventory). A single bulk
+# .update() barely notices row count, but three of these views do real
+# per-row work inside the request (row locks, an extra query, a ledger
+# write) with no wrapping transaction — an oversized batch risks a
+# partially-applied result if gunicorn's request timeout (30s,
+# gunicorn.conf.py) hits mid-loop. Reject instead of silently truncating,
+# so a merchant isn't left guessing which rows landed.
+BULK_ACTION_MAX_ROWS = 500
+
 # URL names a not-yet-onboarded owner may still reach (the wizard itself, the
 # store picker, sign-out).
 _ONBOARDING_EXEMPT = {"onboarding", "onboarding_skip", "project_picker", "set_project"}

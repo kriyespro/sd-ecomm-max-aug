@@ -20,7 +20,7 @@ from apps.core.services import record_audit, safe_next
 from apps.orders import services as orders
 from apps.orders.models import Order, OrderStatus, PaymentStatus
 
-from .mixins import ActiveProjectMixin, StoreDataAccessMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin, StoreDataAccessMixin
 
 
 class _OrderScopedMixin(StoreDataAccessMixin, ActiveProjectMixin):
@@ -118,6 +118,9 @@ class OrderBulkArchiveView(_OrderManageMixin, View):
         pks = request.POST.getlist("pks")
         if action not in ("archive", "unarchive") or not pks:
             messages.error(request, "Pick at least one order and an action.")
+            return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
 
         qs = Order.objects.filter(project=self.active_project, pk__in=pks)

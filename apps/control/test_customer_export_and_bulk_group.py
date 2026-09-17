@@ -134,3 +134,15 @@ class CustomerBulkGroupAssignTests(TestCase):
         resp = self.client.get("/admin/customers/")
         self.assertContains(resp, 'aria-label="Select all customers"')
         self.assertContains(resp, 'aria-label="Select c1@t.test"')
+
+    def test_oversized_batch_is_rejected(self):
+        from apps.control.mixins import BULK_ACTION_MAX_ROWS
+
+        too_many = [str(self.c1.pk)] + [str(-n) for n in range(1, BULK_ACTION_MAX_ROWS + 1)]
+        resp = self.client.post("/admin/customers/bulk-group/", {
+            "group": self.group.pk, "pks": too_many,
+        }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "or fewer at a time")
+        self.c1.refresh_from_db()
+        self.assertIsNone(self.c1.group_id)

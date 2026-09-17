@@ -8,7 +8,7 @@ from django.views.generic import ListView, View
 from apps.reviews import services as rev
 from apps.reviews.models import Review, ReviewStatus
 
-from .mixins import ActiveProjectMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin
 
 
 class ReviewListView(ActiveProjectMixin, ListView):
@@ -46,6 +46,9 @@ class ReviewBulkModerateView(ActiveProjectMixin, View):
         pks = request.POST.getlist("pks")
         if status not in dict(ReviewStatus.choices) or not pks:
             messages.error(request, "Pick at least one review and an action.")
+            return redirect(request.META.get("HTTP_REFERER", "/admin/reviews/"))
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect(request.META.get("HTTP_REFERER", "/admin/reviews/"))
 
         reviews = Review.objects.filter(project=self.active_project, pk__in=pks).select_related("product")

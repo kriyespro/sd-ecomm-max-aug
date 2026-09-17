@@ -18,7 +18,7 @@ from apps.inventory import services as inv
 from apps.inventory.models import InventoryItem, StockMovement, Warehouse
 
 from .forms import InventoryItemForm, StockAdjustForm, WarehouseForm
-from .mixins import ActiveProjectMixin
+from .mixins import BULK_ACTION_MAX_ROWS, ActiveProjectMixin
 
 # --- Warehouses ----------------------------------------------------
 
@@ -161,6 +161,9 @@ class InventoryBulkReceiveView(ActiveProjectMixin, View):
             qty = 0
         if not pks or qty <= 0:
             messages.error(request, "Pick at least one item and a positive quantity.")
+            return redirect("control:inventory_list")
+        if len(pks) > BULK_ACTION_MAX_ROWS:
+            messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect("control:inventory_list")
 
         items = InventoryItem.objects.filter(warehouse__project=self.active_project, pk__in=pks)
