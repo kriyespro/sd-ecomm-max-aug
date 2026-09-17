@@ -238,6 +238,7 @@
           </div>
           {% if s.tracking_number %}<p class="mt-1 text-slate-500">{{ s.tracking_number }}</p>{% endif %}
           {% if s.estimated_delivery %}<p class="text-xs text-slate-400">ETA {{ s.estimated_delivery }}</p>{% endif %}
+          {% if s.notes %}<p class="mt-1 rounded bg-amber-50 px-2 py-1 text-xs text-amber-800">⚠ {{ s.notes }}</p>{% endif %}
           <form method="post" action="{{ url('control:order_shipment_status', kwargs={'pk': order.pk, 'shipment_pk': s.pk}) }}" class="mt-2 flex gap-1">
             {{ csrf_input }}
             <select name="status" class="flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs">

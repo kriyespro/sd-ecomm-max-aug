@@ -249,6 +249,7 @@
       <div class="rounded-lg px-3 py-2 text-sm
                   {{ 'bg-emerald-50 text-emerald-800' if 'success' in message.tags
                      else 'bg-red-50 text-red-700' if 'error' in message.tags
+                     else 'bg-amber-50 text-amber-800' if 'warning' in message.tags
                      else 'bg-slate-100 text-slate-700' }}">
         {{ message }}
       </div>

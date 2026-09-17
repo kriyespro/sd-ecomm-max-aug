@@ -5,6 +5,7 @@ shipment yet, order ready) — the standalone two-step path stays available
 for a second/partial shipment."""
 
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -14,7 +15,9 @@ from apps.billing import services as billing_svc
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
 from apps.orders.models import Order, OrderItem
 from apps.projects.models import Project
-from apps.shipping.models import Shipment, ShippingMethod, ShippingZone
+from apps.shipping.couriers.base import CourierError
+from apps.shipping.couriers.shiprocket import ShiprocketCourier
+from apps.shipping.models import CourierConfig, Courier, Shipment, ShippingMethod, ShippingZone
 
 User = get_user_model()
 
@@ -77,6 +80,46 @@ class OrderSetShippingAndShipTests(TestCase):
         resp = self.client.get(f"/admin/orders/{self.order.pk}/")
         self.assertContains(resp, "Set shipping method")
         self.assertNotContains(resp, "/shipping/set-and-ship/")
+
+    def test_courier_failure_shows_a_warning_not_a_silent_success(self):
+        """Regression: create_shipment() degrades a CourierError to a
+        manual/pending shipment instead of raising — correct — but the
+        view used to show the same green success message either way, and
+        the failure reason (shipment.notes) was never displayed anywhere."""
+        self.method.carrier = "shiprocket"
+        self.method.save(update_fields=["carrier"])
+        CourierConfig.objects.create(
+            project=self.project, courier=Courier.SHIPROCKET, is_test_mode=False,
+            credentials={"email": "x@t.test", "password": "pw"},
+        )
+        with patch.object(ShiprocketCourier, "create_shipment", side_effect=CourierError("bad credentials")):
+            resp = self.client.post(
+                f"/admin/orders/{self.order.pk}/shipping/set-and-ship/",
+                {"method": self.method.pk}, follow=True,
+            )
+        self.assertContains(resp, "courier booking failed")
+        self.assertContains(resp, "bad credentials")
+        shipment = Shipment.objects.get(order=self.order)
+        self.assertIn("bad credentials", shipment.notes)
+
+    def test_courier_success_still_shows_plain_success(self):
+        resp = self.client.post(
+            f"/admin/orders/{self.order.pk}/shipping/set-and-ship/",
+            {"method": self.method.pk}, follow=True,
+        )
+        self.assertContains(resp, "Shipping set and shipment created")
+        self.assertNotContains(resp, "courier booking failed")
+
+    def test_standalone_create_shipment_also_warns_on_courier_failure(self):
+        """Same fix, the other view — OrderCreateShipmentView (the
+        second-shipment / manual-carrier path)."""
+        with patch.object(ShiprocketCourier, "create_shipment", side_effect=CourierError("timeout")):
+            resp = self.client.post(
+                f"/admin/orders/{self.order.pk}/shipping/ship/",
+                {"carrier": "shiprocket"}, follow=True,
+            )
+        self.assertContains(resp, "courier booking failed")
+        self.assertContains(resp, "timeout")
 
     def test_invalid_method_from_another_project_is_rejected(self):
         other = Project.objects.create(name="OtherCo", status="active")

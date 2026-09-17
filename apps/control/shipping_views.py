@@ -193,12 +193,19 @@ class OrderSetShippingAndShipView(_OrderScoped, View):
         cod = request.POST.get("cod") == "1"
         try:
             ship.set_order_shipping(order=order, method=method, cod=cod, actor=request.user)
-            ship.create_shipment(
+            shipment = ship.create_shipment(
                 order=order,
                 tracking_number=request.POST.get("tracking_number", "").strip(),
                 actor=request.user,
             )
-            messages.success(request, f"Shipping set and shipment created: {method.name}.")
+            if shipment.notes:
+                # create_shipment() degrades a courier failure to a manual/
+                # pending shipment instead of raising — the shipping method
+                # was still set correctly, but the booking itself didn't
+                # happen, so this can't be a plain success message.
+                messages.warning(request, f"Shipping set, but the courier booking failed: {shipment.notes}")
+            else:
+                messages.success(request, f"Shipping set and shipment created: {method.name}.")
         except ship.ShippingError as exc:
             messages.error(request, str(exc))
         return redirect("control:order_detail", pk=order.pk)
@@ -207,14 +214,17 @@ class OrderSetShippingAndShipView(_OrderScoped, View):
 class OrderCreateShipmentView(_OrderScoped, View):
     def post(self, request, *args, **kwargs):
         order = self.get_order()
-        ship.create_shipment(
+        shipment = ship.create_shipment(
             order=order,
             carrier=request.POST.get("carrier", "").strip(),
             tracking_number=request.POST.get("tracking_number", "").strip(),
             tracking_url=request.POST.get("tracking_url", "").strip(),
             actor=request.user,
         )
-        messages.success(request, "Shipment created.")
+        if shipment.notes:
+            messages.warning(request, f"Shipment created, but the courier booking failed: {shipment.notes}")
+        else:
+            messages.success(request, "Shipment created.")
         return redirect("control:order_detail", pk=order.pk)
 
 
