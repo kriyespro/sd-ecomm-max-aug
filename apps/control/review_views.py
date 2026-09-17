@@ -33,6 +33,30 @@ class ReviewListView(ActiveProjectMixin, ListView):
         return ctx
 
 
+class ReviewBulkModerateView(ActiveProjectMixin, View):
+    """Bulk approve/reject from the review list — was one click per review.
+    Loops moderate_review() per row rather than a raw bulk .update():
+    unlike the product/order bulk actions, a review touches its product's
+    rating_avg/rating_count aggregate (refresh_product_rating) on every
+    status change, and a batch can span several different products — a
+    bulk .update() would silently leave those aggregates stale."""
+
+    def post(self, request, *args, **kwargs):
+        status = request.POST.get("status", "").strip()
+        pks = request.POST.getlist("pks")
+        if status not in dict(ReviewStatus.choices) or not pks:
+            messages.error(request, "Pick at least one review and an action.")
+            return redirect(request.META.get("HTTP_REFERER", "/admin/reviews/"))
+
+        reviews = Review.objects.filter(project=self.active_project, pk__in=pks).select_related("product")
+        count = 0
+        for review in reviews:
+            rev.moderate_review(review=review, status=status, actor=request.user)
+            count += 1
+        messages.success(request, f"{count} review(s) {status}.")
+        return redirect(request.META.get("HTTP_REFERER", "/admin/reviews/"))
+
+
 class ReviewModerateView(ActiveProjectMixin, View):
     def post(self, request, *args, **kwargs):
         review = get_object_or_404(Review, pk=kwargs["pk"])

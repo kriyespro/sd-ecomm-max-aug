@@ -15,10 +15,23 @@
     </div>
   </div>
 
+  {% if reviews %}
+  <form id="bulk-review-form" method="post" action="{{ url('control:review_bulk_moderate') }}"
+        class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3 text-xs ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300">
+    <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
+    <button name="status" value="approved" class="rounded-lg bg-emerald-600 px-2.5 py-1 text-white hover:bg-emerald-700" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Approve selected</button>
+    <button name="status" value="rejected" class="rounded-lg bg-red-600 px-2.5 py-1 text-white hover:bg-red-700" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Reject selected</button>
+  </form>
+  {% endif %}
+
   {% for r in reviews %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <div class="flex items-start justify-between">
-      <div>
+      <div class="flex items-start gap-3">
+        <input type="checkbox" name="pks" value="{{ r.pk }}" form="bulk-review-form" class="bulk-row-check mt-1 h-3.5 w-3.5 rounded border-slate-300">
+        <div>
         <p class="text-sm font-semibold text-slate-800">
           {{ "★" * r.rating }}<span class="text-slate-300">{{ "★" * (5 - r.rating) }}</span>
           <span class="ml-2 text-slate-600">{{ r.title or "(no title)" }}</span>
@@ -28,6 +41,7 @@
           <a href="{{ url('control:product_edit', kwargs={'pk': r.product.pk}) }}" class="hover:underline">{{ r.product.title }}</a>
           {% if r.is_verified_purchase %} · <span class="text-emerald-600">verified purchase</span>{% endif %}
         </p>
+        </div>
       </div>
       <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if r.status == 'approved' else 'bg-red-100 text-red-700' if r.status == 'rejected' else 'bg-amber-100 text-amber-800' }}">{{ r.get_status_display() }}</span>
     </div>
@@ -45,4 +59,21 @@
   <div class="rounded-xl bg-white p-6 text-center text-sm text-slate-400 ring-1 ring-slate-200">No reviews in this state.</div>
   {% endfor %}
 </div>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    var selectAll = document.getElementById("bulk-select-all");
+    var countEl = document.getElementById("bulk-selected-count");
+    if (!selectAll) return;
+    function updateCount() {
+      if (countEl) countEl.textContent = document.querySelectorAll(".bulk-row-check:checked").length + " selected";
+    }
+    document.addEventListener("change", function (e) {
+      if (e.target === selectAll) {
+        document.querySelectorAll(".bulk-row-check").forEach(function (cb) { cb.checked = selectAll.checked; });
+      }
+      if (e.target === selectAll || (e.target.classList && e.target.classList.contains("bulk-row-check"))) updateCount();
+    });
+    updateCount();
+  });
+</script>
 {% endblock %}
