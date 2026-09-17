@@ -26,7 +26,11 @@
     btn.type = "button";
     btn.tabIndex = -1;
     btn.setAttribute("aria-label", "Show password");
-    btn.className = "absolute inset-y-0 right-0 flex items-center px-2.5";
+    // Inset a couple px from the wrapper's edges (== the input's own
+    // border box) rather than flush against them — flush-right-0 sat the
+    // icon right on top of the input's border line instead of cleanly
+    // inside the bordered box.
+    btn.className = "absolute inset-y-0.5 right-1 flex items-center px-1.5";
     // Every storefront skin has its own palette (Mission Control's own
     // slate/gray theme is just one of ~18) — a hardcoded Tailwind gray
     // looked like a foreign default plopped onto a themed input. currentColor
