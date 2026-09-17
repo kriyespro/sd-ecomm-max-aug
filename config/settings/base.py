@@ -111,6 +111,10 @@ MIDDLEWARE = [
     # Mandatory 2FA for platform admins — must run after auth (needs
     # request.user) and before anything else that could let an admin act.
     "apps.accounts.middleware.TwoFactorEnforcementMiddleware",
+    # Idle timeout for Mission Control staff sessions (35 min of no
+    # request) — same request.user dependency, order relative to the 2FA
+    # gate above doesn't matter, both just check-and-redirect independently.
+    "apps.accounts.middleware.IdleLogoutMiddleware",
     # Resolves request.project from the Host header. Must run after auth so it
     # can fall back to the authenticated user's memberships.
     "apps.core.middleware.ProjectResolverMiddleware",

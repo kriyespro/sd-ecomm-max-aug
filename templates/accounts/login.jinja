@@ -8,6 +8,15 @@
     <h1 class="text-lg font-semibold">Sign in</h1>
     <p class="mt-1 text-sm text-slate-500">Mission Control access</p>
 
+    {% if messages %}
+    {% for message in messages %}
+    <div class="mt-4 rounded-lg px-3 py-2 text-sm
+                {{ 'bg-red-50 text-red-700' if 'error' in message.tags else 'bg-blue-50 text-blue-900' }}">
+      {{ message }}
+    </div>
+    {% endfor %}
+    {% endif %}
+
     {% if form.non_field_errors() %}
     <div class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
       {{ form.non_field_errors()|join(" ") }}
