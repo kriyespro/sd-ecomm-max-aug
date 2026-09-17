@@ -222,3 +222,23 @@ Domains and Webhooks empty states already checked out fine, no change
 needed. Responsive/mobile not re-checked in depth — nothing built this
 session introduced a new non-table/non-form UI shape that would regress
 the existing mobile-responsive pass.
+
+## ROUND 4 — home page CMS editability + auto-scroll (user-requested)
+
+Built same session — see git log ff3c056..c19d71d:
+
+- [x] Trust strip (Free shipping / COD / 7-day returns / Clean formulas —
+      the 4-badge row right under the hero) was hardcoded in botanica2 +
+      botanica3 home.jinja — a code comment literally said "EDIT HOMEPAGE
+      COPY HERE." Now editable at Mission Control → Storefront → Home
+      page benefits, via a second `BenefitItem.kind` (`why` / `trust`) on
+      the existing "Why it works" model + screen rather than a new one —
+      same icon+title+description shape, same fallback-when-empty
+      convention. Found + fixed a real bug while wiring it: store
+      backup/restore's field allowlist for this model didn't include the
+      new `kind` field, which would have silently dropped it.
+- [x] Shorts (shared partial, effectively all 18 skins) and the
+      Instagram feed (botanica3 only — no other skin has this section)
+      now auto-scroll via `auto_scroll_attrs()`, same macro as the
+      category-row overflow case. Instagram's static 6-tile grid became
+      a scroll row, slice raised to 12.
