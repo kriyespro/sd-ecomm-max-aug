@@ -242,3 +242,53 @@ Built same session — see git log ff3c056..c19d71d:
       now auto-scroll via `auto_scroll_attrs()`, same macro as the
       category-row overflow case. Instagram's static 6-tile grid became
       a scroll row, slice raised to 12.
+
+## ROUND 5 — sections 6/20/21/24/30 (planning only, not built yet)
+
+Fresh angles not covered by rounds 1-4: one-primary-action screens,
+background-work risk in this session's *own* new code, revenue-rule
+expansion/referral nudges, jargon leaks on the 6 new bulk screens,
+data-isolation spot check on those same 6. Grounded via code read —
+file:line in each note.
+
+- [ ] [MODERATE] Bulk-action requests have no row cap and no timeout
+      margin. `gunicorn.conf.py:21` sets `timeout = 30`. None of the 6
+      bulk views built this session
+      (`apps/control/catalog_views.py:296`, `order_views.py:118`,
+      `customer_views.py:111`, `review_views.py:46`,
+      `phase11_views.py:340`, `inventory_views.py:156`) cap
+      `request.POST.getlist("pks")`. Product/order/customer bulk actions
+      are a single `.update()` each — fast even at scale, low risk. The
+      other 3 genuinely loop per-row inside the request with real
+      per-item work: review bulk-approve calls `moderate_review()` (save
+      + `refresh_product_rating()`, a second query+save, per review),
+      media bulk-trash loops `trash_asset()`, inventory bulk-receive
+      loops `inv.receive_stock()` (row lock + `StockMovement` write per
+      item). A merchant selecting thousands of rows on any of these 3
+      risks a mid-batch 30s timeout with no wrapping transaction, so a
+      partial batch would apply with no rollback. Fix: cap `pks` length
+      (e.g. reject/truncate over ~500 with a clear message), and/or move
+      the 3 looping ones to a Celery task above some threshold.
+- [ ] [SAFE] No "approaching your limit" nudge on plan usage.
+      `catalog_views.py:273` / `domain_views.py:48` only check
+      `used >= cap` — binary, at-the-wall. Nothing warns a merchant
+      trending toward the cap (e.g. `used >= cap * 0.8`) before they
+      actually hit the block.
+- [ ] [SAFE/MODERATE] Referral program is invisible to store owners.
+      `my_commissions` / `affiliate_overview` are `_DGC_ONLY` /
+      `_PLATFORM_ADMIN_ONLY` in `navigation.py` — grepped
+      `dashboard.jinja` / `store_dashboard.jinja` for any affiliate/
+      referral mention, zero hits. A plain store owner is never invited
+      to refer another merchant from inside their own Mission Control at
+      all, despite CLAUDE_GENERAL_SAAS.md sec 20's explicit "why would
+      they recommend the product?" question. Needs a scope decision
+      (where would an owner's own referral link even live?) before
+      building — not a pure SAFE addition like the others.
+
+Clean, no gap: one-primary-action screens (order detail, product form —
+each card/screen already has one clear dark "primary" button vs bordered
+secondaries, checked), jargon leaks on the 6 bulk screens (grepped for
+raw exception names / `is_active`/`None`/`null` as visible text — zero
+hits, matches the views' own plain-English messages), data isolation on
+all 6 bulk views (every one filters by `project=self.active_project`
+before mutating — confirmed pattern-consistent, no view skips it).
