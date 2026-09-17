@@ -46,7 +46,7 @@
   <form id="bulk-media-form" method="post" action="{{ url('control:media_bulk_delete') }}"
         class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3 text-xs ring-1 ring-slate-200">
     {{ csrf_input }}
-    <input type="checkbox" id="bulk-select-all" class="h-3.5 w-3.5 rounded border-slate-300">
+    <input type="checkbox" id="bulk-select-all" aria-label="Select all files" class="h-3.5 w-3.5 rounded border-slate-300">
     <span id="bulk-selected-count" class="text-slate-400">0 selected</span>
     <button class="rounded-lg border border-red-300 px-2.5 py-1 text-red-600 hover:bg-red-50"
             onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0 && confirm('Move selected files to Trash?')">
@@ -60,6 +60,7 @@
     <div class="relative overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
       {% if can_manage_trash and not show_trash %}
       <input type="checkbox" name="pks" value="{{ a.pk }}" form="bulk-media-form"
+             aria-label="Select {{ a.original_name }}"
              class="bulk-row-check absolute left-1.5 top-1.5 z-10 h-4 w-4 rounded border-slate-300 bg-white/90">
       {% endif %}
       <div class="grid h-28 place-items-center bg-slate-50">

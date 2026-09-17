@@ -76,6 +76,11 @@ class MediaBulkDeleteTests(TestCase):
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, "Trash selected")
 
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/media/")
+        self.assertContains(resp, 'aria-label="Select all files"')
+        self.assertContains(resp, 'aria-label="Select one.jpg"')
+
     def test_trash_view_has_no_bulk_toolbar(self):
         MediaAsset.objects.filter(pk=self.a1.pk).update(trashed_at=timezone.now())
         resp = self.client.get("/admin/media/?trash=1")

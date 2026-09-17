@@ -84,3 +84,8 @@ class InventoryBulkReceiveTests(TestCase):
         self.assertContains(resp, 'name="pks"')
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, "Restock selected")
+
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/inventory/")
+        self.assertContains(resp, 'aria-label="Select all inventory items"')
+        self.assertContains(resp, 'aria-label="Select Shirt"')

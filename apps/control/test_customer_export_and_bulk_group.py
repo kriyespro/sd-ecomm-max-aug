@@ -129,3 +129,8 @@ class CustomerBulkGroupAssignTests(TestCase):
         self.assertContains(resp, 'name="pks"')
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, "Move to group")
+
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/customers/")
+        self.assertContains(resp, 'aria-label="Select all customers"')
+        self.assertContains(resp, 'aria-label="Select c1@t.test"')

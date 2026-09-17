@@ -1,7 +1,7 @@
 {% for cst in customers %}
 <tr class="hover:bg-slate-50">
   <td class="px-4 py-2">
-    <input type="checkbox" name="pks" value="{{ cst.pk }}" form="bulk-group-form" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
+    <input type="checkbox" name="pks" value="{{ cst.pk }}" form="bulk-group-form" aria-label="Select {{ cst.full_name or cst.email }}" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
   </td>
   <td class="px-4 py-2">
     <a href="{{ url('control:customer_detail', kwargs={'pk': cst.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ cst.full_name or cst.email }}</a>

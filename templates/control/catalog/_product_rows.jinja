@@ -2,7 +2,7 @@
 <tr class="hover:bg-slate-50">
   <td class="px-4 py-2">
     {% if not show_trash %}
-    <input type="checkbox" name="pks" value="{{ p.pk }}" form="bulk-status-form" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
+    <input type="checkbox" name="pks" value="{{ p.pk }}" form="bulk-status-form" aria-label="Select {{ p.title }}" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
     {% endif %}
   </td>
   <td class="px-4 py-2">

@@ -78,6 +78,11 @@ class ProductBulkStatusTests(TestCase):
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, 'value="activate"')
 
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/products/")
+        self.assertContains(resp, 'aria-label="Select all products"')
+        self.assertContains(resp, "aria-label=\"Select A\"")  # row checkbox, product title "A"
+
     def test_trash_view_has_no_bulk_toolbar(self):
         resp = self.client.get("/admin/products/?trash=1")
         self.assertNotContains(resp, "bulk-status-form")

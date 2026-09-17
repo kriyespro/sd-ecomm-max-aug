@@ -85,6 +85,11 @@ class OrderBulkArchiveTests(TestCase):
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, "Archive selected")
 
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/orders/")
+        self.assertContains(resp, 'aria-label="Select all orders"')
+        self.assertContains(resp, 'aria-label="Select order BO-1"')
+
     def test_staff_cannot_bulk_archive(self):
         staff = User.objects.create_user("staff1", "staff1@t.test", "pw", is_staff=True)
         Membership.objects.create(user=staff, project=self.project, role="staff")

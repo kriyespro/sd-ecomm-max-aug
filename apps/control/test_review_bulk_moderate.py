@@ -94,3 +94,8 @@ class ReviewBulkModerateTests(TestCase):
         self.assertContains(resp, 'name="pks"')
         self.assertContains(resp, 'id="bulk-select-all"')
         self.assertContains(resp, "Approve selected")
+
+    def test_checkboxes_have_accessible_names(self):
+        resp = self.client.get("/admin/reviews/?status=pending")
+        self.assertContains(resp, 'aria-label="Select all reviews"')
+        self.assertContains(resp, 'aria-label="Select review by A"')

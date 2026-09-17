@@ -22,7 +22,7 @@
 <tr {% if loop.first %}data-tour="order-row"{% endif %} class="hover:bg-slate-50">
   {% if can_manage_orders %}
   <td class="px-4 py-2">
-    <input type="checkbox" name="pks" value="{{ o.pk }}" form="bulk-archive-form" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
+    <input type="checkbox" name="pks" value="{{ o.pk }}" form="bulk-archive-form" aria-label="Select order {{ o.number }}" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
   </td>
   {% endif %}
   <td class="px-4 py-2">
