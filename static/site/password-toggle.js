@@ -26,7 +26,19 @@
     btn.type = "button";
     btn.tabIndex = -1;
     btn.setAttribute("aria-label", "Show password");
-    btn.className = "absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400 hover:text-slate-600";
+    btn.className = "absolute inset-y-0 right-0 flex items-center px-2.5";
+    // Every storefront skin has its own palette (Mission Control's own
+    // slate/gray theme is just one of ~18) — a hardcoded Tailwind gray
+    // looked like a foreign default plopped onto a themed input. currentColor
+    // + opacity instead: the icon inherits whatever text color already
+    // applies at that spot (each skin's own muted/ink tone, or Mission
+    // Control's slate), so it always reads as "part of the input" rather
+    // than a mismatched grey square.
+    btn.style.color = "currentColor";
+    btn.style.opacity = "0.5";
+    btn.style.transition = "opacity .15s";
+    btn.addEventListener("mouseenter", function () { btn.style.opacity = "0.85"; });
+    btn.addEventListener("mouseleave", function () { btn.style.opacity = "0.5"; });
     btn.innerHTML = EYE;
     btn.addEventListener("click", function () { toggle(input, btn); });
 
