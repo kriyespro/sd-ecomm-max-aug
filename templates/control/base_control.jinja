@@ -222,6 +222,15 @@
     </div>
     {% endif %}
 
+    {% if control_needs_2fa_setup %}
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-blue-50 px-4 py-2 text-sm text-blue-900">
+      <span>Secure your account — set up two-factor authentication before your next sign-in.</span>
+      <a href="{{ url('accounts:2fa_setup') }}" class="rounded bg-blue-900 px-2 py-1 text-xs font-medium text-white hover:bg-blue-800">
+        Set up now
+      </a>
+    </div>
+    {% endif %}
+
     {% if control_host_project %}
     <div class="flex flex-wrap items-center justify-between gap-2 bg-amber-100 px-4 py-2 text-sm text-amber-900">
       <span>This domain is <strong>{{ control_host_project.name }}</strong>, but you're managing

@@ -106,6 +106,15 @@ def control(request):
     easy_mode = getattr(profile, "ui_mode", "expert") == "easy"
     show_guides = getattr(profile, "show_guides", True)
 
+    # A brand-new signup's grace session (see TwoFactorEnforcementMiddleware
+    # / apps.accounts.twofactor) — not forced into setup yet, but nudged so
+    # it isn't silently skipped, just deferred.
+    needs_2fa_setup = False
+    if user.is_staff:
+        from apps.accounts.twofactor import has_signup_grace, is_enabled
+
+        needs_2fa_setup = has_signup_grace(request) and not is_enabled(user)
+
     tour_steps = None
     if show_guides:
         from .tours import tour_for
@@ -160,6 +169,7 @@ def control(request):
         "control_show_guides": show_guides,
         "control_tour_steps": tour_steps,
         "control_trial_days_left": trial_days_left,
+        "control_needs_2fa_setup": needs_2fa_setup,
         "control_demo_seeded": bool(
             can_manage and active and (active.feature_flags or {}).get("demo_seeded")
         ),

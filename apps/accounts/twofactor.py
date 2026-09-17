@@ -26,6 +26,24 @@ from django.utils import timezone
 ISSUER = "Mission Control"
 BACKUP_CODE_COUNT = 10
 
+# A brand-new account (self-signup or affiliate join, both Google-only)
+# isn't forced into 2FA setup mid-signup — the very first thing they'd see
+# would be a security wall before they've even looked at the product.
+# grant_signup_grace() marks *this session only* exempt from
+# TwoFactorEnforcementMiddleware; logging out (which flushes the session)
+# or a fresh sign-in on another device/session doesn't carry the grace, so
+# the very next real login is where setup becomes mandatory — "set it up
+# after signup, on your next login," not "never."
+_GRACE_SESSION_KEY = "2fa_signup_grace"
+
+
+def grant_signup_grace(request) -> None:
+    request.session[_GRACE_SESSION_KEY] = True
+
+
+def has_signup_grace(request) -> bool:
+    return bool(request.session.get(_GRACE_SESSION_KEY))
+
 
 def is_enabled(user) -> bool:
     profile = getattr(user, "profile", None)

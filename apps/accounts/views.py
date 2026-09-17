@@ -273,6 +273,8 @@ class GoogleCallbackView(View):
                     messages.error(request, msg)
                 return redirect(fallback)
             login(request, user)
+            if created:
+                twofactor.grant_signup_grace(request)
             if upgraded:
                 messages.success(request, "You're in — here's your referral link.")
             else:
@@ -409,4 +411,5 @@ class SignupCompleteView(FormView):
                      city=form.cleaned_data["city"], state=form.cleaned_data["state"],
                      postal_code=form.cleaned_data["postal_code"])
         login(self.request, user)
+        twofactor.grant_signup_grace(self.request)
         return redirect("control:onboarding")

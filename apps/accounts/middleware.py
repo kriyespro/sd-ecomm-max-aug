@@ -13,12 +13,17 @@ next Mission Control request until it finishes. This does not force a
 logout of already-active sessions — there is no way to demand a code from
 a session that predates 2FA without a forced logout of every account at
 once, which is its own outage risk.
+
+Exception: a brand-new signup gets one grace session (see
+apps.accounts.twofactor.grant_signup_grace) — no setup wall on the very
+first login right after creating the account, but the next real login
+(a fresh session) is enforced normally.
 """
 
 from django.shortcuts import redirect
 from django.urls import reverse
 
-from .twofactor import is_enabled
+from .twofactor import has_signup_grace, is_enabled
 
 _GATED_PREFIX = "/admin/"
 # Reachable under /admin/ without a confirmed 2FA setup — none today, but
@@ -37,6 +42,7 @@ class TwoFactorEnforcementMiddleware:
             and not request.path.startswith(_EXEMPT_PREFIXES)
             and user and user.is_authenticated and user.is_staff
             and not is_enabled(user)
+            and not has_signup_grace(request)
         ):
             return redirect(reverse("accounts:2fa_setup"))
         return self.get_response(request)
