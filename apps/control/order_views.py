@@ -109,6 +109,29 @@ class OrderArchiveView(_OrderManageMixin, View):
         return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
 
 
+class OrderBulkArchiveView(_OrderManageMixin, View):
+    """Bulk archive/unarchive from the order list — was one row at a time.
+    Same checkbox+toolbar shape as the product bulk-status action."""
+
+    def post(self, request, *args, **kwargs):
+        action = request.POST.get("action", "")
+        pks = request.POST.getlist("pks")
+        if action not in ("archive", "unarchive") or not pks:
+            messages.error(request, "Pick at least one order and an action.")
+            return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
+
+        qs = Order.objects.filter(project=self.active_project, pk__in=pks)
+        if action == "archive":
+            count = qs.filter(is_archived=False).update(is_archived=True, archived_at=timezone.now())
+        else:
+            count = qs.filter(is_archived=True).update(is_archived=False, archived_at=None)
+        record_audit(actor=request.user, project=self.active_project, action=AuditLog.Action.UPDATE,
+                     target=None, changes={"bulk_archive": action, "count": count, "pks": pks},
+                     request=request)
+        messages.success(request, f"{count} order(s) {'archived' if action == 'archive' else 'restored'}.")
+        return redirect(safe_next(request, request.POST.get("next"), "control:order_list"))
+
+
 class OrderUnarchiveView(_OrderManageMixin, View):
     def post(self, request, *args, **kwargs):
         order = self._order()

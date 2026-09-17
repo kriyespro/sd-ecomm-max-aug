@@ -20,6 +20,11 @@
 } %}
 {% for o in orders %}
 <tr {% if loop.first %}data-tour="order-row"{% endif %} class="hover:bg-slate-50">
+  {% if can_manage_orders %}
+  <td class="px-4 py-2">
+    <input type="checkbox" name="pks" value="{{ o.pk }}" form="bulk-archive-form" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
+  </td>
+  {% endif %}
   <td class="px-4 py-2">
     <a href="{{ url('control:order_detail', kwargs={'pk': o.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ o.number }}</a>
   </td>
@@ -40,7 +45,7 @@
   {% endif %}
 </tr>
 {% else %}
-<tr><td colspan="{{ 8 if can_manage_orders else 7 }}" class="px-4 py-6 text-center text-slate-400">No orders found.</td></tr>
+<tr><td colspan="{{ 9 if can_manage_orders else 7 }}" class="px-4 py-6 text-center text-slate-400">No orders found.</td></tr>
 {% endfor %}
 {% if page_obj and page_obj.has_other_pages() %}
 <tr>

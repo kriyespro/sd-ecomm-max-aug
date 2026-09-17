@@ -152,6 +152,7 @@ urlpatterns = [
     path("orders/", ordv.OrderListView.as_view(), name="order_list"),
     path("orders/export/", ordv.OrderExportView.as_view(), name="order_export"),
     path("orders/<int:pk>/", ordv.OrderDetailView.as_view(), name="order_detail"),
+    path("orders/bulk-archive/", ordv.OrderBulkArchiveView.as_view(), name="order_bulk_archive"),
     path("orders/<int:pk>/archive/", ordv.OrderArchiveView.as_view(), name="order_archive"),
     path("orders/<int:pk>/unarchive/", ordv.OrderUnarchiveView.as_view(), name="order_unarchive"),
     path("orders/<int:pk>/status/", ordv.OrderStatusView.as_view(), name="order_status"),
