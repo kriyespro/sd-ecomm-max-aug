@@ -217,13 +217,23 @@ class BenefitItemListView(_ScopedList):
     template_name = "control/cms/benefit_item_list.jinja"
     context_object_name = "items"
 
+    def _kind(self):
+        from apps.cms.models import BenefitItemKind
+
+        raw = (self.request.GET.get("kind") or "").strip()
+        return raw if raw in dict(BenefitItemKind.choices) else BenefitItemKind.WHY
+
     def get_queryset(self):
-        return super().get_queryset().order_by("order", "id")
+        return super().get_queryset().filter(kind=self._kind()).order_by("order", "id")
 
     def get_context_data(self, **kwargs):
+        from apps.cms.models import BenefitItemKind
+
         ctx = super().get_context_data(**kwargs)
         theme = ThemeSettings.objects.filter(project=self.active_project).first()
         ctx["heading_value"] = (theme.section_titles or {}).get("benefits", "") if theme else ""
+        ctx["kind"] = self._kind()
+        ctx["kind_choices"] = BenefitItemKind.choices
         return ctx
 
 
@@ -253,11 +263,21 @@ class _BenefitItemForm(_ScopedForm):
     model = BenefitItem
     form_class = BenefitItemForm
     template_name = "control/_object_form.jinja"
-    success_url = reverse_lazy("control:cms_benefit_items")
+
+    def get_success_url(self):
+        base = reverse_lazy("control:cms_benefit_items")
+        return f"{base}?kind={self.object.kind}"
 
 
 class BenefitItemCreateView(_BenefitItemForm, CreateView):
-    pass
+    def get_initial(self):
+        from apps.cms.models import BenefitItemKind
+
+        initial = super().get_initial()
+        raw = (self.request.GET.get("kind") or "").strip()
+        if raw in dict(BenefitItemKind.choices):
+            initial["kind"] = raw
+        return initial
 
 
 class BenefitItemUpdateView(_BenefitItemForm, UpdateView):

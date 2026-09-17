@@ -7,17 +7,16 @@
 
 {% block content %}
 {#
-  ══════════════════════════════════════════════════════════════════════
-  EDIT HOMEPAGE COPY HERE
-  ══════════════════════════════════════════════════════════════════════
-  trust_strip — the 4 badges just under the hero. Each row is
-  ('Headline', 'sub-line').
+  trust_strip — the 4 badges just under the hero. Owner-editable at
+  Mission Control → Storefront → Home page benefits → Trust strip
+  (apps.cms.models.BenefitItem, kind="trust"). Falls back to these
+  defaults when the store has none configured.
 #}
-{% set trust_strip = [
-  ('Free shipping',    'Orders over ₹999'),
-  ('Cash on delivery', 'Across India'),
-  ('7-day returns',    'No questions asked'),
-  ('Clean formulas',   'No nasties, ever'),
+{% set trust_strip = trust_badges if trust_badges else [
+  {'icon': '✦', 'title': 'Free shipping', 'description': 'Orders over ₹999'},
+  {'icon': '✦', 'title': 'Cash on delivery', 'description': 'Across India'},
+  {'icon': '✦', 'title': '7-day returns', 'description': 'No questions asked'},
+  {'icon': '✦', 'title': 'Clean formulas', 'description': 'No nasties, ever'},
 ] %}
 
 {% macro category_row(heading='Shop by category', tiles=none, pad='py-6', title_key='categories') %}
@@ -171,12 +170,12 @@
 {# ============ TRUST STRIP ============ #}
 <div class="border-y border-line bg-panel">
   <div class="mx-auto grid max-w-7xl grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x">
-    {% for t, s in trust_strip %}
+    {% for item in trust_strip %}
     <div class="flex items-center gap-3 border-t border-line px-5 py-5 sm:border-t-0">
-      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">&#10022;</span>
+      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">{{ item.icon or '✦' }}</span>
       <div>
-        <p class="text-[12px] font-semibold leading-tight text-ink">{{ t }}</p>
-        <p class="mt-0.5 text-[10px] uppercase tracking-luxe text-mute">{{ s }}</p>
+        <p class="text-[12px] font-semibold leading-tight text-ink">{{ item.title }}</p>
+        <p class="mt-0.5 text-[10px] uppercase tracking-luxe text-mute">{{ item.description }}</p>
       </div>
     </div>
     {% endfor %}
@@ -309,9 +308,10 @@
     <a href="{{ store_profile.instagram_url }}" target="_blank" rel="noopener" class="mt-1 inline-block text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">Follow us</a>
     {% endif %}
   </div>
-  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-6">
-    {% for it in instagram_items[:6] %}
-    <a href="{{ it.href or '#' }}" {{ 'target=_blank rel=noopener' if it.href }} class="group relative block aspect-square overflow-hidden rounded-lg bg-line/40">
+  <div class="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:px-0"
+       {{ auto_scroll_attrs(step=200, interval=2000) }}>
+    {% for it in instagram_items[:12] %}
+    <a href="{{ it.href or '#' }}" {{ 'target=_blank rel=noopener' if it.href }} class="group relative block aspect-square w-40 shrink-0 snap-start overflow-hidden rounded-lg bg-line/40 sm:w-48">
       <img src="{{ (it.image.url if it.image else '') | media_src(600, 600, 'Instagram') }}" alt="{{ it.caption }}" width="600" height="600" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">
       <span class="absolute inset-0 grid place-items-center bg-ink/0 text-paper opacity-0 transition group-hover:bg-ink/25 group-hover:opacity-100">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>

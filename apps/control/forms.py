@@ -605,7 +605,7 @@ class BudgetBandForm(ProjectScopedForm):
 class BenefitItemForm(ProjectScopedForm):
     class Meta:
         model = BenefitItem
-        fields = ["icon", "title", "description", "order", "is_active"]
+        fields = ["kind", "icon", "title", "description", "order", "is_active"]
 
 
 class InstagramItemForm(ProjectScopedForm):

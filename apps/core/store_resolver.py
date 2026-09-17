@@ -141,6 +141,7 @@ def _build_chrome(project):
     from apps.categories.models import Category
     from apps.cms.models import (
         BenefitItem,
+        BenefitItemKind,
         BudgetBand,
         InstagramItem,
         Menu,
@@ -217,7 +218,11 @@ def _build_chrome(project):
             .order_by("order", "id")[:8]
         ),
         "benefit_items": list(
-            BenefitItem.objects.filter(project=project, is_active=True)
+            BenefitItem.objects.filter(project=project, is_active=True, kind=BenefitItemKind.WHY)
+            .order_by("order", "id")[:6]
+        ),
+        "trust_badges": list(
+            BenefitItem.objects.filter(project=project, is_active=True, kind=BenefitItemKind.TRUST)
             .order_by("order", "id")[:6]
         ),
         "instagram_items": list(

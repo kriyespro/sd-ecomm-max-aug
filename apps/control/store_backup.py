@@ -78,7 +78,7 @@ _REGISTRY: list[dict] = [
          fields=["label", "min_price", "max_price", "order", "is_active"],
          files=["image"]),
     dict(key="benefititem", model="cms.BenefitItem",
-         fields=["icon", "title", "description", "order", "is_active"]),
+         fields=["kind", "icon", "title", "description", "order", "is_active"]),
     dict(key="instagramitem", model="cms.InstagramItem",
          fields=["source_url", "caption", "link_url", "order", "is_active"],
          files=["image"]),

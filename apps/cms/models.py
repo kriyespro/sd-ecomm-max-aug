@@ -292,12 +292,25 @@ class BudgetBand(TenantScopedModel):
         return "&".join(parts)
 
 
-class BenefitItem(TenantScopedModel):
-    """One tile in the home page "Why it works" / benefit-band section —
-    an icon glyph, a short title and a one-line description. Owner-managed;
-    an empty list falls back to the skin's built-in defaults so an existing
-    store's home page never goes blank."""
+class BenefitItemKind(models.TextChoices):
+    WHY = "why", "Why it works"
+    TRUST = "trust", "Trust strip"
 
+
+class BenefitItem(TenantScopedModel):
+    """One tile in a home page benefit band — an icon glyph, a short title
+    and a one-line description. Owner-managed; an empty list falls back to
+    the skin's built-in defaults so an existing store's home page never
+    goes blank.
+
+    Two independent bands share this one model via ``kind`` rather than
+    two separate models — same shape (icon+title+description), just a
+    different spot on the page and different default copy: ``why`` is the
+    "Why it works" brand-story band further down the page; ``trust`` is
+    the compact 4-badge strip right under the hero (shipping/COD/returns/
+    ingredients-style reassurance), which used to be hardcoded per skin."""
+
+    kind = models.CharField(max_length=10, choices=BenefitItemKind.choices, default=BenefitItemKind.WHY, blank=True)
     icon = models.CharField(
         max_length=4, blank=True, default="✦",
         help_text="A single emoji or symbol, e.g. \U0001F33F or ✦.",

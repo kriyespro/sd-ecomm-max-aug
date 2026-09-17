@@ -1,18 +1,30 @@
 {% extends "control/base_control.jinja" %}
-{% block page_title %}Why it works{% endblock %}
+{% block page_title %}Why it works &amp; trust strip{% endblock %}
 
 {% block content %}
 <div class="rounded-xl bg-white ring-1 ring-slate-200">
   <div class="flex items-center justify-between border-b border-slate-200 p-4">
     <div>
-      <h2 class="text-sm font-semibold text-slate-700">Why it works · {{ active_project.name }}</h2>
+      <h2 class="text-sm font-semibold text-slate-700">Home page benefits · {{ active_project.name }}</h2>
       <p class="mt-1 text-xs text-slate-500">
-        The 3-tile benefit band on the home page ("Why it works"). Leave this
-        list empty to keep the skin's built-in defaults.
+        {% if kind == 'trust' %}
+        The compact badge row right under the hero (shipping, COD, returns,
+        that kind of reassurance). Leave this list empty to keep the skin's
+        built-in defaults.
+        {% else %}
+        The benefit band further down the home page ("Why it works"). Leave
+        this list empty to keep the skin's built-in defaults.
+        {% endif %}
       </p>
     </div>
-    <a href="{{ url('control:cms_benefit_item_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New item</a>
+    <a href="{{ url('control:cms_benefit_item_create') }}?kind={{ kind }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">New item</a>
   </div>
+  <div class="flex items-center gap-3 border-b border-slate-200 px-4 py-2 text-xs">
+    {% for value, label in kind_choices %}
+    <a href="?kind={{ value }}" class="{{ 'font-semibold text-slate-900' if kind == value else 'text-slate-500 hover:text-slate-900' }}">{{ label }}</a>
+    {% endfor %}
+  </div>
+  {% if kind != 'trust' %}
   <form method="post" action="{{ url('control:cms_benefits_heading') }}" class="flex flex-wrap items-end gap-3 border-b border-slate-200 p-4">
     {{ csrf_input }}
     <label class="flex-1 min-w-[14rem]">
@@ -22,6 +34,7 @@
     </label>
     <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Save</button>
   </form>
+  {% endif %}
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
     <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
       <tr><th class="px-4 py-2"></th><th class="px-4 py-2">Title</th><th class="px-4 py-2">Description</th><th class="px-4 py-2">Order</th><th class="px-4 py-2">Active</th><th class="px-4 py-2 text-right">Actions</th></tr>
@@ -40,7 +53,13 @@
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No items yet — showing the skin's built-in defaults. Add 3 like "Fast shipping", "Easy returns", "Secure checkout".</td></tr>
+      <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">
+        {% if kind == 'trust' %}
+        No items yet — showing the skin's built-in defaults. Add 4 like "Free shipping", "Cash on delivery", "7-day returns", "Secure checkout".
+        {% else %}
+        No items yet — showing the skin's built-in defaults. Add 3 like "Fast shipping", "Easy returns", "Secure checkout".
+        {% endif %}
+      </td></tr>
       {% endfor %}
     </tbody>
   </table></div>

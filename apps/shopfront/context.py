@@ -105,6 +105,7 @@ def base_context(request, project, **extra):
         "primary_nav": primary_nav(chrome),
         "budget_bands": chrome.get("budget_bands", []),
         "benefit_items": chrome.get("benefit_items", []),
+        "trust_badges": chrome.get("trust_badges", []),
         "instagram_items": chrome.get("instagram_items", []),
         "footer_pages": chrome["footer_pages"],
         "store_is_demo": chrome.get("demo", False),
