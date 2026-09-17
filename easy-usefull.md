@@ -117,5 +117,79 @@ Working one at a time, safest first. Test + confirm before moving to the next.
 
 ---
 
-**Starting with**: trial-ending-soon reminder (SAFE, RELIABLE+COMMERCIAL,
-smallest blast radius). Will report back before picking the next item.
+## LESS FRICTION — round 1 (CLAUDE_GENERAL_SAAS.md sec 4/44)
+
+Audited 7 workflows (product create, order fulfillment, bulk actions,
+coupons, team invite, domains, dashboard). All 4 real gaps found were
+built same session — see git log 6a59edb..bcb6330:
+
+- [x] Coupon code Generate button.
+- [x] Bulk activate/deactivate/archive on the product list.
+- [x] Order fulfillment: set-shipping-method + create-shipment merged
+      into one submit for the common first-shipment case.
+- [x] Product create form accepts images in the same Save (was a hard
+      2-screen "save first, then upload" requirement).
+
+Team invite, domain verify, Today dashboard: already good, no change.
+
+## LESS FRICTION — round 2 (planning only, not built yet)
+
+Audited 10 more areas not covered by round 1. Each recommendation below
+is the same proven shape as round 1's bulk-product fix (checkbox +
+toolbar + one audit-log row for the batch) unless noted. Grounded via
+code read, not guessed — file:line in each note.
+
+- [ ] [SAFE] Bulk archive on the order list. `OrderListView`
+      (`apps/control/order_views.py:55`) already has search + status +
+      payment filters + CSV export; row action is Archive/Unarchive
+      one-at-a-time. A merchant clearing a month of delivered orders does
+      it one row at a time today. Same checkbox+toolbar shape as the
+      product list.
+- [ ] [SAFE] CSV export on the customer list. `CustomerListView`
+      (`apps/control/customer_views.py:25`) has search + segment filter
+      but no export — orders already have one, customers don't. Common
+      ask for marketing/CRM tools. Pure addition, mirrors the existing
+      order export exactly.
+- [ ] [SAFE] Bulk assign customers to a group. Same screen — moving many
+      existing customers into a new `CustomerGroup` is one-at-a-time via
+      `CustomerUpdateView` today.
+- [ ] [SAFE] Bulk approve/reject on review moderation.
+      `ReviewModerateView` (`apps/control/review_views.py:36`) approves
+      one review per POST; the list already shows a pending count and
+      status filter, so a merchant with 10 pending reviews clicks 10
+      times. Same shape as the product bulk-status fix.
+- [ ] [MODERATE] Bulk delete on the media library.
+      `MediaDeleteView`/`MediaRestoreView`/`MediaPurgeView`
+      (`apps/control/phase11_views.py:240,277,321`) are strictly
+      one-asset-per-request, no checkbox UI in `library.jinja` at all —
+      asymmetric, since upload already accepts multiple files in one
+      submit. Tagged MODERATE not SAFE because delete is destructive
+      (media may be in use on live product pages) — needs a confirm step
+      and a check for in-use assets before batching, not just a raw bulk
+      `.update()`/delete.
+- [ ] [MODERATE] Bulk restock (quantity add, not a status toggle) on
+      Inventory. Already has search + warehouse + low-stock filter and
+      an inline HTMX adjust row (no page nav) — already fairly good.
+      Lower priority: unlike a status flip, "add N units" is a per-row
+      value, not one action applied to every selected row, so the UI
+      needs a per-row quantity input inside the bulk form, not just a
+      dropdown — more design work than the others on this list.
+
+Audited and already good, no gap found: Category/Brand/Tag CRUD (low
+cardinality, ~5-20 rows per store — bulk actions here would be
+over-engineering per CLAUDE_GENERAL_SAAS.md sec 15's own warning),
+Reports/CSV export (already one screen, filters carry into the export
+link, uncapped), Store profile/theme setup (checked for
+type-the-same-thing-twice against onboarding — it's the same
+`StoreProfile` row, onboarding just pre-fills it, not re-asked blank),
+Notification/webhook setup (every built-in event already works with zero
+config via `apps.notifications.defaults.DEFAULTS`, confirmed by this
+session's own low-stock/trial-reminder work), duplicate data entry
+generally (no manual "create order" screen exists — orders only
+originate from storefront checkout, so nothing re-asks an already-on-file
+customer's details).
+
+**Not started** — plan only per explicit request. Suggested build order
+if greenlit: the four SAFE ones first (same proven pattern, low risk,
+quick), media bulk-delete and inventory bulk-restock after (need a bit
+more design care each).
