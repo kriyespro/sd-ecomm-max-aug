@@ -26,6 +26,43 @@ docker compose exec web python manage.py createsuperuser
 App on `http://localhost:8000` (or `WEB_PORT`). `/healthz/` (liveness),
 `/readyz/` (db + cache).
 
+**First login after `createsuperuser`**: Mission Control now requires TOTP
+2FA for every `is_staff` account (owner/manager/staff/DGC/platform admin —
+see "Mandatory 2FA" below). The superuser's very first `/admin/` visit
+redirects straight to `/accounts/2fa/setup/` — that's expected, not a bug.
+
+## Mandatory 2FA + idle logout (Mission Control)
+
+Every account that can reach `/admin/` (`User.is_staff`) must set up TOTP +
+backup codes before doing anything else there — enforced by
+`apps.accounts.middleware.TwoFactorEnforcementMiddleware`. Storefront
+shoppers are untouched (they're never `is_staff`). New dependencies:
+`pyotp` (code verify) and `qrcode` (renders the setup QR server-side, as an
+inline `data:` URI — no third-party QR API call, the secret never leaves
+the server). Both are in `requirements.txt`, so already covered by
+`requirements-prod.txt`'s `-r requirements.txt` — no separate install step.
+
+A brand-new signup (Google-only) gets one grace session — no 2FA wall on
+the very first login right after creating the account — but every login
+after that is enforced normally. Recovery for a locked-out account (device
++ backup codes both lost): another platform admin resets it from
+`/admin/users/<id>/`.
+
+Separately, `apps.accounts.middleware.IdleLogoutMiddleware` logs a staff
+session out after 35 minutes with no `/admin/` request (active use keeps
+it alive indefinitely — it's an idle timer, not a fixed session length).
+Also `/admin/`-only; storefront sessions are untouched.
+
+## Courier integrations (Shiprocket / Delhivery)
+
+`apps.shipping.couriers` ships real Shiprocket + Delhivery adapters
+(`apps/shipping/couriers/shiprocket.py`, `delhivery.py` — stdlib `urllib`,
+no SDK). Each store's own API credentials live in `CourierConfig` rows,
+entered by the store owner at `/admin/shipping/couriers/` — nothing to
+configure at the environment/deploy level. `CourierConfig.is_test_mode`
+defaults to `True` (synthetic tracking numbers, no live network call), so
+a store works out of the box before its owner ever adds real keys.
+
 ## nginx — mnxstore.com on 159.195.57.98
 
 `.env.prod` sets `WEB_PORT=8888`, so the `web` container publishes on
