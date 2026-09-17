@@ -12,10 +12,12 @@
 
   {% if domain_cap is not none %}
   <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-2 text-xs
-              {{ 'bg-red-50 text-red-700' if domain_cap_full else 'bg-slate-100 text-slate-500' }}">
-    <span>Domains: {{ domain_used }} / {{ domain_cap }} used{% if domain_cap_full %} — you're at your plan's limit.{% endif %}</span>
+              {{ 'bg-red-50 text-red-700' if domain_cap_full else 'bg-amber-50 text-amber-800' if domain_cap_near else 'bg-slate-100 text-slate-500' }}">
+    <span>Domains: {{ domain_used }} / {{ domain_cap }} used{% if domain_cap_full %} — you're at your plan's limit.{% elif domain_cap_near %} — approaching your plan's limit.{% endif %}</span>
     {% if domain_cap_full %}
     <a href="{{ url('control:store_plan') }}" class="rounded-lg bg-red-600 px-2.5 py-1 font-semibold text-white hover:bg-red-700">Upgrade plan</a>
+    {% elif domain_cap_near %}
+    <a href="{{ url('control:store_plan') }}" class="rounded-lg bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700">Upgrade plan</a>
     {% endif %}
   </div>
   {% endif %}

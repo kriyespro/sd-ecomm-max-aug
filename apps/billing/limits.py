@@ -25,6 +25,20 @@ def usage(project) -> dict:
     }
 
 
+NEAR_CAP_RATIO = 0.8
+
+
+def is_near_cap(used, cap) -> bool:
+    """True once usage crosses NEAR_CAP_RATIO of the plan's limit but
+    hasn't hit it yet — an "approaching your limit" nudge, distinct from
+    (and less severe than) the hard at-cap block/message. Shared by every
+    screen that shows a used/cap pair (Products, Domains, Team) so the
+    threshold lives in one place."""
+    if cap is None or cap <= 0:
+        return False
+    return used < cap and used >= cap * NEAR_CAP_RATIO
+
+
 def _check(project, attr, current, label):
     plan = _plan(project)
     if plan is None:

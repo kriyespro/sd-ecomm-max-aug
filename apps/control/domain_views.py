@@ -46,6 +46,7 @@ class DomainListView(_DomainAccess, TemplateView):
         ctx["domain_used"] = used
         ctx["domain_cap"] = cap
         ctx["domain_cap_full"] = cap is not None and used >= cap
+        ctx["domain_cap_near"] = billing_limits.is_near_cap(used, cap)
         return ctx
 
 

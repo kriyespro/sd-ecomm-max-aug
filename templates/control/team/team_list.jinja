@@ -30,10 +30,12 @@
     </p>
     {% if seat_cap is not none %}
     <div class="mt-2 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs
-                {{ 'bg-red-50 text-red-700' if seat_full else 'text-slate-400' }}">
-      <span>Team seats: {{ seat_used }} / {{ seat_cap }} used{% if seat_full %} — you're at your plan's limit.{% endif %}</span>
+                {{ 'bg-red-50 text-red-700' if seat_full else 'bg-amber-50 text-amber-800' if seat_near else 'text-slate-400' }}">
+      <span>Team seats: {{ seat_used }} / {{ seat_cap }} used{% if seat_full %} — you're at your plan's limit.{% elif seat_near %} — approaching your plan's limit.{% endif %}</span>
       {% if seat_full %}
       <a href="{{ url('control:store_plan') }}" class="rounded-lg bg-red-600 px-2.5 py-1 font-semibold text-white hover:bg-red-700">Upgrade plan</a>
+      {% elif seat_near %}
+      <a href="{{ url('control:store_plan') }}" class="rounded-lg bg-amber-600 px-2.5 py-1 font-semibold text-white hover:bg-amber-700">Upgrade plan</a>
       {% endif %}
     </div>
     {% endif %}

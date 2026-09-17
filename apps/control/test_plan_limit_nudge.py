@@ -92,3 +92,39 @@ class PlanLimitNudgeTests(TestCase):
         resp = self.client.get("/admin/team/")
         self.assertContains(resp, "Team seats: 1 / 1 used")
         self.assertContains(resp, "Upgrade plan")
+
+    def test_products_shows_approaching_nudge_before_the_wall(self):
+        plan = self._plan()
+        plan.max_products = 5
+        plan.save(update_fields=["max_products"])
+        for i in range(4):  # 4/5 = 80% -> "near", not yet full
+            Product.objects.create(
+                project=self.project, title=f"P{i}", slug=f"p{i}",
+                price=Decimal("100"), status="active",
+            )
+        resp = self.client.get("/admin/products/")
+        self.assertContains(resp, "Products: 4 / 5 used")
+        self.assertContains(resp, "approaching your plan's limit")
+        self.assertContains(resp, "Upgrade plan")
+        self.assertNotContains(resp, "you're at your plan's limit")
+
+    def test_domains_shows_approaching_nudge_before_the_wall(self):
+        plan = self._plan()
+        plan.max_custom_domains = 5
+        plan.save(update_fields=["max_custom_domains"])
+        for i in range(4):
+            Domain.objects.create(project=self.project, host=f"brand{i}.test")
+        resp = self.client.get("/admin/domains/")
+        self.assertContains(resp, "Domains: 4 / 5 used")
+        self.assertContains(resp, "approaching your plan's limit")
+
+    def test_team_shows_approaching_nudge_before_the_wall(self):
+        plan = self._plan()
+        plan.max_staff = 5
+        plan.save(update_fields=["max_staff"])
+        for i in range(3):
+            u = User.objects.create_user(f"s{i}", f"s{i}@t.test", "pw", is_staff=True)
+            Membership.objects.create(project=self.project, user=u, role=StoreRole.STAFF)
+        resp = self.client.get("/admin/team/")
+        self.assertContains(resp, "Team seats: 4 / 5 used")
+        self.assertContains(resp, "approaching your plan's limit")

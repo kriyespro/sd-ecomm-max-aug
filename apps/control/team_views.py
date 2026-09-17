@@ -50,6 +50,7 @@ class TeamListView(_TeamBase, TemplateView):
         ctx["seat_used"] = used
         ctx["seat_cap"] = cap
         ctx["seat_full"] = cap is not None and used >= cap
+        ctx["seat_near"] = billing_limits.is_near_cap(used, cap)
         return ctx
 
 
