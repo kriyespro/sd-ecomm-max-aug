@@ -109,13 +109,17 @@ _STORE_MANAGE_ONLY = {"payment_providers", "courier_configs", "domains", "team",
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}
 # Hidden from a store's DGC — orders, customers and money belong to the store.
-# b2b_* and owner_backup are also owner-only (see _OWNER_ONLY) — both mixins
-# apply on those views (StoreDataAccessMixin + StoreRoleRequiredMixin), so an
-# item needing both must appear in both sets or the nav shows a dead link a
-# commission-only DGC gets 403'd on.
+# b2b_* is also owner-only (see _OWNER_ONLY) — both mixins apply on those
+# views (StoreDataAccessMixin + StoreRoleRequiredMixin), so an item needing
+# both must appear in both sets or the nav shows a dead link a commission-only
+# DGC gets 403'd on. owner_backup is deliberately NOT here — backup/restore
+# only ever touches catalog/CMS/theme content (apps.control.store_backup's
+# own field allowlist has no order/customer/payment model in it), so it's
+# store *setup*, same bucket as store_showcase — a DGC-without-membership is
+# meant to reach it (see apps.accounts.permissions.dgc_without_membership).
 _STORE_DATA_ONLY = {"order_list", "customers", "analytics", "reports", "payment_providers",
                     "courier_configs",
-                    "owner_backup", "b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables"}
+                    "b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables"}
 # Billing self-service — hidden when a DGC owns the billing relationship.
 _BILLING_ONLY = {"store_plan"}
 

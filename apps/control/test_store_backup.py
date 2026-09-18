@@ -227,7 +227,15 @@ class OwnerBackupScreenTests(TestCase):
         self._login(self.mgr)
         self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
 
-    def test_dgc_without_membership_cannot_reach_owner_backup(self):
+    def test_dgc_without_membership_can_reach_owner_backup(self):
+        # Backup/restore is store *setup*, not orders/customers/money -- the
+        # one thing a DGC-without-membership (StoreDataAccessMixin's usual
+        # boundary) is explicitly allowed to do per
+        # apps.accounts.permissions.dgc_without_membership's own docstring.
+        # Previously blocked by StoreDataAccessMixin being mixed into
+        # _OwnerOnly, which contradicted that documented intent -- some DGCs
+        # (those with an incidental team Membership row too) could reach it,
+        # most (subscription-manager-only, the normal case) couldn't.
         dgc = User.objects.create_user("d3", "d3@t.test", "pw", is_staff=True)
         Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
         from apps.billing import services as billing_svc
@@ -235,7 +243,36 @@ class OwnerBackupScreenTests(TestCase):
         sub.manager = User.objects.get(pk=dgc.pk)
         sub.save(update_fields=["manager"])
         self._login(User.objects.get(pk=dgc.pk))
-        self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
+        self.assertEqual(self.client.get("/admin/backup/").status_code, 200)
+        blob = self.client.get("/admin/backup/download/").content
+        self.assertTrue(blob[:2] == b"PK")
+
+        Product.objects.filter(project=self.store).delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            r = self.client.post("/admin/backup/restore/", {
+                "confirm_name": "OwnerCo",
+                "backup": SimpleUploadedFile("b.zip", blob, "application/zip"),
+            })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
+
+    def test_dgc_via_referral_only_has_no_access_at_all(self):
+        # The other side of the boundary: an affiliate-link referral must
+        # never grant store access (Subscription.referred_by, not .manager --
+        # see the field comments in apps.billing.models). Such a DGC can't
+        # even select this store as their active project (it's outside
+        # projects_for_user), so a session pointed at it gets bounced to the
+        # store picker rather than reaching the backup screen at all.
+        dgc = User.objects.create_user("d4", "d4@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=dgc).update(platform_role=PlatformRole.MANAGER)
+        from apps.billing import services as billing_svc
+        sub = billing_svc.ensure_subscription(self.store)
+        sub.referred_by = User.objects.get(pk=dgc.pk)
+        sub.save(update_fields=["referred_by"])
+        self._login(User.objects.get(pk=dgc.pk))
+        self.assertRedirects(
+            self.client.get("/admin/backup/"), "/admin/choose-store/", fetch_redirect_response=False,
+        )
 
 
 @override_settings(ALLOWED_HOSTS=["*"])

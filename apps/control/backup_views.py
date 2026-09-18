@@ -12,12 +12,21 @@ from django.views.generic import TemplateView
 from apps.accounts.permissions import StoreRole, StoreRoleRequiredMixin
 
 from . import store_backup
-from .mixins import ActiveProjectMixin, StoreDataAccessMixin
+from .mixins import ActiveProjectMixin
 
 _MAX_UPLOAD = 700 * 1024 * 1024
 
 
-class _OwnerOnly(StoreDataAccessMixin, StoreRoleRequiredMixin, ActiveProjectMixin):
+class _OwnerOnly(StoreRoleRequiredMixin, ActiveProjectMixin):
+    """Store owner, or the store's DGC (Platform Manager credited on the
+    subscription) even with no team membership -- backup/restore is store
+    *setup*, not orders/customers/money, so it's explicitly one of the
+    things apps.accounts.permissions.dgc_without_membership's own docstring
+    says such a DGC should be able to do. StoreRoleRequiredMixin already
+    grants this correctly via has_store_role()'s platform-staff/subscription
+    -manager special case -- no StoreDataAccessMixin here, since that mixin
+    is for the orders/customers/payments boundary this view doesn't touch."""
+
     required_store_roles = frozenset({StoreRole.OWNER})
     role_denied_message = "Only the store owner can back up or restore this store."
 

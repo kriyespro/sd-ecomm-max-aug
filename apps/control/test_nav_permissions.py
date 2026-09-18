@@ -1,13 +1,21 @@
 """Every sidebar link a role can see must actually work for that role — a nav
 item gated looser than its view's real permission check is a dead link (403
-on click). This is a regression test for exactly that class of bug: a DGC
-who only manages a store via Subscription.manager (no real Membership, i.e.
-apps.accounts.permissions.dgc_without_membership) saw "Backup & restore" and
-the whole "B2B / Wholesale" section in their sidebar, but every one of those
-views also mixes in StoreDataAccessMixin (they export full order/customer/
-payables data) and 403'd. navigation.py's _OWNER_ONLY gate alone doesn't know
-about that second, stricter gate — the fix adds those items to
-_STORE_DATA_ONLY too, matching the view stack exactly.
+on click). Regression test for that class of bug on the "B2B / Wholesale"
+section: a DGC who only manages a store via Subscription.manager (no real
+Membership, i.e. apps.accounts.permissions.dgc_without_membership) saw those
+links in their sidebar, but every one of those views also mixes in
+StoreDataAccessMixin (they export real order/customer/payables data) and
+403'd. navigation.py's _OWNER_ONLY gate alone doesn't know about that second,
+stricter gate — the fix adds those items to _STORE_DATA_ONLY too, matching
+the view stack exactly.
+
+"Backup & restore" was previously lumped in here too, on the same
+(incorrect) assumption that it exported order/customer data — it doesn't
+(apps.control.store_backup's own field allowlist is catalog/CMS/theme only),
+so it was wrongly blocking the common case (a DGC with no incidental team
+Membership row) while letting DGCs who happened to also hold a Membership
+through — see apps/control/test_store_backup.py's
+test_dgc_without_membership_can_reach_owner_backup for that fix.
 """
 
 from django.contrib.auth import get_user_model
@@ -21,7 +29,6 @@ from apps.projects.models import Project
 User = get_user_model()
 
 _DGC_BLOCKED_URLS = [
-    "/admin/backup/",
     "/admin/b2b/settings/",
     "/admin/b2b/marketplace/",
     "/admin/b2b/orders/",
@@ -54,7 +61,6 @@ class DgcWithoutMembershipNavParityTests(TestCase):
 
     def test_blocked_screens_are_not_linked_in_the_sidebar(self):
         resp = self.client.get("/admin/products/")
-        self.assertNotContains(resp, 'href="/admin/backup/"')
         self.assertNotContains(resp, 'href="/admin/b2b/settings/"')
         self.assertNotContains(resp, 'href="/admin/b2b/marketplace/"')
         self.assertNotContains(resp, 'href="/admin/b2b/orders/"')
@@ -74,6 +80,14 @@ class DgcWithoutMembershipNavParityTests(TestCase):
         resp = self.client.get("/admin/products/")
         self.assertContains(resp, 'href="/admin/showcase/settings/"')
         self.assertEqual(self.client.get("/admin/showcase/settings/").status_code, 200)
+
+    def test_backup_stays_visible_and_working(self):
+        """Same story as store_showcase: backup/restore is catalog/CMS/theme
+        only, no order/customer/payment data, so it must stay reachable for
+        a managing DGC with no incidental team Membership row."""
+        resp = self.client.get("/admin/products/")
+        self.assertContains(resp, 'href="/admin/backup/"')
+        self.assertEqual(self.client.get("/admin/backup/").status_code, 200)
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
