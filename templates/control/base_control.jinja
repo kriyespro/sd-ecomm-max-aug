@@ -142,6 +142,11 @@
               Remove demo content
             </button>
           </form>
+          {% elif control_active_project and control_can_manage_store %}
+          <a href="{{ url('control:cms_store_profile') }}#demo-content"
+             class="shrink-0 inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            Import demo content
+          </a>
           {% endif %}
         </h1>
       </div>
