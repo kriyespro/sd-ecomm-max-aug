@@ -118,6 +118,12 @@ class DashboardView(ControlAccessMixin, TemplateView):
         ctx["activity"] = services.recent_activity(self.request.user)
         if is_platform_admin(self.request.user):
             ctx["top_affiliates"] = services.top_affiliates()
+        elif is_platform_staff(self.request.user):
+            from apps.billing.models import Plan
+
+            ctx["dgc_plans"] = Plan.objects.filter(
+                is_active=True, is_public=True, dgc_price_yearly__gt=0,
+            ).order_by("sort_order")
         return ctx
 
     @staticmethod

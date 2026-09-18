@@ -147,8 +147,23 @@ class Plan(TimeStampedModel):
     price_monthly = models.DecimalField(**_MONEY, default=Decimal("0"))
     price_yearly = models.DecimalField(**_MONEY, default=Decimal("0"), help_text="Total for 12 months.")
 
+    # What a DGC pays the platform to provision a client's store on this plan
+    # — wholesale, always less than price_monthly/yearly above. The DGC bills
+    # their own client at (or above) the retail price separately, outside the
+    # platform, and keeps the spread as their margin. Set only on plans a DGC
+    # can actually provision with (public ones); 0 means "not offered as a
+    # DGC-provisioned plan." See Subscription.billed_to_dgc and
+    # store_services.create_store for where this gets applied.
+    dgc_price_monthly = models.DecimalField(**_MONEY, default=Decimal("0"))
+    dgc_price_yearly = models.DecimalField(**_MONEY, default=Decimal("0"), help_text="Total for 12 months.")
+
     # % of this plan's fee paid to the DGC who signed the store up (recurring,
     # every paid invoice). Read live at accrual time — see _accrue_commission.
+    # Only applies to a referral-credited subscription (Subscription
+    # .referred_by) or a manager-credited one NOT using the wholesale price
+    # above (Subscription.billed_to_dgc) — a wholesale-billed subscription's
+    # DGC already gets their margin from the retail/wholesale spread, so it
+    # never additionally accrues this commission on top.
     commission_monthly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
     commission_yearly_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("30"))
 
@@ -173,6 +188,9 @@ class Plan(TimeStampedModel):
 
     def price_for(self, period) -> Decimal:
         return self.price_yearly if period == BillingPeriod.YEARLY else self.price_monthly
+
+    def dgc_price_for(self, period) -> Decimal:
+        return self.dgc_price_yearly if period == BillingPeriod.YEARLY else self.dgc_price_monthly
 
     def commission_pct_for(self, period) -> Decimal:
         return self.commission_yearly_pct if period == BillingPeriod.YEARLY else self.commission_monthly_pct
@@ -219,6 +237,14 @@ class Subscription(TimeStampedModel):
 
     # Optional per-store price override (deal pricing). Null = use the plan price.
     override_price = models.DecimalField(**_MONEY, null=True, blank=True)
+
+    # True only when override_price was set automatically to plan.dgc_price_for()
+    # because a DGC provisioned this store (store_services.create_store) —
+    # distinct from a platform admin manually setting override_price for an
+    # ad-hoc deal, which still earns the manager their normal commission.
+    # _accrue_commission checks this to avoid paying a DGC commission on top
+    # of the wholesale price they already paid.
+    billed_to_dgc = models.BooleanField(default=False)
 
     # Platform gift: no renewal invoices are issued and the store is never
     # suspended for non-payment. Set by a super admin on the store screen.

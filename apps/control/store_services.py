@@ -1,6 +1,8 @@
 """Provision a store: create the Project, its owner account, and wire the
 subscription. Used by the Mission Control "New store" flow (platform staff)."""
 
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -75,7 +77,16 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     sub.plan = plan
     sub.period = period if period in dict(BillingPeriod.choices) else BillingPeriod.MONTHLY
     sub.manager = manager
-    sub.save(update_fields=["plan", "period", "manager", "updated_at"])
+    # A DGC provisioning a store pays the platform the plan's wholesale price,
+    # not the retail one -- their margin is the retail/wholesale spread, taken
+    # up with their own client outside the platform. See Plan.dgc_price_for
+    # and Subscription.billed_to_dgc.
+    dgc_price = plan.dgc_price_for(sub.period) if manager is not None else Decimal("0")
+    if dgc_price > 0:
+        sub.override_price = dgc_price
+        sub.billed_to_dgc = True
+    sub.save(update_fields=["plan", "period", "manager", "override_price",
+                            "billed_to_dgc", "updated_at"])
 
     owner, created_owner, temp_password = _get_or_create_staff_user(
         owner_email, owner_name, owner_password

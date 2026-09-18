@@ -71,9 +71,21 @@ class StoreCreateForm(forms.Form):
     def __init__(self, *args, actor=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._actor = actor
-        # A Platform Manager can only sign a store up under their own name.
-        if actor is not None and not is_platform_admin(actor):
+        # A Platform Manager can only sign a store up under their own name --
+        # so is_dgc_actor here means "the price this plan choice must show is
+        # the wholesale one this same actor is about to be billed."
+        is_dgc_actor = actor is not None and not is_platform_admin(actor)
+        if is_dgc_actor:
             self.fields.pop("manager", None)
+
+        def _plan_label(plan):
+            if is_dgc_actor and plan.dgc_price_yearly:
+                return (f"{plan.name} — ₹{plan.dgc_price_yearly:,.0f}/yr you pay "
+                        f"(₹{plan.price_yearly:,.0f}/yr retail to your client)")
+            if plan.price_yearly:
+                return f"{plan.name} — ₹{plan.price_yearly:,.0f}/yr"
+            return plan.name
+        self.fields["plan"].label_from_instance = _plan_label
 
         # Default the plan picker to "growth" (falls back to the first plan).
         if not self.is_bound and self.fields["plan"].initial is None:

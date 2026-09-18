@@ -27,6 +27,41 @@
     </div>
   </div>
 
+  {% if dgc_plans %}
+  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="mb-3 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-slate-700">Your plan pricing</h2>
+      <a href="{{ url('control:store_create') }}" class="text-xs text-slate-400 hover:text-slate-600">Create a store →</a>
+    </div>
+    <p class="mb-3 text-xs text-slate-500">
+      What you pay the platform to provision a client's store. Bill your
+      client at (or above) the retail price yourself — the spread is your
+      margin.
+    </p>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+      <thead class="text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="py-1 pr-4">Plan</th><th class="py-1 pr-4">You pay</th>
+          <th class="py-1">Client's retail price</th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in dgc_plans %}
+        <tr>
+          <td class="py-1.5 pr-4 font-medium">{{ p.name }}</td>
+          <td class="py-1.5 pr-4">
+            ₹{{ p.dgc_price_yearly|int }}/yr
+            <span class="text-xs text-slate-400">(₹{{ p.dgc_price_monthly|int }}/mo)</span>
+          </td>
+          <td class="py-1.5 text-slate-500">
+            ₹{{ p.price_yearly|int }}/yr
+            <span class="text-xs text-slate-400">(₹{{ p.price_monthly|int }}/mo)</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  {% endif %}
+
   {% if control_is_platform_admin and top_affiliates %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <div class="mb-3 flex items-center justify-between">

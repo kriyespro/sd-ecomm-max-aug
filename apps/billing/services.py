@@ -269,6 +269,12 @@ def mark_invoice_paid(invoice, *, provider_payment_id=""):
 
 def _accrue_commission(invoice):
     sub = invoice.subscription
+    # A wholesale-billed subscription's DGC already took their margin from
+    # the retail/wholesale spread (see store_services.create_store) -- an
+    # extra commission on top of the price they themselves paid would be
+    # double-counting.
+    if sub.billed_to_dgc:
+        return
     # A managing DGC wins if there is one; otherwise fall back to whoever's
     # affiliate link the store signed up through. Either way this is the only
     # place that FK is read for money — it never grants store access.
