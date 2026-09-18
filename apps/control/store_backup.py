@@ -1,16 +1,33 @@
 """Store backup / restore — download one store's storefront content as a
 portable .zip and load it onto any other store.
 
-WHAT'S INCLUDED: catalogue (categories, brands, product types, products,
-product images, variants), CMS (pages, FAQs, banners, budget bands, Instagram
-items, Shorts, content blocks, menus), and the theme + store profile.
+WHAT'S ALWAYS INCLUDED: catalogue (categories, brands, product types,
+products, product images, variants), CMS (pages, FAQs, banners, budget
+bands, Instagram items, Shorts, content blocks, menus), and the theme +
+store profile. This half is cross-store portable by design — a platform
+admin or a store's DGC can dump one store and load it onto a different one
+(a template store, a fresh reset) without ever touching that target store's
+own orders/customers/money.
 
-WHAT'S NOT: orders, customers, carts, reviews, inventory levels, coupons,
-shipping, payment credentials, domains, the subscription, the team — all of
-that is a store's own live operation, never cloned.
+WHAT'S NEVER INCLUDED: carts, reviews, inventory levels, coupons, shipping,
+payment credentials, domains, the subscription, the team.
 
-Restore is destructive: the target store's content (same set as above) is
-wiped first, then rebuilt from the archive. Platform-admin only.
+WHAT'S OPTIONALLY INCLUDED (``include_sensitive=True``): customers, customer
+addresses, customer groups, orders, order line items, order status history,
+payments and refunds — a store's own transaction history. Only the OWNER-
+facing backup screen (apps.control.backup_views) asks for this; the platform
+admin / DGC screen (apps.control.store_views) never does, since cross-store
+copying of one store's real customer/order/payment records into another
+would be a data leak, not a template. To keep that boundary even if a caller
+mixes this up, ``restore_store(..., include_sensitive=True)`` only actually
+restores the sensitive half when the archive's own ``source_project_id``
+matches the target store's own pk — i.e. only ever "restore my own earlier
+backup onto myself," never "load someone else's transaction history here."
+An archive with no sensitive data in it (e.g. a DGC's, or an older backup)
+restores its catalog/CMS/theme half exactly as before either way.
+
+Restore is destructive: the target store's content (whichever set applies)
+is wiped first, then rebuilt from the archive.
 """
 
 from __future__ import annotations
@@ -31,6 +48,7 @@ logger = logging.getLogger(__name__)
 
 FORMAT_VERSION = 1
 MAX_PRODUCTS = 5000
+MAX_ORDERS = 20000
 MAX_ARCHIVE_UNCOMPRESSED = 600 * 1024 * 1024   # 600 MB
 MAX_MANIFEST_BYTES = 64 * 1024 * 1024           # 64 MB
 
@@ -108,6 +126,54 @@ _REGISTRY: list[dict] = [
                  "category_mobile_slider"]),
 ]
 
+# Opt-in only (see module docstring) — a store's own transaction history.
+# Ordered by dependency, same convention as _REGISTRY, and processed with the
+# same idmap so "customer"/"order"/"product"/"variant" FKs remap correctly.
+# Deliberately NOT remapped (nulled on restore instead, by simply never being
+# declared below): Customer.user, Order.user, Order.warehouse,
+# OrderStatusEvent.actor, Refund.actor — every one is a link to something
+# outside this registry (a live auth account, a warehouse/inventory row),
+# and relinking a restored record to a *different* live object than the one
+# it originally pointed to would be its own, worse kind of data mixup.
+_SENSITIVE_REGISTRY: list[dict] = [
+    dict(key="customergroup", model="customers.CustomerGroup",
+         fields=["name", "slug", "description", "discount_percent", "is_default"]),
+    dict(key="customer", model="customers.Customer",
+         fields=["email", "first_name", "last_name", "phone", "tags", "segment",
+                 "is_active", "is_blocked", "marketing_opt_in", "notes",
+                 "orders_count", "total_spent", "last_order_at"],
+         fks={"group": "customergroup"}),
+    dict(key="customeraddress", model="customers.CustomerAddress",
+         fields=["label", "name", "line1", "line2", "city", "state", "postal_code",
+                 "country", "phone", "is_default_shipping", "is_default_billing"],
+         fks={"customer": "customer"}, scope="customer__project", no_project=True),
+    dict(key="order", model="orders.Order",
+         fields=["number", "email", "phone", "status", "payment_status",
+                 "fulfillment_status", "shipping_status", "billing_address",
+                 "shipping_address", "currency", "subtotal", "discount_total",
+                 "tax_total", "shipping_total", "grand_total", "coupon_code",
+                 "shipping_method", "tracking_number", "courier", "customer_note",
+                 "admin_note", "is_archived", "archived_at", "placed_at"],
+         fks={"customer": "customer"}),
+    dict(key="orderitem", model="orders.OrderItem",
+         fields=["product_title", "variant_name", "sku", "unit_price", "quantity",
+                 "line_total", "fulfilled_quantity"],
+         fks={"order": "order", "product": "product", "variant": "variant"},
+         scope="order__project", no_project=True),
+    dict(key="orderstatusevent", model="orders.OrderStatusEvent",
+         fields=["kind", "from_value", "to_value", "note"],
+         fks={"order": "order"}, scope="order__project", no_project=True),
+    dict(key="payment", model="payments.Payment",
+         fields=["provider", "status", "amount", "amount_refunded", "currency",
+                 "provider_order_id", "provider_payment_id", "provider_signature",
+                 "idempotency_key", "error_code", "error_message", "meta",
+                 "captured_at", "failed_at"],
+         fks={"order": "order"}),
+    dict(key="refund", model="payments.Refund",
+         fields=["amount", "status", "reason", "provider_refund_id", "meta"],
+         fks={"payment": "payment"}, scope="payment__project", no_project=True),
+]
+
 
 class BackupError(Exception):
     pass
@@ -125,17 +191,21 @@ def _queryset(entry, project):
 
 # --- dump ---------------------------------------------------------------
 
-def _dump_store_into(zf: zipfile.ZipFile, project, prefix: str = "") -> dict:
+def _dump_store_into(zf: zipfile.ZipFile, project, prefix: str = "",
+                     *, include_sensitive: bool = False) -> dict:
     """Write ``{prefix}manifest.json`` + ``{prefix}media/...`` into an open zip.
     Returns per-model counts."""
     manifest = {
         "format": FORMAT_VERSION,
         "source_project": project.name,
+        "source_project_id": project.pk,
+        "include_sensitive": include_sensitive,
         "created_at": datetime.now(dt_timezone.utc).isoformat(),
         "data": {},
     }
     counts = {}
-    for entry in _REGISTRY:
+    registry = _REGISTRY + _SENSITIVE_REGISTRY if include_sensitive else _REGISTRY
+    for entry in registry:
         rows = []
         for obj in _queryset(entry, project).order_by("pk").iterator():
             row = {"_id": obj.pk}
@@ -166,18 +236,27 @@ def _dump_store_into(zf: zipfile.ZipFile, project, prefix: str = "") -> dict:
     return counts
 
 
-def dump_store(project) -> bytes:
-    """Serialise ``project``'s storefront content to a .zip byte string."""
+def dump_store(project, *, include_sensitive: bool = False) -> bytes:
+    """Serialise ``project``'s storefront content to a .zip byte string.
+    ``include_sensitive=True`` also bundles its orders/customers/payments —
+    see the module docstring for who should (and shouldn't) pass that."""
     from apps.catalog.models import Product
+    from apps.orders.models import Order
 
     n_products = Product.objects.filter(project=project).count()
     if n_products > MAX_PRODUCTS:
         raise BackupError(
             f"This store has {n_products} products — over the {MAX_PRODUCTS} backup limit."
         )
+    if include_sensitive:
+        n_orders = Order.objects.filter(project=project).count()
+        if n_orders > MAX_ORDERS:
+            raise BackupError(
+                f"This store has {n_orders} orders — over the {MAX_ORDERS} backup limit."
+            )
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        _dump_store_into(zf, project, "")
+        _dump_store_into(zf, project, "", include_sensitive=include_sensitive)
     return buf.getvalue()
 
 
@@ -231,16 +310,23 @@ def _safe_zip(zf: zipfile.ZipFile) -> None:
         raise BackupError("Archive is too large to restore.")
 
 
-def _wipe(project) -> None:
+def _wipe(project, *, include_sensitive: bool = False) -> None:
     from apps.control.starter_content import wipe_storefront_content
 
     wipe_storefront_content(project)
     # Not covered by wipe_storefront_content:
     apps.get_model("catalog.ProductType").objects.filter(project=project).delete()
+    if include_sensitive:
+        # Cascades: Order -> OrderItem/OrderStatusEvent/Payment -> Refund,
+        # Customer -> CustomerAddress (and any Wishlist -- see store_backup's
+        # module docstring / the review that led here).
+        apps.get_model("orders.Order").objects.filter(project=project).delete()
+        apps.get_model("customers.Customer").objects.filter(project=project).delete()
+        apps.get_model("customers.CustomerGroup").objects.filter(project=project).delete()
 
 
 def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: bytes,
-                        actor=None) -> dict:
+                        actor=None, *, include_sensitive: bool = False) -> dict:
     """Core restore: wipe ``project`` and rebuild from ``{prefix}manifest.json``
     inside the already-open, already-safety-checked ``zf``. Not atomic itself —
     the caller wraps it (per-store for a platform restore)."""
@@ -259,14 +345,27 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
     if len(data.get("product", [])) > MAX_PRODUCTS:
         raise BackupError("Backup has too many products to restore.")
 
-    _wipe(project)
+    restore_sensitive = False
+    if include_sensitive and manifest.get("include_sensitive"):
+        if manifest.get("source_project_id") != project.pk:
+            raise BackupError(
+                "This backup's orders, customers and payments belong to a "
+                "different store — restoring them here isn't allowed. "
+                "Nothing was changed."
+            )
+        if len(data.get("order", [])) > MAX_ORDERS:
+            raise BackupError("Backup has too many orders to restore.")
+        restore_sensitive = True
+
+    _wipe(project, include_sensitive=restore_sensitive)
 
     idmap: dict[str, dict[int, int]] = {}
     self_links: list[tuple] = []   # (Model, new_pk, key, fk_name, old_target_id)
     pending_files: list[tuple] = []  # (Model, new_pk, field, token)
     counts: dict[str, int] = {}
 
-    for entry in _REGISTRY:
+    registry = _REGISTRY + _SENSITIVE_REGISTRY if restore_sensitive else _REGISTRY
+    for entry in registry:
         Model = _model(entry)
         key = entry["key"]
         idmap[key] = {}
@@ -354,8 +453,12 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
 
 
 @transaction.atomic
-def restore_store(project, archive: bytes, *, actor=None) -> dict:
-    """Wipe ``project``'s content, then rebuild it from a :func:`dump_store` zip."""
+def restore_store(project, archive: bytes, *, actor=None,
+                  include_sensitive: bool = False) -> dict:
+    """Wipe ``project``'s content, then rebuild it from a :func:`dump_store` zip.
+    ``include_sensitive=True`` also restores orders/customers/payments, but
+    only when the archive actually has them AND they're this same store's own
+    (see the module docstring) — otherwise this behaves exactly as before."""
     try:
         zf = zipfile.ZipFile(io.BytesIO(archive))
     except zipfile.BadZipFile as exc:
@@ -365,7 +468,8 @@ def restore_store(project, archive: bytes, *, actor=None) -> dict:
         if "platform.json" in zf.namelist():
             raise BackupError("That's a full-platform backup — restore it from the platform dashboard.")
         raise BackupError("Archive has no manifest.json — not a store backup.")
-    return _restore_store_from(zf, project, "", archive, actor)
+    return _restore_store_from(zf, project, "", archive, actor,
+                               include_sensitive=include_sensitive)
 
 
 def restore_platform(archive: bytes, *, actor=None) -> dict:

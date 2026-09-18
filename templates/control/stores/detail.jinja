@@ -106,7 +106,10 @@
     {% endif %}
   </div>
 
-  {# platform owner + this store's DGC — the store owner has the same on /admin/backup/ #}
+  {# Platform-admin / DGC scope: catalog/CMS/theme only, cross-store copy
+     allowed. The store's real owner gets this same catalog/CMS/theme scope
+     PLUS their own orders/customers/payments on /admin/backup/ -- never
+     copyable between stores, see apps.control.store_backup's docstring. #}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Backup &amp; restore</p>
     <p class="mt-1 text-xs text-slate-500">
