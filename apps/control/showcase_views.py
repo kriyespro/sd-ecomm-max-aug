@@ -75,6 +75,21 @@ class ShowcaseAdminAddView(PlatformAdminRequiredMixin, View):
         return redirect("control:showcase_list")
 
 
+class ShowcaseRemoveView(PlatformAdminRequiredMixin, View):
+    """Pull a store off Live Stores — the approve/reject flow only covers
+    pending submissions, there was no way back off once a store was live."""
+
+    def post(self, request, pk, *args, **kwargs):
+        project = get_object_or_404(Project, pk=pk)
+        try:
+            services.remove_from_showcase(actor=request.user, project=project, request=request)
+        except (ValidationError, PermissionDenied) as exc:
+            messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+        else:
+            messages.success(request, f"{project.name} removed from Live Stores.")
+        return redirect("control:showcase_list")
+
+
 class ShowcaseReviewView(PlatformAdminRequiredMixin, View):
     def post(self, request, pk, *args, **kwargs):
         project = get_object_or_404(Project, pk=pk)

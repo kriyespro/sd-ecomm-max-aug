@@ -26,49 +26,65 @@
   {% endfor %}
 </div>
 
-<div class="space-y-4">
-  {% for p in projects %}
-  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    <div class="flex flex-wrap items-start justify-between gap-3">
-      <div class="min-w-0">
-        <p class="font-semibold text-slate-900">{{ p.name }}
-          <span class="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold
+<div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+      <tr>
+        <th class="px-4 py-2">Store</th>
+        <th class="px-4 py-2">Status</th>
+        <th class="px-4 py-2">Submitted</th>
+        <th class="px-4 py-2">Reviewed</th>
+        <th class="px-4 py-2 text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in projects %}
+      <tr class="hover:bg-slate-50">
+        <td class="px-4 py-2">
+          <span class="font-medium text-slate-900">{{ p.name }}</span>
+          <span class="block text-xs text-slate-400">
+            {% if p.public_url %}<a href="{{ p.public_url }}" target="_blank" rel="noopener" class="hover:underline">{{ p.primary_domain }}</a>{% else %}no domain{% endif %}
+          </span>
+          {% if p.showcase_review_note %}<span class="block text-xs text-slate-500">Note: {{ p.showcase_review_note }}</span>{% endif %}
+        </td>
+        <td class="px-4 py-2">
+          <span class="rounded-full px-2 py-0.5 text-xs font-semibold
             {% if p.showcase_status == 'approved' %}bg-emerald-50 text-emerald-700
             {% elif p.showcase_status == 'rejected' %}bg-rose-50 text-rose-700
             {% else %}bg-amber-50 text-amber-700{% endif %}">{{ p.get_showcase_status_display() }}</span>
-        </p>
-        <p class="mt-0.5 text-sm text-slate-500">
-          {% if p.public_url %}<a href="{{ p.public_url }}" target="_blank" rel="noopener" class="underline">{{ p.primary_domain }}</a>{% else %}no domain{% endif %}
-        </p>
-        <p class="mt-2 text-xs text-slate-400">
-          Submitted {{ p.showcase_submitted_at.strftime('%d %b %Y') if p.showcase_submitted_at else '—' }}
-          {% if p.showcase_reviewed_at %} · reviewed by {{ p.showcase_reviewed_by.email if p.showcase_reviewed_by else '—' }} on {{ p.showcase_reviewed_at.strftime('%d %b %Y') }}{% endif %}
-        </p>
-        {% if p.showcase_review_note %}
-        <p class="mt-2 text-sm text-slate-700">Note: {{ p.showcase_review_note }}</p>
-        {% endif %}
-      </div>
-      {% if p.showcase_status == 'pending' %}
-      <div class="flex shrink-0 gap-2">
-        <form method="post" action="{{ url('control:showcase_review', kwargs={'pk': p.pk}) }}">
-          {{ csrf_input }}
-          <input type="hidden" name="decision" value="approve">
-          <button class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-500">Approve</button>
-        </form>
-        <form method="post" action="{{ url('control:showcase_review', kwargs={'pk': p.pk}) }}"
-              onsubmit="return confirm('Reject this listing?')">
-          {{ csrf_input }}
-          <input type="hidden" name="decision" value="reject">
-          <button class="rounded-lg bg-white px-3 py-1.5 text-sm font-medium text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50">Reject</button>
-        </form>
-      </div>
-      {% endif %}
-    </div>
-  </div>
-  {% else %}
-  <div class="rounded-xl bg-white p-10 text-center text-sm text-slate-400 ring-1 ring-slate-200">
-    No submissions{% if status %} with status "{{ status }}"{% endif %}.
-  </div>
-  {% endfor %}
+        </td>
+        <td class="px-4 py-2 text-slate-500">{{ p.showcase_submitted_at.strftime('%d %b %Y') if p.showcase_submitted_at else '—' }}</td>
+        <td class="px-4 py-2 text-slate-500">
+          {% if p.showcase_reviewed_at %}{{ p.showcase_reviewed_by.email if p.showcase_reviewed_by else '—' }}<br><span class="text-xs">{{ p.showcase_reviewed_at.strftime('%d %b %Y') }}</span>{% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-2 text-right whitespace-nowrap">
+          {% if p.showcase_status == 'pending' %}
+          <form method="post" action="{{ url('control:showcase_review', kwargs={'pk': p.pk}) }}" class="inline">
+            {{ csrf_input }}
+            <input type="hidden" name="decision" value="approve">
+            <button class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-500">Approve</button>
+          </form>
+          <form method="post" action="{{ url('control:showcase_review', kwargs={'pk': p.pk}) }}" class="ml-1 inline"
+                onsubmit="return confirm('Reject this listing?')">
+            {{ csrf_input }}
+            <input type="hidden" name="decision" value="reject">
+            <button class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50">Reject</button>
+          </form>
+          {% elif p.showcase_status == 'approved' %}
+          <form method="post" action="{{ url('control:showcase_remove', kwargs={'pk': p.pk}) }}" class="inline"
+                onsubmit="return confirm('Remove {{ p.name }} from Live Stores?')">
+            {{ csrf_input }}
+            <button class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-rose-600 ring-1 ring-inset ring-rose-200 hover:bg-rose-50">Remove</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-4 py-8 text-center text-sm text-slate-400">
+        No submissions{% if status %} with status "{{ status }}"{% endif %}.
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endblock %}

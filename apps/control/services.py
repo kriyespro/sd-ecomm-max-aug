@@ -478,3 +478,29 @@ def admin_add_to_showcase(*, actor, project, request=None):
         changes={"decision": "admin_add", "project": project.name}, request=request,
     )
     return project
+
+
+def remove_from_showcase(*, actor, project, request=None):
+    """Platform admin pulls a store off Live Stores — resets to
+    "not submitted" (not "rejected": the store didn't do anything wrong,
+    an admin just chose to unfeature it). The owner can resubmit, or an
+    admin can add it back with admin_add_to_showcase(), either way."""
+    if not _is_platform_admin(actor):
+        raise PermissionDenied("Only a platform admin can remove a store from the showcase.")
+    if project.showcase_status != Project.ShowcaseStatus.APPROVED:
+        raise ValidationError("That store isn't currently on Live Stores.")
+
+    project.showcase_status = Project.ShowcaseStatus.NOT_SUBMITTED
+    project.showcase_submitted_at = None
+    project.showcase_reviewed_by = None
+    project.showcase_reviewed_at = None
+    project.showcase_review_note = ""
+    project.save(update_fields=[
+        "showcase_status", "showcase_submitted_at", "showcase_reviewed_by",
+        "showcase_reviewed_at", "showcase_review_note", "updated_at",
+    ])
+    record_audit(
+        actor=actor, action=AuditLog.Action.UPDATE, target=project,
+        changes={"decision": "admin_remove", "project": project.name}, request=request,
+    )
+    return project
