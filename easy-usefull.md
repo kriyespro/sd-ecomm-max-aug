@@ -273,3 +273,42 @@ raw exception names / `is_active`/`None`/`null` as visible text — zero
 hits, matches the views' own plain-English messages), data isolation on
 all 6 bulk views (every one filters by `project=self.active_project`
 before mutating — confirmed pattern-consistent, no view skips it).
+
+## ROUND 6 — one-click status toggles missing on 4 newer list screens (audited 2026-09-18, not built yet)
+
+Also covers this session's own new work: onboarding wizard compacted
+(2ee50d1), demo-content remove/import buttons moved to the header
+(1ba6b82/44bc3ae), showcase list turned into a compact table (7a223c1).
+
+- [ ] Courier accounts: `is_enabled` shown as a plain badge, no toggle.
+      `templates/control/shipping/courier_list.jinja:28-31`, view at
+      `apps/control/shipping_views.py:113` (`CourierConfigListView`).
+      Currently 4 steps (Edit → flip checkbox → Save → back) to turn a
+      courier on/off. Fix: 1-click POST toggle on the list row, same
+      pattern as the already-shipped `ProductFlagToggleView`
+      (`apps/control/catalog_views.py:667`). SAFE.
+- [ ] Shipping zones: `is_active` shown as a plain badge, no toggle.
+      `templates/control/shipping/zone_list.jinja:16-18`, view at
+      `apps/control/shipping_views.py:42` (`ZoneListView`). Same 4-step
+      edit-to-toggle problem, same fix. SAFE.
+- [ ] Webhook endpoints: `is_active` column is text-only ("yes"/"no"),
+      no toggle. `templates/control/webhooks/endpoint_list.jinja:19-20`.
+      Same fix. SAFE.
+- [ ] Certificates: `is_public` shown as a badge, no toggle.
+      `templates/control/certificates/list.jinja:33` onward. Same fix.
+      SAFE.
+- [ ] Media library type filter (`kind` `<select>`) needs a separate
+      "Filter" button click to apply. `templates/control/media/library.jinja:28-34`.
+      Fix: `onchange="this.form.submit()"` on the select — same
+      auto-submit convention `base_control.jinja`'s store-switcher
+      dropdown already uses. Text search field stays a real submit (no
+      debounce hack). SAFE.
+
+All 5 reuse an existing, already-proven in-repo pattern — no new design,
+no risk to data, purely additive. Not built yet — user said "not now."
+
+Already good, no gap found: product CSV/Excel import (already one
+screen, one submit, sensible column defaults documented inline), custom
+domain verify flow (re-checked, still fine), media upload + bulk-trash
+(built rounds 2/5), social/WhatsApp/AI product-copy settings screens
+(single-record forms, no list-row toggle friction to fix).
