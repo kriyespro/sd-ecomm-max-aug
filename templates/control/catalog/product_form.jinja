@@ -1,5 +1,5 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
+{% from "control/_forms.jinja" import render_form, render_field %}
 {% block page_title %}{{ "Edit product" if object else "New product" }}{% endblock %}
 
 {% block content %}
@@ -25,12 +25,20 @@
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {{ csrf_input }}
     <div class="grid gap-4 rounded-xl bg-white p-6 ring-1 ring-slate-200 md:grid-cols-2">
-      {{ render_form(form) }}
+      {{ render_form(form, exclude=['hsn_sac', 'tax_class']) }}
     </div>
 
     {% if size_color_enabled %}
       {% include "control/catalog/_size_color.jinja" %}
     {% endif %}
+
+    <details class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+      <summary class="cursor-pointer text-sm font-semibold text-slate-700">Extra</summary>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        {{ render_field(form.hsn_sac) }}
+        {{ render_field(form.tax_class) }}
+      </div>
+    </details>
 
     {% if not object %}
     <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">

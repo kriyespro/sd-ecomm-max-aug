@@ -36,6 +36,12 @@
                hx-trigger="change" hx-swap="none" class="h-3.5 w-3.5 rounded border-slate-300">
         New
       </label>
+      <label class="inline-flex items-center gap-1 text-xs text-slate-600" title="Show in Best sellers">
+        <input type="checkbox" name="state" value="1" {{ 'checked' if p.is_bestseller }}
+               hx-post="{{ url('control:product_flag_toggle', kwargs={'pk': p.pk, 'flag': 'is_bestseller'}) }}"
+               hx-trigger="change" hx-swap="none" class="h-3.5 w-3.5 rounded border-slate-300">
+        Bestseller
+      </label>
     </div>
     {% else %}—{% endif %}
   </td>

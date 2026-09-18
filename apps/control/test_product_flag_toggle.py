@@ -1,6 +1,8 @@
-"""Compact Featured/New arrivals checkboxes on /admin/products/ — lets a
-merchant pick which home page rail a product shows in without opening the
-full product edit form."""
+"""Compact Featured/New arrivals/Bestseller checkboxes on /admin/products/ —
+lets a merchant pick which home page rail a product shows in without opening
+the full product edit form. These three flags were removed from the
+create/edit form itself (apps/control/forms.py ProductForm) once this list
+toggle existed, to avoid asking for the same thing twice."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -41,6 +43,7 @@ class ProductFlagToggleTests(TestCase):
         body = self.client.get("/admin/products/").content.decode()
         self.assertIn(f"/admin/products/{self.product.pk}/flags/is_featured/", body)
         self.assertIn(f"/admin/products/{self.product.pk}/flags/is_new_arrival/", body)
+        self.assertIn(f"/admin/products/{self.product.pk}/flags/is_bestseller/", body)
 
     def test_checking_the_box_sets_the_flag(self):
         resp = self._toggle("is_featured", checked=True)
@@ -64,8 +67,14 @@ class ProductFlagToggleTests(TestCase):
         self.assertFalse(self.product.is_featured)
         self.assertTrue(self.product.is_new_arrival)
 
-    def test_unknown_flag_is_rejected(self):
+    def test_bestseller_flag_toggles_too(self):
         resp = self._toggle("is_bestseller", checked=True)
+        self.assertEqual(resp.status_code, 204)
+        self.product.refresh_from_db()
+        self.assertTrue(self.product.is_bestseller)
+
+    def test_unknown_flag_is_rejected(self):
+        resp = self._toggle("is_archived", checked=True)
         self.assertEqual(resp.status_code, 404)
 
     def test_cannot_toggle_another_projects_product(self):

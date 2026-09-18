@@ -666,12 +666,12 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
 
 class ProductFlagToggleView(_ScopedQuerysetMixin, View):
     """Quick per-row checkboxes on the products list — which home page rail
-    (Featured/New arrivals) a product shows in, without opening the full
-    edit form. Each checkbox POSTs on its own (no wrapping <form>), so an
-    unchecked box sends no body at all — "state" present means checked."""
+    (Featured/New arrivals/Best sellers) a product shows in, without opening
+    the full edit form. Each checkbox POSTs on its own (no wrapping <form>),
+    so an unchecked box sends no body at all — "state" present means checked."""
 
     model = Product
-    ALLOWED_FLAGS = {"is_featured", "is_new_arrival"}
+    ALLOWED_FLAGS = {"is_featured", "is_new_arrival", "is_bestseller"}
 
     def post(self, request, pk, flag, *args, **kwargs):
         if flag not in self.ALLOWED_FLAGS:

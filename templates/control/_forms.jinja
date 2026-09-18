@@ -26,12 +26,14 @@
 </div>
 {% endmacro %}
 
-{% macro render_form(form) %}
+{% macro render_form(form, exclude=[]) %}
   {% if form.non_field_errors() %}
   <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
   {% endif %}
   {% for field in form.visible_fields() %}
+    {% if field.name not in exclude %}
     {{ render_field(field) }}
+    {% endif %}
   {% endfor %}
   {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
 {% endmacro %}

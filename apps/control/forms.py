@@ -12,7 +12,7 @@ from django.contrib.auth.password_validation import validate_password
 from decimal import Decimal
 
 from apps.accounts.models import PlatformRole
-from apps.catalog.models import Brand, Product, ProductType, Tag, Variant
+from apps.catalog.models import Brand, Product, ProductStatus, ProductType, Tag, Variant
 from apps.categories.models import Category
 from apps.cms.models import (
     FAQ,
@@ -131,26 +131,22 @@ class ProductForm(ProjectScopedForm):
     class Meta:
         model = Product
         fields = [
-            "title", "slug", "kind", "price", "sale_price", "cost_price", "status",
+            "title", "kind", "price", "sale_price", "cost_price", "status",
             "type", "brand", "category",
-            "sku", "barcode", "hsn_sac", "tax_class",
+            "barcode", "hsn_sac", "tax_class",
             "short_description", "description",
             "weight", "length", "width", "height",
-            "is_featured", "is_new_arrival", "is_bestseller", "search_indexed",
+            "search_indexed",
             "seo_title", "seo_description", "seo_keywords",
         ]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4}),
             "short_description": forms.Textarea(attrs={"rows": 2}),
-            "slug": forms.TextInput(attrs={"placeholder": "auto from title"}),
-            "sku": forms.TextInput(attrs={"placeholder": "auto"}),
         }
         labels = {
             "search_indexed": "Show in search & storefront listings",
         }
         help_texts = {
-            "slug": "Leave blank to auto-generate from the title.",
-            "sku": "Leave blank to auto-generate.",
             "search_indexed": "Off = hidden from the storefront grid, search and "
                               "sitemap even when the status is Active. Direct link "
                               "still works.",
@@ -158,8 +154,14 @@ class ProductForm(ProjectScopedForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["slug"].required = False
-        self.fields["sku"].required = False
+        if not self.instance.pk:
+            # Slug and SKU are auto-generated from the title on save
+            # (Product.save()) whenever left blank -- no reason to make
+            # every merchant type them. Status defaults to Active here
+            # (not on the model, which other create paths like import
+            # still want as Draft) since a merchant filling this form out
+            # is about to publish, not stage, a product.
+            self.initial["status"] = ProductStatus.ACTIVE
         self.fields["type"].queryset = ProductType.objects.filter(project=self.project)
         self.fields["brand"].queryset = Brand.objects.filter(project=self.project)
         self.fields["category"].queryset = Category.objects.filter(project=self.project)
