@@ -132,6 +132,17 @@
             <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></svg>
           </a>
           {% endif %}
+          {% if control_demo_seeded %}
+          <form method="post" action="{{ url('control:demo_remove') }}"
+                onsubmit="return confirm('Delete all demo products, banners and pages? Anything you added stays.')"
+                class="shrink-0 inline">
+            {{ csrf_input }}
+            <input type="hidden" name="next" value="{{ request.get_full_path() }}">
+            <button class="rounded-md bg-red-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-red-700">
+              Remove demo content
+            </button>
+          </form>
+          {% endif %}
         </h1>
       </div>
 
@@ -200,12 +211,6 @@
       <span>This store is showing <strong>demo content</strong> — edit the sample
         products, banners and pages, then swap in your own images where you see
         the grey <span class="font-mono text-xs">1600×900</span> placeholders.</span>
-      <form method="post" action="{{ url('control:demo_remove') }}"
-            onsubmit="return confirm('Delete all demo products, banners and pages? Anything you added stays.')">
-        {{ csrf_input }}
-        <input type="hidden" name="next" value="{{ request.get_full_path() }}">
-        <button class="rounded bg-{{ _hue }}-900 px-2 py-1 text-xs font-medium text-white">Remove demo content</button>
-      </form>
     </div>
     {% endif %}
 
