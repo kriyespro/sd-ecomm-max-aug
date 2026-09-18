@@ -56,7 +56,9 @@ def _build_source(project):
     ThemeSettings.objects.update_or_create(project=project,
                                            defaults={"primary_color": "#123456"})
     StoreProfile.objects.update_or_create(project=project,
-                                          defaults={"tagline": "Best tees in town"})
+                                          defaults={"tagline": "Best tees in town",
+                                                    "whatsapp": "+919812345678",
+                                                    "whatsapp_enquiry_enabled": True})
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -103,7 +105,10 @@ class StoreBackupRoundTripTests(TestCase):
         self.assertEqual(MenuItem.objects.get(menu=menu, label="About").page.slug, "about-us")
 
         self.assertEqual(ThemeSettings.objects.get(project=self.dst).primary_color, "#123456")
-        self.assertEqual(StoreProfile.objects.get(project=self.dst).tagline, "Best tees in town")
+        dst_profile = StoreProfile.objects.get(project=self.dst)
+        self.assertEqual(dst_profile.tagline, "Best tees in town")
+        self.assertTrue(dst_profile.whatsapp_enquiry_enabled)
+        self.assertEqual(dst_profile.whatsapp, "+919812345678")
 
         # untouched
         self.assertTrue(Customer.objects.filter(pk=self.customer.pk).exists())

@@ -410,6 +410,7 @@ urlpatterns = [
 
     # Social auto-share (per-store add-on)
     path("marketing/social/", socv.SocialSettingsView.as_view(), name="social"),
+    path("marketing/whatsapp-enquiry/", mktv.WhatsAppEnquiryView.as_view(), name="whatsapp_enquiry"),
     path("marketing/social/<str:provider>/creds/", socv.SocialSaveCredsView.as_view(), name="social_creds"),
     path("marketing/social/<str:provider>/connect/", socv.SocialConnectView.as_view(), name="social_connect"),
     path("marketing/social/<str:provider>/callback/", socv.SocialCallbackView.as_view(), name="social_callback"),

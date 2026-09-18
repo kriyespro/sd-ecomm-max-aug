@@ -55,6 +55,7 @@ _SECTIONS = [
         ("notification_settings", "Notifications", "\U0001f514"),
         ("tracking", "Pixels & tracking", "\U0001f4c8"),
         ("social", "Auto-share", "\U0001f4e3"),
+        ("whatsapp_enquiry", "WhatsApp enquiry button", "\U0001f4ac"),
     ]),
     ("storefront", "Storefront", "\U0001f6cd", [
         ("cms_store_profile", "Store profile", "\U0001f3ea"),

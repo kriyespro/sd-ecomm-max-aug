@@ -1,0 +1,38 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}WhatsApp enquiry button{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">WhatsApp enquiry button · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Adds a WhatsApp button next to Add to cart on every product card,
+      storewide, across every skin. A shopper who taps it opens WhatsApp with
+      a message already filled in — the product name, price and a link back
+      to it — sent straight to your store's WhatsApp number.
+    </p>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    {% if object.whatsapp %}
+    <p class="mb-4 text-xs text-slate-500">
+      Messages go to <span class="font-medium text-slate-700">{{ object.whatsapp }}</span>.
+      <a href="{{ url('control:cms_store_profile') }}" class="underline">Change it on Store profile.</a>
+    </p>
+    {% else %}
+    <p class="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+      No WhatsApp number set yet —
+      <a href="{{ url('control:cms_store_profile') }}" class="underline">add one on Store profile</a>
+      before turning this on.
+    </p>
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+      {{ csrf_input }}
+      {{ render_form(form) }}
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

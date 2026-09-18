@@ -10,6 +10,7 @@ from django.views import View
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
+from apps.cms.models import StoreProfile
 from apps.core.mixins import PlatformAdminRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
@@ -340,4 +341,46 @@ class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
         record_audit(actor=self.request.user, action=AuditLog.Action.UPDATE,
                      target=self.object, request=self.request)
         messages.success(self.request, "Marketing-site tracking saved.")
+        return resp
+
+
+# --- WhatsApp enquiry button on product cards -------------------------------
+
+class WhatsAppEnquiryForm(forms.ModelForm):
+    class Meta:
+        model = StoreProfile
+        fields = ["whatsapp_enquiry_enabled"]
+        labels = {
+            "whatsapp_enquiry_enabled": "Show a WhatsApp button next to Add to cart "
+                                        "on every product card",
+        }
+
+    def clean(self):
+        cleaned = super().clean()
+        if cleaned.get("whatsapp_enquiry_enabled") and not self.instance.whatsapp:
+            self.add_error(
+                "whatsapp_enquiry_enabled",
+                "Add a WhatsApp number on Store profile first.",
+            )
+        return cleaned
+
+
+class WhatsAppEnquiryView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView):
+    form_class = WhatsAppEnquiryForm
+    template_name = "control/marketing/whatsapp_enquiry_form.jinja"
+    success_url = reverse_lazy("control:whatsapp_enquiry")
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage marketing settings."
+
+    def get_object(self, queryset=None):
+        obj, _ = StoreProfile.objects.get_or_create(project=self.active_project)
+        return obj
+
+    def form_valid(self, form):
+        resp = super().form_valid(form)
+        record_audit(actor=self.request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=self.object,
+                     changes={"whatsapp_enquiry_enabled": self.object.whatsapp_enquiry_enabled},
+                     request=self.request)
+        messages.success(self.request, "WhatsApp enquiry button settings saved.")
         return resp

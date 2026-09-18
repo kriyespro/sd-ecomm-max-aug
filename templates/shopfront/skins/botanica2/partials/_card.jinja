@@ -43,11 +43,14 @@
       {% endif %}
     </div>
 
-    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-3">
-      <input type="hidden" name="product" value="{{ p.slug }}">
-      <button class="w-full rounded-full border border-accent bg-transparent py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent hover:text-paper">
-        Add to cart
-      </button>
-    </form>
+    <div class="mt-3 flex gap-1.5">
+      <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="min-w-0 flex-1">
+        <input type="hidden" name="product" value="{{ p.slug }}">
+        <button class="w-full rounded-full border border-accent bg-transparent py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent hover:text-paper">
+          Add to cart
+        </button>
+      </form>
+      {% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}
+    </div>
   </div>
 </article>

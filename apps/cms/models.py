@@ -710,6 +710,11 @@ class StoreProfile(TenantScopedModel):
     whatsapp = models.CharField(
         max_length=32, blank=True, help_text="Number in international format, e.g. +9198…",
     )
+    whatsapp_enquiry_enabled = models.BooleanField(
+        default=False,
+        help_text="Show a WhatsApp button next to Add to cart on every product card, "
+                  "pre-filled with the product name, price and link.",
+    )
     address = models.TextField(
         blank=True, help_text="Full postal address, shown in the footer.",
     )
@@ -748,10 +753,12 @@ class StoreProfile(TenantScopedModel):
         super().save(*args, **kwargs)
 
     @property
+    def whatsapp_digits(self):
+        return "".join(c for c in self.whatsapp if c.isdigit())
+
+    @property
     def whatsapp_link(self):
-        if not self.whatsapp:
-            return ""
-        digits = "".join(c for c in self.whatsapp if c.isdigit())
+        digits = self.whatsapp_digits
         return f"https://wa.me/{digits}" if digits else ""
 
     @property
