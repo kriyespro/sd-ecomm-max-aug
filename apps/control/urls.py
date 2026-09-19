@@ -342,6 +342,10 @@ urlpatterns = [
     path("backup/", backupv.OwnerBackupView.as_view(), name="owner_backup"),
     path("backup/download/", backupv.OwnerBackupDownloadView.as_view(), name="owner_backup_download"),
     path("backup/restore/", backupv.OwnerRestoreView.as_view(), name="owner_backup_restore"),
+    path("backup/snapshots/<int:pk>/download/", backupv.OwnerBackupSnapshotDownloadView.as_view(),
+         name="owner_backup_snapshot_download"),
+    path("backup/snapshots/<int:pk>/restore/", backupv.OwnerBackupSnapshotRestoreView.as_view(),
+         name="owner_backup_snapshot_restore"),
 
     # Backup & restore centre (superadmin / platform owner)
     path("platform-backups/", views.PlatformBackupCenterView.as_view(), name="platform_backups"),

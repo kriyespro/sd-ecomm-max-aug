@@ -3,8 +3,8 @@ content. Same engine as the platform-side store backup (apps.control.store_backu
 just scoped to the active project and gated to the OWNER role."""
 
 from django.contrib import messages
-from django.http import HttpResponse
-from django.shortcuts import redirect
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views import View
 from django.views.generic import TemplateView
@@ -18,6 +18,7 @@ from apps.accounts.permissions import (
 
 from . import store_backup
 from .mixins import ActiveProjectMixin
+from .models import RETENTION_DAYS, StoreBackupSnapshot
 
 _MAX_UPLOAD = 700 * 1024 * 1024
 
@@ -52,7 +53,14 @@ class OwnerBackupView(_OwnerOnly, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["include_sensitive"] = self._include_sensitive()
+        include_sensitive = self._include_sensitive()
+        ctx["include_sensitive"] = include_sensitive
+        ctx["retention_days"] = RETENTION_DAYS
+        # Automatic daily snapshots always carry orders/customers/payments
+        # (apps.control.tasks.daily_store_backup_task) -- owner-only, same
+        # rule as the manual download/restore above.
+        if include_sensitive:
+            ctx["auto_snapshots"] = self.active_project.backup_snapshots.all()[:RETENTION_DAYS]
         return ctx
 
 
@@ -104,4 +112,49 @@ class OwnerRestoreView(_OwnerOnly, View):
             detail += f", {counts.get('order', 0)} orders, {counts.get('customer', 0)} customers"
         detail += ")"
         messages.success(request, f"Restored — {sum(counts.values())} items {detail}.")
+        return redirect("control:owner_backup")
+
+
+class _OwnerSnapshotBase(_OwnerOnly):
+    """Automatic daily snapshots are owner-only data (see StoreBackupSnapshot's
+    own docstring) -- a DGC reaching the plain backup screen via the
+    subscription-manager bypass must never touch these, even by guessing a
+    snapshot's pk for a store they can otherwise open."""
+
+    def get_snapshot(self, pk):
+        if not self._include_sensitive():
+            raise Http404
+        return get_object_or_404(StoreBackupSnapshot, pk=pk, project=self.active_project)
+
+
+class OwnerBackupSnapshotDownloadView(_OwnerSnapshotBase, View):
+    def get(self, request, *args, **kwargs):
+        snap = self.get_snapshot(kwargs["pk"])
+        resp = HttpResponse(snap.archive.read(), content_type="application/zip")
+        resp["Content-Disposition"] = f'attachment; filename="{snap.archive.name.rsplit("/", 1)[-1]}"'
+        return resp
+
+
+class OwnerBackupSnapshotRestoreView(_OwnerSnapshotBase, View):
+    def post(self, request, *args, **kwargs):
+        snap = self.get_snapshot(kwargs["pk"])
+        store = self.active_project
+        try:
+            counts = store_backup.restore_store(
+                store, snap.archive.read(), actor=request.user, include_sensitive=True,
+            )
+        except store_backup.BackupError as exc:
+            messages.error(request, str(exc))
+            return redirect("control:owner_backup")
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("snapshot restore failed")
+            messages.error(request, f"Restore failed: {exc}")
+            return redirect("control:owner_backup")
+        messages.success(
+            request,
+            f"Restored from the {snap.created_at:%d %b %Y %H:%M} backup — "
+            f"{sum(counts.values())} items.",
+        )
         return redirect("control:owner_backup")
