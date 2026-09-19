@@ -261,3 +261,61 @@ class PlanPageDgcNoStoreTests(TestCase):
         # this checks the label is present rather than the number's absence.
         self.assertContains(resp, "Your B2B rate")
         self.assertContains(resp, "14,999")
+
+    def test_dgc_sees_b2b_rate_even_on_a_legacy_retail_billed_store(self):
+        # A store the DGC manages but that was never auto-wholesale-priced
+        # (created before this feature, or hand-assigned via
+        # set_store_manager) -- billed_to_dgc is False, but the DGC viewing
+        # it must still see their own B2B rate here, not the client's retail
+        # price. This was the actual bug: show_dgc_prices used to key off
+        # the subscription's billed_to_dgc instead of who's viewing.
+        project = Project.objects.create(
+            name="LegacyDgcStore", status="active", feature_flags={"onboarded": True},
+        )
+        sub = billing_svc.ensure_subscription(project, plan=Plan.objects.get(code="basic"))
+        sub.manager = self.dgc
+        sub.save(update_fields=["manager"])
+        self.assertFalse(sub.billed_to_dgc)
+
+        self.client.force_login(self.dgc)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
+        s.save()
+        resp = self.client.get("/admin/plan/")
+        self.assertContains(resp, "Your B2B rate")
+        self.assertContains(resp, "14,999")
+
+    def test_changing_plan_on_a_legacy_store_converts_it_to_wholesale(self):
+        project = Project.objects.create(
+            name="ConvertMeStore", status="active", feature_flags={"onboarded": True},
+        )
+        sub = billing_svc.ensure_subscription(project, plan=Plan.objects.get(code="basic"))
+        sub.manager = self.dgc
+        sub.save(update_fields=["manager"])
+
+        self.client.force_login(self.dgc)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
+        s.save()
+        resp = self.client.post("/admin/plan/change/", {
+            "plan": Plan.objects.get(code="growth").pk, "period": "yearly",
+        })
+        self.assertEqual(resp.status_code, 302)
+        sub.refresh_from_db()
+        self.assertTrue(sub.billed_to_dgc)
+        self.assertEqual(sub.override_price, Decimal("24999"))
+
+    def test_owner_managing_their_own_store_still_sees_retail(self):
+        project = Project.objects.create(
+            name="RealOwnerStore", status="active", feature_flags={"onboarded": True},
+        )
+        billing_svc.ensure_subscription(project, plan=Plan.objects.get(code="basic"))
+        owner = User.objects.create_user("plow", "plow@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=project, user=owner, role=StoreRole.OWNER)
+        self.client.force_login(owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
+        s.save()
+        resp = self.client.get("/admin/plan/")
+        self.assertNotContains(resp, "Your B2B rate")
+        self.assertContains(resp, "24,999")

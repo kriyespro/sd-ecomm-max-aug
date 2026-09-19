@@ -68,9 +68,12 @@ class PlanView(_PlanBase, TemplateView):
         ctx["subscription"] = sub
         ctx["current_price"] = sub.current_price()
         ctx["plans"] = Plan.objects.filter(is_active=True, is_public=True).order_by("sort_order")
-        # A wholesale-billed (DGC-provisioned) store's plan-switcher must show
-        # what the DGC actually pays, not the retail price their client sees.
-        ctx["show_dgc_prices"] = sub.billed_to_dgc
+        # Keyed on who's viewing, not this one subscription's billed_to_dgc --
+        # a DGC managing a store that predates wholesale pricing (no override
+        # set yet) must still see their own B2B rate here, not the retail
+        # price their client sees. billed_to_dgc still drives actual billing
+        # (see change_plan) -- this only controls what's displayed.
+        ctx["show_dgc_prices"] = is_platform_staff(self.request.user) and not is_platform_admin(self.request.user)
         ctx["usage"] = limits.usage(self.active_project)
         ctx["invoices"] = sub.invoices.all()[:12]
         ctx["open_invoice"] = sub.invoices.filter(status="open").first()
@@ -84,8 +87,16 @@ class PlanChangeView(_PlanBase, View):
         period = request.POST.get("period")
         if period not in (BillingPeriod.MONTHLY, BillingPeriod.YEARLY):
             period = BillingPeriod.MONTHLY
+        # A DGC changing the plan on any store they reached this page for
+        # (projects_for_user already scoped that access) always bills going
+        # forward at their own wholesale rate, even if this particular store
+        # predates wholesale pricing and was still on retail until now.
+        as_dgc = is_platform_staff(request.user) and not is_platform_admin(request.user)
         try:
-            billing_svc.change_plan(sub, plan=plan, period=period, actor=request.user)
+            billing_svc.change_plan(
+                sub, plan=plan, period=period, actor=request.user,
+                billed_to_dgc=True if as_dgc else None,
+            )
         except billing_svc.BillingError as exc:
             messages.error(request, str(exc))
             return redirect("control:store_plan")

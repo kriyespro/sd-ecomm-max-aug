@@ -87,7 +87,7 @@ def is_dgc_managed(project) -> bool:
 
 
 @transaction.atomic
-def change_plan(subscription, *, plan, period, actor=None):
+def change_plan(subscription, *, plan, period, actor=None, billed_to_dgc=None):
     """Switch plan/period and bill it, unless an invoice is already open.
 
     Trialing, suspended or cancelled subscriptions have no live paid period to
@@ -95,6 +95,11 @@ def change_plan(subscription, *, plan, period, actor=None):
     immediately (ending a trial early counts as "buy now"). An already-active
     subscription keeps its current paid period; the new price is billed at the
     next cycle boundary, as before.
+
+    ``billed_to_dgc``: pass True/False to explicitly (re)set whether this
+    subscription is wholesale-billed -- e.g. a DGC changing the plan on a
+    store that predates wholesale pricing should convert it going forward.
+    Leave as None to keep whatever the subscription already had.
     """
     if not plan.is_active:
         raise BillingError("That plan is not available.")
@@ -107,10 +112,14 @@ def change_plan(subscription, *, plan, period, actor=None):
     if subscription.status == SubscriptionStatus.CANCELLED:
         subscription.status = SubscriptionStatus.ACTIVE
     update_fields = ["plan", "period", "cancel_at_period_end", "status", "updated_at"]
+    if billed_to_dgc is not None and billed_to_dgc != subscription.billed_to_dgc:
+        subscription.billed_to_dgc = billed_to_dgc
+        update_fields.append("billed_to_dgc")
     # A wholesale-billed (DGC-provisioned) subscription's override_price is
-    # pinned to whichever plan set it -- switching plans must re-price it to
-    # the NEW plan's wholesale rate, or the next invoice would silently bill
-    # the old plan's price under the new plan's name.
+    # pinned to whichever plan set it -- switching plans (or just now turning
+    # wholesale billing on) must re-price it to the plan's wholesale rate, or
+    # the next invoice would silently bill the wrong price under the new
+    # plan's name.
     if subscription.billed_to_dgc:
         subscription.override_price = plan.dgc_price_for(period)
         update_fields.append("override_price")
