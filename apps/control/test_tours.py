@@ -107,7 +107,10 @@ class RoleChecklistTests(TestCase):
         Membership.objects.create(project=self.project, user=owner, role=StoreRole.OWNER)
         self._login_easy(owner)
         resp = self.client.get("/admin/")
-        self.assertContains(resp, "0 / 10")
+        # "Connect a payment method" reads as already done -- COD is a
+        # virtual default that needs no setup (2026-08-19 fix), so a
+        # brand-new store starts at 1/10, not 0/10.
+        self.assertContains(resp, "1 / 10")
         self.assertContains(resp, "Create a launch coupon")
         self.assertContains(resp, "Preview &amp; share your store")
 

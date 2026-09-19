@@ -190,6 +190,14 @@ def seed_starter_content(project, *, force: bool = False) -> dict:
     )
     from apps.reviews.models import Review, ReviewStatus
     from apps.reviews.services import refresh_product_rating
+    from apps.shipping.services import ensure_default_shipping
+
+    # Not demo content (not tracked in `ref`, never removed by "Remove demo
+    # content") -- without it a brand-new store's first order has no
+    # shipping method to pick and the "Set shipping & ship" button doesn't
+    # even render. Runs regardless of the is_seeded/force guard below since
+    # it's already idempotent on its own (no-op once any zone exists).
+    ensure_default_shipping(project)
 
     if is_seeded(project) and not force:
         return project.feature_flags.get(_REF, {})

@@ -14,7 +14,7 @@ def owner_steps(project):
     from apps.categories.models import Category
     from apps.cms.models import Banner, BannerPlacement, StoreProfile
     from apps.coupons.models import Coupon
-    from apps.payments.models import PaymentProviderConfig
+    from apps.payments import services as payment_services
     from apps.shipping.models import ShippingMethod
 
     store_profile = StoreProfile.objects.filter(project=project).first()
@@ -26,9 +26,11 @@ def owner_steps(project):
     has_theme = Banner.objects.filter(
         project=project, placement=BannerPlacement.HERO, is_active=True,
     ).exists()
-    has_payment = PaymentProviderConfig.objects.filter(
-        project=project, is_enabled=True,
-    ).exists()
+    # COD is a virtual default (apps.payments.services.enabled_provider_configs)
+    # -- never written as a real row unless an owner explicitly adds/disables
+    # one, so a raw PaymentProviderConfig query always read a brand-new store
+    # as "no payment method" even though it can already take COD orders.
+    has_payment = bool(payment_services.enabled_provider_configs(project))
     has_shipping = ShippingMethod.objects.filter(project=project, is_active=True).exists()
     has_domain = bool((project.primary_domain or "").strip())
     has_team = Membership.objects.filter(

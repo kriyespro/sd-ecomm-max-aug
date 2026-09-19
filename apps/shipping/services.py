@@ -61,6 +61,27 @@ def matching_zone(project, address: dict):
     return None
 
 
+def ensure_default_shipping(project) -> bool:
+    """A brand-new store has zero ShippingZone/ShippingMethod rows -- the
+    "Set shipping & ship" button on order_detail.jinja doesn't even render
+    without one (no method to pick), so a first order is a dead end with
+    literally nothing to click. Seeds one zone that matches every address
+    ("All India", no country/state/pincode restriction) and one flat-rate,
+    zero-cost, self-ship method (blank ``carrier`` -- no courier account
+    needed, same "works with zero external setup" shape as COD being the
+    default payment option). No-op if the store already has any zone, so
+    it never touches a store that configured its own. Not tracked as demo
+    content -- never removed by "Remove demo content."""
+    if ShippingZone.objects.filter(project=project).exists():
+        return False
+    zone = ShippingZone.objects.create(project=project, name="All India", is_active=True)
+    ShippingMethod.objects.create(
+        project=zone.project, zone=zone, name="Standard delivery",
+        is_active=True, min_days=2, max_days=7,
+    )
+    return True
+
+
 def available_methods(*, project, address, subtotal, weight=None, cod=False):
     """Return ``[(method, quote_decimal), ...]`` for the address + basket."""
     zone = matching_zone(project, address)
