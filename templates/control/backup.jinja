@@ -57,6 +57,18 @@
   </div>
   {% endif %}
 
+  {% if show_backup_upgrade_nudge %}
+  <div class="rounded-xl bg-amber-50 p-5 ring-1 ring-amber-200">
+    <h2 class="text-sm font-semibold text-amber-900">Get automatic daily backups</h2>
+    <p class="mt-1 text-xs text-amber-800">
+      Automatic daily backups, plus your customers/orders/payments included
+      in every backup, are a Growth and Pro feature.
+    </p>
+    <a href="{{ url('control:store_plan') }}"
+       class="mt-3 inline-block rounded-lg bg-amber-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800">Upgrade plan</a>
+  </div>
+  {% endif %}
+
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <h2 class="text-sm font-semibold text-slate-700">Download a backup</h2>
     {% if include_sensitive %}

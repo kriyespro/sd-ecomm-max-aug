@@ -67,3 +67,12 @@ def check_can_add_domain(project):
 def skin_upload_allowed(project) -> bool:
     plan = _plan(project)
     return bool(plan and plan.allow_skin_upload)
+
+
+def full_backup_allowed(project) -> bool:
+    """Orders/customers/payments in the owner's own backup, plus the
+    automatic daily backup — a Growth/Pro perk. False just means the store
+    falls back to the plain catalog/CMS/theme manual backup every plan
+    already gets, not that backup is unavailable."""
+    plan = _plan(project)
+    return bool(plan and plan.allow_full_backup)

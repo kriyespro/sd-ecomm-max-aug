@@ -17,7 +17,7 @@
         <tr>
           <th class="px-4 py-2">Plan</th><th class="px-4 py-2">Monthly</th><th class="px-4 py-2">Yearly</th>
           <th class="px-4 py-2">Comm. mo/yr</th><th class="px-4 py-2">Products</th><th class="px-4 py-2">Staff</th>
-          <th class="px-4 py-2">Skins</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th>
+          <th class="px-4 py-2">Skins</th><th class="px-4 py-2">Backup</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -30,6 +30,7 @@
           <td class="px-4 py-2 text-xs">{{ p.max_products if p.max_products is not none else '∞' }}</td>
           <td class="px-4 py-2 text-xs">{{ p.max_staff if p.max_staff is not none else '∞' }}</td>
           <td class="px-4 py-2 text-xs">{{ 'yes' if p.allow_skin_upload else '—' }}</td>
+          <td class="px-4 py-2 text-xs">{{ 'yes' if p.allow_full_backup else '—' }}</td>
           <td class="px-4 py-2 text-xs">
             {{ 'Public' if p.is_public and p.is_active else 'Hidden' if p.is_active else 'Off' }}
           </td>

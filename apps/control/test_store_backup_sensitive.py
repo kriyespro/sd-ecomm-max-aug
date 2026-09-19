@@ -21,6 +21,7 @@ from django.test import TestCase, override_settings
 
 from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.billing import services as billing_svc
+from apps.billing.models import Plan
 from apps.catalog.models import Product
 from apps.control import store_backup
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
@@ -166,7 +167,9 @@ class OwnerBackupScreenSensitiveTests(TestCase):
         self.project = Project.objects.create(
             name="ScreenCo", status="active", feature_flags={"onboarded": True},
         )
-        billing_svc.ensure_subscription(self.project)
+        sub = billing_svc.ensure_subscription(self.project)  # signal already made one, on Basic
+        sub.plan = Plan.objects.get(code="growth")  # full backup is a Growth/Pro feature
+        sub.save(update_fields=["plan"])
         self.owner = User.objects.create_user("po", "po@t.test", "pw", is_staff=True)
         Membership.objects.create(project=self.project, user=self.owner, role=StoreRole.OWNER)
         _seed_transaction_data(self.project, user=self.owner)
@@ -246,7 +249,9 @@ class OwnerBackupScreenSensitiveTests(TestCase):
         other = Project.objects.create(
             name="OtherScreenCo", status="active", feature_flags={"onboarded": True},
         )
-        billing_svc.ensure_subscription(other)
+        other_sub = billing_svc.ensure_subscription(other)
+        other_sub.plan = Plan.objects.get(code="growth")
+        other_sub.save(update_fields=["plan"])
         other_owner = User.objects.create_user("oo", "oo@t.test", "pw", is_staff=True)
         Membership.objects.create(project=other, user=other_owner, role=StoreRole.OWNER)
         _seed_transaction_data(other, user=other_owner)

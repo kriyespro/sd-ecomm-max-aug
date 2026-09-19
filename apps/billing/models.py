@@ -175,6 +175,14 @@ class Plan(TimeStampedModel):
     allow_skin_upload = models.BooleanField(default=False)
     remove_platform_branding = models.BooleanField(default=False)
     priority_support = models.BooleanField(default=False)
+    # Gates the "full" backup on /admin/backup/ -- orders/customers/payments
+    # in the manual download/restore, plus the automatic daily backup
+    # checkbox and Celery task entirely. Off (False) doesn't remove backup
+    # access outright: the store still gets the plain catalog/CMS/theme
+    # manual backup, same as a DGC's. See apps.control.backup_views
+    # ._OwnerOnly._include_sensitive and apps.control.tasks
+    # .daily_store_backup_task.
+    allow_full_backup = models.BooleanField(default=False)
     transaction_fee_pct = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal("0"),
                                               help_text="Platform fee on storefront sales, %.")
 

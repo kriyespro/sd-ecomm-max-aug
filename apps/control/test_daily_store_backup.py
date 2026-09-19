@@ -23,6 +23,7 @@ from django.utils import timezone
 
 from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole
 from apps.billing import services as billing_svc
+from apps.billing.models import Plan
 from apps.catalog.models import Product
 from apps.control import tasks as control_tasks
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
@@ -33,10 +34,27 @@ from apps.projects.models import Project
 User = get_user_model()
 
 
-def _active_project(name, *, auto_backup=True, **extra):
+def _active_project(name, *, auto_backup=True, plan_code="growth", **extra):
+    """A store on a plan with allow_full_backup=True (growth/pro) by
+    default -- the automatic backup task and the owner's full-backup access
+    both require that, on top of the auto_backup opt-in flag itself.
+
+    Project.objects.create() already fires a post_save signal that gives
+    the project a trial Subscription on the default (Basic) plan before
+    this function runs -- ensure_subscription() is idempotent and would
+    silently ignore the plan= passed below since one already exists, so
+    the plan is reassigned explicitly afterward (same fix store_services
+    .create_store() already applies for the same reason)."""
     flags = extra.pop("feature_flags", {})
     flags["auto_backup"] = auto_backup
-    return Project.objects.create(name=name, status=Project.Status.ACTIVE, feature_flags=flags, **extra)
+    project = Project.objects.create(
+        name=name, status=Project.Status.ACTIVE, feature_flags=flags, **extra,
+    )
+    if plan_code:
+        sub = billing_svc.ensure_subscription(project)
+        sub.plan = Plan.objects.get(code=plan_code)
+        sub.save(update_fields=["plan"])
+    return project
 
 
 class DailyStoreBackupTaskTests(TestCase):
@@ -141,7 +159,9 @@ class AutoBackupToggleTests(TestCase):
         self.project = Project.objects.create(
             name="ToggleCo", status=Project.Status.ACTIVE, feature_flags={"onboarded": True},
         )
-        billing_svc.ensure_subscription(self.project)
+        sub = billing_svc.ensure_subscription(self.project)  # signal already made one, on Basic
+        sub.plan = Plan.objects.get(code="growth")
+        sub.save(update_fields=["plan"])
         self.owner = User.objects.create_user("tgo", "tgo@t.test", "pw", is_staff=True)
         Membership.objects.create(project=self.project, user=self.owner, role=StoreRole.OWNER)
         self.client.force_login(self.owner)
@@ -175,6 +195,63 @@ class AutoBackupToggleTests(TestCase):
         start = body.index('name="auto_backup"')
         end = body.index(">", start)
         self.assertIn("checked", body[start:end])
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class BasicPlanBackupGatingTests(TestCase):
+    """Full backup (orders/customers/payments in the manual backup, plus
+    automatic daily backups) is a Growth/Pro perk -- a Basic-plan owner
+    keeps the plain catalog/CMS/theme manual backup every plan already
+    got, just not the "full" tier."""
+
+    def setUp(self):
+        self.project = Project.objects.create(
+            name="BasicPlanCo", status=Project.Status.ACTIVE, feature_flags={"onboarded": True},
+        )
+        sub = billing_svc.ensure_subscription(self.project)
+        sub.plan = Plan.objects.get(code="basic")
+        sub.save(update_fields=["plan"])
+        self.owner = User.objects.create_user("bpo", "bpo@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.project, user=self.owner, role=StoreRole.OWNER)
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+
+    def test_no_automatic_backup_panel_or_checkbox(self):
+        body = self.client.get("/admin/backup/").content.decode()
+        self.assertNotIn("Automatic backups", body)
+        self.assertNotIn('name="auto_backup"', body)
+
+    def test_upgrade_nudge_shown(self):
+        body = self.client.get("/admin/backup/").content.decode()
+        self.assertIn("Get automatic daily backups", body)
+        self.assertIn("/admin/plan/", body)
+
+    def test_turning_the_checkbox_on_directly_is_rejected(self):
+        resp = self.client.post("/admin/backup/auto/", {"auto_backup": "on"}, follow=True)
+        self.assertContains(resp, "Growth/Pro feature")
+        self.project.refresh_from_db()
+        self.assertFalse((self.project.feature_flags or {}).get("auto_backup"))
+
+    def test_manual_download_still_works_catalog_only(self):
+        resp = self.client.get("/admin/backup/download/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp["Content-Type"], "application/zip")
+
+    def test_manual_backup_copy_says_catalog_only(self):
+        body = self.client.get("/admin/backup/").content.decode()
+        self.assertIn("Orders, customers, coupons and settings are not included.", body)
+
+    def test_daily_task_skips_even_if_flag_somehow_got_set(self):
+        # Defence in depth: even if auto_backup were force-set some other
+        # way (a downgrade after opting in on Growth, a direct DB edit),
+        # the task itself re-checks the plan.
+        self.project.feature_flags = {**self.project.feature_flags, "auto_backup": True}
+        self.project.save(update_fields=["feature_flags"])
+        result = control_tasks.daily_store_backup_task()
+        self.assertEqual(result["created"], 0)
+        self.assertFalse(StoreBackupSnapshot.objects.filter(project=self.project).exists())
 
 
 @override_settings(ALLOWED_HOSTS=["*"])

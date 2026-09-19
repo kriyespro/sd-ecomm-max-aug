@@ -15,6 +15,7 @@ from apps.accounts.permissions import (
     is_platform_admin,
     store_role,
 )
+from apps.billing import limits as billing_limits
 
 from . import store_backup
 from .mixins import ActiveProjectMixin
@@ -36,16 +37,22 @@ class _OwnerOnly(StoreRoleRequiredMixin, ActiveProjectMixin):
     That said, orders/customers/payments ARE what dump_store/restore_store's
     own ``include_sensitive`` flag adds on top of catalog/CMS/theme -- and
     that half is only for the store's real owner (a genuine StoreRole.OWNER
-    membership row), or a platform admin, never a DGC reaching this same
-    screen via the subscription-manager bypass above. _include_sensitive()
-    is how each view below tells those two apart."""
+    membership row) on a Growth/Pro plan (apps.billing.limits
+    .full_backup_allowed), or a platform admin (always, regardless of
+    plan), never a DGC reaching this same screen via the subscription
+    -manager bypass above. _include_sensitive() is how each view below
+    tells all of that apart."""
 
     required_store_roles = frozenset({StoreRole.OWNER})
     role_denied_message = "Only the store owner can back up or restore this store."
 
     def _include_sensitive(self):
         user = self.request.user
-        return is_platform_admin(user) or store_role(user, self.active_project) == StoreRole.OWNER
+        if is_platform_admin(user):
+            return True
+        if store_role(user, self.active_project) != StoreRole.OWNER:
+            return False
+        return billing_limits.full_backup_allowed(self.active_project)
 
 
 class OwnerBackupView(_OwnerOnly, TemplateView):
@@ -62,6 +69,12 @@ class OwnerBackupView(_OwnerOnly, TemplateView):
         # rule as the manual download/restore above.
         if include_sensitive:
             ctx["auto_snapshots"] = self.active_project.backup_snapshots.all()[:RETENTION_DAYS]
+        elif store_role(self.request.user, self.active_project) == StoreRole.OWNER:
+            # A real owner blocked only by plan (not the DGC-without-
+            # membership case) -- worth the upgrade nudge; a DGC isn't the
+            # one who'd act on it (see billing.md's plan-screen-hidden-
+            # from-DGC's-team precedent).
+            ctx["show_backup_upgrade_nudge"] = True
         return ctx
 
 
@@ -72,13 +85,20 @@ class OwnerAutoBackupToggleView(_OwnerOnly, View):
 
     def post(self, request, *args, **kwargs):
         store = self.active_project
+        wants_on = request.POST.get("auto_backup") == "on"
+        if wants_on and not self._include_sensitive():
+            messages.error(
+                request,
+                "Automatic backup is a Growth/Pro feature — upgrade under Plan & billing to turn it on.",
+            )
+            return redirect("control:owner_backup")
         flags = store.feature_flags or {}
-        flags["auto_backup"] = request.POST.get("auto_backup") == "on"
+        flags["auto_backup"] = wants_on
         store.feature_flags = flags
         store.save(update_fields=["feature_flags", "updated_at"])
         messages.success(
             request,
-            "Automatic daily backups turned on." if flags["auto_backup"]
+            "Automatic daily backups turned on." if wants_on
             else "Automatic daily backups turned off.",
         )
         return redirect("control:owner_backup")

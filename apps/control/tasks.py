@@ -48,19 +48,24 @@ BACKUP_BATCH_SIZE = 50
 @shared_task(name="apps.control.tasks.daily_store_backup_task")
 def daily_store_backup_task():
     """One full backup (catalog/CMS/theme + orders/customers/payments) per
-    active store that has opted in (Project.feature_flags["auto_backup"],
-    toggled from the "Automatic backup" checkbox on /admin/backup/) -- off
-    by default. Owner-only self-restore data -- see
-    apps.control.models.StoreBackupSnapshot and apps.control.store_backup's
-    own module docstring for why the sensitive half is safe here (never
-    cross-store) and never offered to a DGC. Keeps a rolling
-    RETENTION_DAYS-day window per store; a single store's failure (over the
-    product/order cap, a transient storage error) never blocks the rest.
+    active store that (a) is on a plan with allow_full_backup (Growth/Pro --
+    apps.billing.limits.full_backup_allowed) and (b) has opted in
+    (Project.feature_flags["auto_backup"], toggled from the "Automatic
+    backup" checkbox on /admin/backup/, off by default). The plan check runs
+    here too, not just at the checkbox, so a store downgraded off Growth/Pro
+    stops getting backed up immediately rather than on its next toggle.
+    Owner-only self-restore data -- see apps.control.models
+    .StoreBackupSnapshot and apps.control.store_backup's own module
+    docstring for why the sensitive half is safe here (never cross-store)
+    and never offered to a DGC. Keeps a rolling RETENTION_DAYS-day window
+    per store; a single store's failure (over the product/order cap, a
+    transient storage error) never blocks the rest.
 
     Scheduled every 30 min from 12:00-5:30 AM IST (CELERY_BEAT_SCHEDULE) --
     each run only takes the next BACKUP_BATCH_SIZE stores that haven't been
     backed up yet today, so a large store count spreads across the window
     instead of everyone hitting storage/CPU at once at midnight."""
+    from apps.billing.limits import full_backup_allowed
     from apps.control.models import RETENTION_DAYS, StoreBackupSnapshot
     from apps.control.store_backup import BackupError, dump_store
     from apps.projects.models import Project
@@ -71,8 +76,14 @@ def daily_store_backup_task():
         .values_list("project_id", flat=True)
     )
     batch = []
-    for project in Project.objects.filter(status=Project.Status.ACTIVE).order_by("pk").iterator():
+    projects = (
+        Project.objects.filter(status=Project.Status.ACTIVE)
+        .select_related("subscription__plan").order_by("pk").iterator()
+    )
+    for project in projects:
         if project.pk in done_today or not (project.feature_flags or {}).get("auto_backup"):
+            continue
+        if not full_backup_allowed(project):
             continue
         batch.append(project)
         if len(batch) >= BACKUP_BATCH_SIZE:

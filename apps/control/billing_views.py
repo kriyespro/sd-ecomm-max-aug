@@ -30,7 +30,7 @@ class PlanForm(forms.ModelForm):
             "commission_monthly_pct", "commission_yearly_pct",
             "max_products", "max_staff", "max_custom_domains", "storage_gb",
             "allow_skin_upload", "remove_platform_branding", "priority_support",
-            "transaction_fee_pct", "features",
+            "allow_full_backup", "transaction_fee_pct", "features",
         ]
         help_texts = {
             "price_monthly": "Retail INR / month.",
