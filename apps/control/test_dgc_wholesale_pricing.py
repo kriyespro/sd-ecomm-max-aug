@@ -194,14 +194,14 @@ class DgcDashboardPricingPanelTests(TestCase):
     def test_dgc_sees_pricing_panel_on_their_dashboard(self):
         self.client.force_login(self.dgc)
         body = self.client.get("/admin/").content.decode()
-        self.assertIn("Your plan pricing", body)
+        self.assertIn("Your B2B pricing", body)
         self.assertIn("₹14999/yr", body)
         self.assertIn("₹24999/yr", body)
 
     def test_admin_does_not_see_the_dgc_pricing_panel(self):
         self.client.force_login(self.admin)
         body = self.client.get("/admin/").content.decode()
-        self.assertNotIn("Your plan pricing", body)
+        self.assertNotIn("Your B2B pricing", body)
 
     def test_owner_with_a_store_does_not_see_the_dgc_pricing_panel(self):
         project = Project.objects.create(
@@ -215,4 +215,4 @@ class DgcDashboardPricingPanelTests(TestCase):
         s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
         s.save()
         body = self.client.get("/admin/").content.decode()
-        self.assertNotIn("Your plan pricing", body)
+        self.assertNotIn("Your B2B pricing", body)
