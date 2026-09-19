@@ -56,12 +56,32 @@ class OwnerBackupView(_OwnerOnly, TemplateView):
         include_sensitive = self._include_sensitive()
         ctx["include_sensitive"] = include_sensitive
         ctx["retention_days"] = RETENTION_DAYS
+        ctx["auto_backup_enabled"] = bool((self.active_project.feature_flags or {}).get("auto_backup"))
         # Automatic daily snapshots always carry orders/customers/payments
         # (apps.control.tasks.daily_store_backup_task) -- owner-only, same
         # rule as the manual download/restore above.
         if include_sensitive:
             ctx["auto_snapshots"] = self.active_project.backup_snapshots.all()[:RETENTION_DAYS]
         return ctx
+
+
+class OwnerAutoBackupToggleView(_OwnerOnly, View):
+    """The "Automatic backup" checkbox on /admin/backup/ -- off by default,
+    apps.control.tasks.daily_store_backup_task only backs up a store once
+    its owner opts in here."""
+
+    def post(self, request, *args, **kwargs):
+        store = self.active_project
+        flags = store.feature_flags or {}
+        flags["auto_backup"] = request.POST.get("auto_backup") == "on"
+        store.feature_flags = flags
+        store.save(update_fields=["feature_flags", "updated_at"])
+        messages.success(
+            request,
+            "Automatic daily backups turned on." if flags["auto_backup"]
+            else "Automatic daily backups turned off.",
+        )
+        return redirect("control:owner_backup")
 
 
 class OwnerBackupDownloadView(_OwnerOnly, View):

@@ -340,6 +340,7 @@ urlpatterns = [
 
     # Store-owner's own backup / restore (active project)
     path("backup/", backupv.OwnerBackupView.as_view(), name="owner_backup"),
+    path("backup/auto/", backupv.OwnerAutoBackupToggleView.as_view(), name="owner_backup_auto_toggle"),
     path("backup/download/", backupv.OwnerBackupDownloadView.as_view(), name="owner_backup_download"),
     path("backup/restore/", backupv.OwnerRestoreView.as_view(), name="owner_backup_restore"),
     path("backup/snapshots/<int:pk>/download/", backupv.OwnerBackupSnapshotDownloadView.as_view(),

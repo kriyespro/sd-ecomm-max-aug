@@ -5,12 +5,26 @@
 <div class="mx-auto max-w-2xl space-y-4">
   {% if include_sensitive %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    <h2 class="text-sm font-semibold text-slate-700">Automatic backups</h2>
-    <p class="mt-1 text-xs text-slate-500">
-      A full backup of this store — catalogue, CMS, theme, customers, orders
-      and payments — is taken automatically every day. The last
-      {{ retention_days }} are kept here; older ones are removed.
-    </p>
+    <div class="flex items-start justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-semibold text-slate-700">Automatic backups</h2>
+        <p class="mt-1 text-xs text-slate-500">
+          A full backup of this store — catalogue, CMS, theme, customers,
+          orders and payments — taken automatically once a day (between
+          midnight and 6am IST). The last {{ retention_days }} are kept;
+          older ones are removed.
+        </p>
+      </div>
+      <form method="post" action="{{ url('control:owner_backup_auto_toggle') }}" class="shrink-0">
+        {{ csrf_input }}
+        <label class="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="auto_backup" onchange="this.form.submit()"
+                 {{ 'checked' if auto_backup_enabled }}
+                 class="h-4 w-4 rounded border-slate-300">
+          Automatic backup
+        </label>
+      </form>
+    </div>
     {% if auto_snapshots %}
     <div class="mt-3 overflow-x-auto"><table class="w-full text-left text-sm">
       <thead class="text-xs uppercase tracking-wide text-slate-400">
@@ -35,8 +49,10 @@
         {% endfor %}
       </tbody>
     </table></div>
-    {% else %}
+    {% elif auto_backup_enabled %}
     <p class="mt-3 text-xs text-slate-400">No automatic backup yet — the first one runs within 24 hours.</p>
+    {% else %}
+    <p class="mt-3 text-xs text-slate-400">Off — check "Automatic backup" above to start daily backups.</p>
     {% endif %}
   </div>
   {% endif %}

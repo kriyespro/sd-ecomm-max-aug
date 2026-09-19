@@ -1,13 +1,21 @@
 """Daily automatic store backups (apps.control.tasks.daily_store_backup_task
-+ apps.control.models.StoreBackupSnapshot): one full backup per active
-store every day, 7-day rolling retention, owner-facing one-click restore
-on /admin/backup/. Same engine as the owner's manual backup
++ apps.control.models.StoreBackupSnapshot): opt-in per store
+(Project.feature_flags["auto_backup"], off by default, toggled from an
+"Automatic backup" checkbox on /admin/backup/), one full backup per
+opted-in active store per day, 7-day rolling retention, owner-facing
+one-click restore. Same engine as the owner's manual backup
 (apps.control.store_backup) -- these are just system-generated instead of
 button-clicked, and always include_sensitive=True (orders/customers/
-payments), never shown to a DGC without a real store membership."""
+payments), never shown to a DGC without a real store membership.
+
+Scheduled every 30 min from 12:00-5:30 AM IST (CELERY_TIMEZONE +
+CELERY_BEAT_SCHEDULE) -- each run only picks up BACKUP_BATCH_SIZE stores
+that haven't been backed up yet today, so a large store count spreads
+across the window instead of spiking at midnight."""
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -25,22 +33,42 @@ from apps.projects.models import Project
 User = get_user_model()
 
 
+def _active_project(name, *, auto_backup=True, **extra):
+    flags = extra.pop("feature_flags", {})
+    flags["auto_backup"] = auto_backup
+    return Project.objects.create(name=name, status=Project.Status.ACTIVE, feature_flags=flags, **extra)
+
+
 class DailyStoreBackupTaskTests(TestCase):
     def setUp(self):
-        self.active = Project.objects.create(name="ActiveCo", status=Project.Status.ACTIVE)
+        self.active = _active_project("ActiveCo")
         Product.objects.create(
             project=self.active, title="Widget", slug="widget",
             price=Decimal("100"), status="active",
         )
-        self.draft = Project.objects.create(name="DraftCo", status=Project.Status.DRAFT)
-        self.archived = Project.objects.create(name="ArchivedCo", status=Project.Status.ARCHIVED)
+        self.draft = Project.objects.create(
+            name="DraftCo", status=Project.Status.DRAFT, feature_flags={"auto_backup": True},
+        )
+        self.archived = Project.objects.create(
+            name="ArchivedCo", status=Project.Status.ARCHIVED, feature_flags={"auto_backup": True},
+        )
 
-    def test_creates_one_snapshot_per_active_store_only(self):
+    def test_creates_one_snapshot_per_opted_in_active_store_only(self):
         result = control_tasks.daily_store_backup_task()
         self.assertEqual(result["created"], 1)
         self.assertEqual(StoreBackupSnapshot.objects.filter(project=self.active).count(), 1)
         self.assertFalse(StoreBackupSnapshot.objects.filter(project=self.draft).exists())
         self.assertFalse(StoreBackupSnapshot.objects.filter(project=self.archived).exists())
+
+    def test_store_without_auto_backup_enabled_is_skipped(self):
+        opted_out = _active_project("OptedOutCo", auto_backup=False)
+        control_tasks.daily_store_backup_task()
+        self.assertFalse(StoreBackupSnapshot.objects.filter(project=opted_out).exists())
+
+    def test_store_with_no_feature_flags_at_all_is_skipped(self):
+        bare = Project.objects.create(name="BareCo", status=Project.Status.ACTIVE)
+        control_tasks.daily_store_backup_task()
+        self.assertFalse(StoreBackupSnapshot.objects.filter(project=bare).exists())
 
     def test_snapshot_records_size(self):
         control_tasks.daily_store_backup_task()
@@ -54,6 +82,12 @@ class DailyStoreBackupTaskTests(TestCase):
         blob = snap.archive.read()
         self.assertTrue(blob.startswith(b"PK"))
 
+    def test_running_twice_in_the_same_day_does_not_duplicate(self):
+        control_tasks.daily_store_backup_task()
+        result = control_tasks.daily_store_backup_task()
+        self.assertEqual(result["created"], 0)
+        self.assertEqual(StoreBackupSnapshot.objects.filter(project=self.active).count(), 1)
+
     def test_old_snapshots_are_pruned(self):
         control_tasks.daily_store_backup_task()
         old = StoreBackupSnapshot.objects.get(project=self.active)
@@ -64,8 +98,12 @@ class DailyStoreBackupTaskTests(TestCase):
         self.assertEqual(StoreBackupSnapshot.objects.filter(project=self.active).count(), 1)
         self.assertFalse(StoreBackupSnapshot.objects.filter(pk=old.pk).exists())
 
-    def test_recent_snapshots_are_kept(self):
+    def test_recent_snapshots_from_a_previous_day_are_kept_alongside_todays(self):
         control_tasks.daily_store_backup_task()
+        yesterday = StoreBackupSnapshot.objects.get(project=self.active)
+        StoreBackupSnapshot.objects.filter(pk=yesterday.pk).update(
+            created_at=timezone.now() - timedelta(days=1),
+        )
         control_tasks.daily_store_backup_task()
         self.assertEqual(StoreBackupSnapshot.objects.filter(project=self.active).count(), 2)
 
@@ -75,7 +113,7 @@ class DailyStoreBackupTaskTests(TestCase):
                     price=Decimal("1"), status="active")
             for i in range(MAX_PRODUCTS)
         ])
-        other = Project.objects.create(name="FineCo", status=Project.Status.ACTIVE)
+        other = _active_project("FineCo")
         Product.objects.create(
             project=other, title="OK", slug="ok", price=Decimal("1"), status="active",
         )
@@ -85,14 +123,64 @@ class DailyStoreBackupTaskTests(TestCase):
         self.assertTrue(StoreBackupSnapshot.objects.filter(project=other).exists())
         self.assertFalse(StoreBackupSnapshot.objects.filter(project=self.active).exists())
 
+    def test_batch_size_limits_stores_processed_per_run(self):
+        for i in range(3):
+            p = _active_project(f"Batch{i}")
+            Product.objects.create(
+                project=p, title="X", slug=f"x{i}", price=Decimal("1"), status="active",
+            )
+        with patch.object(control_tasks, "BACKUP_BATCH_SIZE", 2):
+            result = control_tasks.daily_store_backup_task()
+        self.assertEqual(result["created"], 2)
+        self.assertEqual(StoreBackupSnapshot.objects.count(), 2)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class AutoBackupToggleTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(
+            name="ToggleCo", status=Project.Status.ACTIVE, feature_flags={"onboarded": True},
+        )
+        billing_svc.ensure_subscription(self.project)
+        self.owner = User.objects.create_user("tgo", "tgo@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.project, user=self.owner, role=StoreRole.OWNER)
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+
+    def test_off_by_default(self):
+        body = self.client.get("/admin/backup/").content.decode()
+        start = body.index('name="auto_backup"')
+        end = body.index(">", start)
+        self.assertNotIn("checked", body[start:end])
+
+    def test_turning_it_on_persists(self):
+        resp = self.client.post("/admin/backup/auto/", {"auto_backup": "on"})
+        self.assertRedirects(resp, "/admin/backup/")
+        self.project.refresh_from_db()
+        self.assertTrue(self.project.feature_flags["auto_backup"])
+
+    def test_turning_it_off_persists(self):
+        self.project.feature_flags = {**self.project.feature_flags, "auto_backup": True}
+        self.project.save(update_fields=["feature_flags"])
+        self.client.post("/admin/backup/auto/", {})  # unchecked box sends nothing
+        self.project.refresh_from_db()
+        self.assertFalse(self.project.feature_flags["auto_backup"])
+
+    def test_checked_when_already_on(self):
+        self.project.feature_flags = {**self.project.feature_flags, "auto_backup": True}
+        self.project.save(update_fields=["feature_flags"])
+        body = self.client.get("/admin/backup/").content.decode()
+        start = body.index('name="auto_backup"')
+        end = body.index(">", start)
+        self.assertIn("checked", body[start:end])
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class BackupPageAutoSnapshotsTests(TestCase):
     def setUp(self):
-        self.project = Project.objects.create(
-            name="SnapScreenCo", status=Project.Status.ACTIVE,
-            feature_flags={"onboarded": True},
-        )
+        self.project = _active_project("SnapScreenCo", feature_flags={"onboarded": True})
         Product.objects.create(
             project=self.project, title="Widget", slug="widget",
             price=Decimal("100"), status="active",
@@ -149,9 +237,7 @@ class BackupPageAutoSnapshotsTests(TestCase):
         )
 
     def test_cannot_reach_another_stores_snapshot(self):
-        other = Project.objects.create(
-            name="OtherSnapCo", status=Project.Status.ACTIVE, feature_flags={"onboarded": True},
-        )
+        other = _active_project("OtherSnapCo", feature_flags={"onboarded": True})
         billing_svc.ensure_subscription(other)
         other_owner = User.objects.create_user("oso", "oso@t.test", "pw", is_staff=True)
         Membership.objects.create(project=other, user=other_owner, role=StoreRole.OWNER)

@@ -42,21 +42,44 @@ def purge_trashed_task():
     return {"products": products, "assets": assets, "kept": kept}
 
 
+BACKUP_BATCH_SIZE = 50
+
+
 @shared_task(name="apps.control.tasks.daily_store_backup_task")
 def daily_store_backup_task():
     """One full backup (catalog/CMS/theme + orders/customers/payments) per
-    active store, every day. Owner-only self-restore data -- see
+    active store that has opted in (Project.feature_flags["auto_backup"],
+    toggled from the "Automatic backup" checkbox on /admin/backup/) -- off
+    by default. Owner-only self-restore data -- see
     apps.control.models.StoreBackupSnapshot and apps.control.store_backup's
     own module docstring for why the sensitive half is safe here (never
     cross-store) and never offered to a DGC. Keeps a rolling
     RETENTION_DAYS-day window per store; a single store's failure (over the
-    product/order cap, a transient storage error) never blocks the rest."""
+    product/order cap, a transient storage error) never blocks the rest.
+
+    Scheduled every 30 min from 12:00-5:30 AM IST (CELERY_BEAT_SCHEDULE) --
+    each run only takes the next BACKUP_BATCH_SIZE stores that haven't been
+    backed up yet today, so a large store count spreads across the window
+    instead of everyone hitting storage/CPU at once at midnight."""
     from apps.control.models import RETENTION_DAYS, StoreBackupSnapshot
     from apps.control.store_backup import BackupError, dump_store
     from apps.projects.models import Project
 
+    today = timezone.localdate()
+    done_today = set(
+        StoreBackupSnapshot.objects.filter(created_at__date=today)
+        .values_list("project_id", flat=True)
+    )
+    batch = []
+    for project in Project.objects.filter(status=Project.Status.ACTIVE).order_by("pk").iterator():
+        if project.pk in done_today or not (project.feature_flags or {}).get("auto_backup"):
+            continue
+        batch.append(project)
+        if len(batch) >= BACKUP_BATCH_SIZE:
+            break
+
     created = failed = 0
-    for project in Project.objects.filter(status=Project.Status.ACTIVE).iterator():
+    for project in batch:
         try:
             blob = dump_store(project, include_sensitive=True)
         except BackupError as exc:

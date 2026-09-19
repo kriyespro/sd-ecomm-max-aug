@@ -245,6 +245,8 @@ XFF_TRUSTED_HOPS = int(env("DJANGO_XFF_TRUSTED_HOPS", "1"))
 
 
 
+from celery.schedules import crontab  # noqa: E402
+
 # --- Celery ---------------------------------------------------------
 CELERY_BROKER_URL = env("CELERY_BROKER_URL", env("REDIS_URL", "redis://localhost:6379/0"))
 CELERY_RESULT_BACKEND = None                 # fire-and-forget
@@ -252,7 +254,11 @@ CELERY_TASK_IGNORE_RESULT = True
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_ACCEPT_CONTENT = ["json"]
-CELERY_TIMEZONE = TIME_ZONE
+# Django's own TIME_ZONE stays UTC (storage/display) -- this only controls
+# how crontab-based beat schedules below read their wall-clock hour/minute.
+# The daily-store-backup entry is the only crontab one; every other entry
+# is a plain float interval and doesn't care about a timezone at all.
+CELERY_TIMEZONE = "Asia/Kolkata"
 CELERY_TASK_TIME_LIMIT = 120
 CELERY_TASK_SOFT_TIME_LIMIT = 90
 CELERY_TASK_ACKS_LATE = True
@@ -287,7 +293,13 @@ CELERY_BEAT_SCHEDULE = {
     },
     "daily-store-backup": {
         "task": "apps.control.tasks.daily_store_backup_task",
-        "schedule": 3600.0 * 24,   # daily — one full backup per active store, 7-day rolling window
+        # Every 30 min from 12:00 AM to 5:30 AM IST (CELERY_TIMEZONE above) --
+        # the task itself only backs up stores that opted in and haven't
+        # already been done today, processing one batch per slot, so a large
+        # store count spreads across the window instead of spiking at
+        # midnight. A small store count just finishes on the first slot and
+        # every later one in the window is a fast no-op.
+        "schedule": crontab(minute="*/30", hour="0-5"),
     },
     "ai-refresh-free-models": {
         "task": "apps.ai.tasks.refresh_free_models_task",
