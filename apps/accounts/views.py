@@ -26,6 +26,11 @@ _INPUT = ("mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm "
 _PENDING = "signup_google"
 
 
+def request_wants_password_form(request) -> bool:
+    """?password=1 escape hatch — see LoginView.get_context_data."""
+    return request.GET.get("password") == "1"
+
+
 class LoginView(auth_views.LoginView):
     template_name = "accounts/login.jinja"
     redirect_authenticated_user = True
@@ -33,6 +38,14 @@ class LoginView(auth_views.LoginView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["google_enabled"] = google_oauth.is_enabled()
+        # Google-only login for now -- the password form is hidden by
+        # default so it isn't offered/discoverable, but stays reachable at
+        # ?password=1 as a deliberate escape hatch: team accounts are
+        # provisioned with a one-time password (apps.accounts.team
+        # .provision_member), not a Google-linked identity, so hard-removing
+        # password auth entirely risks locking them (and any non-Google
+        # superadmin) out with no way back in short of server/DB access.
+        ctx["show_password_form"] = request_wants_password_form(self.request)
         return ctx
 
     def post(self, request, *args, **kwargs):
@@ -40,6 +53,10 @@ class LoginView(auth_views.LoginView):
         if ratelimit.is_locked(request, username):
             form = self.get_form()
             form.add_error(None, ratelimit.LOCK_MESSAGE)
+            return self.render_to_response(self.get_context_data(form=form))
+        if google_oauth.is_enabled() and not request_wants_password_form(request):
+            form = self.get_form()
+            form.add_error(None, "Password sign-in is off for now — use Continue with Google.")
             return self.render_to_response(self.get_context_data(form=form))
         return super().post(request, *args, **kwargs)
 

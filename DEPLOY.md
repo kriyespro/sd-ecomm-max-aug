@@ -26,17 +26,23 @@ docker compose exec web python manage.py createsuperuser
 App on `http://localhost:8000` (or `WEB_PORT`). `/healthz/` (liveness),
 `/readyz/` (db + cache).
 
-**First login after `createsuperuser`**: Mission Control now requires TOTP
-2FA for every `is_staff` account (owner/manager/staff/DGC/platform admin —
-see "Mandatory 2FA" below). The superuser's very first `/admin/` visit
-redirects straight to `/accounts/2fa/setup/` — that's expected, not a bug.
+**First login after `createsuperuser`**: 2FA enforcement is off by default
+(`TWO_FACTOR_ENFORCED=false`) — see "Mandatory 2FA" below for how to turn it
+back on. Mission Control login is also Google-only for now (the password
+form on `/accounts/login/` is hidden; reachable at `?password=1` if Google
+sign-in isn't configured or an account needs it).
 
 ## Mandatory 2FA + idle logout (Mission Control)
 
-Every account that can reach `/admin/` (`User.is_staff`) must set up TOTP +
-backup codes before doing anything else there — enforced by
-`apps.accounts.middleware.TwoFactorEnforcementMiddleware`. Storefront
-shoppers are untouched (they're never `is_staff`). New dependencies:
+`TWO_FACTOR_ENFORCED` (env var, default `false`) controls whether every
+account that can reach `/admin/` (`User.is_staff`) must set up TOTP +
+backup codes before doing anything else there. When `true`,
+`config/settings/base.py` inserts `apps.accounts.middleware
+.TwoFactorEnforcementMiddleware` into `MIDDLEWARE` right after
+`AuthenticationMiddleware`; when `false` (current default), the middleware
+is left out entirely and nobody is forced into setup — flip the env var and
+restart to turn it back on, no code change needed. Storefront shoppers are
+untouched either way (they're never `is_staff`). Dependencies either way:
 `pyotp` (code verify) and `qrcode` (renders the setup QR server-side, as an
 inline `data:` URI — no third-party QR API call, the secret never leaves
 the server). Both are in `requirements.txt`, so already covered by

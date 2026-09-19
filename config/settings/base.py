@@ -108,9 +108,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    # Mandatory 2FA for platform admins — must run after auth (needs
-    # request.user) and before anything else that could let an admin act.
-    "apps.accounts.middleware.TwoFactorEnforcementMiddleware",
     # Idle timeout for Mission Control staff sessions (35 min of no
     # request) — same request.user dependency, order relative to the 2FA
     # gate above doesn't matter, both just check-and-redirect independently.
@@ -126,6 +123,19 @@ MIDDLEWARE = [
     "apps.billing.middleware.SubscriptionGateMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
+
+# Mandatory 2FA for every Mission Control account (owner/manager/staff/DGC/
+# platform admin) -- off for now (TWO_FACTOR_ENFORCED=false), reversible
+# without a code change by flipping the env var back and restarting. When
+# on, must run after auth (needs request.user) and before anything else
+# that could let an admin act, so it's inserted right after
+# AuthenticationMiddleware regardless of what's been appended above.
+TWO_FACTOR_ENFORCED = env_bool("TWO_FACTOR_ENFORCED", False)
+if TWO_FACTOR_ENFORCED:
+    MIDDLEWARE.insert(
+        MIDDLEWARE.index("django.contrib.auth.middleware.AuthenticationMiddleware") + 1,
+        "apps.accounts.middleware.TwoFactorEnforcementMiddleware",
+    )
 
 # /metrics is only served to a request that presents this token in
 # X-Metrics-Token (set it in prod; empty = endpoint disabled).
