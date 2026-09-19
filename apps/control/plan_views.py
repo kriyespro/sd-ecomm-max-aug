@@ -3,17 +3,17 @@
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, JsonResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.views.generic import TemplateView, View
 
-from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
+from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin, is_platform_admin, is_platform_staff
 from apps.billing import limits
 from apps.billing import services as billing_svc
 from apps.billing.models import BillingPeriod, Invoice, Plan
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
-from .mixins import ActiveProjectMixin
+from .mixins import ActiveProjectMixin, get_active_project
 
 
 class _PlanBase(StoreRoleRequiredMixin, ActiveProjectMixin):
@@ -41,7 +41,26 @@ class _PlanBase(StoreRoleRequiredMixin, ActiveProjectMixin):
 
 
 class PlanView(_PlanBase, TemplateView):
+    """A store's own "Plan & billing" screen. A pure DGC (no store selected)
+    has no store subscription to show here -- ActiveProjectMixin would
+    otherwise just bounce them to the store picker with nothing to show for
+    it, so this shows their own B2B pricing reference instead."""
+
     template_name = "control/billing/store_plan.jinja"
+
+    def dispatch(self, request, *args, **kwargs):
+        user = request.user
+        if (
+            user.is_authenticated and user.is_active and user.is_staff
+            and get_active_project(request) is None
+            and is_platform_staff(user) and not is_platform_admin(user)
+        ):
+            dgc_plans = Plan.objects.filter(
+                is_active=True, is_public=True, dgc_price_yearly__gt=0,
+            ).order_by("sort_order")
+            return render(request, "control/billing/dgc_plan_pricing.jinja",
+                          {"dgc_plans": dgc_plans})
+        return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -49,6 +68,9 @@ class PlanView(_PlanBase, TemplateView):
         ctx["subscription"] = sub
         ctx["current_price"] = sub.current_price()
         ctx["plans"] = Plan.objects.filter(is_active=True, is_public=True).order_by("sort_order")
+        # A wholesale-billed (DGC-provisioned) store's plan-switcher must show
+        # what the DGC actually pays, not the retail price their client sees.
+        ctx["show_dgc_prices"] = sub.billed_to_dgc
         ctx["usage"] = limits.usage(self.active_project)
         ctx["invoices"] = sub.invoices.all()[:12]
         ctx["open_invoice"] = sub.invoices.filter(status="open").first()

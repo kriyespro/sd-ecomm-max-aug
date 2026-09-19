@@ -1,0 +1,15 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Plan &amp; billing{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-4xl space-y-5">
+  <div>
+    <h1 class="text-lg font-semibold text-slate-800">Plan &amp; billing</h1>
+    <p class="mt-1 text-sm text-slate-500">
+      No store selected — here's your own B2B pricing. Choose a store from
+      the sidebar to see its plan, invoices and change-plan options instead.
+    </p>
+  </div>
+  {% include "control/billing/_dgc_pricing_table.jinja" %}
+</div>
+{% endblock %}

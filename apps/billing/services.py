@@ -106,7 +106,15 @@ def change_plan(subscription, *, plan, period, actor=None):
     subscription.cancel_at_period_end = False
     if subscription.status == SubscriptionStatus.CANCELLED:
         subscription.status = SubscriptionStatus.ACTIVE
-    subscription.save(update_fields=["plan", "period", "cancel_at_period_end", "status", "updated_at"])
+    update_fields = ["plan", "period", "cancel_at_period_end", "status", "updated_at"]
+    # A wholesale-billed (DGC-provisioned) subscription's override_price is
+    # pinned to whichever plan set it -- switching plans must re-price it to
+    # the NEW plan's wholesale rate, or the next invoice would silently bill
+    # the old plan's price under the new plan's name.
+    if subscription.billed_to_dgc:
+        subscription.override_price = plan.dgc_price_for(period)
+        update_fields.append("override_price")
+    subscription.save(update_fields=update_fields)
     if not _open_invoice(subscription):
         issue_invoice(subscription, period_start=timezone.now() if immediate else None)
     return subscription

@@ -216,3 +216,48 @@ class DgcDashboardPricingPanelTests(TestCase):
         s.save()
         body = self.client.get("/admin/").content.decode()
         self.assertNotIn("Your B2B pricing", body)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class PlanPageDgcNoStoreTests(TestCase):
+    """/admin/plan/ (control:store_plan) previously just bounced a store-less
+    DGC to the store picker via ActiveProjectMixin -- nothing to show. Now
+    shows their own B2B pricing reference instead."""
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser("lroot", "lroot@t.test", "pw")
+        self.dgc = User.objects.create_user("ldgc", "ldgc@t.test", "pw", is_staff=True)
+        Profile.objects.filter(user=self.dgc).update(platform_role=PlatformRole.MANAGER)
+        self.dgc = User.objects.get(pk=self.dgc.pk)
+
+    def test_dgc_with_no_store_sees_b2b_pricing_instead_of_a_redirect(self):
+        self.client.force_login(self.dgc)
+        resp = self.client.get("/admin/plan/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Your B2B pricing")
+        self.assertContains(resp, "₹14999/yr")
+
+    def test_admin_with_no_store_still_gets_the_normal_picker_redirect(self):
+        self.client.force_login(self.admin)
+        resp = self.client.get("/admin/plan/")
+        self.assertEqual(resp.status_code, 302)
+
+    def test_dgc_with_a_managed_store_selected_sees_its_own_plan_page(self):
+        project, *_ = store_services.create_store(
+            name="DgcOwnStore", owner_email="dgcstore@t.test",
+            plan=Plan.objects.get(code="basic"), actor=self.dgc, manager=self.dgc,
+            period=BillingPeriod.YEARLY,
+        )
+        self.client.force_login(self.dgc)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = project.pk
+        s.save()
+        resp = self.client.get("/admin/plan/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Current plan")
+        # the plan-switcher shows what this DGC actually pays for Basic
+        # (14,999), not the retail price their client would see (24,999) --
+        # growth's own wholesale rate is coincidentally also "24,999", so
+        # this checks the label is present rather than the number's absence.
+        self.assertContains(resp, "Your B2B rate")
+        self.assertContains(resp, "14,999")
