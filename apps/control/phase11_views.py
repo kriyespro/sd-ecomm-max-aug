@@ -41,7 +41,10 @@ class AnalyticsView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["summary"] = analytics.dashboard_summary(self.active_project)
+        summary = analytics.dashboard_summary(self.active_project)
+        ctx["summary"] = summary
+        ctx["revenue_points"] = analytics.revenue_chart_points(summary["revenue_series"])
+        ctx["status_donut"] = analytics.status_donut_segments(summary["orders_by_status"])
         return ctx
 
 

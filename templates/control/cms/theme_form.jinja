@@ -3,23 +3,23 @@
 {% block page_title %}Theme{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-2xl space-y-4">
-  <form method="post" class="space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+<div class="mx-auto grid max-w-5xl gap-4 {{ 'lg:grid-cols-2 lg:items-start' if section_order else '' }}">
+  <form method="post" class="space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
     {{ csrf_input }}
     <h2 class="text-sm font-semibold text-slate-700">Theme · {{ active_project.name }}</h2>
     <p class="text-xs text-slate-400">Consumed by the storefront at <code>/store/config/</code>.</p>
     <div data-tour="theme-colors">{{ render_form(form) }}</div>
 
     {% if title_fields %}
-    <div class="border-t border-slate-100 pt-4">
+    <div class="border-t border-slate-100 pt-3">
       <h3 class="text-sm font-semibold text-slate-700">Section titles</h3>
       <p class="mt-1 text-xs text-slate-400">Rename any heading on the home page. Leave a field blank to use the default shown as its placeholder.</p>
-      <div class="mt-3 space-y-3">
+      <div class="mt-3 grid gap-3 sm:grid-cols-2">
         {% for f in title_fields %}
         <label class="block">
           <span class="text-xs text-slate-500">{{ f.default }}</span>
           <input type="text" name="title__{{ f.key }}" value="{{ f.value }}" placeholder="{{ f.default }}"
-                 class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+                 class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm">
         </label>
         {% endfor %}
       </div>
@@ -30,15 +30,15 @@
   </form>
 
   {% if section_order %}
-  <div data-tour="theme-section-order" class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+  <div data-tour="theme-section-order" class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <h2 class="text-sm font-semibold text-slate-700">Homepage section order</h2>
     <p class="mt-1 text-xs text-slate-400">
       Move sections up or down to change what order they show on the home page. Hero (top banner) and the
       popup always stay fixed; a couple of fixed strips your skin shows (trust badges, brand statement) aren't listed here.
     </p>
-    <ol class="mt-4 divide-y divide-slate-100 rounded-lg border border-slate-200">
+    <ol class="mt-3 divide-y divide-slate-100 rounded-lg border border-slate-200">
       {% for s in section_order %}
-      <li class="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+      <li class="flex items-center justify-between gap-3 px-4 py-2 text-sm">
         <span class="text-slate-700">{{ loop.index }}. {{ s.label }}</span>
         <div class="flex shrink-0 gap-1">
           <form method="post" action="{{ url('control:cms_theme_section_move') }}">

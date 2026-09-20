@@ -143,6 +143,8 @@ def control(request):
         url_name = getattr(getattr(request, "resolver_match", None), "url_name", None)
         tour_steps = tour_for(url_name)
 
+    from apps.projects.verticals import wants_jewellery_sizes
+
     nav = build_nav(
         platform_staff=platform_staff,
         platform_admin=admin,
@@ -153,6 +155,7 @@ def control(request):
         can_manage_owner=can_manage_owner,
         store_data_ok=store_data_ok,
         easy_mode=easy_mode,
+        is_jewellery=bool(active and wants_jewellery_sizes(active)),
     )
     crumbs, nav_active_key, nav_active_url = build_breadcrumb(request, nav)
 

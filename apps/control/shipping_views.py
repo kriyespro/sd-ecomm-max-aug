@@ -57,7 +57,16 @@ class _ZoneForm(_ScopedForm):
 
 
 class ZoneCreateView(_ZoneForm, CreateView):
-    pass
+    def get_initial(self):
+        # Most stores self-ship locally first -- a ready-made "my city" zone
+        # (Surat/Gujarat/India) cuts the blank-form friction; still fully
+        # editable, and only applies to a brand-new zone, never an edit.
+        initial = super().get_initial()
+        initial.setdefault("name", "Surat, Gujarat")
+        initial.setdefault("countries", ["IN"])
+        initial.setdefault("states", ["Gujarat"])
+        initial.setdefault("postal_prefixes", ["394", "395"])
+        return initial
 
 
 class ZoneUpdateView(_ZoneForm, UpdateView):

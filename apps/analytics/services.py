@@ -132,6 +132,54 @@ def _customer_stats(project):
     }
 
 
+def revenue_chart_points(revenue_series):
+    """"x,y x,y ..." for an inline SVG <polyline> (viewBox "0 0 300 100"),
+    zero-filled so a quiet store still draws a flat line, not an empty chart."""
+    if not revenue_series:
+        return ""
+    values = [float(pt["revenue"]) for pt in revenue_series]
+    top = max(values) or 1.0
+    n = len(values)
+    step = 300 / (n - 1) if n > 1 else 0
+    pts = []
+    for i, v in enumerate(values):
+        x = round(i * step, 1)
+        y = round(96 - (v / top) * 90, 1)
+        pts.append(f"{x},{y}")
+    return " ".join(pts)
+
+
+# Fixed palette so a status keeps the same colour across visits.
+_STATUS_COLORS = {
+    "pending": "#94a3b8", "confirmed": "#38bdf8", "processing": "#818cf8",
+    "packed": "#a78bfa", "shipped": "#fb923c", "delivered": "#22c55e",
+    "cancelled": "#ef4444", "returned": "#f43f5e", "refunded": "#eab308",
+}
+
+
+def status_donut_segments(orders_by_status):
+    """SVG donut slices as stroke-dasharray/dashoffset on a shared circle
+    (r=15.9155 -> circumference 100, so dasharray is directly a percentage).
+    Empty when there are no orders at all."""
+    total = sum(orders_by_status.values())
+    if not total:
+        return []
+    segments = []
+    offset = 0.0
+    for status, n in orders_by_status.items():
+        if not n:
+            continue
+        pct = round(n / total * 100, 2)
+        segments.append({
+            "status": status, "n": n, "pct": pct,
+            "color": _STATUS_COLORS.get(status, "#cbd5e1"),
+            "dasharray": f"{pct} {round(100 - pct, 2)}",
+            "dashoffset": round(-offset, 2),
+        })
+        offset += pct
+    return segments
+
+
 def _out_of_stock(project):
     from django.db.models import F
 
@@ -174,6 +222,8 @@ def today_dashboard(project):
 
 
 def _revenue_series(project, *, days=30):
+    """One point per day in range, zero-filled -- a chart needs every day
+    present to plot a real trend line, not just the days with a sale."""
     from apps.orders.models import Order
 
     start = timezone.localdate() - timedelta(days=days - 1)
@@ -184,7 +234,15 @@ def _revenue_series(project, *, days=30):
         .annotate(rev=Sum("grand_total"), n=Count("id"))
         .order_by("d")
     )
-    return [{"date": r["d"].isoformat(), "revenue": str(r["rev"] or 0), "orders": r["n"]} for r in rows]
+    by_day = {r["d"]: r for r in rows}
+    return [
+        {
+            "date": d.isoformat(),
+            "revenue": str((by_day.get(d) or {}).get("rev") or 0),
+            "orders": (by_day.get(d) or {}).get("n") or 0,
+        }
+        for d in _iter_days(start, timezone.localdate())
+    ]
 
 
 # --- reports ----------------------------------------------

@@ -133,8 +133,10 @@ class AdminScreenTests(TestCase):
     def setUp(self):
         if not _HAVE_PIL:
             self.skipTest("Pillow not available")
-        self.store = Project.objects.create(name="Gems", status="active",
-                                            feature_flags={"onboarded": True})
+        self.store = Project.objects.create(
+            name="Gems", status="active",
+            feature_flags={"onboarded": True, "vertical": "jewellery"},
+        )
         self.owner = User.objects.create_user("o", "o@t.test", "pw", is_staff=True)
         Membership.objects.create(project=self.store, user=self.owner, role=StoreRole.OWNER)
 
@@ -143,6 +145,11 @@ class AdminScreenTests(TestCase):
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = self.store.pk
         s.save()
+
+    def test_nav_shows_certificates_for_jewellery_store(self):
+        self._login()
+        resp = self.client.get("/admin/products/")
+        self.assertContains(resp, 'href="/admin/certificates/"')
 
     def test_create_mints_code_and_footer_page(self):
         self._login()
@@ -182,3 +189,30 @@ class AdminScreenTests(TestCase):
         r = self.client.get("/admin/certificates/?q=ruby")
         self.assertContains(r, "Ruby pendant")
         self.assertNotContains(r, "Sapphire ring")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class NonJewelleryStoreGatedTests(TestCase):
+    """Certificates only make sense for a jewellery-vertical store -- hidden
+    from the sidebar and refused server-side for any other vertical."""
+
+    def setUp(self):
+        self.store = Project.objects.create(
+            name="Fashion Co", status="active",
+            feature_flags={"onboarded": True, "vertical": "fashion"},
+        )
+        self.owner = User.objects.create_user("fo", "fo@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.store, user=self.owner, role=StoreRole.OWNER)
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.store.pk
+        s.save()
+
+    def test_nav_hides_certificates(self):
+        resp = self.client.get("/admin/products/")
+        self.assertNotContains(resp, 'href="/admin/certificates/"')
+
+    def test_direct_url_redirected_away(self):
+        resp = self.client.get("/admin/certificates/", follow=True)
+        self.assertContains(resp, "only available for jewellery stores")
+        self.assertEqual(resp.redirect_chain[-1][0], "/admin/")

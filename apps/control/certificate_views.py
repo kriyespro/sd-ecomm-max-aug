@@ -3,6 +3,7 @@
 from django import forms
 from django.contrib import messages
 from django.db.models import Q
+from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
@@ -13,6 +14,7 @@ from apps.certificates.models import (
 )
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
+from apps.projects.verticals import wants_jewellery_sizes
 
 from .mixins import ActiveProjectMixin
 
@@ -69,6 +71,15 @@ class CertificateForm(forms.ModelForm):
 
 class _Base(ActiveProjectMixin):
     model = Certificate
+
+    def check_active_project_access(self, request):
+        parent = super().check_active_project_access(request)
+        if parent is not None:
+            return parent
+        if not wants_jewellery_sizes(self.active_project):
+            messages.error(request, "Certificates are only available for jewellery stores.")
+            return redirect("control:dashboard")
+        return None
 
     def get_queryset(self):
         return Certificate.objects.filter(project=self.active_project).select_related("product")
