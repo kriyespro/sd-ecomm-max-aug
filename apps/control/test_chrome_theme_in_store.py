@@ -50,6 +50,11 @@ class PlatformAdminChromeTests(TestCase):
         self.project = Project.objects.create(
             name="ChromeCo", status="active", feature_flags={"onboarded": True},
         )
+        # A second store -- otherwise get_active_project()'s "sole accessible
+        # project" fallback auto-picks self.project for this superuser even
+        # with nothing in session, which would silently pass the "no store
+        # selected" tests below for the wrong reason.
+        Project.objects.create(name="OtherCo", status="active", feature_flags={"onboarded": True})
         self.client.force_login(self.admin)
 
     def test_indigo_hex_on_a_platform_wide_screen(self):
@@ -62,6 +67,30 @@ class PlatformAdminChromeTests(TestCase):
         s.save()
         body = self.client.get("/admin/products/").content.decode()
         self.assertEqual(_sidebar_bg(body), "[#2BBBD7]")
+
+    def test_sky_hex_on_training_once_a_store_is_selected(self):
+        # /admin/training/ (TrainingLibraryView) doesn't require an active
+        # project (no ActiveProjectMixin -- platform staff can browse it with
+        # nothing picked), but it lives in the sidebar's "Store" section, so
+        # once a store IS picked it should read as in-store too, via
+        # store_scoped_optional.
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        body = self.client.get("/admin/training/").content.decode()
+        self.assertEqual(_sidebar_bg(body), "[#2BBBD7]")
+
+    def test_platform_hex_on_training_with_no_store_selected(self):
+        body = self.client.get("/admin/training/").content.decode()
+        self.assertEqual(_sidebar_bg(body), "[#010736]")
+
+    def test_easy_mode_toggle_hidden_for_platform_admin(self):
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        body = self.client.get("/admin/products/").content.decode()
+        self.assertNotIn("Switch to Easy mode", body)
+        self.assertNotIn("Switch to Expert mode", body)
 
     def test_still_platform_hex_on_a_platform_wide_screen_even_with_a_store_selected(self):
         # A store pick in session shouldn't leak the "in store" tint onto
@@ -141,6 +170,14 @@ class DgcChromeTests(TestCase):
         body = self.client.get("/admin/products/").content.decode()
         self.assertIn(">DGC<", body)
 
+    def test_easy_mode_toggle_hidden_for_dgc(self):
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        body = self.client.get("/admin/products/").content.decode()
+        self.assertNotIn("Switch to Easy mode", body)
+        self.assertNotIn("Switch to Expert mode", body)
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class StoreOwnerChromeUnaffectedTests(TestCase):
@@ -162,3 +199,7 @@ class StoreOwnerChromeUnaffectedTests(TestCase):
     def test_emerald_on_a_store_scoped_screen(self):
         body = self.client.get("/admin/products/").content.decode()
         self.assertEqual(_sidebar_bg(body), "emerald")
+
+    def test_easy_mode_toggle_still_shown_for_store_owner(self):
+        body = self.client.get("/admin/products/").content.decode()
+        self.assertIn("Switch to Easy mode", body)

@@ -87,6 +87,10 @@ class TrainingLibraryView(ControlAccessMixin, TemplateView):
     """Read-only, role-filtered library for every control-panel user."""
 
     template_name = "control/learning/library.jinja"
+    # Sidebar's "Store" section, but doesn't require a picked store (platform
+    # staff with nothing selected still sees general videos) -- see
+    # apps.control.context_processors._is_store_scoped_view.
+    store_scoped_optional = True
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

@@ -42,19 +42,31 @@ def _chrome_theme(user, store_role_val, platform_scope):
 
 
 def _is_store_scoped_view(request, default):
-    """Is the current view scoped to one store (mixes in ``ActiveProjectMixin``)?
+    """Is the current view scoped to one store (mixes in ``ActiveProjectMixin``,
+    or opts in via ``store_scoped_optional`` while a store is actually picked)?
 
     Platform-wide tools (Stores / Users / Billing / Skins / the platform
     dashboard) are not — they get the platform chrome tint even when the admin
     has a store selected in their session. Falls back to ``default`` when the
-    view class can't be resolved (error pages, redirects)."""
+    view class can't be resolved (error pages, redirects).
+
+    ``store_scoped_optional`` (e.g. TrainingLibraryView) covers views that
+    live in the sidebar's "Store" section and read the active project when
+    there is one, but don't require it (no ActiveProjectMixin, so platform
+    staff can still open them with nothing picked) — they should still read
+    as "in store" once a store actually is picked, matching where they sit
+    in the nav."""
     match = getattr(request, "resolver_match", None)
     view_cls = getattr(getattr(match, "func", None), "view_class", None)
     if view_cls is None:
         return default
     from apps.control.mixins import ActiveProjectMixin
 
-    return ActiveProjectMixin in view_cls.__mro__
+    if ActiveProjectMixin in view_cls.__mro__:
+        return True
+    if getattr(view_cls, "store_scoped_optional", False):
+        return get_active_project(request) is not None
+    return False
 
 
 def control(request):

@@ -129,7 +129,7 @@
         </div>
       {% endif %}
 
-      {% if control_active_project %}
+      {% if control_active_project and control_chrome_theme in ('owner', 'manager', 'staff') %}
       <form method="post" action="{{ url('control:ui_mode_toggle') }}" x-show="sidebar" x-cloak class="mt-2 px-1">
         {{ csrf_input }}
         <input type="hidden" name="next" value="{{ request.get_full_path() }}">
