@@ -8,8 +8,12 @@
 {% block body %}
 {# Mission Control colour scheme by the viewer's highest role:
    platform (superuser / Platform Owner) = indigo, DGC (Platform Manager) =
-   orange, store owner = green, store manager = pink, staff = slate. #}
-{% set _badge = {'platform':'Platform','dgc':'DGC','owner':'Owner','manager':'Manager','staff':''}[control_chrome_theme] %}
+   orange, store owner = green, store manager = pink, staff = slate.
+   platform_in_store / dgc_in_store: same role, but they've picked a store
+   and are on a store-scoped screen right now -- lighter shade (sky /
+   amber) as a visual "you're inside someone's store" cue, badge text
+   unchanged. See apps.control.context_processors._chrome_theme. #}
+{% set _badge = {'platform':'Platform','platform_in_store':'Platform','dgc':'DGC','dgc_in_store':'DGC','owner':'Owner','manager':'Manager','staff':''}[control_chrome_theme] %}
 {% set _plat = control_platform_scope %}
 {# Easy mode gets its own bright, lighter green sidebar — an unmissable
    at-a-glance cue distinct from every role's usual dark theme. #}
@@ -20,7 +24,7 @@
 {% set _side_active = 'bg-green-500 text-white' %}
 {% set _side_border = 'border-green-500' %}
 {% else %}
-{% set _hue = {'platform':'indigo','dgc':'orange','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
+{% set _hue = {'platform':'indigo','platform_in_store':'sky','dgc':'orange','dgc_in_store':'amber','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
 {% set _side = 'bg-' ~ _hue ~ '-950' %}
 {% set _side_hover = 'hover:bg-' ~ _hue ~ '-900' %}
 {% set _side_active = 'bg-' ~ _hue ~ '-900 text-white' %}

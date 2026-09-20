@@ -50,8 +50,11 @@ CONTENT = [
 # classes at render time by string-concatenating a hue name
 # (`'bg-' ~ _hue ~ '-950'`), so Tailwind's content scan never sees them.
 # "green" is Easy mode's sidebar tint (bg-green-600 etc, not just -950/-900
-# like the rest — Easy mode is meant to look obviously different).
-_HUES = "indigo|orange|emerald|rose|slate|green"
+# like the rest — Easy mode is meant to look obviously different). "sky" /
+# "amber" are platform_in_store / dgc_in_store — a platform admin / DGC
+# currently working inside a specific store, lighter shades of their normal
+# indigo/orange so it's obvious at a glance (see _chrome_theme).
+_HUES = "indigo|orange|emerald|rose|slate|green|sky|amber"
 # Emitted as JS RegExp literals (Tailwind's safelist wants real regexes, not
 # strings). The `/` inside the opacity pattern is escaped for the literal.
 _SAFELIST_JS = (

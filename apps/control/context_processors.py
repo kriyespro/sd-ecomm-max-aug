@@ -16,13 +16,22 @@ from .navigation import build_breadcrumb, build_nav
 def _chrome_theme(user, store_role_val, platform_scope):
     """One keyword driving the Mission Control colour scheme, by the viewer's
     highest role: superuser / Platform Owner -> platform, Platform Manager
-    (a Digital Growth Consultant) -> dgc, then per store role."""
+    (a Digital Growth Consultant) -> dgc, then per store role.
+
+    For platform/dgc specifically, ``platform_scope`` (False once they've
+    picked a store and are on a store-scoped screen -- see
+    ``_is_store_scoped_view``) switches to a distinct "_in_store" variant --
+    a lighter shade in the same slot in base_control.jinja's hue table --
+    purely so it's visually obvious "I'm inside someone's store right now,"
+    not a different role. The platform-wide screens (Stores, Users,
+    Billing, Skins, the platform dashboard) keep the normal indigo/orange
+    look untouched either way."""
     profile = getattr(user, "profile", None)
     role = getattr(profile, "platform_role", "none")
     if user.is_superuser or role == "platform_owner":
-        return "platform"
+        return "platform" if platform_scope else "platform_in_store"
     if role == "platform_manager":
-        return "dgc"
+        return "dgc" if platform_scope else "dgc_in_store"
     if platform_scope:
         return "platform"
     if store_role_val == "owner":

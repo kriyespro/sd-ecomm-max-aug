@@ -216,10 +216,16 @@ class ChromeThemeByRoleTests(TestCase):
         session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         session.save()
 
-    def test_superuser_is_indigo_everywhere(self):
+    def test_superuser_is_indigo_on_platform_wide_screens_sky_inside_a_store(self):
+        # 2026-09-20: a platform admin's indigo stays untouched on
+        # platform-wide tools (Stores, Users, Billing...), but switches to
+        # a lighter "sky" once they've picked a store and are on a
+        # store-scoped screen -- a visual "you're inside someone's store
+        # right now" cue. See apps.control.test_chrome_theme_in_store for
+        # the full in-store-vs-platform-wide matrix (DGC included).
         su = get_user_model().objects.create_superuser("root", "r@t.test", "pw")
         self._login(su)
-        self.assertEqual(self._hue("/admin/products/"), "indigo")
+        self.assertEqual(self._hue("/admin/products/"), "sky")
         self.assertEqual(self._hue("/admin/stores/"), "indigo")
 
     def test_dgc_is_orange(self):
