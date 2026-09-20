@@ -1,12 +1,18 @@
 """Mission Control sidebar colour (apps.control.context_processors
 ._chrome_theme, templates/control/base_control.jinja): a platform admin
-or DGC's usual indigo/orange stays untouched on platform-wide screens
-(Stores, Users, Billing, Skins, the platform dashboard) -- the request the
-user made. But once they've picked a store and are on a store-scoped
-screen (Products, Orders, etc), the sidebar switches to a lighter shade
-(sky for admin, amber for DGC) as a visual "you're inside someone's
-store right now" cue. A plain store owner/manager/staff's colour never
-changes either way -- this only applies to platform_staff."""
+or DGC's usual colour stays untouched on platform-wide screens (Stores,
+Users, Billing, Skins, the platform dashboard) -- the request the user
+made. But once they've picked a store and are on a store-scoped screen
+(Products, Orders, etc), the sidebar switches to a lighter, visually
+distinct shade (exact brand hex, since Tailwind's -950 shade lands
+near-black for every hue and two -950s didn't read as different enough)
+as a "you're inside someone's store right now" cue. A plain store
+owner/manager/staff's colour never changes either way -- this only
+applies to platform_staff.
+
+platform / platform_in_store / dgc_in_store use literal hex
+(apps.control base_control.jinja _side); dgc's own platform-wide colour
+is untouched Tailwind orange-950, so still asserted by hue name."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -18,13 +24,23 @@ from apps.projects.models import Project
 User = get_user_model()
 
 
-def _sidebar_hue(body: str) -> str:
+def _sidebar_bg(body: str) -> str:
+    """The <aside>'s bg- token: a bare hue name ("indigo") for the normal
+    Tailwind-scale states, or the literal hex ("[#2BBBD7]") for the three
+    custom-colour states."""
     start = body.index('<aside')
     end = body.index('>', start)
     chunk = body[start:end]
     marker = "bg-"
     idx = chunk.index(marker) + len(marker)
+    if chunk[idx] == "[":
+        return chunk[idx:chunk.index("]", idx) + 1]
     return chunk[idx:chunk.index("-", idx)]
+
+
+def _sidebar_tag(body: str) -> str:
+    start = body.index('<aside')
+    return body[start:body.index('>', start)]
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -36,25 +52,25 @@ class PlatformAdminChromeTests(TestCase):
         )
         self.client.force_login(self.admin)
 
-    def test_indigo_on_a_platform_wide_screen(self):
+    def test_indigo_hex_on_a_platform_wide_screen(self):
         body = self.client.get("/admin/stores/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "indigo")
+        self.assertEqual(_sidebar_bg(body), "[#010736]")
 
-    def test_sky_once_working_inside_a_store(self):
+    def test_sky_hex_once_working_inside_a_store(self):
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         s.save()
         body = self.client.get("/admin/products/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "sky")
+        self.assertEqual(_sidebar_bg(body), "[#2BBBD7]")
 
-    def test_still_indigo_on_a_platform_wide_screen_even_with_a_store_selected(self):
+    def test_still_platform_hex_on_a_platform_wide_screen_even_with_a_store_selected(self):
         # A store pick in session shouldn't leak the "in store" tint onto
         # platform-wide tools -- only an actual store-scoped screen should.
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         s.save()
         body = self.client.get("/admin/stores/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "indigo")
+        self.assertEqual(_sidebar_bg(body), "[#010736]")
 
     def test_badge_still_reads_platform_either_way(self):
         s = self.client.session
@@ -62,6 +78,24 @@ class PlatformAdminChromeTests(TestCase):
         s.save()
         body = self.client.get("/admin/products/").content.decode()
         self.assertIn(">Platform<", body)
+
+    def test_dark_navy_platform_screen_keeps_light_text(self):
+        # #010736 is dark -- original light-grey-on-dark scheme stays.
+        body = self.client.get("/admin/stores/").content.decode()
+        tag = _sidebar_tag(body)
+        self.assertIn("text-slate-300", tag)
+        self.assertNotIn("text-slate-900", tag)
+
+    def test_light_cyan_in_store_screen_flips_to_dark_text(self):
+        # #2BBBD7 is light -- light-grey text would be unreadable there, so
+        # the sidebar flips to dark text/tints for this state only.
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        body = self.client.get("/admin/products/").content.decode()
+        tag = _sidebar_tag(body)
+        self.assertIn("text-slate-900", tag)
+        self.assertNotIn("text-slate-300", tag)
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -82,14 +116,23 @@ class DgcChromeTests(TestCase):
 
     def test_orange_on_a_platform_wide_screen(self):
         body = self.client.get("/admin/stores/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "orange")
+        self.assertEqual(_sidebar_bg(body), "orange")
 
-    def test_amber_once_working_inside_their_managed_store(self):
+    def test_amber_hex_once_working_inside_their_managed_store(self):
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         s.save()
         body = self.client.get("/admin/products/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "amber")
+        self.assertEqual(_sidebar_bg(body), "[#FFA259]")
+
+    def test_light_amber_in_store_screen_flips_to_dark_text(self):
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+        body = self.client.get("/admin/products/").content.decode()
+        tag = _sidebar_tag(body)
+        self.assertIn("text-slate-900", tag)
+        self.assertNotIn("text-slate-300", tag)
 
     def test_badge_still_reads_dgc_either_way(self):
         s = self.client.session
@@ -118,4 +161,4 @@ class StoreOwnerChromeUnaffectedTests(TestCase):
 
     def test_emerald_on_a_store_scoped_screen(self):
         body = self.client.get("/admin/products/").content.decode()
-        self.assertEqual(_sidebar_hue(body), "emerald")
+        self.assertEqual(_sidebar_bg(body), "emerald")

@@ -206,7 +206,14 @@ class ChromeThemeByRoleTests(TestCase):
         session.save()
 
     def _hue(self, path="/admin/products/"):
+        """Named Tailwind hue ("indigo") for the normal-scale states, or the
+        literal hex ("#010736") for the three custom-colour states (2026-09-20
+        -- Tailwind's -950 shade is near-black for every hue, so two -950s
+        didn't read as visually distinct; see test_chrome_theme_in_store.py)."""
         body = self.client.get(path, HTTP_HOST="testserver", follow=True).content.decode()
+        m = re.search(r'<aside class="[^"]*?bg-\[(#[0-9A-Fa-f]{6})\]', body)
+        if m:
+            return m.group(1)
         m = re.search(r"<aside class=\"[^\"]*?bg-([a-z]+)-950", body)
         return m.group(1) if m else None
 
@@ -216,17 +223,19 @@ class ChromeThemeByRoleTests(TestCase):
         session[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         session.save()
 
-    def test_superuser_is_indigo_on_platform_wide_screens_sky_inside_a_store(self):
-        # 2026-09-20: a platform admin's indigo stays untouched on
+    def test_superuser_is_custom_navy_on_platform_wide_screens_custom_cyan_inside_a_store(self):
+        # 2026-09-20: a platform admin's dark navy stays untouched on
         # platform-wide tools (Stores, Users, Billing...), but switches to
-        # a lighter "sky" once they've picked a store and are on a
-        # store-scoped screen -- a visual "you're inside someone's store
-        # right now" cue. See apps.control.test_chrome_theme_in_store for
-        # the full in-store-vs-platform-wide matrix (DGC included).
+        # a lighter, distinct brand cyan once they've picked a store and
+        # are on a store-scoped screen -- a visual "you're inside someone's
+        # store right now" cue. Exact hex, not a named Tailwind hue, since
+        # -950 is near-black for every colour and two -950s didn't read as
+        # visually distinct. See apps.control.test_chrome_theme_in_store
+        # for the full in-store-vs-platform-wide matrix (DGC included).
         su = get_user_model().objects.create_superuser("root", "r@t.test", "pw")
         self._login(su)
-        self.assertEqual(self._hue("/admin/products/"), "sky")
-        self.assertEqual(self._hue("/admin/stores/"), "indigo")
+        self.assertEqual(self._hue("/admin/products/"), "#2BBBD7")
+        self.assertEqual(self._hue("/admin/stores/"), "#010736")
 
     def test_dgc_is_orange(self):
         from apps.accounts.models import PlatformRole, Profile

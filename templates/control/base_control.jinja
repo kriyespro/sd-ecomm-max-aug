@@ -17,18 +17,64 @@
 {% set _plat = control_platform_scope %}
 {# Easy mode gets its own bright, lighter green sidebar — an unmissable
    at-a-glance cue distinct from every role's usual dark theme. #}
+{% set _side_light_bg = false %}
+{% set _side_text = 'text-slate-300' %}
+{% set _side_text_hover = 'hover:text-white' %}
+{% set _side_logo_text = 'text-white' %}
+{% set _tints = ['bg-white/[0.02]', 'bg-white/[0.05]', 'bg-white/[0.03]', 'bg-white/[0.06]', 'bg-white/[0.04]', 'bg-white/[0.06]', 'bg-white/[0.03]'] %}
 {% if control_easy_mode %}
 {% set _hue = 'green' %}
 {% set _side = 'bg-green-600' %}
 {% set _side_hover = 'hover:bg-green-500' %}
 {% set _side_active = 'bg-green-500 text-white' %}
 {% set _side_border = 'border-green-500' %}
+{% set _side_header_text = 'text-green-200' %}
 {% else %}
 {% set _hue = {'platform':'indigo','platform_in_store':'sky','dgc':'orange','dgc_in_store':'amber','owner':'emerald','manager':'rose','staff':'slate'}[control_chrome_theme] %}
 {% set _side = 'bg-' ~ _hue ~ '-950' %}
 {% set _side_hover = 'hover:bg-' ~ _hue ~ '-900' %}
 {% set _side_active = 'bg-' ~ _hue ~ '-900 text-white' %}
 {% set _side_border = 'border-' ~ _hue ~ '-900' %}
+{% set _side_header_text = 'text-' ~ _hue ~ '-200' %}
+{# Tailwind's -950 shade lands near-black for every hue, so indigo vs sky
+   barely read as different there — exact brand hex for the sidebar itself
+   on these three states instead, so "you're inside a store" is obvious at
+   a glance. Literal strings (not built from a variable) so Tailwind's
+   content scan picks them up with no safelist entry needed. _hue above
+   still drives the lighter accents (wrapper wash, header border, badges)
+   and reads fine there already.
+
+   platform_in_store / dgc_in_store land on genuinely light backgrounds
+   (#2BBBD7, #FFA259) -- the sidebar's whole text/tint scheme otherwise
+   assumes a dark background (light-grey text, white-wash nested panels),
+   so _side_light_bg flips those to dark text / dark-wash panels for just
+   these two, or the sidebar would render with unreadable light-on-light
+   text. #}
+{% if control_chrome_theme == 'platform' %}
+{% set _side = 'bg-[#010736]' %}
+{% set _side_hover = 'hover:bg-[#0b1a52]' %}
+{% set _side_active = 'bg-[#0b1a52] text-white' %}
+{% set _side_border = 'border-[#0b1a52]' %}
+{% elif control_chrome_theme == 'platform_in_store' %}
+{% set _side = 'bg-[#2BBBD7]' %}
+{% set _side_hover = 'hover:bg-[#1a9db6]' %}
+{% set _side_active = 'bg-[#1a9db6] text-white' %}
+{% set _side_border = 'border-[#1a9db6]' %}
+{% set _side_light_bg = true %}
+{% elif control_chrome_theme == 'dgc_in_store' %}
+{% set _side = 'bg-[#FFA259]' %}
+{% set _side_hover = 'hover:bg-[#f28b33]' %}
+{% set _side_active = 'bg-[#f28b33] text-white' %}
+{% set _side_border = 'border-[#f28b33]' %}
+{% set _side_light_bg = true %}
+{% endif %}
+{% if _side_light_bg %}
+{% set _side_text = 'text-slate-900/80' %}
+{% set _side_text_hover = 'hover:text-slate-900' %}
+{% set _side_logo_text = 'text-slate-900' %}
+{% set _side_header_text = 'text-slate-900/70' %}
+{% set _tints = ['bg-black/[0.04]', 'bg-black/[0.07]', 'bg-black/[0.05]', 'bg-black/[0.08]', 'bg-black/[0.06]', 'bg-black/[0.08]', 'bg-black/[0.05]'] %}
+{% endif %}
 {% endif %}
 <div x-data="{ sidebar: true, nav: false }" class="flex min-h-screen bg-{{ _hue }}-50">
 
@@ -37,14 +83,14 @@
        class="fixed inset-0 z-30 bg-slate-900/50 lg:hidden"></div>
 
   {# --- Sidebar: off-canvas drawer below lg, static rail at lg+ --- #}
-  <aside class="fixed inset-y-0 left-0 z-40 flex w-60 flex-col {{ _side }} text-slate-300
+  <aside class="fixed inset-y-0 left-0 z-40 flex w-60 flex-col {{ _side }} {{ _side_text }}
                 transition-transform duration-200
                 lg:static lg:z-auto lg:translate-x-0 lg:transition-[width]"
          :class="{
            '-translate-x-full': !nav, 'translate-x-0': nav,
            'lg:w-60': sidebar, 'lg:w-16': !sidebar
          }">
-    <div class="flex h-14 items-center gap-2 px-4 font-semibold text-white">
+    <div class="flex h-14 items-center gap-2 px-4 font-semibold {{ _side_logo_text }}">
       <span class="text-lg">⌘</span>
       <span x-show="sidebar" x-cloak>Mission Control</span>
     </div>
@@ -53,11 +99,10 @@
        collapsed icon rail (lg:w-16) every item shows regardless. #}
     <nav x-data="{ open: '{{ control_nav_active_key or (control_nav[0].key if control_nav else '') }}' }"
          class="flex-1 overflow-y-auto px-2 py-2 text-sm">
-      {% set _tints = ['bg-white/[0.02]', 'bg-white/[0.05]', 'bg-white/[0.03]', 'bg-white/[0.06]', 'bg-white/[0.04]', 'bg-white/[0.06]', 'bg-white/[0.03]'] %}
       {% for s in control_nav %}
       <div class="mb-1 overflow-hidden rounded-lg {{ _tints[loop.index0 % (_tints | length)] }}">
         <button type="button" @click="open = (open === '{{ s.key }}' ? '' : '{{ s.key }}')"
-                class="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-{{ _hue }}-200 hover:text-white"
+                class="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider {{ _side_header_text }} {{ _side_text_hover }}"
                 :class="open === '{{ s.key }}' && '{{ _side_active }}'">
           <span class="w-4 shrink-0 text-center text-sm">{{ s.icon }}</span>
           <span x-show="sidebar" x-cloak class="flex-1 truncate">{{ s.label }}</span>
@@ -67,7 +112,7 @@
         <div x-show="!sidebar || open === '{{ s.key }}'" x-cloak class="space-y-0.5 px-1 pb-2 pt-0.5">
           {% for it in s['items'] %}
           <a href="{{ it.url }}" @click="nav = false"
-             class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} hover:text-white
+             class="flex items-center gap-3 rounded-lg px-3 py-1.5 {{ _side_hover }} {{ _side_text_hover }}
                     {{ (_side_active ~ ' font-medium') if control_nav_active_url == it.url else '' }}">
             <span class="w-4 shrink-0 text-center">{{ it.icon }}</span>
             <span x-show="sidebar" x-cloak class="truncate">{{ it.label }}</span>
@@ -88,7 +133,7 @@
       <form method="post" action="{{ url('control:ui_mode_toggle') }}" x-show="sidebar" x-cloak class="mt-2 px-1">
         {{ csrf_input }}
         <input type="hidden" name="next" value="{{ request.get_full_path() }}">
-        <button class="w-full rounded-lg px-3 py-1.5 text-left text-xs {{ _side_hover }} hover:text-white">
+        <button class="w-full rounded-lg px-3 py-1.5 text-left text-xs {{ _side_hover }} {{ _side_text_hover }}">
           {% if control_easy_mode %}⚡ Switch to Expert mode{% else %}✨ Switch to Easy mode{% endif %}
         </button>
       </form>
@@ -96,13 +141,13 @@
       <form method="post" action="{{ url('control:guide_toggle') }}" x-show="sidebar" x-cloak class="mt-1 px-1">
         {{ csrf_input }}
         <input type="hidden" name="next" value="{{ request.get_full_path() }}">
-        <button class="w-full rounded-lg px-3 py-1.5 text-left text-xs {{ _side_hover }} hover:text-white">
+        <button class="w-full rounded-lg px-3 py-1.5 text-left text-xs {{ _side_hover }} {{ _side_text_hover }}">
           {% if control_show_guides %}🎯 Turn off page guides{% else %}🎯 Turn on page guides{% endif %}
         </button>
       </form>
     </nav>
     {% if request.user.is_superuser %}
-    <a href="/sd/" class="border-t {{ _side_border }} px-4 py-3 text-xs hover:text-white">
+    <a href="/sd/" class="border-t {{ _side_border }} px-4 py-3 text-xs {{ _side_text_hover }}">
       <span x-show="sidebar" x-cloak>Django admin /sd/</span>
       <span x-show="!sidebar" x-cloak>⚙</span>
     </a>
