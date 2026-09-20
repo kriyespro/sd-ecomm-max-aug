@@ -2,9 +2,12 @@
 
 import csv
 import io
+import time
 from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import urlparse
 
+from django.core.cache import cache
 from django.db.models import Count, F, Sum
 from django.db.models.functions import TruncDate
 from django.utils import timezone
@@ -20,6 +23,150 @@ def record_event(project, key, *, when=None, n=1):
     day = when or timezone.localdate()
     counter, _ = EventCounter.objects.get_or_create(project=project, date=day, key=key)
     EventCounter.objects.filter(pk=counter.pk).update(count=F("count") + n)
+
+
+# --- live traffic (Visitors today / funnel / live visitors) --------------
+#
+# Storefront pages are anonymous and CDN-edge-cacheable (see
+# apps.shopfront.middleware) -- a real visitor's request often never reaches
+# Django at all once a page is cached, so these counters can ONLY be trusted
+# when driven by a client-side JS beacon (apps.shopfront.views.BeaconView +
+# static/shopfront/beacon.js), which always runs in the real browser
+# regardless of where the HTML came from. add_to_cart / checkout_started are
+# the exception -- those endpoints are never edge-cached (cart mutations,
+# and "/checkout" is in _PRIVATE_PATHS), so they're recorded directly,
+# server-side, from apps.shopfront.views.CartAddView / CheckoutView.
+
+LIVE_VISITOR_TTL = 75  # seconds; beacon heartbeats every 25s, so 2 missed = gone
+
+
+def mark_visitor_seen(project, vid, *, day=None):
+    """First beacon of the day for this visitor id -> counts as a new
+    "visitor" for the funnel and returns True (so the caller also records
+    traffic source once, not on every page view)."""
+    day = day or timezone.localdate()
+    key = f"an:seen:{project.pk}:{day.isoformat()}:{vid}"
+    is_new = cache.add(key, 1, timeout=60 * 60 * 26)
+    if is_new:
+        record_event(project, "visitor", when=day)
+    return is_new
+
+
+def record_page_event(project, event):
+    record_event(project, "page_view")
+    if event == "product_view":
+        record_event(project, "product_view")
+
+
+_TRAFFIC_BUCKETS = (
+    ("search", ("google.", "bing.", "duckduckgo.", "yahoo.")),
+    ("social", ("facebook.", "instagram.", "l.instagram.", "t.co", "twitter.",
+                "x.com", "linkedin.", "pinterest.", "wa.me", "whatsapp.")),
+)
+
+
+def classify_referrer(referrer, own_host):
+    """"direct" (no referrer, or the store's own domain), "search", "social",
+    or "referral" (any other external site)."""
+    if not referrer:
+        return "direct"
+    host = urlparse(referrer).netloc.lower()
+    if not host or host == (own_host or "").lower():
+        return "direct"
+    for bucket, needles in _TRAFFIC_BUCKETS:
+        if any(needle in host for needle in needles):
+            return bucket
+    return "referral"
+
+
+def record_traffic_source(project, referrer, own_host):
+    record_event(project, f"src_{classify_referrer(referrer, own_host)}")
+
+
+def touch_live_visitor(project, vid, *, page, ip):
+    """Upsert this visitor's presence (city, current page) with a rolling
+    TTL -- read back by live_visitors(). Approximate by design (last-write-
+    wins under concurrent beacons, no locking): this drives a vanity "who's
+    browsing right now" widget, not billing or anything else load-bearing."""
+    key = f"an:live:{project.pk}"
+    now = time.time()
+    data = cache.get(key) or {}
+    data = {k: v for k, v in data.items() if now - v["ts"] < LIVE_VISITOR_TTL}
+    data[vid] = {"page": page, "city": geoip_city(ip), "ts": now}
+    cache.set(key, data, timeout=LIVE_VISITOR_TTL + 30)
+
+
+def live_visitors(project):
+    key = f"an:live:{project.pk}"
+    now = time.time()
+    data = cache.get(key) or {}
+    return sorted(
+        (v for v in data.values() if now - v["ts"] < LIVE_VISITOR_TTL),
+        key=lambda v: -v["ts"],
+    )
+
+
+_geoip_reader = None
+_geoip_unavailable = False
+
+
+def geoip_city(ip):
+    """City name for an IP via the GeoLite2-City .mmdb at settings.GEOIP_CITY_DB
+    (see that setting for where to get the file). Blank, not an error, when
+    the file is missing, the IP is private/unresolvable, or geoip2 isn't
+    installed -- the live-visitors widget just shows no city for that row."""
+    global _geoip_reader, _geoip_unavailable
+    if not ip or _geoip_unavailable:
+        return ""
+    if _geoip_reader is None:
+        import os
+
+        from django.conf import settings
+
+        path = getattr(settings, "GEOIP_CITY_DB", "")
+        if not path or not os.path.exists(path):
+            _geoip_unavailable = True
+            return ""
+        try:
+            import geoip2.database
+
+            _geoip_reader = geoip2.database.Reader(path)
+        except Exception:  # noqa: BLE001 — any load failure just disables lookups
+            _geoip_unavailable = True
+            return ""
+    try:
+        return _geoip_reader.city(ip).city.name or ""
+    except Exception:  # noqa: BLE001 — private/reserved/unresolvable IPs, etc.
+        return ""
+
+
+def funnel_today(project):
+    """Visitors -> Product views -> Add to cart -> Checkout -> Orders, plus
+    conversion rate and a traffic-source breakdown, for the dashboard's
+    "today" widgets."""
+    from apps.orders.models import Order
+
+    today = timezone.localdate()
+    counters = dict(
+        EventCounter.objects.filter(project=project, date=today).values_list("key", "count")
+    )
+    visitors = counters.get("visitor", 0)
+    orders = Order.objects.filter(
+        project=project, status__in=REVENUE_STATUSES, created_at__date=today
+    ).count()
+    return {
+        "visitors": visitors,
+        "page_views": counters.get("page_view", 0),
+        "product_views": counters.get("product_view", 0),
+        "add_to_cart": counters.get("add_to_cart", 0),
+        "checkout": counters.get("checkout_started", 0),
+        "orders": orders,
+        "conversion_rate": round(orders / visitors * 100, 1) if visitors else 0.0,
+        "traffic_sources": {
+            k[4:]: v for k, v in counters.items() if k.startswith("src_") and v
+        },
+        "live_visitors": live_visitors(project),
+    }
 
 
 # --- daily roll-up -----------------------------------------
@@ -218,6 +365,7 @@ def today_dashboard(project):
     summary["needs_action_count"] = needs_action_count
     summary["recent_orders"] = recent_orders
     summary["low_stock_items"] = inv.low_stock_items(project)[:6]
+    summary["funnel"] = funnel_today(project)
     return summary
 
 

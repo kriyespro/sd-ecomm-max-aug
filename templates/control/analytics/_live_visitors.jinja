@@ -1,0 +1,23 @@
+<div id="live-visitors" hx-get="{{ url('control:live_visitors_partial') }}" hx-trigger="every 15s" hx-swap="outerHTML">
+  <div class="flex items-center gap-2">
+    <span class="relative flex h-2.5 w-2.5">
+      {% if live_visitors %}
+      <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+      {% endif %}
+      <span class="relative inline-flex h-2.5 w-2.5 rounded-full {{ 'bg-emerald-500' if live_visitors else 'bg-slate-300' }}"></span>
+    </span>
+    <span class="text-sm font-medium text-slate-700">
+      {{ live_visitors|length }} {{ "person" if live_visitors|length == 1 else "people" }} online now
+    </span>
+  </div>
+  <ul class="mt-3 max-h-56 space-y-1.5 overflow-y-auto text-sm">
+    {% for v in live_visitors %}
+    <li class="flex items-center justify-between gap-2">
+      <span class="text-slate-500">{{ v.city or "Unknown" }}</span>
+      <span class="truncate text-right text-slate-700">{{ v.label }}</span>
+    </li>
+    {% else %}
+    <li class="text-slate-400">No one browsing right now.</li>
+    {% endfor %}
+  </ul>
+</div>

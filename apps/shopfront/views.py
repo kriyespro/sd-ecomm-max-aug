@@ -6,6 +6,7 @@ accounts via django.contrib.auth.
 """
 
 import json
+import uuid
 from decimal import Decimal
 
 from django.contrib import messages
@@ -18,7 +19,9 @@ from django.db.models import F, Q, Sum
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
 
 from .render import render, render_to_string
 
@@ -27,6 +30,7 @@ from apps.catalog.models import Product, ProductImage, Variant
 from apps.catalog.variants import storefront_axes as variant_axes
 from apps.categories.models import Category
 from apps.checkout import services as checkout_svc
+from apps.analytics import services as analytics_svc
 from apps.cms.models import Page
 from apps.core.services import safe_next
 from apps.coupons import services as coupons_svc
@@ -386,6 +390,9 @@ class CartAddView(View):
             variant = get_object_or_404(Variant, product=product, pk=request.POST["variant"])
         qty = max(1, int(request.POST.get("quantity") or 1))
         cart_svc.add_to_cart(cart=cart, product=product, variant=variant, quantity=qty)
+        # Never edge-cached (cart mutations always hit origin), so this is a
+        # reliable server-side count -- no beacon needed for this step.
+        analytics_svc.record_event(project, "add_to_cart")
         if request.POST.get("buy_now"):
             resp = HttpResponse(status=204)
             resp["HX-Redirect"] = reverse("shopfront:checkout")
@@ -465,6 +472,9 @@ class CheckoutView(View):
         if not cart.items.exists():
             return redirect("shopfront:cart")
         ctx["payment_providers"] = _checkout_payment_providers(project)
+        # "/checkout" is in _PRIVATE_PATHS (never edge-cached), so this is a
+        # reliable server-side count -- no beacon needed for this step.
+        analytics_svc.record_event(project, "checkout_started")
         request._tracking = ("InitiateCheckout", {
             "value": float(cart.subtotal or 0),
             "currency": project.currency,
@@ -876,3 +886,48 @@ def _render_verify(request, project, *, code=None, page_title="Verify certificat
 class VerifyView(View):
     def get(self, request, code=None):
         return _render_verify(request, current_project(request), code=code)
+
+
+# --- analytics beacon ------------------------------------------------
+
+_VISITOR_COOKIE = "sd_vid"
+_VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24  # 1 day — enough for "today"'s dedup
+
+
+@method_decorator(csrf_exempt, name="dispatch")
+class BeaconView(View):
+    """Fire-and-forget POST from static/shopfront/beacon.js — see
+    apps.analytics.services for why this (not a Django view on the page
+    itself) is the source of truth for page/product views, "visitors
+    today" and the live-visitors widget. No sensitive data, nothing to
+    forge that would matter beyond nudging a vanity counter, so no CSRF."""
+
+    http_method_names = ["post"]
+
+    def post(self, request):
+        # Not current_project() -- that 404s when nothing resolves, and a
+        # beacon should always just quietly no-op instead.
+        project = getattr(request, "project", None)
+        if project is None:
+            return HttpResponse(status=204)
+
+        vid = request.COOKIES.get(_VISITOR_COOKIE) or uuid.uuid4().hex[:20]
+        path = (request.POST.get("path") or "")[:200]
+        ip = request.META.get("REMOTE_ADDR", "")
+
+        if request.POST.get("kind") != "heartbeat":
+            event = request.POST.get("event")
+            event = event if event in ("page_view", "product_view") else "page_view"
+            is_new = analytics_svc.mark_visitor_seen(project, vid)
+            analytics_svc.record_page_event(project, event)
+            if is_new:
+                referrer = (request.POST.get("referrer") or "")[:300]
+                analytics_svc.record_traffic_source(project, referrer, request.get_host())
+
+        analytics_svc.touch_live_visitor(project, vid, page=path or "/", ip=ip)
+
+        resp = HttpResponse(status=204)
+        if not request.COOKIES.get(_VISITOR_COOKIE):
+            resp.set_cookie(_VISITOR_COOKIE, vid, max_age=_VISITOR_COOKIE_MAX_AGE,
+                            httponly=True, samesite="Lax")
+        return resp

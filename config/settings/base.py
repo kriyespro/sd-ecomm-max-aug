@@ -120,6 +120,7 @@ MIDDLEWARE = [
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
     "apps.shopfront.middleware.SeoInjectionMiddleware",
     "apps.shopfront.middleware.TrackingInjectionMiddleware",
+    "apps.shopfront.middleware.BeaconInjectionMiddleware",
     "apps.billing.middleware.SubscriptionGateMiddleware",
     "django_prometheus.middleware.PrometheusAfterMiddleware",
 ]
@@ -242,6 +243,13 @@ TRUST_PROXY_HEADERS = env_bool("DJANGO_TRUST_PROXY_HEADERS", False)
 # Trust only the Nth value from the right (1 = the IP the trusted proxy saw).
 # Ignored unless TRUST_PROXY_HEADERS is on. CF-Connecting-IP, when present, wins.
 XFF_TRUSTED_HOPS = int(env("DJANGO_XFF_TRUSTED_HOPS", "1"))
+
+# MaxMind GeoLite2-City .mmdb, for the "Live visitors" dashboard widget's
+# city lookup (apps.analytics.services.geoip_city). Free account + license
+# key at maxmind.com/en/geolite2/signup, then download GeoLite2-City.mmdb
+# and point this at it. City comes back blank (no error) when unset or the
+# file is missing — the widget still works, just without a city label.
+GEOIP_CITY_DB = env("GEOIP_CITY_DB", str(BASE_DIR / "GeoLite2-City.mmdb"))
 
 
 

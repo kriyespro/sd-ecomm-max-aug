@@ -18,6 +18,51 @@
     {% endfor %}
   </div>
 
+  {# --- today's funnel / live visitors / traffic sources -------------- #}
+  <div data-tour="today-funnel" class="grid gap-4 lg:grid-cols-3">
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700">Today's funnel</h2>
+        <span class="text-xs font-medium text-slate-500">{{ t.funnel.conversion_rate }}% conversion</span>
+      </div>
+      <ol class="mt-3 space-y-1.5 text-sm">
+        {% for label, value in [
+          ("Visitors", t.funnel.visitors), ("Product views", t.funnel.product_views),
+          ("Add to cart", t.funnel.add_to_cart), ("Checkout", t.funnel.checkout),
+          ("Orders", t.funnel.orders)] %}
+        <li class="flex items-center gap-2">
+          {% if not loop.first %}<span class="w-4 shrink-0 text-center text-slate-300">↓</span>{% endif %}
+          <span class="font-semibold text-slate-900">{{ value }}</span>
+          <span class="text-slate-500">{{ label }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+      <p class="mt-2 text-[11px] text-slate-400">{{ t.funnel.page_views }} page views today.</p>
+    </div>
+
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">Live visitors</h2>
+      <div class="mt-3" id="live-visitors" hx-get="{{ url('control:live_visitors_partial') }}"
+           hx-trigger="load" hx-swap="outerHTML">
+        <p class="text-sm text-slate-400">Loading…</p>
+      </div>
+    </div>
+
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">Traffic source</h2>
+      <ul class="mt-3 space-y-1.5 text-sm">
+        {% for src, n in t.funnel.traffic_sources.items() %}
+        <li class="flex items-center justify-between">
+          <span class="capitalize text-slate-500">{{ src }}</span>
+          <span class="font-medium text-slate-700">{{ n }}</span>
+        </li>
+        {% else %}
+        <li class="text-slate-400">No visits recorded yet today.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
   <div class="grid gap-4 lg:grid-cols-3">
     {# --- needs attention ------------------------------------------- #}
     <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 lg:col-span-2">

@@ -23,5 +23,10 @@ django-prometheus>=2.3,<3
 pyotp>=2.9,<3
 qrcode>=7,<8
 
+# GeoLite2-City .mmdb lookup for the "Live visitors" dashboard widget
+# (apps.analytics.services.geoip_city). No-ops gracefully if the .mmdb file
+# isn't present (see GEOIP_CITY_DB in settings).
+geoip2>=4,<5
+
 # Production — installed in the Docker image (see Dockerfile / requirements-prod.txt)
 # psycopg[binary], redis, gunicorn, whitenoise

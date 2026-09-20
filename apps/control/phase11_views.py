@@ -48,6 +48,49 @@ class AnalyticsView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
         return ctx
 
 
+class LiveVisitorsPartialView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
+    """htmx-polled fragment (see store_dashboard.jinja / analytics dashboard)
+    -- kept separate from the full page render so refreshing "who's online
+    right now" every few seconds doesn't re-run the whole dashboard query
+    set."""
+
+    template_name = "control/analytics/_live_visitors.jinja"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["live_visitors"] = self._labelled(analytics.live_visitors(self.active_project))
+        return ctx
+
+    def _labelled(self, visitors):
+        """"/p/<slug>/" -> the product's title, a couple of other known paths
+        -> a friendly name, anything else -> the raw path. One batched query
+        for every product page currently open, not one query per visitor."""
+        import re
+
+        from apps.catalog.models import Product
+
+        known = {"/": "Homepage", "/shop/": "Shop", "/cart/": "Cart",
+                 "/checkout/": "Checkout", "/wishlist/": "Wishlist"}
+        slugs = {
+            m.group(1) for v in visitors
+            if (m := re.match(r"^/p/([^/]+)/?$", v["page"]))
+        }
+        titles = dict(
+            Product.objects.filter(project=self.active_project, slug__in=slugs)
+            .values_list("slug", "title")
+        ) if slugs else {}
+
+        out = []
+        for v in visitors:
+            m = re.match(r"^/p/([^/]+)/?$", v["page"])
+            if m and m.group(1) in titles:
+                label = f"Product: {titles[m.group(1)]}"
+            else:
+                label = known.get(v["page"], v["page"])
+            out.append({**v, "label": label})
+        return out
+
+
 class ReportsView(StoreDataAccessMixin, ActiveProjectMixin, TemplateView):
     template_name = "control/analytics/reports.jinja"
 

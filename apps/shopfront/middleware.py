@@ -197,6 +197,48 @@ class SeoInjectionMiddleware:
         return response
 
 
+class BeaconInjectionMiddleware:
+    """Splice the first-party analytics beacon (static/shopfront/beacon.js)
+    into every storefront HTML page — same "inject, don't edit 18 skin
+    templates" trick as SeoInjectionMiddleware. Drives the "Visitors today" /
+    funnel / live-visitors dashboard widgets (apps.analytics.services):
+    storefront pages are CDN-edge-cacheable, so only a script that actually
+    runs in the visitor's browser sees every real page view — a Django view
+    would only see cache-miss traffic.
+    """
+
+    SNIPPET = '<script src="/static/shopfront/beacon.js" defer></script>'
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if not _is_storefront_request(request):
+            return response
+        if getattr(response, "streaming", False) or response.status_code != 200:
+            return response
+        if request.headers.get("HX-Request") == "true":
+            return response
+        if "text/html" not in response.get("Content-Type", ""):
+            return response
+        if getattr(request, "project", None) is None:
+            return response
+
+        try:
+            content = response.content.decode(response.charset or "utf-8")
+        except (UnicodeDecodeError, AttributeError):
+            return response
+        if "</body>" not in content:
+            return response
+
+        content = content.replace("</body>", self.SNIPPET + "\n</body>", 1)
+        response.content = content.encode(response.charset or "utf-8")
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
+        return response
+
+
 class TrackingInjectionMiddleware:
     """Inject the browser pixel base tags (+ a per-page conversion event from
     ``request._tracking``) into storefront HTML, once per provider the store has

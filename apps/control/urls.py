@@ -219,6 +219,7 @@ urlpatterns = [
 
     # Analytics + reports
     path("analytics/", p11.AnalyticsView.as_view(), name="analytics"),
+    path("analytics/live-visitors/", p11.LiveVisitorsPartialView.as_view(), name="live_visitors_partial"),
     path("reports/", p11.ReportsView.as_view(), name="reports"),
     path("reports/export/", p11.ReportExportView.as_view(), name="report_export"),
 

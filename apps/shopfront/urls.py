@@ -40,6 +40,8 @@ urlpatterns = [
 
     path("verify/", views.VerifyView.as_view(), name="verify"),
     path("verify/<str:code>/", views.VerifyView.as_view(), name="verify_code"),
+
+    path("beacon/", views.BeaconView.as_view(), name="beacon"),
 ]
 
 if settings.SEO_INDEXNOW_KEY:
