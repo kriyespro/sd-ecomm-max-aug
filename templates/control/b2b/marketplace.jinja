@@ -16,7 +16,7 @@
     <div class="overflow-x-auto"><table class="w-full text-left text-sm">
       <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
         <tr>
-          <th class="px-3 py-2">Product</th>
+          <th class="px-3 py-2 w-64">Product</th>
           <th class="px-3 py-2">Seller</th>
           <th class="px-3 py-2 whitespace-nowrap">Wholesale</th>
           <th class="px-3 py-2 text-right">Import</th>
@@ -27,14 +27,14 @@
         {% set img = l.product.images.all() | first %}
         <tr class="align-top hover:bg-slate-50">
           <td class="px-3 py-2">
-            <div class="flex items-center gap-2.5">
+            <div class="flex items-start gap-2.5">
               {% if img %}
               <img src="{{ img.image.url }}" alt="" class="h-9 w-9 shrink-0 rounded object-cover ring-1 ring-slate-200">
               {% else %}
               <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-slate-100 text-xs text-slate-400 ring-1 ring-slate-200">{{ l.product.title[:1] }}</div>
               {% endif %}
-              <div>
-                <div class="font-medium text-slate-800">{{ l.product.title }}</div>
+              <div class="min-w-0">
+                <div class="line-clamp-2 font-medium text-slate-800" title="{{ l.product.title }}">{{ l.product.title }}</div>
                 <div class="text-[11px] text-slate-400">{{ l.product.category.name if l.product.category else "Uncategorised" }}</div>
               </div>
             </div>
