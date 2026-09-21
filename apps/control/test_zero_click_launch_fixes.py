@@ -141,3 +141,34 @@ class OwnerChecklistPaymentCheckTests(TestCase):
             project=self.project, provider=Provider.RAZORPAY, is_enabled=True,
         )
         self.assertTrue(self._payment_step()["done"])
+
+
+class PreviewAndShareDoesNotRequireTeamOrCouponTests(TestCase):
+    """"Preview & share your store" used to require literally every other
+    checklist item done, including "Invite your team" and "Create a launch
+    coupon" -- both genuinely optional for a solo seller, so a fully live,
+    sellable store could never show this step as done. Fixed to gate only
+    on what actually blocks a real sale."""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="SoloSellerCo", status="active")
+        seed_starter_content(self.project)  # product, category, hero banner, shipping
+        self.project.primary_domain = "soloseller.example.com"
+        self.project.save(update_fields=["primary_domain"])
+
+    def _preview_step(self):
+        steps = quick_launch.owner_steps(self.project)
+        return next(s for s in steps if s["label"] == "Preview & share your store")
+
+    def test_done_without_a_team_or_a_coupon(self):
+        from apps.accounts.models import Membership
+
+        self.assertFalse(
+            Membership.objects.filter(project=self.project).exclude(role=StoreRole.OWNER).exists()
+        )
+        self.assertTrue(self._preview_step()["done"])
+
+    def test_still_not_done_when_a_real_launch_blocker_is_missing(self):
+        self.project.primary_domain = ""
+        self.project.save(update_fields=["primary_domain"])
+        self.assertFalse(self._preview_step()["done"])

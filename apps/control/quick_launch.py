@@ -38,9 +38,13 @@ def owner_steps(project):
     ).exclude(role=StoreRole.OWNER).exists()
     has_coupon = Coupon.objects.filter(project=project).exists()
 
-    core_done = [
+    # "Preview & share" only gates on what actually blocks a real sale --
+    # team invites and a launch coupon are genuinely optional for a solo
+    # seller, so requiring them here meant that (very common) case could
+    # never reach "done" even once the store was fully live and sellable.
+    launch_ready = [
         profile_done, has_product, has_category, has_theme,
-        has_payment, has_shipping, has_domain, has_team, has_coupon,
+        has_payment, has_shipping, has_domain,
     ]
 
     return [
@@ -62,7 +66,7 @@ def owner_steps(project):
          "url": reverse("control:team")},
         {"label": "Create a launch coupon", "done": has_coupon,
          "url": reverse("control:coupon_list")},
-        {"label": "Preview & share your store", "done": all(core_done),
+        {"label": "Preview & share your store", "done": all(launch_ready),
          "url": project.public_url or reverse("control:domains")},
     ]
 

@@ -38,6 +38,13 @@ class OnboardingGateTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Set up your store")
 
+    def test_vertical_defaults_to_a_choice_not_blank(self):
+        # A rushed owner who never consciously picks a vertical still
+        # submits successfully instead of hitting a "choose one" error --
+        # the radio group's Alpine init value must carry a real default.
+        resp = self.client.get("/admin/start/")
+        self.assertContains(resp, "v: 'fashion'")
+
     def test_platform_staff_not_gated(self):
         su = User.objects.create_superuser("root", "r@t.test", "pw")
         self.client.force_login(su)
@@ -59,7 +66,7 @@ class OnboardingGateTests(TestCase):
                 "vertical": "clothing",
             },
         )
-        self.assertRedirects(resp, "/admin/products/", fetch_redirect_response=False)
+        self.assertRedirects(resp, "/admin/", fetch_redirect_response=False)
 
         self.project.refresh_from_db()
         self.assertTrue(self.project.feature_flags["onboarded"])
@@ -105,7 +112,7 @@ class OnboardingGateTests(TestCase):
                 "subdomain": "fresh-market",
             },
         )
-        self.assertRedirects(resp, "/admin/products/", fetch_redirect_response=False)
+        self.assertRedirects(resp, "/admin/", fetch_redirect_response=False)
         self.assertTrue(Domain.objects.filter(
             project=self.project, host="fresh-market.shopinaday.test",
             is_verified=True, is_primary=True,
@@ -114,7 +121,7 @@ class OnboardingGateTests(TestCase):
 
     def test_skip(self):
         resp = self.client.post("/admin/start/skip/")
-        self.assertRedirects(resp, "/admin/products/", fetch_redirect_response=False)
+        self.assertRedirects(resp, "/admin/", fetch_redirect_response=False)
         self.project.refresh_from_db()
         self.assertTrue(self.project.feature_flags["onboarded"])
         self.assertEqual(self.project.feature_flags["vertical"], "")

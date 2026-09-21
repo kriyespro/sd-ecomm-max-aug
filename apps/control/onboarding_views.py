@@ -106,7 +106,11 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
             "city": (prof and prof.city) or "",
             "state": (prof and prof.state) or "",
             "postal_code": (prof and prof.postal_code) or "",
-            "vertical": vertical_of(p) or None,
+            # Defaults to the broadest catch-all vertical (not None) -- a
+            # rushed owner who never consciously picks one still submits
+            # successfully instead of hitting a "choose one" validation
+            # error on their very first screen.
+            "vertical": vertical_of(p) or VERTICALS[0][0],
             "subdomain": subdomains.current_slug(p),
         }
 
@@ -158,7 +162,10 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
             "You're all set. Your store already has demo products — edit them, "
             "or add your own.",
         )
-        return redirect("control:product_list")
+        # The dashboard is where the Easy-mode launch checklist
+        # (quick_launch.owner_steps) actually lives -- landing on Products
+        # instead meant a freshly onboarded owner never saw "what's next".
+        return redirect("control:dashboard")
 
 
 class OnboardingSkipView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
@@ -175,4 +182,4 @@ class OnboardingSkipView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
         p.feature_flags = flags
         p.save(update_fields=["feature_flags"])
         messages.info(request, "Setup skipped. Finish it anytime from Store profile.")
-        return redirect(safe_next(request, request.POST.get("next"), reverse("control:product_list")))
+        return redirect(safe_next(request, request.POST.get("next"), reverse("control:dashboard")))
