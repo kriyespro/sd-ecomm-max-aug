@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.test import TestCase, override_settings
 
 from apps.accounts.models import Membership, PlatformRole, Profile
@@ -16,6 +17,11 @@ class ActivityFeedTenantScopingTests(TestCase):
     counts on the Mission Control dashboard — never another tenant's."""
 
     def setUp(self):
+        # dashboard_stats() caches by user pk (control/services.py); a fresh
+        # DB per test doesn't reset this process-level cache, and SQLite's
+        # rolled-back transactions mean a test user's pk gets reused across
+        # methods -- clear it so an earlier test's cached counts can't leak.
+        cache.clear()
         self.own_project = Project.objects.create(
             name="Own Co", status="active", feature_flags={"onboarded": True}
         )
@@ -34,6 +40,13 @@ class ActivityFeedTenantScopingTests(TestCase):
         Profile.objects.update_or_create(
             user=self.dgc, defaults={"platform_role": PlatformRole.MANAGER}
         )
+        # create_user()'s post_save signal (ensure_profile) constructs a
+        # Profile(user=self.dgc) to get_or_create it, which caches that
+        # (default-role) instance as self.dgc's reverse .profile relation --
+        # the update_or_create above changes the DB row but not that cache.
+        # Refresh so self.dgc.profile (used by is_platform_staff() below)
+        # reads the updated role instead of a stale pre-update snapshot.
+        self.dgc.refresh_from_db()
         sub = self.own_project.subscription
         sub.manager = self.dgc
         sub.save(update_fields=["manager"])
@@ -76,6 +89,31 @@ class ActivityFeedTenantScopingTests(TestCase):
         self.assertEqual(stats["total_projects"], 1)
         admin_stats = services.dashboard_stats(self.superuser)
         self.assertEqual(admin_stats["total_projects"], 2)
+
+    def test_dgc_dashboard_shows_simplified_scoped_cards(self):
+        # DGC gets its own store-scoped labels, not the platform-growth
+        # labels admin sees -- and no dead "Revenue today" placeholder.
+        self.client.force_login(self.dgc)
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "Stores you manage")
+        self.assertContains(resp, "Active stores")
+        self.assertContains(resp, "Team members")
+        self.assertNotContains(resp, "Revenue today")
+        self.assertNotContains(resp, "Total users")
+        self.assertNotContains(resp, "Affiliate signups")
+
+    def test_admin_dashboard_keeps_growth_cards_no_dead_revenue_stat(self):
+        self.client.force_login(self.superuser)
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "Total users")
+        self.assertContains(resp, "Affiliate signups")
+        self.assertNotContains(resp, "Revenue today")
+
+    def test_dashboard_stats_no_longer_has_dead_revenue_key(self):
+        from apps.control import services
+
+        stats = services.dashboard_stats(self.dgc)
+        self.assertNotIn("revenue_today", stats)
 
     def test_superuser_sees_every_tenant(self):
         self.client.force_login(self.superuser)

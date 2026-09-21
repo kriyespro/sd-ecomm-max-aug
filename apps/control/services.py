@@ -63,8 +63,6 @@ def dashboard_stats(user):
         "active_users_7d": user_qs.filter(last_login__gte=now - timedelta(days=7)).count(),
         "total_projects": projects.count(),
         "active_projects": projects.filter(status=Project.Status.ACTIVE).count(),
-        # Revenue wiring lands with the orders app (Phase 5).
-        "revenue_today": 0,
     }
     if admin:
         from apps.billing.models import Subscription

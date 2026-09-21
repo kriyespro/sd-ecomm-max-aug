@@ -1,13 +1,23 @@
+{% if control_is_platform_admin %}
 {% set cards = [
   ("Total users", stats.total_users),
   ("Signups today", stats.signups_today),
   ("Active users (7d)", stats.active_users_7d),
   ("Projects", stats.total_projects),
   ("Active projects", stats.active_projects),
-  ("Revenue today", stats.revenue_today),
+  ("Affiliate signups", stats.affiliate_signups),
 ] %}
-{% if control_is_platform_admin %}
-{% set cards = cards + [("Affiliate signups", stats.affiliate_signups)] %}
+{% else %}
+{# DGC: platform-growth metrics (signups, affiliate totals) are the
+   platform owner's concern, not theirs -- just their own store count and
+   team activity, clearly labelled as "your"/"you manage" instead of the
+   ambiguous platform-wide-sounding labels above. #}
+{% set cards = [
+  ("Stores you manage", stats.total_projects),
+  ("Active stores", stats.active_projects),
+  ("Team members", stats.total_users),
+  ("Active team (7d)", stats.active_users_7d),
+] %}
 {% endif %}
 <div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
   {% for label, value in cards %}
