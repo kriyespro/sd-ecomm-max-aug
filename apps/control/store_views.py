@@ -435,6 +435,8 @@ class StoreUnarchiveView(_StoreScope, View):
 
 class StoreDeleteView(_StoreScope, View):
     def post(self, request, pk, *args, **kwargs):
+        from django.db.models import ProtectedError
+
         store = self.get_store(pk)
         name = store.name
         try:
@@ -444,6 +446,16 @@ class StoreDeleteView(_StoreScope, View):
             )
         except (ValidationError, PermissionDenied) as exc:
             messages.error(request, "; ".join(getattr(exc, "messages", [str(exc)])))
+            return redirect("control:store_detail", pk=pk)
+        except ProtectedError:
+            # Belt-and-braces: delete_store() already clears the known
+            # PROTECT-guarded tables first, but a future one added elsewhere
+            # should fail as a clean error message, not a 500.
+            messages.error(
+                request,
+                f"Couldn't delete {name} — something still references its data. "
+                "No change was made; contact support.",
+            )
             return redirect("control:store_detail", pk=pk)
         messages.success(request, f"{name} was permanently deleted.")
         return redirect("control:stores")

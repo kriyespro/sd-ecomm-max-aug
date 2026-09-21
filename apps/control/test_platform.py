@@ -167,6 +167,52 @@ class ArchiveAndDeleteStoreTests(TestCase):
         )
         self.assertFalse(Project.objects.filter(pk=pk).exists())
 
+    def test_superuser_deletes_store_with_items_in_a_cart(self):
+        # Regression: CartItem.product/variant is on_delete=PROTECT for the
+        # normal single-product-delete flow -- Django's PROTECT still raises
+        # even when the protecting row is itself being cascade-deleted in
+        # the same operation, so a store with an active cart used to 500
+        # project.delete(). delete_store() must clear carts first.
+        from decimal import Decimal
+
+        from apps.cart.models import Cart, CartItem
+        from apps.catalog.models import Product
+
+        product = Product.objects.create(
+            project=self.project, title="Mug", slug="mug", price=Decimal("100"),
+        )
+        cart = Cart.objects.create(project=self.project, session_key="s1")
+        CartItem.objects.create(cart=cart, product=product, quantity=1, unit_price=Decimal("100"))
+
+        pk = self.project.pk
+        store_services.delete_store(
+            project=self.project, actor=self.superuser, confirm_name="ArchiveCo",
+        )
+        self.assertFalse(Project.objects.filter(pk=pk).exists())
+
+    def test_superuser_deletes_store_with_an_inventory_transfer(self):
+        # Same PROTECT gotcha as carts, via InventoryTransfer.source/
+        # destination -> Warehouse.
+        from decimal import Decimal
+
+        from apps.catalog.models import Product
+        from apps.inventory.models import InventoryTransfer, Warehouse
+
+        product = Product.objects.create(
+            project=self.project, title="Lamp", slug="lamp", price=Decimal("100"),
+        )
+        wh1 = Warehouse.objects.create(project=self.project, name="Main", code="main")
+        wh2 = Warehouse.objects.create(project=self.project, name="Backup", code="backup")
+        InventoryTransfer.objects.create(
+            project=self.project, source=wh1, destination=wh2, product=product, quantity=1,
+        )
+
+        pk = self.project.pk
+        store_services.delete_store(
+            project=self.project, actor=self.superuser, confirm_name="ArchiveCo",
+        )
+        self.assertFalse(Project.objects.filter(pk=pk).exists())
+
     def test_platform_owner_cannot_delete(self):
         with self.assertRaises(PermissionDenied):
             store_services.delete_store(
@@ -236,6 +282,26 @@ class ArchiveAndDeleteScreensTests(TestCase):
         self.assertTrue(Project.objects.filter(pk=self.project.pk).exists())
 
     def test_delete_view_correct_name_deletes(self):
+        pk = self.project.pk
+        resp = self.client.post(
+            f"/admin/stores/{pk}/delete/",
+            {"confirm_name": "ScreenArchiveCo"}, follow=True,
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(Project.objects.filter(pk=pk).exists())
+
+    def test_delete_view_with_a_cart_item_succeeds_not_500(self):
+        from decimal import Decimal
+
+        from apps.cart.models import Cart, CartItem
+        from apps.catalog.models import Product
+
+        product = Product.objects.create(
+            project=self.project, title="Mug", slug="mug", price=Decimal("100"),
+        )
+        cart = Cart.objects.create(project=self.project, session_key="s1")
+        CartItem.objects.create(cart=cart, product=product, quantity=1, unit_price=Decimal("100"))
+
         pk = self.project.pk
         resp = self.client.post(
             f"/admin/stores/{pk}/delete/",

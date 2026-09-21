@@ -271,7 +271,16 @@ def delete_store(*, project, actor, confirm_name, request=None):
     """Permanently delete a store and every row that belongs to it (products,
     orders, customers, ... — everything hangs off ``Project`` by FK cascade).
     There is no undo. Superadmin only, and the caller must retype the store's
-    exact name so a stray click can't wipe a tenant."""
+    exact name so a stray click can't wipe a tenant.
+
+    A couple of FKs are deliberately ``on_delete=PROTECT`` for the normal
+    single-record flow (CartItem.product/variant, InventoryTransfer.source/
+    destination) -- Django's PROTECT still raises even when the protecting
+    rows are themselves about to cascade-delete in the same operation, so a
+    store with an active cart or a past warehouse transfer would otherwise
+    blow up ``project.delete()`` with an uncaught ProtectedError. Clear
+    those tables first (see apps.control.starter_content.wipe_storefront_
+    content's identical carts-first comment for the same reason)."""
     _require_superuser(actor)
     if (confirm_name or "").strip() != project.name:
         raise ValidationError("Type the store's exact name to confirm deletion.")
@@ -306,4 +315,10 @@ def delete_store(*, project, actor, confirm_name, request=None):
         },
         request=request,
     )
+
+    from apps.cart.models import Cart
+    from apps.inventory.models import InventoryTransfer
+
+    Cart.objects.filter(project=project).delete()
+    InventoryTransfer.objects.filter(project=project).delete()
     project.delete()
