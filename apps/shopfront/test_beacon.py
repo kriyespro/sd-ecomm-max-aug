@@ -10,7 +10,7 @@ from apps.catalog.models import Product
 from apps.projects.models import Domain, Project
 
 
-@override_settings(ALLOWED_HOSTS=["*"])
+@override_settings(ALLOWED_HOSTS=["*"], GEOIP_EXTERNAL_LOOKUP=False)
 class BeaconViewTests(TestCase):
     def setUp(self):
         cache.clear()

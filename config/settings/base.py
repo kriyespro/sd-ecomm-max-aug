@@ -244,12 +244,18 @@ TRUST_PROXY_HEADERS = env_bool("DJANGO_TRUST_PROXY_HEADERS", False)
 # Ignored unless TRUST_PROXY_HEADERS is on. CF-Connecting-IP, when present, wins.
 XFF_TRUSTED_HOPS = int(env("DJANGO_XFF_TRUSTED_HOPS", "1"))
 
-# MaxMind GeoLite2-City .mmdb, for the "Live visitors" dashboard widget's
-# city lookup (apps.analytics.services.geoip_city). Free account + license
-# key at maxmind.com/en/geolite2/signup, then download GeoLite2-City.mmdb
-# and point this at it. City comes back blank (no error) when unset or the
-# file is missing — the widget still works, just without a city label.
+# "Live visitors" dashboard widget city lookup (apps.analytics.services.
+# geoip_city). Two options, tried in this order, zero setup required:
+# 1. A self-hosted MaxMind GeoLite2-City .mmdb (fast, no network, but needs
+#    a free account + license key at maxmind.com/en/geolite2/signup, then
+#    download GeoLite2-City.mmdb and point GEOIP_CITY_DB at it).
+# 2. When that file isn't present: a free no-signup external IP-geolocation
+#    API (one outbound HTTPS call per new visitor IP, cached a week) --
+#    works out of the box, no setup. Set GEOIP_EXTERNAL_LOOKUP=false to
+#    disable it (e.g. to keep visitor IPs from ever leaving the server) and
+#    just get no city instead.
 GEOIP_CITY_DB = env("GEOIP_CITY_DB", str(BASE_DIR / "GeoLite2-City.mmdb"))
+GEOIP_EXTERNAL_LOOKUP = env_bool("GEOIP_EXTERNAL_LOOKUP", True)
 
 
 

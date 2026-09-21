@@ -109,14 +109,37 @@ def live_visitors(project):
 _geoip_reader = None
 _geoip_unavailable = False
 
+GEOIP_CACHE_TTL = 60 * 60 * 24 * 7  # a week -- an IP's city rarely changes
+
 
 def geoip_city(ip):
-    """City name for an IP via the GeoLite2-City .mmdb at settings.GEOIP_CITY_DB
-    (see that setting for where to get the file). Blank, not an error, when
-    the file is missing, the IP is private/unresolvable, or geoip2 isn't
-    installed -- the live-visitors widget just shows no city for that row."""
+    """City name for an IP. Tries the self-hosted GeoLite2-City .mmdb at
+    settings.GEOIP_CITY_DB first (fast, no network, but needs the file --
+    see that setting); when it's not present, falls back to a free
+    no-signup IP-geolocation API (settings.GEOIP_EXTERNAL_LOOKUP, on by
+    default) so the live-visitors widget works with zero setup. Every
+    result (including a blank one) is cached a week per IP, so a given
+    visitor's IP triggers at most one external call, not one per beacon.
+    Always blank, never an error, on any failure."""
+    if not ip:
+        return ""
+    from django.conf import settings
+
+    cache_key = f"an:geoip:{ip}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    city = _geoip_local(ip)
+    if not city and getattr(settings, "GEOIP_EXTERNAL_LOOKUP", True):
+        city = _geoip_external(ip)
+    cache.set(cache_key, city, timeout=GEOIP_CACHE_TTL)
+    return city
+
+
+def _geoip_local(ip):
     global _geoip_reader, _geoip_unavailable
-    if not ip or _geoip_unavailable:
+    if _geoip_unavailable:
         return ""
     if _geoip_reader is None:
         import os
@@ -137,6 +160,27 @@ def geoip_city(ip):
     try:
         return _geoip_reader.city(ip).city.name or ""
     except Exception:  # noqa: BLE001 — private/reserved/unresolvable IPs, etc.
+        return ""
+
+
+def _geoip_external(ip):
+    """ipapi.co -- free, HTTPS, no signup/key, ~1k lookups/day/IP. Fine for
+    this: results are cached a week per visitor IP, so real call volume is
+    a small fraction of live-visitor traffic. A short timeout + broad
+    except means a slow/blocked/rate-limited response just yields no city,
+    never a hung or broken beacon request."""
+    import json
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(
+            f"https://ipapi.co/{ip}/json/",
+            headers={"User-Agent": "sd-headless-backend (self-hosted storefront analytics)"},
+        )
+        with urllib.request.urlopen(req, timeout=1.5) as resp:
+            data = json.loads(resp.read().decode())
+        return data.get("city") or ""
+    except Exception:  # noqa: BLE001 — network/timeout/parse/rate-limit, etc.
         return ""
 
 

@@ -124,16 +124,37 @@ class LiveVisitorsTests(TestCase):
 
 
 class GeoipCityGracefulTests(TestCase):
-    @override_settings(GEOIP_CITY_DB="/nonexistent/path/GeoLite2-City.mmdb")
-    def test_missing_db_file_returns_blank_not_error(self):
+    def setUp(self):
+        cache.clear()
         import apps.analytics.services as svc
 
         svc._geoip_reader = None
         svc._geoip_unavailable = False
+
+    @override_settings(GEOIP_CITY_DB="/nonexistent/path/GeoLite2-City.mmdb",
+                       GEOIP_EXTERNAL_LOOKUP=False)
+    def test_missing_db_external_disabled_returns_blank_not_error(self):
         self.assertEqual(geoip_city("8.8.8.8"), "")
+
+    @override_settings(GEOIP_CITY_DB="/nonexistent/path/GeoLite2-City.mmdb",
+                       GEOIP_EXTERNAL_LOOKUP=True)
+    def test_missing_db_external_enabled_never_raises(self):
+        # No network in this test environment -- exercises the external
+        # fallback's own try/except, not a specific result.
+        self.assertIsInstance(geoip_city("8.8.8.8"), str)
 
     def test_blank_ip_returns_blank(self):
         self.assertEqual(geoip_city(""), "")
+
+    @override_settings(GEOIP_CITY_DB="/nonexistent/path/GeoLite2-City.mmdb",
+                       GEOIP_EXTERNAL_LOOKUP=False)
+    def test_result_cached_per_ip(self):
+        from unittest.mock import patch
+
+        with patch("apps.analytics.services._geoip_local", return_value="Surat") as m:
+            self.assertEqual(geoip_city("1.2.3.4"), "Surat")
+            self.assertEqual(geoip_city("1.2.3.4"), "Surat")
+            m.assert_called_once()
 
 
 class FunnelTodayTests(TestCase):
