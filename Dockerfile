@@ -32,7 +32,7 @@ RUN set -eux; \
       arm64) tw_arch=arm64 ;; \
       *) tw_arch=x64 ;; \
     esac; \
-    curl -fsSL -o /usr/local/bin/tailwindcss \
+    curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors -o /usr/local/bin/tailwindcss \
       "https://github.com/tailwindlabs/tailwindcss/releases/download/${TAILWIND_VERSION}/tailwindcss-linux-${tw_arch}"; \
     chmod +x /usr/local/bin/tailwindcss; \
     python tools/build_tailwind_skins.py; \
