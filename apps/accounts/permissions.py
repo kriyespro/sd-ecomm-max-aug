@@ -64,15 +64,26 @@ def store_role(user, project):
     )
 
 
+def is_subscription_manager(user, project) -> bool:
+    """True when ``user`` is the Platform Manager (DGC) credited on
+    ``project``'s subscription. The one shared check behind both
+    has_store_role()'s owner-level bypass and Mission Control's chrome
+    context (apps.control.context_processors' ``managed_by_user``) --
+    kept in one place so nav visibility and actual access can't silently
+    drift apart from each other."""
+    if project is None or not (user and getattr(user, "is_authenticated", False)):
+        return False
+    return project.__class__.objects.filter(
+        pk=project.pk, subscription__manager=user
+    ).exists()
+
+
 def has_store_role(user, project, allowed) -> bool:
     # Platform staff who administer this store get every store-role capability.
     if is_platform_admin(user):
         return True
-    if is_platform_staff(user) and project is not None:
-        if project.__class__.objects.filter(
-            pk=project.pk, subscription__manager=user
-        ).exists():
-            return True
+    if is_platform_staff(user) and is_subscription_manager(user, project):
+        return True
     return store_role(user, project) in set(allowed)
 
 

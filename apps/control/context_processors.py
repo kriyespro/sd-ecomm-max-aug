@@ -5,6 +5,7 @@ from apps.accounts.permissions import (
     OWNER_MANAGER,
     is_platform_admin,
     is_platform_staff,
+    is_subscription_manager,
     store_role,
 )
 from apps.projects.services import projects_for_user
@@ -81,12 +82,14 @@ def control(request):
     # can_manage/can_manage_owner mirror has_store_role()'s own bypass rules
     # (platform admin, or the DGC who manages this store) but computed once
     # instead of has_store_role() re-running the membership-role query for
-    # every allowed-role set it's asked about.
+    # every allowed-role set it's asked about. is_subscription_manager() is
+    # the same underlying check has_store_role() uses -- one place, so nav
+    # visibility here can't silently drift from actual access there.
     admin = is_platform_admin(user)
     platform_staff = is_platform_staff(user)
     managed_by_user = bool(
         active is not None and platform_staff and not admin
-        and active.__class__.objects.filter(pk=active.pk, subscription__manager=user).exists()
+        and is_subscription_manager(user, active)
     )
     role = store_role(user, active)
     can_manage = admin or managed_by_user or role in OWNER_MANAGER
