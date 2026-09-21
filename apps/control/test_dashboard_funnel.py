@@ -132,6 +132,15 @@ class StoreDashboardChartsTests(TestCase):
         self.assertIn("Customers", body)
         self.assertIn("High value", body)
 
+    def test_all_three_analytics_cards_present_and_not_duplicated(self):
+        # Orders / Customers / Products, moved in from the full Analytics
+        # report verbatim -- each appears exactly once, not duplicated with
+        # the pre-existing donut/best-sellers/customers content.
+        body = self.client.get("/admin/").content.decode()
+        self.assertIn("paid · AOV", body)
+        self.assertIn("Best sellers", body)
+        self.assertEqual(body.count("👥 Customers"), 1)
+
     def test_today_stats_tour_target_still_present(self):
         # apps.control.tours references data-tour="today-stats" by name --
         # the hero/secondary-card restyle must keep this exact anchor.
