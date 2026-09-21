@@ -1,11 +1,10 @@
 {% extends "control/base_control.jinja" %}
-{% from "control/_forms.jinja" import render_form %}
 {% block page_title %}B2B marketplace{% endblock %}
 
 {% block content %}
 <div class="mx-auto max-w-6xl space-y-4">
   <div>
-    <h2 class="text-sm font-semibold text-slate-700">Wholesale products from other stores</h2>
+    <h2 class="text-sm font-semibold text-slate-700">Wholesale products from other stores · set Your markup</h2>
     <p class="mt-1 text-xs text-slate-500">
       Import one into your own catalog at a markup you choose. The seller ships it
       directly to your customer (dropship) — you never hold the stock.
@@ -19,7 +18,7 @@
           <th class="px-3 py-2 w-64">Product</th>
           <th class="px-3 py-2">Seller</th>
           <th class="px-3 py-2 whitespace-nowrap">Wholesale</th>
-          <th class="px-3 py-2 text-right">Import</th>
+          <th class="px-3 py-2 text-right">Your markup</th>
         </tr>
       </thead>
       <tbody class="divide-y divide-slate-100">
@@ -45,10 +44,14 @@
             {% if l.pk in imported_ids %}
             <span class="rounded bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700">Imported</span>
             {% else %}
-            <form method="post" action="{{ url('control:b2b_import', kwargs={'pk': l.pk}) }}" class="inline-flex items-end gap-2">
+            <form method="post" action="{{ url('control:b2b_import', kwargs={'pk': l.pk}) }}" class="inline-flex items-center justify-end gap-1.5">
               {{ csrf_input }}
-              <div class="w-24">{{ render_form(form) }}</div>
-              <button class="rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800">Import</button>
+              {{ form.markup_pct.as_widget(attrs={
+                   "class": "w-14 rounded border border-slate-300 px-1.5 py-1 text-right text-xs",
+                   "title": form.markup_pct.help_text,
+                 }) }}
+              <span class="text-xs text-slate-400">%</span>
+              <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800">Import</button>
             </form>
             {% endif %}
           </td>
