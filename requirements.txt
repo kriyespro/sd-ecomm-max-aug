@@ -28,5 +28,11 @@ qrcode>=7,<8
 # isn't present (see GEOIP_CITY_DB in settings).
 geoip2>=4,<5
 
+# stdlib zoneinfo (apps.control.views._greeting, the dashboard's IST-based
+# "Good morning/afternoon/evening") falls back to this if the base image's
+# system tzdata is missing/stripped, per Python's own zoneinfo docs -- the
+# python:*-slim images don't reliably ship IANA tz data.
+tzdata>=2024.1
+
 # Production — installed in the Docker image (see Dockerfile / requirements-prod.txt)
 # psycopg[binary], redis, gunicorn, whitenoise

@@ -30,6 +30,25 @@ from .mixins import ACTIVE_PROJECT_SESSION_KEY, get_active_project
 User = get_user_model()
 
 
+def _greeting(now=None):
+    """"Good morning"/"afternoon"/"evening" by IST wall-clock hour -- the
+    platform's stores are India-only today (same assumption the automatic-
+    backup scheduling already makes), so a fixed zone beats Django's UTC
+    TIME_ZONE setting for a greeting that's actually supposed to match the
+    owner's own clock. ``now`` is injectable (any tz-aware datetime) for
+    tests; real callers always leave it as the actual current time."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    when = now or datetime.now(ZoneInfo("Asia/Kolkata"))
+    hour = when.astimezone(ZoneInfo("Asia/Kolkata")).hour
+    if hour < 12:
+        return "Good morning"
+    if hour < 17:
+        return "Good afternoon"
+    return "Good evening"
+
+
 class UiModeToggleView(ControlAccessMixin, View):
     """Flips the signed-in user's own Mission Control sidebar mode — a
     personal preference (Profile.ui_mode), not a store setting."""
@@ -97,6 +116,7 @@ class DashboardView(ControlAccessMixin, TemplateView):
 
             ctx["active_project"] = self.active_project
             ctx["today"] = today_dashboard(self.active_project)
+            ctx["greeting"] = _greeting()
             if easy:
                 from . import quick_launch
 

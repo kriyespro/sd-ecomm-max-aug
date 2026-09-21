@@ -4,6 +4,9 @@ LiveVisitorsPartialView) alongside the existing Today numbers -- for the
 store owner, and for a platform admin/DGC currently working inside that
 store (same template, see apps.control.views.DashboardView)."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -12,9 +15,30 @@ from apps.accounts.models import Membership, StoreRole
 from apps.analytics.services import mark_visitor_seen, touch_live_visitor
 from apps.catalog.models import Product
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
+from apps.control.views import _greeting
 from apps.projects.models import Project
 
 User = get_user_model()
+
+
+class GreetingTests(TestCase):
+    def _at_ist_hour(self, hour):
+        return datetime(2026, 1, 1, hour, 30, tzinfo=ZoneInfo("Asia/Kolkata"))
+
+    def test_morning(self):
+        self.assertEqual(_greeting(self._at_ist_hour(9)), "Good morning")
+
+    def test_afternoon(self):
+        self.assertEqual(_greeting(self._at_ist_hour(14)), "Good afternoon")
+
+    def test_evening(self):
+        self.assertEqual(_greeting(self._at_ist_hour(20)), "Good evening")
+
+    def test_boundary_just_before_noon_is_still_morning(self):
+        self.assertEqual(_greeting(self._at_ist_hour(11)), "Good morning")
+
+    def test_boundary_5pm_is_evening(self):
+        self.assertEqual(_greeting(self._at_ist_hour(17)), "Good evening")
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -99,6 +123,20 @@ class StoreDashboardChartsTests(TestCase):
     def test_full_analytics_link_still_present(self):
         resp = self.client.get("/admin/")
         self.assertContains(resp, 'href="/admin/analytics/"')
+
+    def test_greeting_and_customers_card_present(self):
+        resp = self.client.get("/admin/")
+        body = resp.content.decode()
+        self.assertRegex(body, r"Good (morning|afternoon|evening), dco")
+        self.assertIn("DashChartCo", body)
+        self.assertIn("Customers", body)
+        self.assertIn("High value", body)
+
+    def test_today_stats_tour_target_still_present(self):
+        # apps.control.tours references data-tour="today-stats" by name --
+        # the hero/secondary-card restyle must keep this exact anchor.
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, 'data-tour="today-stats"')
 
 
 @override_settings(ALLOWED_HOSTS=["*"])

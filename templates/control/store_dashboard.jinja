@@ -5,13 +5,18 @@
 {% set t = today %}
 <div class="space-y-6">
 
+  <div>
+    <h1 class="text-xl font-semibold text-slate-900">{{ greeting }}, {{ request.user.first_name or request.user.get_username() }}</h1>
+    <p class="mt-0.5 text-sm text-slate-500">Here's how <span class="font-medium text-slate-700">{{ active_project.name }}</span> is doing today.</p>
+  </div>
+
   {% include "control/partials/_quick_launch.jinja" %}
 
   {# --- revenue chart + orders by status ------------------------------ #}
   <div class="grid gap-4 lg:grid-cols-3">
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 lg:col-span-2">
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:col-span-2">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-slate-700">Revenue — last 30 days</h2>
+        <h2 class="text-sm font-semibold text-slate-700">📈 Revenue — last 30 days</h2>
         <a href="{{ url('control:analytics') }}" class="text-xs text-slate-500 hover:underline">Full analytics →</a>
       </div>
       {% if t.revenue_points %}
@@ -29,8 +34,8 @@
       {% endif %}
     </div>
 
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-      <h2 class="text-sm font-semibold text-slate-700">Orders by status</h2>
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">🧾 Orders by status</h2>
       {% if t.status_donut %}
       <div class="mt-3 flex items-center gap-4">
         <svg viewBox="0 0 36 36" class="h-24 w-24 shrink-0 -rotate-90">
@@ -56,22 +61,28 @@
     </div>
   </div>
 
-  <div data-tour="today-stats" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    {% for label, value in [
-      ("Sales today", t.sales.today), ("This week", t.sales.week),
-      ("This month", t.sales.month), ("All time", t.sales.total)] %}
-    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-      <p class="text-xs text-slate-400">{{ label }}</p>
-      <p class="mt-1 text-lg font-semibold text-slate-800">{{ active_project.currency }} {{ value }}</p>
+  {# --- today's numbers: a hero revenue figure + 3 secondary stats ----- #}
+  <div data-tour="today-stats" class="grid gap-4 lg:grid-cols-4">
+    <div class="rounded-2xl bg-gradient-to-br from-slate-900 to-slate-700 p-5 text-white shadow-md">
+      <p class="text-xs font-medium uppercase tracking-wide text-slate-300">💰 Sales today</p>
+      <p class="mt-2 text-3xl font-bold tracking-tight">{{ active_project.currency }} {{ t.sales.today }}</p>
     </div>
-    {% endfor %}
+    <div class="grid grid-cols-3 gap-4 lg:col-span-3">
+      {% for label, value in [
+        ("This week", t.sales.week), ("This month", t.sales.month), ("All time", t.sales.total)] %}
+      <div class="flex flex-col justify-center rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-200">
+        <p class="text-xs font-medium text-slate-400">{{ label }}</p>
+        <p class="mt-1 text-lg font-semibold text-slate-800">{{ active_project.currency }} {{ value }}</p>
+      </div>
+      {% endfor %}
+    </div>
   </div>
 
   {# --- today's funnel / live visitors / traffic sources -------------- #}
   <div data-tour="today-funnel" class="grid gap-4 lg:grid-cols-3">
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-slate-700">Today's funnel</h2>
+        <h2 class="text-sm font-semibold text-slate-700">🔻 Today's funnel</h2>
         <span class="text-xs font-medium text-slate-500">{{ t.funnel.conversion_rate }}% conversion</span>
       </div>
       <ol class="mt-3 space-y-1.5 text-sm">
@@ -89,16 +100,16 @@
       <p class="mt-2 text-[11px] text-slate-400">{{ t.funnel.page_views }} page views today.</p>
     </div>
 
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-      <h2 class="text-sm font-semibold text-slate-700">Live visitors</h2>
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">🟢 Live visitors</h2>
       <div class="mt-3" id="live-visitors" hx-get="{{ url('control:live_visitors_partial') }}"
            hx-trigger="load" hx-swap="outerHTML">
         <p class="text-sm text-slate-400">Loading…</p>
       </div>
     </div>
 
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-      <h2 class="text-sm font-semibold text-slate-700">Traffic source</h2>
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">🌐 Traffic source</h2>
       <ul class="mt-3 space-y-1.5 text-sm">
         {% for src, n in t.funnel.traffic_sources.items() %}
         <li class="flex items-center justify-between">
@@ -114,9 +125,9 @@
 
   <div class="grid gap-4 lg:grid-cols-3">
     {# --- needs attention ------------------------------------------- #}
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 lg:col-span-2">
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:col-span-2">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-slate-700">Needs your attention</h2>
+        <h2 class="text-sm font-semibold text-slate-700">⚠️ Needs your attention</h2>
         {% if t.needs_action_count %}
         <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">{{ t.needs_action_count }}</span>
         {% endif %}
@@ -142,9 +153,9 @@
     </div>
 
     {# --- low stock --------------------------------------------------- #}
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div class="flex items-center justify-between">
-        <h2 class="text-sm font-semibold text-slate-700">Low stock</h2>
+        <h2 class="text-sm font-semibold text-slate-700">📦 Low stock</h2>
         {% if t.products.low_stock %}
         <span class="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">{{ t.products.low_stock }}</span>
         {% endif %}
@@ -167,8 +178,8 @@
 
   <div class="grid gap-4 lg:grid-cols-3">
     {# --- recent orders ----------------------------------------------- #}
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 lg:col-span-2">
-      <h2 class="text-sm font-semibold text-slate-700">Recent orders</h2>
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:col-span-2">
+      <h2 class="text-sm font-semibold text-slate-700">🧾 Recent orders</h2>
       <div class="mt-3 divide-y divide-slate-100">
         {% for o in t.recent_orders %}
         <div class="flex items-center justify-between py-2 text-sm">
@@ -188,17 +199,32 @@
       <a href="{{ url('control:order_list') }}" class="mt-2 inline-block text-xs text-slate-500 hover:underline">All orders →</a>
     </div>
 
-    {# --- best sellers -------------------------------------------------- #}
-    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-      <h2 class="text-sm font-semibold text-slate-700">Best sellers</h2>
-      <p class="mt-1 text-xs text-slate-400">{{ t.products.total }} products · {{ t.products.out_of_stock }} out of stock</p>
-      <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm">
-        {% for p in t.products.best_sellers[:6] %}
-        <li>{{ p.product_title }} <span class="text-slate-400">×{{ p.qty }}</span></li>
-        {% else %}
-        <li class="list-none text-slate-400">No sales yet.</li>
-        {% endfor %}
-      </ol>
+    <div class="space-y-4">
+      {# --- best sellers -------------------------------------------------- #}
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <h2 class="text-sm font-semibold text-slate-700">🏆 Best sellers</h2>
+        <p class="mt-1 text-xs text-slate-400">{{ t.products.total }} products · {{ t.products.out_of_stock }} out of stock</p>
+        <ol class="mt-3 list-decimal space-y-1 pl-5 text-sm">
+          {% for p in t.products.best_sellers[:6] %}
+          <li>{{ p.product_title }} <span class="text-slate-400">×{{ p.qty }}</span></li>
+          {% else %}
+          <li class="list-none text-slate-400">No sales yet.</li>
+          {% endfor %}
+        </ol>
+      </div>
+
+      {# --- customers ------------------------------------------------- #}
+      <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+        <h2 class="text-sm font-semibold text-slate-700">👥 Customers</h2>
+        <ul class="mt-3 space-y-1 text-sm">
+          {% for label, value in [
+            ("Total", t.customers.total), ("New", t.customers.new),
+            ("Returning", t.customers.returning), ("VIP", t.customers.vip),
+            ("High value", t.customers.high_value), ("Inactive", t.customers.inactive)] %}
+          <li class="flex justify-between"><span class="text-slate-500">{{ label }}</span><span class="font-medium text-slate-700">{{ value }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
     </div>
   </div>
 
