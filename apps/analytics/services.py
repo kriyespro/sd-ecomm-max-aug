@@ -410,6 +410,12 @@ def today_dashboard(project):
     summary["recent_orders"] = recent_orders
     summary["low_stock_items"] = inv.low_stock_items(project)[:6]
     summary["funnel"] = funnel_today(project)
+    # Same revenue-line + orders-by-status charts as the full Analytics
+    # report (apps.control.phase11_views.AnalyticsView) -- the dashboard is
+    # the one-page version, so it needs its own copy of these, not a link
+    # to go look at them elsewhere.
+    summary["revenue_points"] = revenue_chart_points(summary["revenue_series"])
+    summary["status_donut"] = status_donut_segments(summary["orders_by_status"])
     return summary
 
 

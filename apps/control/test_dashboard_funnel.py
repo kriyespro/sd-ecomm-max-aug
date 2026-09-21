@@ -51,6 +51,57 @@ class StoreDashboardFunnelTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+class StoreDashboardChartsTests(TestCase):
+    """The revenue line chart + orders-by-status donut from the full
+    Analytics report now also render on the dashboard itself (merged in, so
+    /admin/ is a one-page report), above the stats cards -- and the old
+    bottom CSS-bar revenue chart is gone, replaced by this one."""
+
+    def setUp(self):
+        cache.clear()
+        self.project = Project.objects.create(
+            name="DashChartCo", status="active", feature_flags={"onboarded": True},
+        )
+        self.owner = User.objects.create_user("dco", "dco@t.test", "pw", is_staff=True)
+        Membership.objects.create(project=self.project, user=self.owner, role=StoreRole.OWNER)
+        self.client.force_login(self.owner)
+        s = self.client.session
+        s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
+        s.save()
+
+    def test_charts_render_with_zero_state(self):
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "Revenue — last 30 days")
+        self.assertContains(resp, "Orders by status")
+        self.assertContains(resp, "No orders yet.")
+
+    def test_charts_appear_before_stats_cards(self):
+        body = self.client.get("/admin/").content.decode()
+        chart_idx = body.index("Revenue — last 30 days")
+        stats_idx = body.index('data-tour="today-stats"')
+        self.assertLess(chart_idx, stats_idx)
+
+    def test_only_one_revenue_chart_on_the_page(self):
+        body = self.client.get("/admin/").content.decode()
+        self.assertEqual(body.count("Revenue — last 30 days"), 1)
+
+    def test_donut_renders_once_there_are_orders(self):
+        from apps.orders.models import Order
+
+        Order.objects.create(
+            project=self.project, number="DC-1", email="buyer@t.test",
+            subtotal="500", grand_total="500", status="delivered",
+        )
+        body = self.client.get("/admin/").content.decode()
+        self.assertIn("stroke-dasharray", body)
+        self.assertNotIn("No orders yet.", body)
+
+    def test_full_analytics_link_still_present(self):
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, 'href="/admin/analytics/"')
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
 class LiveVisitorsPartialTests(TestCase):
     def setUp(self):
         cache.clear()

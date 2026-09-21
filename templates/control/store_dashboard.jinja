@@ -7,6 +7,55 @@
 
   {% include "control/partials/_quick_launch.jinja" %}
 
+  {# --- revenue chart + orders by status ------------------------------ #}
+  <div class="grid gap-4 lg:grid-cols-3">
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 lg:col-span-2">
+      <div class="flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700">Revenue — last 30 days</h2>
+        <a href="{{ url('control:analytics') }}" class="text-xs text-slate-500 hover:underline">Full analytics →</a>
+      </div>
+      {% if t.revenue_points %}
+      <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="mt-3 h-32 w-full">
+        <polyline points="0,96 {{ t.revenue_points }} 300,96" fill="#0f172a0d" stroke="none"></polyline>
+        <polyline points="{{ t.revenue_points }}" fill="none" stroke="#0f172a" stroke-width="1.5"
+                   vector-effect="non-scaling-stroke"></polyline>
+      </svg>
+      <div class="mt-1 flex justify-between text-[10px] text-slate-400">
+        <span>{{ t.revenue_series[0].date }}</span>
+        <span>{{ t.revenue_series[-1].date }}</span>
+      </div>
+      {% else %}
+      <p class="mt-3 text-sm text-slate-400">No revenue in range.</p>
+      {% endif %}
+    </div>
+
+    <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
+      <h2 class="text-sm font-semibold text-slate-700">Orders by status</h2>
+      {% if t.status_donut %}
+      <div class="mt-3 flex items-center gap-4">
+        <svg viewBox="0 0 36 36" class="h-24 w-24 shrink-0 -rotate-90">
+          <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#f1f5f9" stroke-width="4"></circle>
+          {% for seg in t.status_donut %}
+          <circle cx="18" cy="18" r="15.9155" fill="none" stroke="{{ seg.color }}" stroke-width="4"
+                  stroke-dasharray="{{ seg.dasharray }}" stroke-dashoffset="{{ seg.dashoffset }}"></circle>
+          {% endfor %}
+        </svg>
+        <ul class="space-y-1 text-xs">
+          {% for seg in t.status_donut %}
+          <li class="flex items-center gap-1.5">
+            <span class="h-2 w-2 shrink-0 rounded-full" style="background:{{ seg.color }}"></span>
+            <span class="text-slate-500">{{ seg.status }}</span>
+            <span class="font-medium text-slate-700">{{ seg.n }}</span>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% else %}
+      <p class="mt-3 text-sm text-slate-400">No orders yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
   <div data-tour="today-stats" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     {% for label, value in [
       ("Sales today", t.sales.today), ("This week", t.sales.week),
@@ -150,24 +199,6 @@
         <li class="list-none text-slate-400">No sales yet.</li>
         {% endfor %}
       </ol>
-    </div>
-  </div>
-
-  {# --- revenue trend ------------------------------------------------- #}
-  <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
-    <div class="flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-slate-700">Revenue — last 30 days</h2>
-      <a href="{{ url('control:analytics') }}" class="text-xs text-slate-500 hover:underline">Full analytics →</a>
-    </div>
-    <div class="mt-3 flex items-end gap-1" style="height:100px">
-      {% set maxrev = (t.revenue_series | map(attribute='revenue') | map('float') | list | max) if t.revenue_series else 1 %}
-      {% for pt in t.revenue_series %}
-      <div class="flex-1 rounded-t bg-slate-800"
-           style="height: {{ ((pt.revenue|float / (maxrev or 1)) * 100) | round(1) }}%"
-           title="{{ pt.date }}: {{ active_project.currency }} {{ pt.revenue }}"></div>
-      {% else %}
-      <p class="text-sm text-slate-400">No revenue in range.</p>
-      {% endfor %}
     </div>
   </div>
 
