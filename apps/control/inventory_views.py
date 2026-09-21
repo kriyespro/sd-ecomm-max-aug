@@ -70,11 +70,25 @@ class WarehouseDeleteView(ActiveProjectMixin, DeleteView):
         return Warehouse.objects.filter(project=self.active_project)
 
     def form_valid(self, form):
+        from django.db.models import ProtectedError
+
+        warehouse = self.get_object()
         record_audit(
             actor=self.request.user, project=self.active_project,
-            action=AuditLog.Action.DELETE, target=self.get_object(), request=self.request,
+            action=AuditLog.Action.DELETE, target=warehouse, request=self.request,
         )
-        return super().form_valid(form)
+        try:
+            return super().form_valid(form)
+        except ProtectedError:
+            # InventoryTransfer.source/destination is on_delete=PROTECT (same
+            # class of bug as the store-delete 500 -- a warehouse that's ever
+            # been part of a stock transfer can't just cascade away).
+            messages.error(
+                self.request,
+                f"Can't delete {warehouse.name} — it still has a stock transfer "
+                "on record. Remove or reassign that first.",
+            )
+            return redirect("control:warehouse_list")
 
 
 # --- Inventory items ----------------------------------------------

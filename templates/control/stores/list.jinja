@@ -20,7 +20,7 @@
 <div class="mx-auto max-w-6xl space-y-4">
   <div class="flex items-center justify-between">
     <div>
-      <h2 class="text-sm font-semibold text-slate-700">Stores</h2>
+      <h2 class="text-sm font-semibold text-slate-700">{{ "Stores" if is_admin else "Your stores" }}</h2>
       <p class="mt-1 text-xs text-slate-500">
         {% if is_admin %}Every store on the platform.{% else %}Stores you signed up.{% endif %}
         Click a store to manage its team, plan, or to start working in it.

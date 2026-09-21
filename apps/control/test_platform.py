@@ -348,6 +348,19 @@ class StoreListFilterTests(TestCase):
         t.plan = self.basic
         t.save(update_fields=["plan"])
 
+    def test_dgc_sees_your_stores_heading_admin_sees_stores(self):
+        self.client.force_login(self.dgc)
+        r = self.client.get("/admin/stores/")
+        self.assertContains(r, "Your stores")
+
+        self.client.force_login(self.admin)
+        r = self.client.get("/admin/stores/")
+        html = r.content.decode()
+        h2_start = html.index("<h2")
+        h2_end = html.index("</h2>", h2_start) + len("</h2>")
+        self.assertIn(">Stores<", html[h2_start:h2_end])
+        self.assertNotIn("Your stores", html[h2_start:h2_end])
+
     def test_status_filter_narrows_the_list(self):
         r = self.client.get("/admin/stores/?status=active")
         self.assertContains(r, "AliveCo")

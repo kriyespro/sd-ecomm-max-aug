@@ -5,36 +5,62 @@
 {% set _INPUT = "block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm transition focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500" %}
 
 {% block content %}
-<form method="post" class="mx-auto max-w-2xl space-y-5 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+<form method="post" class="mx-auto max-w-2xl space-y-6 rounded-xl bg-white p-6 ring-1 ring-slate-200">
   {{ csrf_input }}
   <div>
     <h2 class="text-sm font-semibold text-slate-700">Create a store</h2>
-    <p class="mt-1 text-xs text-slate-500">
-      Creates the store, its owner account, and a trial subscription. Set an
-      owner password below so a new owner can sign in right away; an existing
-      account keeps its current login.
-    </p>
+    <p class="mt-1 text-xs text-slate-500">Creates the store, its owner account, and a trial subscription.</p>
   </div>
 
   {% if form.non_field_errors() %}
   <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
   {% endif %}
 
-  {% for field in form.visible_fields() %}
-    {% if field.name == 'subdomain' and base_domain %}
+  <div class="space-y-4">
+    <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Store</h3>
+    {{ render_field(form.name) }}
+    {% if 'subdomain' in form.fields %}
     <div class="space-y-1">
-      <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ field.label }}</label>
+      <label for="{{ form.subdomain.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.subdomain.label }}</label>
+      {% if base_domain %}
       <div class="mt-1 flex">
-        {{ field.as_widget(attrs={"class": _INPUT ~ " rounded-r-none", "placeholder": "your-store"}) }}
+        {{ form.subdomain.as_widget(attrs={"class": _INPUT ~ " rounded-r-none", "placeholder": "your-store"}) }}
         <span class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 text-sm text-slate-500">.{{ base_domain }}</span>
       </div>
-      {% if field.help_text %}<p class="text-xs text-slate-400">{{ field.help_text }}</p>{% endif %}
-      {% for error in field.errors %}<p class="text-xs text-red-600">{{ error }}</p>{% endfor %}
+      {% else %}
+      {{ form.subdomain.as_widget(attrs={"class": _INPUT}) }}
+      {% endif %}
+      {% if form.subdomain.help_text %}<p class="text-xs text-slate-400">{{ form.subdomain.help_text }}</p>{% endif %}
+      {% for error in form.subdomain.errors %}<p class="text-xs text-red-600">{{ error }}</p>{% endfor %}
     </div>
-    {% else %}
-    {{ render_field(field) }}
     {% endif %}
-  {% endfor %}
+    {{ render_field(form.primary_domain) }}
+  </div>
+
+  <div class="space-y-4 border-t border-slate-100 pt-4">
+    <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Owner</h3>
+    {{ render_field(form.owner_email) }}
+    {{ render_field(form.owner_name) }}
+  </div>
+
+  <div class="space-y-4 border-t border-slate-100 pt-4">
+    <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Plan</h3>
+    {{ render_field(form.plan) }}
+    {{ render_field(form.period) }}
+    {% if 'manager' in form.fields %}{{ render_field(form.manager) }}{% endif %}
+  </div>
+
+  <details class="border-t border-slate-100 pt-4">
+    <summary class="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-400">
+      Advanced — currency, country, owner password
+    </summary>
+    <div class="mt-4 space-y-4">
+      {{ render_field(form.currency) }}
+      {{ render_field(form.country) }}
+      {{ render_field(form.owner_password) }}
+    </div>
+  </details>
+
   {% for field in form.hidden_fields() %}{{ field }}{% endfor %}
 
   <div class="flex gap-2 pt-1">

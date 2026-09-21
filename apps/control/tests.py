@@ -377,6 +377,42 @@ class StoreCreateOwnerPasswordTests(TestCase):
         self.assertFalse(get_user_model().objects.filter(email="owner@fresh.test").exists())
 
 
+class StoreCreateFormLayoutTests(TestCase):
+    """The create-store form groups fields into Store/Owner/Plan sections plus
+    a collapsed "Advanced" block (currency, country, owner password) --
+    those three still render and still submit with their defaults even
+    though they're visually tucked away."""
+
+    def setUp(self):
+        from apps.billing.models import Plan
+
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="lroot", email="lroot@t.test", password="pw"
+        )
+        self.plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        self.client.force_login(self.admin)
+
+    def test_advanced_fields_present_in_the_page(self):
+        body = self.client.get("/admin/stores/new/").content.decode()
+        self.assertIn("Advanced", body)
+        self.assertIn('id="id_currency"', body)
+        self.assertIn('id="id_country"', body)
+        self.assertIn('id="id_owner_password"', body)
+
+    def test_defaults_in_advanced_block_still_submit(self):
+        resp = self.client.post("/admin/stores/new/", {
+            "name": "Tucked Away Co", "primary_domain": "",
+            "currency": "INR", "country": "IN",
+            "owner_email": "tucked@fresh.test", "owner_name": "Tucked Owner",
+            "plan": self.plan.pk, "period": "monthly",
+        })
+        self.assertEqual(resp.status_code, 302)
+        p = Project.objects.get(name="Tucked Away Co")
+        self.assertEqual(p.currency, "INR")
+        self.assertEqual(p.country, "IN")
+
+
 @override_settings(PLATFORM_HOSTS=["mnxstore.com"], PLATFORM_BASE_DOMAIN="mnxstore.com")
 class StoreCreateSubdomainTests(TestCase):
     def setUp(self):
