@@ -18,6 +18,7 @@ from apps.analytics.services import (
     record_traffic_source,
     top_product_views,
     touch_live_visitor,
+    traffic_sources_for,
 )
 from apps.catalog.models import Product
 from apps.orders.models import Order
@@ -142,6 +143,16 @@ class TrafficSourceRecordingTests(TestCase):
         record_traffic_source(self.project, "", "srcco.test")
         out = funnel_today(self.project)
         self.assertEqual(out["traffic_sources"], {"search": 1, "direct": 1})
+
+    def test_traffic_sources_for_rolls_up_the_window(self):
+        record_traffic_source(self.project, "https://www.google.com/", "srcco.test")
+        record_traffic_source(self.project, "https://www.google.com/", "srcco.test")
+        self.assertEqual(traffic_sources_for(self.project, days=1), {"search": 2})
+        self.assertEqual(traffic_sources_for(self.project, days=7), {"search": 2})
+        self.assertEqual(traffic_sources_for(self.project, days=30), {"search": 2})
+
+    def test_traffic_sources_for_empty_when_none_recorded(self):
+        self.assertEqual(traffic_sources_for(self.project, days=7), {})
 
 
 class LiveVisitorsTests(TestCase):

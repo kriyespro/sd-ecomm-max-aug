@@ -143,8 +143,10 @@ class StoreDashboardChartsTests(TestCase):
 
     def test_top_products_viewed_zero_state(self):
         resp = self.client.get("/admin/")
-        self.assertContains(resp, "Top products viewed today")
-        self.assertContains(resp, "No product views recorded yet today.")
+        self.assertContains(resp, "Top products — today")
+        self.assertContains(resp, "Top products — this week")
+        self.assertContains(resp, "Top products — this month")
+        self.assertContains(resp, "No product views recorded yet.")
 
     def test_top_products_viewed_appears_below_revenue_chart(self):
         from apps.analytics.services import record_page_event
@@ -155,12 +157,31 @@ class StoreDashboardChartsTests(TestCase):
         )
         record_page_event(self.project, "product_view", path=f"/p/{product.slug}/")
         body = self.client.get("/admin/").content.decode()
-        self.assertIn("Chart Topper", body)
+        self.assertEqual(body.count("Chart Topper"), 3)  # today + week + month
         revenue_idx = body.index("Revenue — last 30 days")
-        views_idx = body.index("Top products viewed today")
+        views_idx = body.index("Top products — today")
         stats_idx = body.index('data-tour="today-stats"')
         self.assertLess(revenue_idx, views_idx)
         self.assertLess(views_idx, stats_idx)
+
+    def test_traffic_source_today_week_month_all_present(self):
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "Traffic source — today")
+        self.assertContains(resp, "Traffic source — this week")
+        self.assertContains(resp, "Traffic source — this month")
+
+    def test_a_view_today_counts_toward_week_and_month_too(self):
+        from apps.analytics.services import top_product_views
+
+        product = Product.objects.create(
+            project=self.project, title="Rollup Test", slug="rollup-test",
+            status="active", price="99",
+        )
+        from apps.analytics.services import record_page_event
+        record_page_event(self.project, "product_view", path=f"/p/{product.slug}/")
+        self.assertEqual(top_product_views(self.project, days=1)[0]["views"], 1)
+        self.assertEqual(top_product_views(self.project, days=7)[0]["views"], 1)
+        self.assertEqual(top_product_views(self.project, days=30)[0]["views"], 1)
 
     def test_today_stats_tour_target_still_present(self):
         # apps.control.tours references data-tour="today-stats" by name --

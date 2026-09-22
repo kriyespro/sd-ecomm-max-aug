@@ -82,28 +82,30 @@ def _record_product_view(project, path):
         record_event(project, f"pv:{product_id}")
 
 
-def top_product_views(project, limit=6):
-    """Today's most-viewed products, ranked -- the "what's getting looked
-    at" complement to Best sellers ("what's getting bought"). Same idea as
-    the live-visitors widget (apps.analytics.services.live_visitors), just
-    an aggregate instead of a live snapshot: what a beacon has been
-    recording, not who's on the page this second."""
+def top_product_views(project, *, days=1, limit=6):
+    """Most-viewed products over the last ``days`` days, ranked -- the
+    "what's getting looked at" complement to Best sellers ("what's getting
+    bought"). Same idea as the live-visitors widget (apps.analytics.
+    services.live_visitors), just an aggregate instead of a live snapshot:
+    what a beacon has been recording, not who's on the page this second.
+    ``days=1`` is "today", ``days=7`` "this week", ``days=30`` "this month"
+    -- same day-window convention as revenue_chart_points."""
     from apps.catalog.models import Product
 
-    today = timezone.localdate()
+    start = timezone.localdate() - timedelta(days=days - 1)
     rows = list(
-        EventCounter.objects.filter(project=project, date=today, key__startswith="pv:")
-        .order_by("-count")[:limit]
+        EventCounter.objects.filter(project=project, date__gte=start, key__startswith="pv:")
+        .values("key").annotate(total=Sum("count")).order_by("-total")[:limit]
     )
     ids = []
     counts = {}
     for r in rows:
         try:
-            pid = int(r.key[3:])
+            pid = int(r["key"][3:])
         except ValueError:
             continue
         ids.append(pid)
-        counts[pid] = r.count
+        counts[pid] = r["total"]
     titles = dict(Product.objects.filter(pk__in=ids).values_list("pk", "title"))
     return [
         {"product_id": pid, "title": titles[pid], "views": counts[pid]}
@@ -134,6 +136,18 @@ def classify_referrer(referrer, own_host):
 
 def record_traffic_source(project, referrer, own_host):
     record_event(project, f"src_{classify_referrer(referrer, own_host)}")
+
+
+def traffic_sources_for(project, *, days=1):
+    """direct/search/social/referral counts over the last ``days`` days --
+    same day-window convention as top_product_views(). ``days=1`` is what
+    funnel_today() already returns as "today"; this covers week/month."""
+    start = timezone.localdate() - timedelta(days=days - 1)
+    rows = (
+        EventCounter.objects.filter(project=project, date__gte=start, key__startswith="src_")
+        .values("key").annotate(total=Sum("count"))
+    )
+    return {r["key"][4:]: r["total"] for r in rows if r["total"]}
 
 
 def touch_live_visitor(project, vid, *, page, ip):
@@ -469,7 +483,11 @@ def today_dashboard(project):
     # to go look at them elsewhere.
     summary["revenue_points"] = revenue_chart_points(summary["revenue_series"])
     summary["status_donut"] = status_donut_segments(summary["orders_by_status"])
-    summary["top_products_viewed"] = top_product_views(project)
+    summary["top_products_viewed"] = top_product_views(project, days=1)
+    summary["top_products_viewed_week"] = top_product_views(project, days=7)
+    summary["top_products_viewed_month"] = top_product_views(project, days=30)
+    summary["traffic_sources_week"] = traffic_sources_for(project, days=7)
+    summary["traffic_sources_month"] = traffic_sources_for(project, days=30)
     return summary
 
 

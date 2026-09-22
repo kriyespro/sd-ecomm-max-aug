@@ -61,16 +61,17 @@
     </div>
   </div>
 
-  {# --- top products viewed today -------------------------------------
+  {# --- top products viewed: today / this week / this month -----------
        The "what's getting looked at" complement to Best sellers ("what's
-       getting bought") -- same beacon-driven idea as Live visitors, just
-       today's running total instead of a live snapshot. #}
+       getting bought") -- same beacon-driven idea as Live visitors, just a
+       running total instead of a live snapshot. #}
+  {% macro top_products_card(title, items) %}
   <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-    <h2 class="text-sm font-semibold text-slate-700">👀 Top products viewed today</h2>
-    {% if t.top_products_viewed %}
-    {% set maxv = t.top_products_viewed[0].views %}
+    <h2 class="text-sm font-semibold text-slate-700">👀 {{ title }}</h2>
+    {% if items %}
+    {% set maxv = items[0].views %}
     <ul class="mt-3 space-y-2">
-      {% for p in t.top_products_viewed %}
+      {% for p in items %}
       <li>
         <div class="flex items-center justify-between gap-2 text-sm">
           <span class="truncate text-slate-700">{{ p.title }}</span>
@@ -83,8 +84,14 @@
       {% endfor %}
     </ul>
     {% else %}
-    <p class="mt-3 text-sm text-slate-400">No product views recorded yet today.</p>
+    <p class="mt-3 text-sm text-slate-400">No product views recorded yet.</p>
     {% endif %}
+  </div>
+  {% endmacro %}
+  <div class="grid gap-4 lg:grid-cols-3">
+    {{ top_products_card("Top products — today", t.top_products_viewed) }}
+    {{ top_products_card("Top products — this week", t.top_products_viewed_week) }}
+    {{ top_products_card("Top products — this month", t.top_products_viewed_month) }}
   </div>
 
   {# --- today's numbers: a hero revenue figure + 3 secondary stats ----- #}
@@ -142,8 +149,8 @@
     </div>
   </div>
 
-  {# --- today's funnel / live visitors / traffic sources -------------- #}
-  <div data-tour="today-funnel" class="grid gap-4 lg:grid-cols-3">
+  {# --- today's funnel / live visitors ---------------------------------- #}
+  <div data-tour="today-funnel" class="grid gap-4 lg:grid-cols-2">
     <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
       <div class="flex items-center justify-between">
         <h2 class="text-sm font-semibold text-slate-700">🔻 Today's funnel</h2>
@@ -171,20 +178,28 @@
         <p class="text-sm text-slate-400">Loading…</p>
       </div>
     </div>
+  </div>
 
-    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
-      <h2 class="text-sm font-semibold text-slate-700">🌐 Traffic source</h2>
-      <ul class="mt-3 space-y-1.5 text-sm">
-        {% for src, n in t.funnel.traffic_sources.items() %}
-        <li class="flex items-center justify-between">
-          <span class="capitalize text-slate-500">{{ src }}</span>
-          <span class="font-medium text-slate-700">{{ n }}</span>
-        </li>
-        {% else %}
-        <li class="text-slate-400">No visits recorded yet today.</li>
-        {% endfor %}
-      </ul>
-    </div>
+  {# --- traffic source: today / this week / this month ----------------- #}
+  {% macro traffic_source_card(title, sources, empty_msg) %}
+  <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <h2 class="text-sm font-semibold text-slate-700">🌐 {{ title }}</h2>
+    <ul class="mt-3 space-y-1.5 text-sm">
+      {% for src, n in sources.items() %}
+      <li class="flex items-center justify-between">
+        <span class="capitalize text-slate-500">{{ src }}</span>
+        <span class="font-medium text-slate-700">{{ n }}</span>
+      </li>
+      {% else %}
+      <li class="text-slate-400">{{ empty_msg }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endmacro %}
+  <div class="grid gap-4 lg:grid-cols-3">
+    {{ traffic_source_card("Traffic source — today", t.funnel.traffic_sources, "No visits recorded yet today.") }}
+    {{ traffic_source_card("Traffic source — this week", t.traffic_sources_week, "No visits recorded yet this week.") }}
+    {{ traffic_source_card("Traffic source — this month", t.traffic_sources_month, "No visits recorded yet this month.") }}
   </div>
 
   <div class="grid gap-4 lg:grid-cols-3">
