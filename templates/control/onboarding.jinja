@@ -86,7 +86,7 @@
       <h2 class="text-sm font-semibold text-slate-700">{{ form.vertical.label }}</h2>
       <p class="mt-1 text-xs text-slate-400">
         Pick the closest fit. Clothing &amp; Fashion stores get a Size &amp; Colour builder on every
-        product; Jewellery stores get the same builder for ring &amp; bangle size.
+        product; Jewellery stores get the same builder relabelled for ring &amp; bangle size and colour.
       </p>
       {% for error in form.vertical.errors %}<p class="mt-1 text-xs text-red-600">{{ error }}</p>{% endfor %}
       <div class="mt-3 grid gap-2 sm:grid-cols-2" x-data="{ v: '{{ form.vertical.value() or '' }}' }">

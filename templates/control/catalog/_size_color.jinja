@@ -1,20 +1,21 @@
-{# Size & Colour quick builder — apparel verticals, and (relabelled, no
-   Colour field) jewellery's ring/bangle size. Two comma lists drive a live
-   combo table; each row can override price / sale / stock. Submitted as
-   sizes, colors and combo_price[KEY] / combo_sale[KEY] / combo_stock[KEY]
-   where KEY is "<size>|||<color>" — a jewellery product simply never submits
-   "colors", which apps.catalog.variants already treats as a one-axis
-   product (no code changes needed there). Reconciled server-side by
-   apps.catalog.variants. #}
+{# Size & Colour quick builder — apparel verticals get plain Size/Colour;
+   jewellery gets the same two fields relabelled (ring/bangle size, metal/
+   gem colour). Two comma lists drive a live combo table; each row can
+   override price / sale / stock. Submitted as sizes, colors and combo_
+   price[KEY] / combo_sale[KEY] / combo_stock[KEY] where KEY is "<size>|||
+   <color>" — either list may be left blank for a one-axis product, which
+   apps.catalog.variants already treats correctly (no code changes needed
+   there). Reconciled server-side by apps.catalog.variants. #}
 <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200"
      x-data='sizeColor({{ sc_rows|tojson }}, {{ sc_sizes|tojson }}, {{ sc_colors|tojson }})'>
   {% if jewellery_sizes %}
-  <h2 class="text-sm font-semibold text-slate-700">Ring &amp; bangle size</h2>
+  <h2 class="text-sm font-semibold text-slate-700">Ring &amp; bangle size, and colour</h2>
   <p class="mt-1 text-xs text-slate-400">
-    List the sizes you sell, separated by commas — ring sizes, bangle sizes
-    (inches or cm), whichever fits this piece. We build one purchasable
-    variant per size — shoppers pick their size on the product page. Leave a
-    price blank to use the product price.
+    List the sizes you sell (ring sizes, bangle sizes in inches or cm —
+    whichever fits this piece) and, if it comes in more than one metal or
+    gemstone colour, list those too, both separated by commas. We build one
+    purchasable variant per combination — shoppers pick on the product page.
+    Leave a price blank to use the product price.
   </p>
   {% else %}
   <h2 class="text-sm font-semibold text-slate-700">Size &amp; colour</h2>
@@ -33,22 +34,21 @@
   <p class="mt-1 text-xs text-slate-400">
     Off by default — the Stock column below is just a note to yourself and
     shoppers can always buy. Turn this on to actually block checkout once a
-    {{ 'size' if jewellery_sizes else 'size/colour' }} sells out.
+    size/colour sells out.
   </p>
 
-  <div class="mt-4 grid gap-4 {{ '' if jewellery_sizes else 'sm:grid-cols-2' }}">
+  <div class="mt-4 grid gap-4 sm:grid-cols-2">
     <div>
       <label class="block text-sm font-medium text-slate-700">{{ 'Ring / bangle size' if jewellery_sizes else 'Sizes' }}</label>
       <input name="sizes" x-model="sizes" placeholder="{{ '6, 7, 8, 9, 10' if jewellery_sizes else 'S, M, L, XL' }}"
              class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
     </div>
-    {% if not jewellery_sizes %}
     <div>
       <label class="block text-sm font-medium text-slate-700">Colours</label>
-      <input name="colors" x-model="colors" placeholder="Black, White, Navy"
+      <input name="colors" x-model="colors"
+             placeholder="{{ 'Yellow gold, Rose gold, White gold' if jewellery_sizes else 'Black, White, Navy' }}"
              class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
     </div>
-    {% endif %}
   </div>
 
   <template x-if="combos.length">

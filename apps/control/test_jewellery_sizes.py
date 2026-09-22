@@ -1,6 +1,8 @@
 """Jewellery stores get the same Size & Colour quick builder as clothing/
-fashion, relabelled to ring/bangle size with no Colour field — reusing
-apps.catalog.variants' existing one-axis (sizes-only) handling untouched."""
+fashion, relabelled to ring/bangle size and metal/gem colour -- both axes,
+same as apparel, reusing apps.catalog.variants' existing two-axis handling
+untouched (colour was previously hidden for jewellery; now shown, so a
+gold/rose-gold/silver ring can have per-colour price and stock)."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -30,15 +32,16 @@ class JewellerySizeBuilderTests(TestCase):
         session.save()
         return project
 
-    def test_jewellery_product_form_shows_ring_bangle_labelling(self):
+    def test_jewellery_product_form_shows_ring_bangle_labelling_and_colour(self):
         project = self._login("jewellery")
         product = Product.objects.create(
             project=project, title="Ring", price="999", status="draft",
         )
         body = self.client.get(f"/admin/products/{product.pk}/").content.decode()
-        self.assertIn("Ring &amp; bangle size", body)
+        self.assertIn("Ring &amp; bangle size, and colour", body)
         self.assertIn("Ring / bangle size", body)
-        self.assertNotIn("Colours</label>", body)
+        self.assertIn("Colours</label>", body)
+        self.assertIn("Yellow gold, Rose gold, White gold", body)
 
     def test_clothing_product_form_is_unaffected(self):
         project = self._login("clothing")
@@ -50,7 +53,10 @@ class JewellerySizeBuilderTests(TestCase):
         self.assertIn("Colours</label>", body)
         self.assertNotIn("Ring &amp; bangle size", body)
 
-    def test_saving_jewellery_sizes_creates_one_variant_per_size_no_color(self):
+    def test_saving_jewellery_sizes_only_creates_one_variant_per_size(self):
+        # Colour is optional -- a seller who leaves it blank still gets the
+        # one-axis (sizes-only) product apps.catalog.variants already
+        # handled before colour was ever shown for jewellery.
         project = self._login("jewellery")
         product = Product.objects.create(
             project=project, title="Ring", price="999", status="draft",
@@ -68,7 +74,30 @@ class JewellerySizeBuilderTests(TestCase):
         self.assertTrue(Attribute.objects.filter(project=project, name="Size").exists())
         self.assertFalse(Attribute.objects.filter(project=project, name="Color").exists())
 
-    def test_onboarding_step_two_mentions_jewellery(self):
+    def test_saving_jewellery_size_and_colour_creates_one_variant_per_combo(self):
+        project = self._login("jewellery")
+        product = Product.objects.create(
+            project=project, title="Ring", price="999", status="draft",
+        )
+        resp = self.client.post(
+            f"/admin/products/{product.pk}/",
+            {
+                "title": "Ring", "price": "999", "status": "draft", "kind": "simple",
+                "tags": "", "sizes": "6, 7", "colors": "Yellow gold, Rose gold",
+                "combo_price[6|||Yellow gold]": "1200",
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        product.refresh_from_db()
+        variants = product.variants.filter(is_active=True)
+        self.assertEqual(variants.count(), 4)  # 2 sizes x 2 colours
+        self.assertTrue(Attribute.objects.filter(project=project, name="Size").exists())
+        self.assertTrue(Attribute.objects.filter(project=project, name="Color").exists())
+        priced = variants.get(price="1200")
+        names = {av.value for av in priced.attribute_values.all()}
+        self.assertEqual(names, {"6", "Yellow gold"})
+
+    def test_onboarding_step_two_mentions_jewellery_colour(self):
         self._login("jewellery")
         body = self.client.get("/admin/start/").content.decode()
-        self.assertIn("Jewellery stores get the same builder for ring", body)
+        self.assertIn("ring &amp; bangle size and colour", body)
