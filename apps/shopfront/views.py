@@ -919,7 +919,7 @@ class BeaconView(View):
             event = request.POST.get("event")
             event = event if event in ("page_view", "product_view") else "page_view"
             is_new = analytics_svc.mark_visitor_seen(project, vid)
-            analytics_svc.record_page_event(project, event)
+            analytics_svc.record_page_event(project, event, path=path)
             if is_new:
                 referrer = (request.POST.get("referrer") or "")[:300]
                 analytics_svc.record_traffic_source(project, referrer, request.get_host())

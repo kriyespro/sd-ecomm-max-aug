@@ -16,8 +16,10 @@ from apps.analytics.services import (
     mark_visitor_seen,
     record_page_event,
     record_traffic_source,
+    top_product_views,
     touch_live_visitor,
 )
+from apps.catalog.models import Product
 from apps.orders.models import Order
 from apps.projects.models import Project
 
@@ -79,6 +81,55 @@ class RecordPageEventTests(TestCase):
         out = funnel_today(self.project)
         self.assertEqual(out["page_views"], 1)
         self.assertEqual(out["product_views"], 1)
+
+
+class TopProductViewsTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        self.project = Project.objects.create(name="ViewsCo", status="active")
+        self.mug = Product.objects.create(
+            project=self.project, title="Mug", slug="mug", price="100",
+        )
+        self.lamp = Product.objects.create(
+            project=self.project, title="Lamp", slug="lamp", price="200",
+        )
+
+    def test_no_views_yet(self):
+        self.assertEqual(top_product_views(self.project), [])
+
+    def test_a_product_view_beacon_shows_up_ranked(self):
+        record_page_event(self.project, "product_view", path="/p/mug/")
+        out = top_product_views(self.project)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["title"], "Mug")
+        self.assertEqual(out[0]["views"], 1)
+
+    def test_ranked_by_view_count_descending(self):
+        for _ in range(3):
+            record_page_event(self.project, "product_view", path="/p/mug/")
+        record_page_event(self.project, "product_view", path="/p/lamp/")
+        out = top_product_views(self.project)
+        self.assertEqual([p["title"] for p in out], ["Mug", "Lamp"])
+        self.assertEqual(out[0]["views"], 3)
+        self.assertEqual(out[1]["views"], 1)
+
+    def test_unknown_slug_does_not_error(self):
+        record_page_event(self.project, "product_view", path="/p/does-not-exist/")
+        self.assertEqual(top_product_views(self.project), [])
+
+    def test_non_product_path_ignored(self):
+        record_page_event(self.project, "product_view", path="/shop/")
+        self.assertEqual(top_product_views(self.project), [])
+
+    def test_scoped_per_project(self):
+        other = Project.objects.create(name="OtherViewsCo", status="active")
+        Product.objects.create(project=other, title="Other Mug", slug="mug", price="50")
+        record_page_event(other, "product_view", path="/p/mug/")
+        self.assertEqual(top_product_views(self.project), [])
+
+    def test_page_view_kind_does_not_count_as_product_view(self):
+        record_page_event(self.project, "page_view", path="/p/mug/")
+        self.assertEqual(top_product_views(self.project), [])
 
 
 class TrafficSourceRecordingTests(TestCase):

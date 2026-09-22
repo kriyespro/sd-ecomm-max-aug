@@ -2,6 +2,7 @@
 
 import csv
 import io
+import re
 import time
 from datetime import date, timedelta
 from decimal import Decimal
@@ -52,10 +53,62 @@ def mark_visitor_seen(project, vid, *, day=None):
     return is_new
 
 
-def record_page_event(project, event):
+def record_page_event(project, event, path=None):
     record_event(project, "page_view")
     if event == "product_view":
         record_event(project, "product_view")
+        if path:
+            _record_product_view(project, path)
+
+
+_PRODUCT_PATH_RE = re.compile(r"^/p/([^/]+)/?$")
+
+
+def _record_product_view(project, path):
+    """Per-product view count, keyed onto the same EventCounter table as
+    every other beacon counter (see funnel_today's docstring for why this
+    can only be beacon-driven) -- one row per product actually viewed that
+    day, not one per project. Feeds top_product_views() below."""
+    m = _PRODUCT_PATH_RE.match(path)
+    if not m:
+        return
+    from apps.catalog.models import Product
+
+    product_id = (
+        Product.objects.filter(project=project, slug=m.group(1))
+        .values_list("pk", flat=True).first()
+    )
+    if product_id:
+        record_event(project, f"pv:{product_id}")
+
+
+def top_product_views(project, limit=6):
+    """Today's most-viewed products, ranked -- the "what's getting looked
+    at" complement to Best sellers ("what's getting bought"). Same idea as
+    the live-visitors widget (apps.analytics.services.live_visitors), just
+    an aggregate instead of a live snapshot: what a beacon has been
+    recording, not who's on the page this second."""
+    from apps.catalog.models import Product
+
+    today = timezone.localdate()
+    rows = list(
+        EventCounter.objects.filter(project=project, date=today, key__startswith="pv:")
+        .order_by("-count")[:limit]
+    )
+    ids = []
+    counts = {}
+    for r in rows:
+        try:
+            pid = int(r.key[3:])
+        except ValueError:
+            continue
+        ids.append(pid)
+        counts[pid] = r.count
+    titles = dict(Product.objects.filter(pk__in=ids).values_list("pk", "title"))
+    return [
+        {"product_id": pid, "title": titles[pid], "views": counts[pid]}
+        for pid in ids if pid in titles
+    ]
 
 
 _TRAFFIC_BUCKETS = (
@@ -416,6 +469,7 @@ def today_dashboard(project):
     # to go look at them elsewhere.
     summary["revenue_points"] = revenue_chart_points(summary["revenue_series"])
     summary["status_donut"] = status_donut_segments(summary["orders_by_status"])
+    summary["top_products_viewed"] = top_product_views(project)
     return summary
 
 

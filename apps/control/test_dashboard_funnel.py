@@ -141,6 +141,27 @@ class StoreDashboardChartsTests(TestCase):
         self.assertIn("Best sellers", body)
         self.assertEqual(body.count("👥 Customers"), 1)
 
+    def test_top_products_viewed_zero_state(self):
+        resp = self.client.get("/admin/")
+        self.assertContains(resp, "Top products viewed today")
+        self.assertContains(resp, "No product views recorded yet today.")
+
+    def test_top_products_viewed_appears_below_revenue_chart(self):
+        from apps.analytics.services import record_page_event
+
+        product = Product.objects.create(
+            project=self.project, title="Chart Topper", slug="chart-topper",
+            status="active", price="199",
+        )
+        record_page_event(self.project, "product_view", path=f"/p/{product.slug}/")
+        body = self.client.get("/admin/").content.decode()
+        self.assertIn("Chart Topper", body)
+        revenue_idx = body.index("Revenue — last 30 days")
+        views_idx = body.index("Top products viewed today")
+        stats_idx = body.index('data-tour="today-stats"')
+        self.assertLess(revenue_idx, views_idx)
+        self.assertLess(views_idx, stats_idx)
+
     def test_today_stats_tour_target_still_present(self):
         # apps.control.tours references data-tour="today-stats" by name --
         # the hero/secondary-card restyle must keep this exact anchor.

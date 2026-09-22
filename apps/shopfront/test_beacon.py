@@ -5,7 +5,7 @@ today" / funnel / live-visitors dashboard widgets."""
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
-from apps.analytics.services import funnel_today, live_visitors
+from apps.analytics.services import funnel_today, live_visitors, top_product_views
 from apps.catalog.models import Product
 from apps.projects.models import Domain, Project
 
@@ -48,6 +48,13 @@ class BeaconViewTests(TestCase):
     def test_product_view_bumps_product_views(self):
         self._post({"kind": "view", "event": "product_view", "path": "/p/lamp/"})
         self.assertEqual(funnel_today(self.project)["product_views"], 1)
+
+    def test_product_view_beacon_feeds_top_product_views(self):
+        self._post({"kind": "view", "event": "product_view", "path": "/p/lamp/"})
+        out = top_product_views(self.project)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["title"], "Lamp")
+        self.assertEqual(out[0]["views"], 1)
 
     def test_heartbeat_does_not_bump_page_views(self):
         resp = self._post({"kind": "view", "event": "page_view", "path": "/"})
