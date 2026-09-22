@@ -134,7 +134,7 @@ class TodayDashboardScreenTests(TestCase):
         self._login_with_store(self.owner)
         resp = self.client.get("/admin/")
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Sales today")
+        self.assertContains(resp, "💰 Sales")
         self.assertContains(resp, "Needs your attention")
         self.assertContains(resp, "Low stock")
 
@@ -146,7 +146,7 @@ class TodayDashboardScreenTests(TestCase):
             Membership.objects.create(user=user, project=self.project, role=role)
             self._login_with_store(user)
             resp = self.client.get("/admin/")
-            self.assertContains(resp, "Sales today")
+            self.assertContains(resp, "💰 Sales")
 
     def test_dgc_still_sees_platform_overview_not_store_financials(self):
         from apps.accounts.models import PlatformRole, Profile
@@ -164,7 +164,7 @@ class TodayDashboardScreenTests(TestCase):
         self._login_with_store(dgc)
         resp = self.client.get("/admin/")
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "Sales today")
+        self.assertNotContains(resp, "💰 Sales")
         self.assertNotContains(resp, "Needs your attention")
 
     def test_owner_not_onboarded_is_sent_to_setup_wizard(self):

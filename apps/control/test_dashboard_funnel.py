@@ -99,11 +99,13 @@ class StoreDashboardChartsTests(TestCase):
         self.assertContains(resp, "Orders by status")
         self.assertContains(resp, "No orders yet.")
 
-    def test_charts_appear_before_stats_cards(self):
+    def test_compact_sales_summary_is_above_the_revenue_chart(self):
+        # Sales summary (data-tour="today-stats") was moved to the very
+        # top of the page -- above the Live visitors/Revenue/Orders row.
         body = self.client.get("/admin/").content.decode()
-        chart_idx = body.index("Revenue — last 30 days")
         stats_idx = body.index('data-tour="today-stats"')
-        self.assertLess(chart_idx, stats_idx)
+        chart_idx = body.index("Revenue — last 30 days")
+        self.assertLess(stats_idx, chart_idx)
 
     def test_only_one_revenue_chart_on_the_page(self):
         body = self.client.get("/admin/").content.decode()
@@ -132,6 +134,28 @@ class StoreDashboardChartsTests(TestCase):
         self.assertIn("Customers", body)
         self.assertIn("High value", body)
 
+    def test_greeting_is_a_single_line(self):
+        # Also asserts there's still exactly one <h1> on the page (the
+        # topbar's page title) -- the greeting is a <p>, not a second <h1>.
+        body = self.client.get("/admin/").content.decode()
+        self.assertEqual(body.count("<h1"), 1)
+        greet_start = body.index('<p class="text-xl font-semibold')
+        greet_end = body.index("</p>", greet_start)
+        greeting = body[greet_start:greet_end]
+        self.assertIn("dco", greeting)
+        self.assertIn("DashChartCo", greeting)
+        self.assertIn("today", greeting)
+
+    def test_top_row_is_live_visitors_revenue_orders_by_status(self):
+        body = self.client.get("/admin/").content.decode()
+        live_idx = body.index("Live visitors")
+        revenue_idx = body.index("Revenue — last 30 days")
+        orders_idx = body.index("Orders by status")
+        stats_idx = body.index('data-tour="today-stats"')
+        self.assertLess(stats_idx, live_idx)
+        self.assertLess(live_idx, revenue_idx)
+        self.assertLess(revenue_idx, orders_idx)
+
     def test_all_three_analytics_cards_present_and_not_duplicated(self):
         # Orders / Customers / Products, moved in from the full Analytics
         # report verbatim -- each appears exactly once, not duplicated with
@@ -158,11 +182,11 @@ class StoreDashboardChartsTests(TestCase):
         record_page_event(self.project, "product_view", path=f"/p/{product.slug}/")
         body = self.client.get("/admin/").content.decode()
         self.assertEqual(body.count("Chart Topper"), 3)  # today + week + month
+        stats_idx = body.index('data-tour="today-stats"')
         revenue_idx = body.index("Revenue — last 30 days")
         views_idx = body.index("Top products — today")
-        stats_idx = body.index('data-tour="today-stats"')
+        self.assertLess(stats_idx, revenue_idx)
         self.assertLess(revenue_idx, views_idx)
-        self.assertLess(views_idx, stats_idx)
 
     def test_traffic_source_today_week_month_all_present(self):
         resp = self.client.get("/admin/")
