@@ -107,6 +107,16 @@ class StoreDashboardChartsTests(TestCase):
         chart_idx = body.index("Revenue — last 30 days")
         self.assertLess(stats_idx, chart_idx)
 
+    def test_sales_summary_is_one_inline_row_not_stacked_rows(self):
+        body = self.client.get("/admin/").content.decode()
+        stats_start = body.index('data-tour="today-stats"')
+        stats_end = body.index("</div>", body.index("</dl>", stats_start))
+        card = body[stats_start:stats_end]
+        self.assertIn("flex flex-wrap items-center", card)
+        self.assertNotIn("divide-y", card)
+        for label in ("Today", "This week", "This month", "All time"):
+            self.assertIn(label, card)
+
     def test_only_one_revenue_chart_on_the_page(self):
         body = self.client.get("/admin/").content.decode()
         self.assertEqual(body.count("Revenue — last 30 days"), 1)

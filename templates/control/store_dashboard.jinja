@@ -14,14 +14,14 @@
 
   {% include "control/partials/_quick_launch.jinja" %}
 
-  {# --- sales summary: compact, one column, moved to the top ---------- #}
-  <div data-tour="today-stats" class="max-w-md rounded-2xl border-t-4 border-amber-400 bg-white p-4 shadow-sm ring-1 ring-slate-200">
-    <h2 class="text-sm font-semibold text-slate-700">💰 Sales</h2>
-    <dl class="mt-1 divide-y divide-slate-100 text-sm">
+  {# --- sales summary: one compact inline row -------------------------- #}
+  <div data-tour="today-stats" class="rounded-2xl border-t-4 border-amber-400 bg-white p-4 shadow-sm ring-1 ring-slate-200">
+    <dl class="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
+      <span class="text-sm font-semibold text-slate-700">💰 Sales</span>
       {% for label, value in [
         ("Today", t.sales.today), ("This week", t.sales.week),
         ("This month", t.sales.month), ("All time", t.sales.total)] %}
-      <div class="flex items-center justify-between py-1.5">
+      <div class="flex items-baseline gap-1.5">
         <dt class="text-slate-500">{{ label }}</dt>
         <dd class="font-semibold text-slate-900">{{ active_project.currency }} {{ value }}</dd>
       </div>
