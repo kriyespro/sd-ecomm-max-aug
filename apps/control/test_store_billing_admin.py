@@ -218,6 +218,41 @@ class StoreCreateDefaultsTests(TestCase):
         self.assertEqual(sub.status, SubscriptionStatus.TRIALING)
         self.assertGreater((sub.current_period_end - timezone.now()).days, 25)
 
+    def test_extend_control_renders_inline_on_stores_list(self):
+        p = Project.objects.create(name="Listrow Co")
+        resp = self.client.get("/admin/stores/")
+        self.assertContains(resp, f'/admin/stores/{p.pk}/billing/extend/')
+        self.assertContains(resp, "Extend")
+
+    def test_extend_from_list_redirects_back_to_the_list_not_the_detail_page(self):
+        p = Project.objects.create(name="Redirecto")
+        sub = p.subscription
+        sub.status = SubscriptionStatus.SUSPENDED
+        sub.save(update_fields=["status"])
+
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/extend/",
+            {"extend": "1m", "next": "/admin/stores/?status=suspended"},
+        )
+        self.assertRedirects(resp, "/admin/stores/?status=suspended")
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, SubscriptionStatus.TRIALING)
+
+    def test_extend_without_next_still_falls_back_to_the_detail_page(self):
+        p = Project.objects.create(name="Fallback Co")
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/extend/", {"extend": "1m"},
+        )
+        self.assertRedirects(resp, f"/admin/stores/{p.pk}/")
+
+    def test_extend_ignores_an_external_next_url(self):
+        p = Project.objects.create(name="Evilnext Co")
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/extend/",
+            {"extend": "1m", "next": "https://evil.example/"},
+        )
+        self.assertRedirects(resp, f"/admin/stores/{p.pk}/")
+
     def test_extend_requires_a_valid_choice(self):
         p = Project.objects.create(name="Badchoice")
         resp = self.client.post(

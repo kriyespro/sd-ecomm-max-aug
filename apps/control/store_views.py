@@ -310,9 +310,17 @@ class StoreBillingAdjustView(_StoreScope, View):
 
 class StoreBillingExtendView(_StoreScope, View):
     """Super-admin: free goodwill extension — un-suspend, or push a trial/
-    active period further out, with no invoice/payment recorded."""
+    active period further out, with no invoice/payment recorded. Usable
+    inline from the Stores list (POST carries ``next`` back to the list,
+    filters/page and all) as well as from the store detail screen."""
 
     _DAYS = {"1w": 7, "2w": 14, "1m": 30, "3m": 90}
+
+    def _redirect_back(self, request, pk):
+        return redirect(safe_next(
+            request, request.POST.get("next"),
+            reverse("control:store_detail", kwargs={"pk": pk}),
+        ))
 
     def post(self, request, pk, *args, **kwargs):
         from apps.billing import services as billing_svc
@@ -323,18 +331,18 @@ class StoreBillingExtendView(_StoreScope, View):
         sub = getattr(store, "subscription", None)
         if sub is None:
             messages.error(request, "This store has no subscription.")
-            return redirect("control:store_detail", pk=pk)
+            return self._redirect_back(request, pk)
         days = self._DAYS.get(request.POST.get("extend"))
         if days is None:
             messages.error(request, "Pick how long to extend by.")
-            return redirect("control:store_detail", pk=pk)
+            return self._redirect_back(request, pk)
         billing_svc.admin_extend(sub, days=days, actor=request.user)
         sub.refresh_from_db()
         messages.success(
             request,
             f"{store.name}: extended free until {sub.current_period_end:%d %b %Y}.",
         )
-        return redirect("control:store_detail", pk=pk)
+        return self._redirect_back(request, pk)
 
 
 class StoreBillingMarkPaidView(_StoreScope, View):
