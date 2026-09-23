@@ -59,7 +59,8 @@
             <th class="py-2 pr-3 font-medium">Variant</th>
             <th class="py-2 pr-3 font-medium">Price</th>
             <th class="py-2 pr-3 font-medium">Sale price</th>
-            <th class="py-2 font-medium">Stock</th>
+            <th class="py-2 pr-3 font-medium">Stock</th>
+            <th class="py-2 font-medium">Photo</th>
           </tr>
         </thead>
         <tbody>
@@ -78,17 +79,30 @@
                        class="w-24 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none"
                        placeholder="—">
               </td>
-              <td class="py-2">
+              <td class="py-2 pr-3">
                 <input type="text" inputmode="numeric" :name="'combo_stock[' + key(s, c) + ']'"
                        :value="val(key(s, c), 'stock')"
                        class="w-20 rounded border border-slate-300 px-2 py-1 text-sm focus:border-slate-900 focus:outline-none"
                        placeholder="0">
+              </td>
+              <td class="py-2">
+                <div class="flex items-center gap-2">
+                  <template x-if="val(key(s, c), 'image_url')">
+                    <img :src="val(key(s, c), 'image_url')" class="h-9 w-9 rounded object-cover ring-1 ring-slate-200">
+                  </template>
+                  <input type="file" accept="image/*" :name="'combo_image[' + key(s, c) + ']'"
+                         class="block w-28 text-xs text-slate-500 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:text-slate-700 hover:file:bg-slate-200">
+                </div>
               </td>
             </tr>
           </template>
         </tbody>
       </table>
       <p class="mt-2 text-xs text-slate-400" x-text="combos.length + ' variant' + (combos.length === 1 ? '' : 's')"></p>
+      <p class="mt-1 text-xs text-slate-400">
+        Photo is optional per combo — leave blank to keep showing the product's own gallery.
+        On the storefront, picking that combo swaps in this photo automatically.
+      </p>
     </div>
   </template>
 </div>

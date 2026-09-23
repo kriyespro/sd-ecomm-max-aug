@@ -332,6 +332,9 @@ class Variant(TimeStampedModel):
     stock = models.IntegerField(default=0)
     is_active = models.BooleanField(default=True)
     attribute_values = models.ManyToManyField(AttributeValue, blank=True, related_name="variants")
+    # Optional — a Size/Colour combo's own photo (e.g. each colour shot
+    # separately). Blank = storefront falls back to the product's own gallery.
+    image = models.ImageField(upload_to="variants/", blank=True, null=True)
 
     class Meta:
         ordering = ["id"]
@@ -340,6 +343,9 @@ class Variant(TimeStampedModel):
         return self.name or f"Variant<{self.product_id}>"
 
     def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.image, target_kb=60, max_edge=800)
         if not self.sku and self.product_id:
             parent = self.product.sku or _unique_sku(
                 Product.objects.filter(project=self.product.project), self.product.title

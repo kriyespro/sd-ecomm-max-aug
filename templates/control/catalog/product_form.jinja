@@ -28,9 +28,9 @@
       {{ render_form(form, exclude=['hsn_sac', 'tax_class']) }}
     </div>
 
-    {% if size_color_enabled %}
+    <div id="size-color-wrap" class="{{ '' if size_color_enabled else 'hidden' }}">
       {% include "control/catalog/_size_color.jinja" %}
-    {% endif %}
+    </div>
 
     <details class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
       <summary class="cursor-pointer text-sm font-semibold text-slate-700">Extra</summary>
@@ -71,6 +71,26 @@
 </div>
 
 <script>
+(function () {
+  // Kind: Variable shows the Size & Colour builder even for stores whose
+  // vertical wouldn't otherwise get it; Digital/Service hide the physical
+  // shipping fields, which don't apply to them.
+  var kindSel = document.getElementById('id_kind');
+  var scWrap = document.getElementById('size-color-wrap');
+  var verticalWantsSizeColor = {{ 'true' if size_color_enabled else 'false' }};
+  var shipFields = ['weight', 'length', 'width', 'height'].map(function (n) {
+    return document.querySelector('[data-field="' + n + '"]');
+  });
+  function sync() {
+    if (!kindSel) return;
+    var kind = kindSel.value;
+    if (scWrap) scWrap.classList.toggle('hidden', !(verticalWantsSizeColor || kind === 'variable'));
+    var physical = kind !== 'digital' && kind !== 'service';
+    shipFields.forEach(function (el) { if (el) el.classList.toggle('hidden', !physical); });
+  }
+  if (kindSel) { kindSel.addEventListener('change', sync); sync(); }
+})();
+
 function aiProductAssist() {
   return {
     brief: '', loading: false, error: '', modelUsed: '',

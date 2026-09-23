@@ -22,7 +22,7 @@ from django.views.generic import (
 )
 
 from apps.catalog import importer as product_importer
-from apps.catalog.models import Brand, Product, ProductImage, ProductStatus, ProductType, Tag
+from apps.catalog.models import Brand, Product, ProductImage, ProductKind, ProductStatus, ProductType, Tag
 from apps.categories.models import Category
 from apps.core.events import Events, emit
 from apps.core.models import AuditLog
@@ -315,18 +315,22 @@ class ProductBulkStatusView(_ScopedQuerysetMixin, View):
 
 class _ProductSizeColorMixin:
     """Apparel stores (see ``apps.projects.verticals``) get the Size & Colour
-    quick builder on the product form. On save the two comma lists + per-combo
-    price/stock table are reconciled into ``Variant`` rows."""
+    quick builder on the product form automatically; any store also gets it
+    the moment a product's Kind is set to Variable. On save the two comma
+    lists + per-combo price/stock/image table are reconciled into
+    ``Variant`` rows."""
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         from apps.projects.verticals import wants_jewellery_sizes, wants_size_color
 
-        enabled = wants_size_color(self.active_project)
+        obj = ctx.get("object")
+        enabled = wants_size_color(self.active_project) or (
+            obj is not None and obj.kind == ProductKind.VARIABLE
+        )
         ctx["size_color_enabled"] = enabled
         ctx["jewellery_sizes"] = wants_jewellery_sizes(self.active_project)
-        obj = ctx.get("object")
-        if enabled and obj is not None:
+        if obj is not None:
             from apps.catalog.variants import size_color_of
 
             sizes, colors, rows = size_color_of(obj)
@@ -344,9 +348,10 @@ class _ProductSizeColorMixin:
         response = super().form_valid(form)
         from apps.projects.verticals import wants_size_color
 
-        if wants_size_color(self.active_project):
+        if wants_size_color(self.active_project) or self.object.kind == ProductKind.VARIABLE:
             from apps.catalog.variants import (
                 apply_size_color,
+                images_from_files,
                 matrix_from_post,
                 parse_list,
             )
@@ -361,6 +366,7 @@ class _ProductSizeColorMixin:
                 sizes=parse_list(post.get("sizes")),
                 colors=parse_list(post.get("colors")),
                 matrix=matrix_from_post(post),
+                images=images_from_files(self.request.FILES),
             )
         return response
 

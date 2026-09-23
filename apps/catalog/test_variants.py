@@ -91,6 +91,76 @@ class ApplySizeColorTests(TestCase):
         self.assertEqual(rows[combo_key("S", "Red")]["stock"], "4")
 
 
+def _png_bytes():
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), "blue").save(buf, format="PNG")
+    return buf.getvalue()
+
+
+class ComboImageTests(TestCase):
+    """Each Size/Colour combo can carry its own photo — optional, falls back
+    to the product's own gallery when unset, and a blank file input on
+    re-save never clears whatever photo was already there."""
+
+    def setUp(self):
+        self.project = Project.objects.create(name="Palette Co", status="active")
+        self.product = Product.objects.create(
+            project=self.project, title="Scarf", price=Decimal("499"),
+            status="active", kind=ProductKind.SIMPLE,
+        )
+
+    def _upload(self, name="red.png"):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        return SimpleUploadedFile(name, _png_bytes(), content_type="image/png")
+
+    def test_uploaded_combo_image_is_saved_on_the_variant(self):
+        apply_size_color(
+            self.product, sizes=[], colors=["Red", "Blue"],
+            images={combo_key("", "Red"): self._upload()},
+        )
+        red = self.product.variants.get(name="Red")
+        blue = self.product.variants.get(name="Blue")
+        self.assertTrue(red.image)
+        self.assertFalse(blue.image)
+
+    def test_resave_without_a_new_file_keeps_the_existing_image(self):
+        apply_size_color(
+            self.product, sizes=[], colors=["Red"],
+            images={combo_key("", "Red"): self._upload()},
+        )
+        first_name = self.product.variants.get(name="Red").image.name
+
+        apply_size_color(
+            self.product, sizes=[], colors=["Red"],
+            matrix={combo_key("", "Red"): {"stock": "3"}},
+        )
+        red = self.product.variants.get(name="Red")
+        self.assertEqual(red.image.name, first_name)
+        self.assertEqual(red.stock, 3)
+
+    def test_storefront_axes_reports_the_combo_image_url(self):
+        apply_size_color(
+            self.product, sizes=[], colors=["Red", "Blue"],
+            images={combo_key("", "Red"): self._upload()},
+        )
+        axes = storefront_axes(self.product.variants.filter(is_active=True))
+        self.assertIsNotNone(axes["map"][combo_key("", "Red")]["image"])
+        self.assertIsNone(axes["map"][combo_key("", "Blue")]["image"])
+
+    def test_size_color_of_reports_the_combo_image_url_for_prefill(self):
+        apply_size_color(
+            self.product, sizes=[], colors=["Red"],
+            images={combo_key("", "Red"): self._upload()},
+        )
+        _, _, rows = size_color_of(self.product)
+        self.assertTrue(rows[combo_key("", "Red")]["image_url"])
+
+
 class TrackVariantStockTests(TestCase):
     """Opt-in real stock enforcement for Size/Colour variants
     (Product.track_variant_stock) — off by default, matching the platform's
@@ -323,6 +393,24 @@ class StorefrontPickerRenderTests(TestCase):
         # state (that was the bug: two separate `sel`/`map` objects that
         # couldn't see each other).
         self.assertEqual(body.count('sel: {'), 1)
+
+    def test_combo_image_swaps_the_displayed_photo(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=["Black", "White"],
+            images={combo_key("S", "Black"): SimpleUploadedFile(
+                "s-black.png", _png_bytes(), content_type="image/png",
+            )},
+        )
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        # The combo's own photo url reaches the same `map` the price reads...
+        self.assertIn('"image":', body)
+        # ...and an overlay <img> bound to the selected combo's photo swaps
+        # in over the product's own gallery.
+        self.assertIn('x-show="cur && cur.image"', body)
+        self.assertIn(':src="cur && cur.image"', body)
 
     def test_price_updates_with_the_selected_size_not_frozen_at_render_time(self):
         """Regression: the price shown was always the product's own price,

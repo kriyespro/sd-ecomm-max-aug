@@ -49,6 +49,20 @@ def _dec(val):
     return d if d >= 0 else None
 
 
+def images_from_files(files):
+    """Pull ``combo_image[key]`` uploads out of a submitted product form's
+    ``request.FILES`` — same key shape as ``matrix_from_post``'s combo_*
+    fields, one optional photo per Size/Colour combo."""
+    out = {}
+    prefix = "combo_image["
+    for name in files:
+        if name.startswith(prefix) and name.endswith("]"):
+            f = files.get(name)
+            if f:
+                out[name[len(prefix):-1]] = f
+    return out
+
+
 def _int(val):
     try:
         return max(0, int(Decimal(str(val))))
@@ -138,14 +152,19 @@ def _sync_variant_stock_tracking(product):
 
 
 @transaction.atomic
-def apply_size_color(product, *, sizes, colors, matrix=None):
+def apply_size_color(product, *, sizes, colors, matrix=None, images=None):
     """Reconcile ``product``'s variants to the given size/colour lists.
 
     ``matrix`` maps ``combo_key(size, color)`` -> ``{"price", "sale_price",
     "stock"}`` (any missing / blank -> inherit product price, stock 0).
+    ``images`` maps ``combo_key(size, color)`` -> an uploaded file for that
+    combo's own photo — optional, and only replaces a variant's existing
+    image when a new file is actually posted for it (a blank file input on
+    re-save leaves whatever photo was already there alone).
     Returns ``(created, updated, deactivated)`` counts.
     """
     matrix = matrix or {}
+    images = images or {}
     project = product.project
     sizes = list(sizes or [])
     colors = list(colors or [])
@@ -194,12 +213,13 @@ def apply_size_color(product, *, sizes, colors, matrix=None):
         sale = _dec(row.get("sale_price"))
         stock = _int(row.get("stock"))
         label = " / ".join(x for x in (s, c) if x)
+        img_file = images.get(combo_key(s, c))
 
         v = by_sig.get(sig)
         if v is None:
             v = Variant.objects.create(
                 product=product, name=label, price=price, sale_price=sale,
-                stock=stock, is_active=True,
+                stock=stock, is_active=True, image=img_file or None,
             )
             v.attribute_values.set(pair)
             created += 1
@@ -207,7 +227,11 @@ def apply_size_color(product, *, sizes, colors, matrix=None):
             v.name, v.price, v.sale_price, v.stock, v.is_active = (
                 label, price, sale, stock, True,
             )
-            v.save(update_fields=["name", "price", "sale_price", "stock", "is_active"])
+            update_fields = ["name", "price", "sale_price", "stock", "is_active"]
+            if img_file:
+                v.image = img_file
+                update_fields.append("image")
+            v.save(update_fields=update_fields)
             # keep any non-axis values, refresh the axis ones
             keep = [av for av in v.attribute_values.all() if av.id not in all_axis_ids]
             v.attribute_values.set(keep + pair)
@@ -265,6 +289,7 @@ def size_color_of(product):
             "price": "" if v.price is None else f"{v.price:.2f}",
             "sale_price": "" if v.sale_price is None else f"{v.sale_price:.2f}",
             "stock": str(v.stock or 0),
+            "image_url": v.image.url if v.image else "",
         }
     return sizes, colors, rows
 
@@ -347,6 +372,7 @@ def storefront_axes(variants):
             "sale_price": str(v.sale_price) if on_sale else None,
             "in_stock": stock > 0,
             "stock": stock,
+            "image": v.image.url if v.image else None,
         }
 
     if not any_axis:

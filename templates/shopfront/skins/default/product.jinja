@@ -92,6 +92,13 @@
           {% else %}
           <img src="{{ placeholder(1000, 1250, 'Main photo') }}" alt="{{ product.title }}" class="absolute inset-0 h-full w-full object-cover">
           {% endif %}
+          {% if variant_options and variant_options.axes %}
+          {# Size/Colour combo has its own photo — swaps in over the gallery
+             the moment that combo is picked; falls back to the product's own
+             gallery above when the combo has none. #}
+          <img x-show="cur && cur.image" :src="cur && cur.image" alt="{{ product.title }}"
+               class="card-img absolute inset-0 h-full w-full object-cover">
+          {% endif %}
           {% if imgs %}<span class="absolute bottom-3 right-3 bg-paper/90 px-2 py-1 text-[10px] font-medium tracking-wide text-ink opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>{% endif %}
         </div>
         {% if imgs | length > 1 %}

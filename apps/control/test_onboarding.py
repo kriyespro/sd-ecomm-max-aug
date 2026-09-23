@@ -145,10 +145,29 @@ class ProductFormSizeColorTests(TestCase):
         self.assertContains(resp, "Size &amp; colour")
 
     def test_builder_hidden_for_non_apparel(self):
+        # Still in the DOM (Kind=Variable reveals it client-side for any
+        # store) but starts hidden — a non-apparel merchant who leaves Kind
+        # on Simple never sees it.
         self.project.feature_flags = {"onboarded": True, "vertical": "fmcg"}
         self.project.save(update_fields=["feature_flags"])
         resp = self.client.get("/admin/products/new/")
-        self.assertNotContains(resp, "Size &amp; colour")
+        self.assertContains(resp, 'id="size-color-wrap" class="hidden"')
+
+    def test_kind_variable_builds_variants_even_off_the_apparel_verticals(self):
+        self.project.feature_flags = {"onboarded": True, "vertical": "fmcg"}
+        self.project.save(update_fields=["feature_flags"])
+        resp = self.client.post(
+            "/admin/products/new/",
+            {
+                "title": "Party Mix", "slug": "", "kind": "variable",
+                "price": "199", "status": "active", "sku": "",
+                "short_description": "", "description": "",
+                "sizes": "250g, 500g", "colors": "",
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        product = Product.objects.get(project=self.project, title="Party Mix")
+        self.assertEqual(product.variants.filter(is_active=True).count(), 2)
 
     def test_save_builds_variants(self):
         resp = self.client.post(
