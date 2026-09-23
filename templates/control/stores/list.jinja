@@ -118,21 +118,21 @@
           </td>
           {% if is_admin %}<td class="px-3 py-2 text-[11px] text-slate-500">{{ sub.manager.email if sub and sub.manager_id else '—' }}</td>{% endif %}
           <td class="px-3 py-2 text-right">
-            <div class="flex flex-col items-end gap-1.5">
+            <div class="flex items-center justify-end gap-1.5 whitespace-nowrap">
               <form method="post" action="{{ url('control:store_switch', kwargs={'pk': s.pk}) }}" class="inline">
-                {{ csrf_input }}<button class="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-orange-500 px-2.5 py-1 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-300">Work on this <span aria-hidden="true">→</span></button>
+                {{ csrf_input }}<button class="inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-orange-500 px-2 py-1 text-xs font-semibold text-white shadow-sm hover:bg-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-300">Work on this <span aria-hidden="true">→</span></button>
               </form>
               {% if is_admin and sub %}
               <form method="post" action="{{ url('control:store_billing_extend', kwargs={'pk': s.pk}) }}" class="inline-flex items-center gap-1">
                 {{ csrf_input }}
                 <input type="hidden" name="next" value="{{ request.get_full_path() }}">
-                <select name="extend" class="rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] focus:border-slate-900 focus:outline-none">
-                  <option value="1w">+1 week</option>
-                  <option value="2w">+2 weeks</option>
-                  <option value="1m" selected>+1 month</option>
-                  <option value="3m">+3 months</option>
+                <select name="extend" class="rounded-md border border-slate-300 bg-white px-1 py-1 text-[11px] focus:border-slate-900 focus:outline-none">
+                  <option value="1w">+1w</option>
+                  <option value="2w">+2w</option>
+                  <option value="1m" selected>+1m</option>
+                  <option value="3m">+3m</option>
                 </select>
-                <button class="whitespace-nowrap rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                <button class="whitespace-nowrap rounded-md border border-slate-300 bg-white px-1.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
                         title="Free extension — un-suspends a suspended/past-due store, no invoice, no commission">
                   Extend
                 </button>
