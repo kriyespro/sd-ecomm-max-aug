@@ -101,6 +101,27 @@
         </div>
         <p class="text-xs text-slate-400">No charge is taken — a paid invoice is written so DGC commission still accrues.</p>
       </form>
+
+      <form method="post" action="{{ url('control:store_billing_extend', kwargs={'pk': store.pk}) }}"
+            class="space-y-2 border-t border-slate-200 pt-4">
+        {{ csrf_input }}
+        <label for="ext-days" class="block text-sm font-medium text-slate-700">Extend for free / un-suspend</label>
+        <div class="flex flex-wrap items-center gap-2">
+          <select id="ext-days" name="extend" class="{{ _SEL }} sm:w-56">
+            <option value="1w">1 week</option>
+            <option value="2w">2 weeks</option>
+            <option value="1m" selected>1 month</option>
+            <option value="3m">3 months</option>
+          </select>
+          <button class="shrink-0 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">Extend</button>
+        </div>
+        <p class="text-xs text-slate-400">
+          Goodwill extension — no invoice, no DGC commission. Un-suspends a
+          suspended/past-due store back to trialing; a trialing store just
+          gets a longer trial; an active (paying) store keeps its status
+          with extra time.
+        </p>
+      </form>
       {% endif %}
     </div>
     {% endif %}

@@ -503,6 +503,52 @@ def admin_mark_paid(subscription, *, term=None, actor=None):
     return subscription
 
 
+def admin_extend(subscription, *, days, actor=None):
+    """Super-admin goodwill extension — un-suspend a store, or push a
+    trial/active period further out, for free. No invoice, no DGC
+    commission (unlike admin_mark_paid, which records a real payment).
+
+    A suspended/past-due/cancelled subscription goes back to trialing —
+    that's the honest state for "extended without paying". A trialing
+    subscription just gets a longer trial_end. An active (paying)
+    subscription keeps its status, just gets extra time on the current
+    period. Any open (overdue) invoice is voided so suspend_overdue()
+    doesn't immediately re-suspend the store on its next run.
+    """
+    now = timezone.now()
+    new_end = max(subscription.current_period_end, now) + timedelta(days=days)
+    fields = {"current_period_end", "updated_at"}
+
+    subscription.invoices.filter(status=InvoiceStatus.OPEN).update(
+        status=InvoiceStatus.VOID
+    )
+
+    if subscription.status in (
+        SubscriptionStatus.SUSPENDED, SubscriptionStatus.PAST_DUE, SubscriptionStatus.CANCELLED,
+    ):
+        subscription.status = SubscriptionStatus.TRIALING
+        subscription.trial_end = new_end
+        subscription.cancel_at_period_end = False
+        fields |= {"status", "trial_end", "cancel_at_period_end"}
+    elif subscription.status == SubscriptionStatus.TRIALING:
+        subscription.trial_end = new_end
+        fields.add("trial_end")
+
+    subscription.current_period_end = new_end
+    subscription.save(update_fields=list(fields))
+
+    if actor is not None:
+        from apps.core.models import AuditLog
+        from apps.core.services import record_audit
+
+        record_audit(
+            actor=actor, project=subscription.project,
+            action=AuditLog.Action.UPDATE, target=subscription,
+            changes={"admin_extend_days": days},
+        )
+    return subscription
+
+
 # --- dashboards -----------------------------------------------
 
 def platform_summary():

@@ -85,6 +85,59 @@ class AdminAdjustTests(TestCase):
         self.assertEqual(self.sub.status, SubscriptionStatus.ACTIVE)
         self.assertEqual(self.sub.invoices.get().status, InvoiceStatus.PAID)
 
+    def test_extend_unsuspends_a_suspended_store(self):
+        self.sub.status = SubscriptionStatus.SUSPENDED
+        self.sub.current_period_end = timezone.now() - timedelta(days=1)
+        self.sub.save(update_fields=["status", "current_period_end"])
+        inv = billing_svc.issue_invoice(self.sub)
+        self.assertEqual(inv.status, InvoiceStatus.OPEN)
+
+        billing_svc.admin_extend(self.sub, days=7)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, SubscriptionStatus.TRIALING)
+        self.assertGreater((self.sub.current_period_end - timezone.now()).days, 5)
+        self.assertGreater((self.sub.trial_end - timezone.now()).days, 5)
+        # the overdue invoice that caused the suspension is voided, not left
+        # open -- otherwise suspend_overdue() would immediately re-suspend
+        inv.refresh_from_db()
+        self.assertEqual(inv.status, InvoiceStatus.VOID)
+
+    def test_extend_does_not_immediately_re_suspend(self):
+        self.sub.status = SubscriptionStatus.SUSPENDED
+        self.sub.current_period_end = timezone.now() - timedelta(days=1)
+        self.sub.save(update_fields=["status", "current_period_end"])
+        inv = billing_svc.issue_invoice(self.sub)
+        inv.due_at = timezone.now() - timedelta(hours=1)
+        inv.save(update_fields=["due_at"])
+
+        billing_svc.admin_extend(self.sub, days=7)
+        billing_svc.suspend_overdue()
+        self.sub.refresh_from_db()
+        self.assertNotEqual(self.sub.status, SubscriptionStatus.SUSPENDED)
+
+    def test_extend_on_a_trialing_store_just_lengthens_the_trial(self):
+        start_end = self.sub.current_period_end
+        self.assertEqual(self.sub.status, SubscriptionStatus.TRIALING)
+
+        billing_svc.admin_extend(self.sub, days=30)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, SubscriptionStatus.TRIALING)
+        self.assertGreater(self.sub.current_period_end, start_end)
+
+    def test_extend_on_an_active_store_keeps_status_active(self):
+        self.sub.status = SubscriptionStatus.ACTIVE
+        self.sub.save(update_fields=["status"])
+
+        billing_svc.admin_extend(self.sub, days=30)
+        self.sub.refresh_from_db()
+        self.assertEqual(self.sub.status, SubscriptionStatus.ACTIVE)
+
+    def test_extend_never_records_a_payment(self):
+        self.sub.status = SubscriptionStatus.SUSPENDED
+        self.sub.save(update_fields=["status"])
+        billing_svc.admin_extend(self.sub, days=7)
+        self.assertFalse(self.sub.invoices.filter(status=InvoiceStatus.PAID).exists())
+
     def test_mark_paid_one_year_bills_full_term(self):
         billing_svc.admin_adjust(self.sub, plan=self.growth, period=BillingPeriod.MONTHLY)
         billing_svc.issue_invoice(self.sub)  # a stale open monthly invoice
@@ -150,3 +203,41 @@ class StoreCreateDefaultsTests(TestCase):
         self.assertEqual(sub.period, BillingPeriod.YEARLY)
         self.assertEqual(sub.status, SubscriptionStatus.ACTIVE)
         self.assertGreater((sub.current_period_end - timezone.now()).days, 350)
+
+    def test_admin_can_extend_unsuspend_from_store_screen(self):
+        p = Project.objects.create(name="Suspendo")
+        sub = p.subscription
+        sub.status = SubscriptionStatus.SUSPENDED
+        sub.save(update_fields=["status"])
+
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/extend/", {"extend": "1m"}
+        )
+        self.assertEqual(resp.status_code, 302)
+        sub.refresh_from_db()
+        self.assertEqual(sub.status, SubscriptionStatus.TRIALING)
+        self.assertGreater((sub.current_period_end - timezone.now()).days, 25)
+
+    def test_extend_requires_a_valid_choice(self):
+        p = Project.objects.create(name="Badchoice")
+        resp = self.client.post(
+            f"/admin/stores/{p.pk}/billing/extend/", {"extend": "nonsense"}, follow=True,
+        )
+        self.assertContains(resp, "Pick how long to extend by.")
+
+    def test_extend_form_renders_on_store_detail(self):
+        p = Project.objects.create(name="Visible Co")
+        resp = self.client.get(f"/admin/stores/{p.pk}/")
+        self.assertContains(resp, "Extend for free / un-suspend")
+        self.assertContains(resp, "/admin/stores/%d/billing/extend/" % p.pk)
+
+    def test_extend_requires_platform_admin(self):
+        from apps.accounts.models import Membership, StoreRole
+
+        p = Project.objects.create(name="NotAdminCo", status="active",
+                                   feature_flags={"onboarded": True})
+        owner = User.objects.create_user("noa", "noa@t.test", "pw", is_staff=True)
+        Membership.objects.create(user=owner, project=p, role=StoreRole.OWNER)
+        self.client.force_login(owner)
+        resp = self.client.post(f"/admin/stores/{p.pk}/billing/extend/", {"extend": "1m"})
+        self.assertEqual(resp.status_code, 403)

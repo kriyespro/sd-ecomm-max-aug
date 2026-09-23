@@ -308,6 +308,35 @@ class StoreBillingAdjustView(_StoreScope, View):
         return redirect("control:store_detail", pk=pk)
 
 
+class StoreBillingExtendView(_StoreScope, View):
+    """Super-admin: free goodwill extension — un-suspend, or push a trial/
+    active period further out, with no invoice/payment recorded."""
+
+    _DAYS = {"1w": 7, "2w": 14, "1m": 30, "3m": 90}
+
+    def post(self, request, pk, *args, **kwargs):
+        from apps.billing import services as billing_svc
+
+        store = self.get_store(pk)
+        if not is_platform_admin(request.user):
+            raise PermissionDenied
+        sub = getattr(store, "subscription", None)
+        if sub is None:
+            messages.error(request, "This store has no subscription.")
+            return redirect("control:store_detail", pk=pk)
+        days = self._DAYS.get(request.POST.get("extend"))
+        if days is None:
+            messages.error(request, "Pick how long to extend by.")
+            return redirect("control:store_detail", pk=pk)
+        billing_svc.admin_extend(sub, days=days, actor=request.user)
+        sub.refresh_from_db()
+        messages.success(
+            request,
+            f"{store.name}: extended free until {sub.current_period_end:%d %b %Y}.",
+        )
+        return redirect("control:store_detail", pk=pk)
+
+
 class StoreBillingMarkPaidView(_StoreScope, View):
     """Super-admin: record an out-of-band payment (settle open invoice / renew)."""
 
