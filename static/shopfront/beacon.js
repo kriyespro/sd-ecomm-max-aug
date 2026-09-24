@@ -16,6 +16,14 @@
     return /\/p\/[^/]+\/?$/.test(location.pathname);
   }
 
+  function refCode() {
+    try {
+      return new URLSearchParams(location.search).get("ref") || "";
+    } catch (e) {
+      return "";
+    }
+  }
+
   function send(kind) {
     var payload = {
       kind: kind,
@@ -23,6 +31,10 @@
       path: location.pathname,
       referrer: document.referrer || "",
     };
+    if (kind !== "heartbeat") {
+      var ref = refCode();
+      if (ref) payload.ref = ref;
+    }
     var body = Object.keys(payload)
       .map(function (k) { return k + "=" + encodeURIComponent(payload[k]); })
       .join("&");

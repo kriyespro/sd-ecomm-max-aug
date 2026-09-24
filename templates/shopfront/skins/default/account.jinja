@@ -30,6 +30,20 @@
     </div>
   </section>
 
+  {% if referral_program and referral_program.is_active %}
+  <section class="mt-12 border border-line bg-panel px-5 py-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h2 class="text-[12px] font-semibold uppercase tracking-luxe text-mute">Refer &amp; earn</h2>
+        <p class="mt-1 text-sm text-ink/75">Share your link, earn a commission on every order it brings.</p>
+      </div>
+      <a href="{{ url('shopfront:referrals') }}" class="shrink-0 border border-ink px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe hover:bg-ink hover:text-paper">
+        My referrals
+      </a>
+    </div>
+  </section>
+  {% endif %}
+
   <section class="mt-12">
     <h2 class="mb-4 text-[12px] font-semibold uppercase tracking-luxe text-mute">Wishlist</h2>
     {% if wishlist_items %}

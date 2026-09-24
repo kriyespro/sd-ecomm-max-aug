@@ -1,0 +1,147 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Referral program{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Referral program · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Let any signed-in customer become a referrer — they get their own
+      <code>?ref=CODE</code> link, and earn a commission on every order it
+      brings you. A commission is only created once the order's payment
+      actually succeeds (or, for Cash on Delivery, once you mark the cash
+      collected) — never for a cancelled or failed order.
+    </p>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <form method="post" class="grid gap-4 md:grid-cols-2">
+      {{ csrf_input }}
+      {{ render_form(form) }}
+      <div class="md:col-span-2">
+        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+    {% for label, value in [
+      ('Total referrers', total_referrers),
+      ('Active referrers', active_referrers),
+      ('Referral orders', total_orders),
+      ('Referral sales', '₹' ~ '{:,.0f}'.format(total_sales)),
+      ('Commission due', '₹' ~ '{:,.0f}'.format(commission_due)),
+      ('Commission paid', '₹' ~ '{:,.0f}'.format(commission_paid)),
+    ] %}
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <p class="text-[11px] uppercase tracking-wide text-slate-400">{{ label }}</p>
+      <p class="mt-1 text-lg font-semibold text-slate-900">{{ value }}</p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Referrers</div>
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Referrer</th>
+          <th class="px-4 py-2">Code</th>
+          <th class="px-4 py-2">Clicks</th>
+          <th class="px-4 py-2">Orders</th>
+          <th class="px-4 py-2">Sales</th>
+          <th class="px-4 py-2">Pending</th>
+          <th class="px-4 py-2">Approved</th>
+          <th class="px-4 py-2">Paid</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in referrers %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2">{{ r.user.email }}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{ r.code }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.click_count }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ r.orders }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.sales or 0) }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.pending or 0) }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.approved or 0) }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(r.paid or 0) }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if r.status == 'active' else 'bg-slate-100 text-slate-500' }}">{{ r.get_status_display() }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            <form method="post" action="{{ url('control:referral_referrer_toggle', kwargs={'pk': r.pk}) }}">
+              {{ csrf_input }}
+              <button class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                {{ 'Disable' if r.status == 'active' else 'Enable' }}
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td class="px-4 py-6 text-center text-slate-400" colspan="10">No referrers yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="flex items-center justify-between border-b border-slate-200 p-4">
+      <span class="text-sm font-semibold text-slate-700">Recent referrals</span>
+      <a href="{{ url('control:referral_export') }}" class="text-xs font-medium text-slate-500 hover:text-slate-900">Export CSV</a>
+    </div>
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Order</th>
+          <th class="px-4 py-2">Referrer</th>
+          <th class="px-4 py-2">Order amount</th>
+          <th class="px-4 py-2">Commission</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in recent_commissions %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-mono text-xs">{{ c.order.number }}</td>
+          <td class="px-4 py-2 text-xs">{{ c.referrer.code }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.0f}'.format(c.order_amount) }}</td>
+          <td class="px-4 py-2 font-medium">₹{{ '{:,.0f}'.format(c.commission_amount) }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ {'pending': 'bg-amber-100 text-amber-800', 'approved': 'bg-blue-100 text-blue-700',
+                  'paid': 'bg-emerald-100 text-emerald-700', 'rejected': 'bg-rose-100 text-rose-700'}.get(c.status) }}">{{ c.get_status_display() }}</span>
+          </td>
+          <td class="px-4 py-2 text-right">
+            <div class="flex justify-end gap-1">
+              {% if c.status == 'pending' %}
+              <form method="post" action="{{ url('control:referral_commission_approve', kwargs={'pk': c.pk}) }}">
+                {{ csrf_input }}
+                <button class="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">Approve</button>
+              </form>
+              <form method="post" action="{{ url('control:referral_commission_reject', kwargs={'pk': c.pk}) }}">
+                {{ csrf_input }}
+                <button class="rounded border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Reject</button>
+              </form>
+              {% elif c.status == 'approved' %}
+              <form method="post" action="{{ url('control:referral_commission_paid', kwargs={'pk': c.pk}) }}">
+                {{ csrf_input }}
+                <button class="rounded bg-slate-900 px-2 py-1 text-xs font-medium text-white hover:bg-slate-800">Mark paid</button>
+              </form>
+              {% else %}<span class="text-xs text-slate-400">—</span>{% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td class="px-4 py-6 text-center text-slate-400" colspan="6">No referral orders yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

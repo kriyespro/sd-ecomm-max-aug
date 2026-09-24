@@ -34,6 +34,8 @@ urlpatterns = [
     path("account/logout/", views.LogoutView.as_view(), name="logout"),
     path("wishlist/", views.WishlistPageView.as_view(), name="wishlist"),
     path("wishlist/toggle/", views.WishlistToggleView.as_view(), name="wishlist_toggle"),
+    path("account/referrals/", views.ReferralDashboardView.as_view(), name="referrals"),
+    path("account/referrals/join/", views.ReferralJoinView.as_view(), name="referral_join"),
     path("track/", views.TrackOrderView.as_view(), name="track"),
 
     path("page/<slug:slug>/", views.PageView.as_view(), name="page"),

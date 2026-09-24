@@ -37,6 +37,8 @@ from apps.coupons import services as coupons_svc
 from apps.customers import services as customers_svc
 from apps.orders.models import Order
 from apps.accounts import ratelimit as login_ratelimit
+from apps.referrals import services as referrals_svc
+from apps.referrals.models import CommissionStatus as ReferralCommissionStatus
 from apps.reviews import services as reviews_svc
 from apps.reviews.models import ReviewStatus
 from apps.shipping import services as ship_svc
@@ -536,6 +538,8 @@ class CheckoutView(View):
             messages.error(request, str(exc))
             return redirect("shopfront:checkout")
 
+        referrals_svc.attribute_order(order, request.COOKIES.get(_REF_COOKIE))
+
         placed = request.session.get("shopfront_orders", [])
         request.session["shopfront_orders"] = list({*placed, order.number})
         request.session.modified = True
@@ -687,6 +691,7 @@ class AccountView(View):
     def get(self, request):
         project = current_project(request)
         ctx = base_context(request, project)
+        ctx["referral_program"] = referrals_svc.active_program(project)
         if request.user.is_authenticated:
             ctx["orders"] = Order.objects.filter(
                 project=project, email__iexact=request.user.email
@@ -701,6 +706,50 @@ class AccountView(View):
                 .prefetch_related("product__images")
             ]
         return render(request, "shopfront/account.jinja", ctx)
+
+
+class ReferralDashboardView(View):
+    """A signed-in customer's own referral dashboard -- code, link, clicks,
+    orders and commission by status. Shows a "become a referrer" CTA
+    instead when the program is on but they haven't joined yet, or a plain
+    notice when the store hasn't turned the program on at all."""
+
+    def get(self, request):
+        project = current_project(request)
+        ctx = base_context(request, project)
+        ctx["referral_program"] = referrals_svc.active_program(project)
+        if request.user.is_authenticated:
+            referrer = referrals_svc.referrer_for(project, request.user)
+            ctx["referrer"] = referrer
+            if referrer is not None:
+                commissions = referrer.commissions.all()
+                ctx["clicks"] = referrer.clicks.count()
+                ctx["orders"] = commissions.count()
+                ctx["sales"] = commissions.aggregate(s=Sum("order_amount"))["s"] or 0
+                ctx["commission_total"] = commissions.aggregate(s=Sum("commission_amount"))["s"] or 0
+                ctx["pending"] = commissions.filter(
+                    status=ReferralCommissionStatus.PENDING
+                ).aggregate(s=Sum("commission_amount"))["s"] or 0
+                ctx["approved"] = commissions.filter(
+                    status=ReferralCommissionStatus.APPROVED
+                ).aggregate(s=Sum("commission_amount"))["s"] or 0
+                ctx["paid"] = commissions.filter(
+                    status=ReferralCommissionStatus.PAID
+                ).aggregate(s=Sum("commission_amount"))["s"] or 0
+                ctx["recent_commissions"] = (
+                    commissions.select_related("order").order_by("-created_at")[:20]
+                )
+        return render(request, "shopfront/referrals.jinja", ctx)
+
+
+class ReferralJoinView(View):
+    def post(self, request):
+        project = current_project(request)
+        if not request.user.is_authenticated:
+            return redirect("shopfront:login")
+        if referrals_svc.active_program(project) is not None:
+            referrals_svc.become_referrer(project, request.user)
+        return redirect("shopfront:referrals")
 
 
 def _storefront_username(email, project):
@@ -892,6 +941,7 @@ class VerifyView(View):
 
 _VISITOR_COOKIE = "sd_vid"
 _VISITOR_COOKIE_MAX_AGE = 60 * 60 * 24  # 1 day — enough for "today"'s dedup
+_REF_COOKIE = "sd_ref"
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -915,6 +965,7 @@ class BeaconView(View):
         path = (request.POST.get("path") or "")[:200]
         ip = request.META.get("REMOTE_ADDR", "")
 
+        ref_referrer = None
         if request.POST.get("kind") != "heartbeat":
             event = request.POST.get("event")
             event = event if event in ("page_view", "product_view") else "page_view"
@@ -924,10 +975,28 @@ class BeaconView(View):
                 referrer = (request.POST.get("referrer") or "")[:300]
                 analytics_svc.record_traffic_source(project, referrer, request.get_host())
 
+            # Referral attribution: storefront pages are CDN-edge-cacheable,
+            # so this cookie can only be set from here (a POST, never
+            # cached) -- never from the cached page response itself, or it
+            # could leak to a different visitor via a shared cache entry.
+            # Only on the initial view, not every 25s heartbeat.
+            ref_code = (request.POST.get("ref") or "")[:12]
+            if ref_code:
+                ref_referrer = referrals_svc.record_click(project, ref_code, landing_path=path)
+
         analytics_svc.touch_live_visitor(project, vid, page=path or "/", ip=ip)
 
         resp = HttpResponse(status=204)
         if not request.COOKIES.get(_VISITOR_COOKIE):
             resp.set_cookie(_VISITOR_COOKIE, vid, max_age=_VISITOR_COOKIE_MAX_AGE,
                             httponly=True, samesite="Lax")
+        if ref_referrer is not None:
+            program = referrals_svc.active_program(project)
+            if program is not None:
+                resp.set_cookie(
+                    _REF_COOKIE, ref_referrer.code,
+                    max_age=program.cookie_days * 86400,
+                    httponly=True, samesite="Lax",
+                )
+
         return resp

@@ -85,6 +85,7 @@ LOCAL_APPS = [
     "apps.media",
     "apps.analytics",
     "apps.marketing",
+    "apps.referrals",
     "apps.whatsapp",
     "apps.social",
     "apps.certificates",
