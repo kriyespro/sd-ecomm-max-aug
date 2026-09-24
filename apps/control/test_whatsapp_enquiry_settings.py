@@ -51,6 +51,26 @@ class WhatsAppEnquirySettingsTests(TestCase):
         profile = StoreProfile.objects.get(project=self.project)
         self.assertTrue(profile.whatsapp_enquiry_enabled)
 
+    def test_enabling_detail_page_toggle_without_a_number_is_rejected(self):
+        StoreProfile.objects.create(project=self.project)
+        resp = self.client.post(
+            "/admin/marketing/whatsapp-enquiry/", {"whatsapp_enquiry_on_detail": "on"},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Add a WhatsApp number on Store profile first.")
+        profile = StoreProfile.objects.get(project=self.project)
+        self.assertFalse(profile.whatsapp_enquiry_on_detail)
+
+    def test_detail_page_toggle_is_independent_of_the_card_toggle(self):
+        StoreProfile.objects.create(project=self.project, whatsapp="+919812345678")
+        resp = self.client.post(
+            "/admin/marketing/whatsapp-enquiry/", {"whatsapp_enquiry_on_detail": "on"},
+        )
+        self.assertRedirects(resp, "/admin/marketing/whatsapp-enquiry/")
+        profile = StoreProfile.objects.get(project=self.project)
+        self.assertTrue(profile.whatsapp_enquiry_on_detail)
+        self.assertFalse(profile.whatsapp_enquiry_enabled)
+
     def test_unchecking_disables_it(self):
         profile = StoreProfile.objects.create(
             project=self.project, whatsapp="+919812345678", whatsapp_enquiry_enabled=True,

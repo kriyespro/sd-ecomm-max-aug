@@ -349,19 +349,23 @@ class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
 class WhatsAppEnquiryForm(forms.ModelForm):
     class Meta:
         model = StoreProfile
-        fields = ["whatsapp_enquiry_enabled"]
+        fields = ["whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"]
         labels = {
             "whatsapp_enquiry_enabled": "Show a WhatsApp button next to Add to cart "
                                         "on every product card",
+            "whatsapp_enquiry_on_detail": "Also show it on the product page itself, "
+                                          "next to Buy now / Add to bag",
         }
 
     def clean(self):
         cleaned = super().clean()
-        if cleaned.get("whatsapp_enquiry_enabled") and not self.instance.whatsapp:
-            self.add_error(
-                "whatsapp_enquiry_enabled",
-                "Add a WhatsApp number on Store profile first.",
-            )
+        if (
+            (cleaned.get("whatsapp_enquiry_enabled") or cleaned.get("whatsapp_enquiry_on_detail"))
+            and not self.instance.whatsapp
+        ):
+            for field in ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"):
+                if cleaned.get(field):
+                    self.add_error(field, "Add a WhatsApp number on Store profile first.")
         return cleaned
 
 
@@ -380,7 +384,10 @@ class WhatsAppEnquiryView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView
         resp = super().form_valid(form)
         record_audit(actor=self.request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=self.object,
-                     changes={"whatsapp_enquiry_enabled": self.object.whatsapp_enquiry_enabled},
+                     changes={
+                         "whatsapp_enquiry_enabled": self.object.whatsapp_enquiry_enabled,
+                         "whatsapp_enquiry_on_detail": self.object.whatsapp_enquiry_on_detail,
+                     },
                      request=self.request)
         messages.success(self.request, "WhatsApp enquiry button settings saved.")
         return resp

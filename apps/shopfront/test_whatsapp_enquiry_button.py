@@ -78,3 +78,48 @@ class WhatsAppEnquiryButtonTests(TestCase):
         for skin in ("ornza", "botanica2", "botanica3"):
             html = self._render(skin)
             self.assertIn("wa.me/919812345678", html, f"missing on {skin}")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class WhatsAppEnquiryDetailPageTests(TestCase):
+    """The product page's own WhatsApp button — a separate toggle
+    (StoreProfile.whatsapp_enquiry_on_detail) from the card one, so a store
+    can turn either or both on."""
+
+    def setUp(self):
+        self.project = Project.objects.create(
+            name="Acme", feature_flags={"onboarded": True},
+        )
+        Domain.objects.create(project=self.project, host="acme2.test", is_verified=True)
+        self.product = Product.objects.create(
+            project=self.project, title="Gold Ring", slug="gold-ring",
+            price=Decimal("999"), status="active",
+        )
+
+    def _render(self):
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="acme2.test")
+        self.assertEqual(resp.status_code, 200)
+        return resp.content.decode()
+
+    def test_hidden_by_default(self):
+        StoreProfile.objects.create(project=self.project, whatsapp="+919812345678")
+        self.assertNotIn("Ask on WhatsApp", self._render())
+
+    def test_card_toggle_alone_does_not_show_it_on_the_detail_page(self):
+        StoreProfile.objects.create(
+            project=self.project, whatsapp="+919812345678", whatsapp_enquiry_enabled=True,
+        )
+        self.assertNotIn("Ask on WhatsApp", self._render())
+
+    def test_shown_when_detail_toggle_and_number_both_set(self):
+        StoreProfile.objects.create(
+            project=self.project, whatsapp="+919812345678", whatsapp_enquiry_on_detail=True,
+        )
+        html = self._render()
+        self.assertIn("Ask on WhatsApp", html)
+        self.assertIn("https://wa.me/919812345678?text=", html)
+        self.assertIn(quote("Gold Ring"), html)
+
+    def test_hidden_when_toggle_on_but_no_number(self):
+        StoreProfile.objects.create(project=self.project, whatsapp_enquiry_on_detail=True)
+        self.assertNotIn("Ask on WhatsApp", self._render())

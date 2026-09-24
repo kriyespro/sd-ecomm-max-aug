@@ -1,17 +1,34 @@
 {# WhatsApp product-enquiry button — expects `p` (Product); `store_profile`
    (StoreProfile) comes from the chrome context every skin already has (same
    var _footer_contact.jinja uses for its "WhatsApp us" link). Renders nothing
-   unless the store turned this on (Marketing -> WhatsApp enquiry button) and
-   has a number saved (Storefront -> Store profile). #}
-{% if store_profile and store_profile.whatsapp_enquiry_enabled and store_profile.whatsapp_digits %}
+   unless a number is saved (Storefront -> Store profile) and the relevant
+   flag is on. Two optional overrides, both context vars from the includer:
+   - `wa_enabled` — which StoreProfile flag gates this render. Defaults to
+     the product-card flag (`whatsapp_enquiry_enabled`); the product detail
+     page passes `whatsapp_enquiry_on_detail` instead.
+   - `wa_style` — 'block' renders a full-width labelled button (product
+     page, next to Buy now / Add to bag); anything else (the default) is
+     the small square icon used on product cards. #}
+{% set _wa_enabled = wa_enabled if wa_enabled is defined else (store_profile.whatsapp_enquiry_enabled if store_profile else False) %}
+{% if store_profile and _wa_enabled and store_profile.whatsapp_digits %}
 {% set _wa_text = "Hi, I'm interested in " ~ p.title ~ " (" ~ (p.current_price | money) ~ ") — "
                    ~ request.build_absolute_uri(url('shopfront:product', kwargs={'slug': p.slug})) %}
-<a href="https://wa.me/{{ store_profile.whatsapp_digits }}?text={{ _wa_text | urlencode }}"
-   target="_blank" rel="noopener" title="Ask about this on WhatsApp"
+{% set _wa_href = "https://wa.me/" ~ store_profile.whatsapp_digits ~ "?text=" ~ (_wa_text | urlencode) %}
+{% if wa_style == 'block' %}
+<a href="{{ _wa_href }}" target="_blank" rel="noopener" onclick="event.stopPropagation()"
+   class="flex items-center justify-center gap-2 border border-[#25D366] py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-[#25D366] transition-colors hover:bg-[#25D366] hover:text-white">
+  <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M12.04 2c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.44 9.9-9.9 0-2.64-1.03-5.13-2.9-6.99A9.82 9.82 0 0 0 12.04 2Zm0 1.67c2.19 0 4.24.85 5.79 2.4a8.2 8.2 0 0 1 2.4 5.83c0 4.53-3.68 8.22-8.2 8.22a8.2 8.2 0 0 1-4.17-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.16 8.16 0 0 1-1.26-4.37c0-4.53 3.69-8.23 8.23-8.23Zm-4.5 4.6c-.15 0-.4.06-.6.29-.21.23-.8.78-.8 1.9s.82 2.2.93 2.36c.12.15 1.6 2.57 3.97 3.5 1.97.77 2.37.62 2.8.58.43-.04 1.38-.56 1.57-1.11.2-.54.2-1.01.14-1.11-.06-.1-.21-.15-.44-.27-.23-.12-1.38-.68-1.6-.76-.21-.08-.37-.12-.53.12-.15.23-.6.76-.74.92-.14.15-.27.17-.5.06-.23-.12-.98-.36-1.87-1.15-.69-.62-1.16-1.38-1.3-1.61-.13-.23-.01-.36.11-.47.11-.11.23-.27.35-.4.11-.14.15-.23.23-.39.08-.15.04-.29-.02-.4-.06-.12-.53-1.29-.74-1.76-.19-.46-.4-.4-.53-.4Z"/>
+  </svg>
+  Ask on WhatsApp
+</a>
+{% else %}
+<a href="{{ _wa_href }}" target="_blank" rel="noopener" title="Ask about this on WhatsApp"
    onclick="event.stopPropagation()"
    class="grid w-11 shrink-0 place-items-center rounded-lg bg-[#25D366] text-white transition-colors hover:bg-[#1ebe5b]">
   <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
     <path d="M12.04 2c-5.46 0-9.9 4.44-9.9 9.9 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.9-4.44 9.9-9.9 0-2.64-1.03-5.13-2.9-6.99A9.82 9.82 0 0 0 12.04 2Zm0 1.67c2.19 0 4.24.85 5.79 2.4a8.2 8.2 0 0 1 2.4 5.83c0 4.53-3.68 8.22-8.2 8.22a8.2 8.2 0 0 1-4.17-1.14l-.3-.18-3.12.82.83-3.04-.2-.31a8.16 8.16 0 0 1-1.26-4.37c0-4.53 3.69-8.23 8.23-8.23Zm-4.5 4.6c-.15 0-.4.06-.6.29-.21.23-.8.78-.8 1.9s.82 2.2.93 2.36c.12.15 1.6 2.57 3.97 3.5 1.97.77 2.37.62 2.8.58.43-.04 1.38-.56 1.57-1.11.2-.54.2-1.01.14-1.11-.06-.1-.21-.15-.44-.27-.23-.12-1.38-.68-1.6-.76-.21-.08-.37-.12-.53.12-.15.23-.6.76-.74.92-.14.15-.27.17-.5.06-.23-.12-.98-.36-1.87-1.15-.69-.62-1.16-1.38-1.3-1.61-.13-.23-.01-.36.11-.47.11-.11.23-.27.35-.4.11-.14.15-.23.23-.39.08-.15.04-.29-.02-.4-.06-.12-.53-1.29-.74-1.76-.19-.46-.4-.4-.53-.4Z"/>
   </svg>
 </a>
+{% endif %}
 {% endif %}

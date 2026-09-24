@@ -715,6 +715,10 @@ class StoreProfile(TenantScopedModel):
         help_text="Show a WhatsApp button next to Add to cart on every product card, "
                   "pre-filled with the product name, price and link.",
     )
+    whatsapp_enquiry_on_detail = models.BooleanField(
+        default=False,
+        help_text="Also show it on the product page itself, next to Buy now / Add to bag.",
+    )
     address = models.TextField(
         blank=True, help_text="Full postal address, shown in the footer.",
     )
