@@ -940,8 +940,9 @@ class CeoOverviewDashboardTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         for needle in [
             "MRR", "GMV (mo)", "Trials ending soon", "Top stores this month", "Ticket queue",
-            "Server status", "Growth &amp; ops", "New users (7d)", "Partners", "Affiliates",
-            "Learning videos", "Backups today", "Recent activity",
+            "Server status", "Growth &amp; ops", "New stores (7d)", "New users (7d)",
+            "Partners", "Affiliates", "Learning videos", "Backups today", "Recent activity",
+            "Total users", "Signups today",
         ]:
             self.assertContains(resp, needle)
 

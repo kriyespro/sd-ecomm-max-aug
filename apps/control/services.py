@@ -226,11 +226,17 @@ def ceo_overview():
     return overview
 
 
-def recent_activity(user, limit=20):
+def recent_activity(user, limit=None):
     """Audit rows visible to ``user`` — every store for a platform admin,
-    only their own store(s) otherwise."""
+    only their own store(s) otherwise. A platform admin's feed spans every
+    tenant, so it's noisy at any real length — default to a short "what just
+    happened" list rather than a long scroll; a DGC's own-stores feed stays
+    at the old length since it's already narrow."""
+    admin = is_platform_admin(user)
+    if limit is None:
+        limit = 8 if admin else 20
     qs = AuditLog.objects.select_related("actor", "project")
-    if not is_platform_admin(user):
+    if not admin:
         qs = qs.filter(project__in=projects_for_user(user))
     return qs[:limit]
 

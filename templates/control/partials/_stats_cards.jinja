@@ -19,11 +19,11 @@
   ("Active team (7d)", stats.active_users_7d),
 ] %}
 {% endif %}
-<div class="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+<div class="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
   {% for label, value in cards %}
-  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-    <p class="text-xs font-medium uppercase tracking-wide text-slate-400">{{ label }}</p>
-    <p class="mt-1 text-2xl font-semibold text-slate-900">{{ value }}</p>
+  <div class="rounded-xl bg-white p-3 ring-1 ring-slate-200">
+    <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ label }}</p>
+    <p class="mt-1 text-lg font-semibold text-slate-900">{{ value }}</p>
   </div>
   {% endfor %}
 </div>

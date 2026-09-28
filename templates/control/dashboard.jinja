@@ -7,6 +7,13 @@
 
   {% include "control/partials/_quick_launch.jinja" %}
 
+  <div id="stats"
+       hx-get="{{ url('control:stats_cards') }}"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+    {% include "control/partials/_stats_cards.jinja" %}
+  </div>
+
   {% if control_is_platform_admin and ceo %}
   <div class="space-y-4">
     <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
@@ -19,11 +26,12 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-10">
       {% for label, val, warn in [
           ('MRR', '₹' ~ '{:,.0f}'.format(ceo.mrr), false),
           ('GMV (mo)', '₹' ~ '{:,.0f}'.format(ceo.gmv_month), false),
-          ('New stores (mo)', ceo.new_stores_month, false),
+          ('New stores (7d)', ceo.new_stores_week, false),
+          ('New users (7d)', ceo.new_users_week, false),
           ('Active subs', ceo.active_subs, false),
           ('Trials ending (7d)', ceo.trials_ending_count, ceo.trials_ending_count > 0),
           ('Overdue invoices', ceo.overdue_invoices, ceo.overdue_invoices > 0),
@@ -55,7 +63,6 @@
         </div>
 
         <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-3">
-          <div><dt class="text-slate-400">New users (7d)</dt><dd class="font-semibold text-slate-800">{{ ceo.new_users_week }}</dd></div>
           <div><dt class="text-slate-400">Partners</dt><dd class="font-semibold text-slate-800">+{{ ceo.partners_new_week }} · {{ ceo.partners_total }} total</dd></div>
           <div><dt class="text-slate-400">Affiliates</dt><dd class="font-semibold text-slate-800">+{{ ceo.affiliate_signups_week }} · {{ ceo.affiliates_total }} total</dd></div>
           <div><dt class="text-slate-400">Learning videos</dt><dd class="font-semibold text-slate-800">{{ ceo.learning_videos_total }}</dd></div>
@@ -127,13 +134,6 @@
     </div>
   </div>
   {% endif %}
-
-  <div id="stats"
-       hx-get="{{ url('control:stats_cards') }}"
-       hx-trigger="every 30s"
-       hx-swap="innerHTML">
-    {% include "control/partials/_stats_cards.jinja" %}
-  </div>
 
   {% if not control_is_platform_admin %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
