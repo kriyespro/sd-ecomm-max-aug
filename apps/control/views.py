@@ -137,8 +137,11 @@ class DashboardView(ControlAccessMixin, TemplateView):
         ctx["stats"] = services.dashboard_stats(self.request.user)
         ctx["activity"] = services.recent_activity(self.request.user)
         if is_platform_admin(self.request.user):
+            from apps.core.serverstats import server_stats
+
             ctx["top_affiliates"] = services.top_affiliates()
             ctx["ceo"] = services.ceo_overview()
+            ctx["server"] = server_stats()
         elif is_platform_staff(self.request.user):
             from apps.billing.models import Plan
 

@@ -104,12 +104,18 @@ def ceo_overview():
         return cached
 
     from apps.billing import services as billing_svc
+    from apps.billing.limits import full_backup_allowed
     from apps.billing.models import Subscription, SubscriptionStatus
+    from apps.control.models import StoreBackupSnapshot
+    from apps.learning.models import LearningVideo
     from apps.orders.models import Order
-    from apps.support.models import CLOSED_STATUSES, Ticket, TicketKind, TicketPriority
+    from apps.support.models import (
+        CLOSED_STATUSES, Ticket, TicketKind, TicketPriority, TicketStatus,
+    )
 
     now = timezone.now()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    week_start = now - timedelta(days=7)
 
     summary = billing_svc.platform_summary()
 
@@ -143,6 +149,51 @@ def ceo_overview():
     )
     tickets_open = open_tickets.count()
     tickets_urgent = open_tickets.filter(priority=TicketPriority.URGENT).count()
+    tickets_in_progress = open_tickets.filter(status=TicketStatus.IN_PROGRESS).count()
+    tickets_resolved_week = Ticket.objects.exclude(kind=TicketKind.FEATURE_REQUEST).filter(
+        status__in=CLOSED_STATUSES, updated_at__gte=week_start,
+    ).count()
+
+    new_stores_week = Project.objects.filter(created_at__gte=week_start).count()
+    new_users_week = User.objects.filter(date_joined__gte=week_start).count()
+
+    partners_total = User.objects.filter(profile__platform_role=PlatformRole.MANAGER).count()
+    partners_new_week = User.objects.filter(
+        profile__platform_role=PlatformRole.MANAGER, date_joined__gte=week_start,
+    ).count()
+
+    affiliates_total = (
+        Subscription.objects.filter(referred_by__isnull=False)
+        .values("referred_by_id").distinct().count()
+    )
+    affiliate_signups_week = Subscription.objects.filter(
+        referred_by__isnull=False, created_at__gte=week_start,
+    ).count()
+
+    learning_videos_total = LearningVideo.objects.filter(is_published=True).count()
+
+    today = timezone.localdate()
+    backed_up_today = (
+        StoreBackupSnapshot.objects.filter(created_at__date=today)
+        .values("project_id").distinct().count()
+    )
+    backup_eligible = 0
+    for p in Project.objects.filter(status=Project.Status.ACTIVE).select_related("subscription__plan"):
+        if (p.feature_flags or {}).get("auto_backup") and full_backup_allowed(p):
+            backup_eligible += 1
+    last_backup_at = (
+        StoreBackupSnapshot.objects.order_by("-created_at")
+        .values_list("created_at", flat=True).first()
+    )
+
+    # Rolling 8-week new-store trend, oldest -> newest, for the growth chart.
+    stores_weekly = []
+    for i in range(7, -1, -1):
+        w_start = now - timedelta(days=7 * (i + 1))
+        w_end = now - timedelta(days=7 * i)
+        n = Project.objects.filter(created_at__gte=w_start, created_at__lt=w_end).count()
+        stores_weekly.append({"label": w_start.strftime("%d %b"), "count": n})
+    stores_weekly_max = max((w["count"] for w in stores_weekly), default=0) or 1
 
     overview = {
         **summary,
@@ -151,9 +202,25 @@ def ceo_overview():
         "trials_ending": trials_ending,
         "trials_ending_count": trials_ending_count,
         "new_stores_month": new_stores_month,
+        "new_stores_week": new_stores_week,
+        "new_users_week": new_users_week,
         "churned_month": churned_month,
         "tickets_open": tickets_open,
         "tickets_urgent": tickets_urgent,
+        "tickets_in_progress": tickets_in_progress,
+        "tickets_resolved_week": tickets_resolved_week,
+        "partners_total": partners_total,
+        "partners_new_week": partners_new_week,
+        "affiliates_total": affiliates_total,
+        "affiliate_signups_week": affiliate_signups_week,
+        "learning_videos_total": learning_videos_total,
+        "backups": {
+            "done_today": backed_up_today,
+            "eligible": backup_eligible,
+            "last_at": last_backup_at,
+        },
+        "stores_weekly": stores_weekly,
+        "stores_weekly_max": stores_weekly_max,
     }
     cache.set(_CEO_OVERVIEW_CACHE_KEY, overview, _CEO_OVERVIEW_TTL)
     return overview

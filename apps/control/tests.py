@@ -938,7 +938,11 @@ class CeoOverviewDashboardTests(TestCase):
     def test_shows_ceo_pulse_section(self):
         resp = self.client.get("/admin/", HTTP_HOST="testserver")
         self.assertEqual(resp.status_code, 200)
-        for needle in ["MRR", "GMV (mo)", "Trials ending soon", "Top stores this month", "Ticket queue"]:
+        for needle in [
+            "MRR", "GMV (mo)", "Trials ending soon", "Top stores this month", "Ticket queue",
+            "Server status", "Growth &amp; ops", "New users (7d)", "Partners", "Affiliates",
+            "Learning videos", "Backups today", "Recent activity",
+        ]:
             self.assertContains(resp, needle)
 
     def test_top_stores_reflects_paid_orders_this_month(self):
@@ -1005,3 +1009,6 @@ class CeoOverviewDashboardTests(TestCase):
         resp = self.client.get("/admin/", HTTP_HOST="testserver")
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, "GMV (mo)")
+        self.assertNotContains(resp, "Server status")
+        self.assertNotContains(resp, "Growth &amp; ops")
+        self.assertContains(resp, "Recent activity")

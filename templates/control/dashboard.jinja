@@ -9,6 +9,16 @@
 
   {% if control_is_platform_admin and ceo %}
   <div class="space-y-4">
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <div class="mb-2 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700">Server status</h2>
+        <a href="{{ url('control:platform_backups') }}" class="text-xs text-slate-400 hover:text-slate-600">Backup &amp; restore →</a>
+      </div>
+      <div id="server-stats-home" hx-get="{{ url('control:server_stats') }}" hx-trigger="every 10s" hx-swap="innerHTML">
+        {% include "control/partials/_server_stats.jinja" %}
+      </div>
+    </div>
+
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
       {% for label, val, warn in [
           ('MRR', '₹' ~ '{:,.0f}'.format(ceo.mrr), false),
@@ -25,6 +35,47 @@
         <p class="mt-1 text-xl font-semibold {{ 'text-amber-700' if warn else 'text-slate-900' }}">{{ val }}</p>
       </div>
       {% endfor %}
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-10">
+      <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200 lg:col-span-7">
+        <div class="mb-2 flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-700">Growth &amp; ops · last 7 days</h2>
+          <span class="text-xs text-slate-400">{{ ceo.new_stores_week }} new store{{ 's' if ceo.new_stores_week != 1 else '' }} this week</span>
+        </div>
+        <div class="flex h-20 items-end gap-1.5">
+          {% for w in ceo.stores_weekly %}
+          <div class="flex-1 rounded-t bg-indigo-400" title="{{ w.label }}: {{ w.count }}"
+               style="height: {{ (w.count / ceo.stores_weekly_max * 100)|round(1) }}%; min-height: 3px"></div>
+          {% endfor %}
+        </div>
+        <div class="mt-1 flex justify-between text-[10px] text-slate-400">
+          <span>{{ ceo.stores_weekly[0].label }}</span>
+          <span>{{ ceo.stores_weekly[-1].label }}</span>
+        </div>
+
+        <dl class="mt-4 grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs sm:grid-cols-3">
+          <div><dt class="text-slate-400">New users (7d)</dt><dd class="font-semibold text-slate-800">{{ ceo.new_users_week }}</dd></div>
+          <div><dt class="text-slate-400">Partners</dt><dd class="font-semibold text-slate-800">+{{ ceo.partners_new_week }} · {{ ceo.partners_total }} total</dd></div>
+          <div><dt class="text-slate-400">Affiliates</dt><dd class="font-semibold text-slate-800">+{{ ceo.affiliate_signups_week }} · {{ ceo.affiliates_total }} total</dd></div>
+          <div><dt class="text-slate-400">Learning videos</dt><dd class="font-semibold text-slate-800">{{ ceo.learning_videos_total }}</dd></div>
+          <div><dt class="text-slate-400">Tickets</dt><dd class="font-semibold {{ 'text-amber-700' if ceo.tickets_urgent else 'text-slate-800' }}">{{ ceo.tickets_open }} open{{ ' (' ~ ceo.tickets_urgent ~ ' urgent)' if ceo.tickets_urgent else '' }} · {{ ceo.tickets_resolved_week }} resolved</dd></div>
+          <div><dt class="text-slate-400">Backups today</dt><dd class="font-semibold text-slate-800">{{ ceo.backups.done_today }}/{{ ceo.backups.eligible }}{% if ceo.backups.last_at %} <span class="font-normal text-slate-400">· last {{ ceo.backups.last_at.strftime('%d %b %H:%M') }}</span>{% endif %}</dd></div>
+        </dl>
+      </div>
+
+      <div class="rounded-xl bg-white ring-1 ring-slate-200 lg:col-span-3">
+        <div class="flex items-center justify-between border-b border-slate-200 p-3">
+          <h2 class="text-sm font-semibold text-slate-700">Recent activity</h2>
+          <span class="text-[10px] text-slate-400">15s</span>
+        </div>
+        <div id="activity" class="max-h-80 overflow-y-auto p-3 text-xs [&_li]:flex-col [&_li]:items-start [&_li]:gap-0.5 [&_time]:mt-0.5"
+             hx-get="{{ url('control:activity_feed') }}"
+             hx-trigger="every 15s"
+             hx-swap="innerHTML">
+          {% include "control/partials/_activity_feed.jinja" %}
+        </div>
+      </div>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
@@ -84,6 +135,7 @@
     {% include "control/partials/_stats_cards.jinja" %}
   </div>
 
+  {% if not control_is_platform_admin %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <div class="mb-3 flex items-center justify-between">
       <h2 class="text-sm font-semibold text-slate-700">Recent activity</h2>
@@ -96,6 +148,7 @@
       {% include "control/partials/_activity_feed.jinja" %}
     </div>
   </div>
+  {% endif %}
 
   {% include "control/billing/_dgc_pricing_table.jinja" %}
 
