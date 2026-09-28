@@ -957,6 +957,42 @@ class CeoOverviewDashboardTests(TestCase):
         self.assertEqual(overview["top_stores"][0]["project__name"], "RevenueStore")
         self.assertEqual(overview["top_stores"][0]["gmv"], 5000)
 
+    def test_dashboard_page_renders_with_top_stores_and_trials_rows(self):
+        """Regression: the ``url()`` jinja global is Django's bare ``reverse``,
+        not a wrapper — it takes ``kwargs={...}``, never bare keyword args.
+        Only a populated ``top_stores``/``trials_ending`` row exercises those
+        template lines, so an empty-DB smoke test alone won't catch a broken
+        ``url('control:store_detail', pk=...)`` call — this does."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.billing.models import SubscriptionStatus
+        from apps.orders.models import Order
+
+        # A second project so the admin doesn't auto-resolve to a single
+        # "sole accessible project" and get routed to the store dashboard
+        # instead of the platform-wide one (see get_active_project()).
+        Project.objects.create(name="OtherStore", status="active")
+
+        project = Project.objects.create(name="RevenueStore", status="active")
+        Order.objects.create(
+            project=project, number="1001", email="c@t.test",
+            payment_status="paid",
+            subtotal="5000", discount_total="0", tax_total="0",
+            shipping_total="0", grand_total="5000",
+        )
+        # Project creation auto-provisions a trial Subscription (see
+        # apps.billing.signals) off a migration-seeded Plan — reuse it and
+        # just pull its trial_end into the dashboard's 7-day window.
+        sub = project.subscription
+        sub.status = SubscriptionStatus.TRIALING
+        sub.trial_end = timezone.now() + timedelta(days=3)
+        sub.save(update_fields=["status", "trial_end"])
+        resp = self.client.get("/admin/", HTTP_HOST="testserver")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "RevenueStore")
+
     def test_dgc_does_not_see_ceo_pulse(self):
         User = get_user_model()
         dgc = User.objects.create_user(

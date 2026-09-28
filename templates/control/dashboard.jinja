@@ -37,7 +37,7 @@
           <tbody class="divide-y divide-slate-100">
             {% for row in ceo.top_stores %}
             <tr>
-              <td class="px-4 py-2"><a href="{{ url('control:store_detail', pk=row.project_id) }}" class="text-slate-800 hover:underline">{{ row.project__name }}</a></td>
+              <td class="px-4 py-2"><a href="{{ url('control:store_detail', kwargs={'pk': row.project_id}) }}" class="text-slate-800 hover:underline">{{ row.project__name }}</a></td>
               <td class="px-4 py-2 text-right font-medium text-slate-700">₹{{ '{:,.0f}'.format(row.gmv) }}</td>
             </tr>
             {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="2">No paid orders yet this month.</td></tr>{% endfor %}
@@ -54,7 +54,7 @@
           <tbody class="divide-y divide-slate-100">
             {% for sub in ceo.trials_ending %}
             <tr>
-              <td class="px-4 py-2"><a href="{{ url('control:store_detail', pk=sub.project_id) }}" class="text-slate-800 hover:underline">{{ sub.project.name }}</a></td>
+              <td class="px-4 py-2"><a href="{{ url('control:store_detail', kwargs={'pk': sub.project_id}) }}" class="text-slate-800 hover:underline">{{ sub.project.name }}</a></td>
               <td class="px-4 py-2 text-right text-xs text-slate-500">{{ sub.trial_end.strftime('%d %b') }}</td>
             </tr>
             {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="2">Nothing ending in the next 7 days.</td></tr>{% endfor %}
