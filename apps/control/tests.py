@@ -918,3 +918,54 @@ class PaymentProviderFormTests(TestCase):
         cfg.refresh_from_db()
         self.assertEqual(cfg.credentials["key_secret"], "keep-me")
         self.assertEqual(cfg.credentials["key_id"], "rzp_live_y")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class CeoOverviewDashboardTests(TestCase):
+    """Platform-admin ``/admin/`` landing gets a compact money/risk pulse
+    (MRR, GMV, trials ending, top stores, open tickets) on top of the plain
+    growth stat cards — see [[cloude-think-50-50]]-style CEO-usefulness ask."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        User = get_user_model()
+        self.admin = User.objects.create_superuser(
+            username="ceo", email="ceo@t.test", password="pw"
+        )
+        self.client.force_login(self.admin)
+
+    def test_shows_ceo_pulse_section(self):
+        resp = self.client.get("/admin/", HTTP_HOST="testserver")
+        self.assertEqual(resp.status_code, 200)
+        for needle in ["MRR", "GMV (mo)", "Trials ending soon", "Top stores this month", "Ticket queue"]:
+            self.assertContains(resp, needle)
+
+    def test_top_stores_reflects_paid_orders_this_month(self):
+        from apps.orders.models import Order
+
+        project = Project.objects.create(name="RevenueStore", status="active")
+        Order.objects.create(
+            project=project, number="1001", email="c@t.test",
+            payment_status="paid",
+            subtotal="5000", discount_total="0", tax_total="0",
+            shipping_total="0", grand_total="5000",
+        )
+        from apps.control import services
+        overview = services.ceo_overview()
+        self.assertEqual(overview["gmv_month"], 5000)
+        self.assertEqual(overview["top_stores"][0]["project__name"], "RevenueStore")
+        self.assertEqual(overview["top_stores"][0]["gmv"], 5000)
+
+    def test_dgc_does_not_see_ceo_pulse(self):
+        User = get_user_model()
+        dgc = User.objects.create_user(
+            username="dgc1", email="dgc1@t.test", password="pw", is_staff=True
+        )
+        from apps.accounts.models import PlatformRole
+        dgc.profile.platform_role = PlatformRole.MANAGER
+        dgc.profile.save(update_fields=["platform_role"])
+        self.client.force_login(dgc)
+        resp = self.client.get("/admin/", HTTP_HOST="testserver")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "GMV (mo)")

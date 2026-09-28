@@ -7,6 +7,76 @@
 
   {% include "control/partials/_quick_launch.jinja" %}
 
+  {% if control_is_platform_admin and ceo %}
+  <div class="space-y-4">
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      {% for label, val, warn in [
+          ('MRR', '₹' ~ '{:,.0f}'.format(ceo.mrr), false),
+          ('GMV (mo)', '₹' ~ '{:,.0f}'.format(ceo.gmv_month), false),
+          ('New stores (mo)', ceo.new_stores_month, false),
+          ('Active subs', ceo.active_subs, false),
+          ('Trials ending (7d)', ceo.trials_ending_count, ceo.trials_ending_count > 0),
+          ('Overdue invoices', ceo.overdue_invoices, ceo.overdue_invoices > 0),
+          ('Churned (mo)', ceo.churned_month, ceo.churned_month > 0),
+          ('Open tickets', ceo.tickets_open, ceo.tickets_urgent > 0),
+      ] %}
+      <div class="rounded-xl bg-white p-4 ring-1 {{ 'ring-amber-300' if warn else 'ring-slate-200' }}">
+        <p class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ label }}</p>
+        <p class="mt-1 text-xl font-semibold {{ 'text-amber-700' if warn else 'text-slate-900' }}">{{ val }}</p>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      <div class="rounded-xl bg-white ring-1 ring-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-200 p-4">
+          <h2 class="text-sm font-semibold text-slate-700">Top stores this month</h2>
+          <a href="{{ url('control:stores') }}" class="text-xs text-slate-400 hover:text-slate-600">All stores →</a>
+        </div>
+        <table class="w-full text-left text-sm">
+          <tbody class="divide-y divide-slate-100">
+            {% for row in ceo.top_stores %}
+            <tr>
+              <td class="px-4 py-2"><a href="{{ url('control:store_detail', pk=row.project_id) }}" class="text-slate-800 hover:underline">{{ row.project__name }}</a></td>
+              <td class="px-4 py-2 text-right font-medium text-slate-700">₹{{ '{:,.0f}'.format(row.gmv) }}</td>
+            </tr>
+            {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="2">No paid orders yet this month.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="rounded-xl bg-white ring-1 ring-slate-200">
+        <div class="flex items-center justify-between border-b border-slate-200 p-4">
+          <h2 class="text-sm font-semibold text-slate-700">Trials ending soon</h2>
+          <a href="{{ url('control:billing_subscriptions') }}" class="text-xs text-slate-400 hover:text-slate-600">All subscriptions →</a>
+        </div>
+        <table class="w-full text-left text-sm">
+          <tbody class="divide-y divide-slate-100">
+            {% for sub in ceo.trials_ending %}
+            <tr>
+              <td class="px-4 py-2"><a href="{{ url('control:store_detail', pk=sub.project_id) }}" class="text-slate-800 hover:underline">{{ sub.project.name }}</a></td>
+              <td class="px-4 py-2 text-right text-xs text-slate-500">{{ sub.trial_end.strftime('%d %b') }}</td>
+            </tr>
+            {% else %}<tr><td class="px-4 py-6 text-center text-slate-400" colspan="2">Nothing ending in the next 7 days.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white p-4 ring-1 ring-slate-200 text-xs">
+      <div class="flex flex-wrap gap-2">
+        {% for row in ceo.by_plan %}
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-700">{{ row.plan__name }} · {{ row.n }}</span>
+        {% else %}<span class="text-slate-400">No active plans.</span>{% endfor %}
+      </div>
+      <div class="flex gap-4 text-slate-500">
+        <a href="{{ url('control:billing') }}" class="font-medium hover:text-slate-800">Full billing report →</a>
+        <a href="{{ url('control:support_queue') }}" class="font-medium {{ 'text-amber-700' if ceo.tickets_urgent > 0 else '' }} hover:text-slate-800">Ticket queue{{ ' (' ~ ceo.tickets_urgent ~ ' urgent)' if ceo.tickets_urgent > 0 else '' }} →</a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div id="stats"
        hx-get="{{ url('control:stats_cards') }}"
        hx-trigger="every 30s"

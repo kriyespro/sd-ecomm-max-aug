@@ -10,7 +10,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth import login as auth_login
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q
+from django.db.models import Q, Sum
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
@@ -88,6 +88,75 @@ def top_affiliates(limit=5):
         .annotate(signups=Count("id"), latest=Max("created_at"))
         .order_by("-signups", "-latest")[:limit]
     )
+
+
+_CEO_OVERVIEW_CACHE_KEY = "control:ceo_overview"
+_CEO_OVERVIEW_TTL = 60
+
+
+def ceo_overview():
+    """Platform-admin-only "CEO view": money + risk signals the growth stat
+    cards above don't carry (MRR/GMV, plan mix, overdue billing, trials about
+    to lapse, top stores, open support load). Not scoped per-user — always
+    platform-wide, so cache it flat (no per-user key like ``dashboard_stats``)."""
+    cached = cache.get(_CEO_OVERVIEW_CACHE_KEY)
+    if cached is not None:
+        return cached
+
+    from apps.billing import services as billing_svc
+    from apps.billing.models import Subscription, SubscriptionStatus
+    from apps.orders.models import Order
+    from apps.support.models import CLOSED_STATUSES, Ticket, TicketKind, TicketPriority
+
+    now = timezone.now()
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+    summary = billing_svc.platform_summary()
+
+    gmv_month = Order.objects.filter(
+        payment_status="paid", created_at__gte=month_start,
+    ).aggregate(s=Sum("grand_total"))["s"] or 0
+
+    top_stores = list(
+        Order.objects.filter(payment_status="paid", created_at__gte=month_start)
+        .values("project_id", "project__name")
+        .annotate(gmv=Sum("grand_total"))
+        .order_by("-gmv")[:5]
+    )
+
+    trials_qs = Subscription.objects.filter(
+        status=SubscriptionStatus.TRIALING,
+        trial_end__isnull=False,
+        trial_end__gte=now,
+        trial_end__lte=now + timedelta(days=7),
+    ).select_related("project").order_by("trial_end")
+    trials_ending = list(trials_qs[:6])
+    trials_ending_count = trials_qs.count()
+
+    new_stores_month = Project.objects.filter(created_at__gte=month_start).count()
+    churned_month = Subscription.objects.filter(
+        status=SubscriptionStatus.CANCELLED, updated_at__gte=month_start,
+    ).count()
+
+    open_tickets = Ticket.objects.exclude(status__in=CLOSED_STATUSES).exclude(
+        kind=TicketKind.FEATURE_REQUEST
+    )
+    tickets_open = open_tickets.count()
+    tickets_urgent = open_tickets.filter(priority=TicketPriority.URGENT).count()
+
+    overview = {
+        **summary,
+        "gmv_month": gmv_month,
+        "top_stores": top_stores,
+        "trials_ending": trials_ending,
+        "trials_ending_count": trials_ending_count,
+        "new_stores_month": new_stores_month,
+        "churned_month": churned_month,
+        "tickets_open": tickets_open,
+        "tickets_urgent": tickets_urgent,
+    }
+    cache.set(_CEO_OVERVIEW_CACHE_KEY, overview, _CEO_OVERVIEW_TTL)
+    return overview
 
 
 def recent_activity(user, limit=20):
