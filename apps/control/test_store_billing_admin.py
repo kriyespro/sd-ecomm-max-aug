@@ -138,6 +138,16 @@ class AdminAdjustTests(TestCase):
         billing_svc.admin_extend(self.sub, days=7)
         self.assertFalse(self.sub.invoices.filter(status=InvoiceStatus.PAID).exists())
 
+    def test_mark_paid_survives_deleted_invoice_number_gap(self):
+        """count()+1 numbering collided after any invoice was deleted (500)."""
+        billing_svc.admin_mark_paid(self.sub, term=BillingPeriod.MONTHLY)
+        billing_svc.admin_mark_paid(self.sub, term=BillingPeriod.MONTHLY)
+        first = self.sub.invoices.order_by("number").first()
+        first.delete()  # count now < highest sequence
+        billing_svc.admin_mark_paid(self.sub, term=BillingPeriod.MONTHLY)
+        nums = list(self.sub.invoices.values_list("number", flat=True))
+        self.assertEqual(len(nums), len(set(nums)))
+
     def test_mark_paid_one_year_bills_full_term(self):
         billing_svc.admin_adjust(self.sub, plan=self.growth, period=BillingPeriod.MONTHLY)
         billing_svc.issue_invoice(self.sub)  # a stale open monthly invoice

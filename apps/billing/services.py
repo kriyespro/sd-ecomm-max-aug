@@ -36,9 +36,20 @@ def _period_end(start, period):
 
 
 def _next_invoice_number(prefix):
+    """Next free ``PREFIX-YYYY-NNNNNN``.
+
+    Based on the highest existing sequence, not ``count()``: counting reuses a
+    number as soon as any invoice is deleted (store wipe/restore, cascade), and
+    ``Invoice.number`` is unique -- that collision was a 500 on mark-paid.
+    """
     year = timezone.now().year
-    n = Invoice.objects.filter(number__startswith=f"{prefix}-{year}-").count() + 1
-    return f"{prefix}-{year}-{n:06d}"
+    stem = f"{prefix}-{year}-"
+    top = 0
+    for num in Invoice.objects.filter(number__startswith=stem).values_list("number", flat=True):
+        tail = num[len(stem):]
+        if tail.isdigit():
+            top = max(top, int(tail))
+    return f"{stem}{top + 1:06d}"
 
 
 # --- subscribe / change plan -------------------------------------
@@ -449,6 +460,7 @@ def admin_adjust(subscription, *, plan=None, period=None, comp=None, actor=None)
     return subscription
 
 
+@transaction.atomic
 @transaction.atomic
 def admin_mark_paid(subscription, *, term=None, actor=None):
     """Record an out-of-band payment for a store.
