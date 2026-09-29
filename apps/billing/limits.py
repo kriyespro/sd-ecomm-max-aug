@@ -12,12 +12,27 @@ def _plan(project):
     return sub.plan if sub is not None else None
 
 
+def custom_domain_count(project) -> int:
+    """Domains the owner brought themselves. The free auto subdomain
+    (``<slug>.PLATFORM_BASE_DOMAIN``) is part of every store, not a custom
+    domain, so it must not eat the plan's custom-domain allowance."""
+    if not hasattr(project, "domains"):
+        return 0
+    qs = project.domains.all()
+    from apps.projects import subdomains
+
+    base = subdomains.base_domain()
+    if base:
+        qs = qs.exclude(host__iendswith=f".{base}")
+    return qs.count()
+
+
 def usage(project) -> dict:
     """Current counts vs limits — for the plan screen UI."""
     plan = _plan(project)
     products = project.products.count() if hasattr(project, "products") else 0
     staff = project.memberships.filter(is_active=True, role__in=["owner", "manager", "staff"]).count()
-    domains = project.domains.count() if hasattr(project, "domains") else 0
+    domains = custom_domain_count(project)
     return {
         "products": (products, plan.max_products if plan else None),
         "staff": (staff, plan.max_staff if plan else None),
@@ -61,7 +76,7 @@ def check_can_add_staff(project):
 
 
 def check_can_add_domain(project):
-    _check(project, "max_custom_domains", project.domains.count(), "custom domains")
+    _check(project, "max_custom_domains", custom_domain_count(project), "custom domains")
 
 
 def skin_upload_allowed(project) -> bool:

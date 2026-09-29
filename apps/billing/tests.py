@@ -273,3 +273,18 @@ class BillingWebhookTests(TestCase):
         self.assertEqual(r.status_code, 200)
         self.invoice.refresh_from_db()
         self.assertEqual(self.invoice.status, InvoiceStatus.OPEN)
+
+
+class CustomDomainCountTests(TestCase):
+    """The auto subdomain must not count against max_custom_domains."""
+
+    @override_settings(PLATFORM_BASE_DOMAIN="shopinaday.test")
+    def test_platform_subdomain_not_counted(self):
+        from apps.billing import limits
+        from apps.projects.models import Domain, Project
+
+        project = Project.objects.create(name="Sub", status="active")
+        Domain.objects.create(project=project, host="sub.shopinaday.test", is_verified=True)
+        self.assertEqual(limits.custom_domain_count(project), 0)
+        Domain.objects.create(project=project, host="mystore.com")
+        self.assertEqual(limits.custom_domain_count(project), 1)
