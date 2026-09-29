@@ -245,7 +245,7 @@ class OwnerBackupScreenSensitiveTests(TestCase):
         self.assertTrue(Order.objects.filter(project=self.project, number="STILL-HERE").exists())
         self.assertFalse(Order.objects.filter(project=self.project, number="SB-1").exists())
 
-    def test_cross_store_sensitive_backup_upload_is_rejected_with_clear_message(self):
+    def test_cross_store_sensitive_backup_restores_catalogue_only(self):
         other = Project.objects.create(
             name="OtherScreenCo", status="active", feature_flags={"onboarded": True},
         )
@@ -266,5 +266,6 @@ class OwnerBackupScreenSensitiveTests(TestCase):
             "confirm_name": "ScreenCo",
             "backup": SimpleUploadedFile("other.zip", other_blob, "application/zip"),
         }, follow=True)
-        self.assertContains(resp, "different store")
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, "different store")
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())

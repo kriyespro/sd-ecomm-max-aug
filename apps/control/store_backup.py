@@ -347,15 +347,13 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
 
     restore_sensitive = False
     if include_sensitive and manifest.get("include_sensitive"):
-        if manifest.get("source_project_id") != project.pk:
-            raise BackupError(
-                "This backup's orders, customers and payments belong to a "
-                "different store — restoring them here isn't allowed. "
-                "Nothing was changed."
-            )
-        if len(data.get("order", [])) > MAX_ORDERS:
-            raise BackupError("Backup has too many orders to restore.")
-        restore_sensitive = True
+        # Orders/customers/payments only come back into the store they were
+        # taken from. A backup from another store still restores its
+        # catalogue/CMS/theme; this store's own orders/customers are kept.
+        if manifest.get("source_project_id") == project.pk:
+            if len(data.get("order", [])) > MAX_ORDERS:
+                raise BackupError("Backup has too many orders to restore.")
+            restore_sensitive = True
 
     _wipe(project, include_sensitive=restore_sensitive)
 
