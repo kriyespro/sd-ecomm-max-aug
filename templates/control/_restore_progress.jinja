@@ -1,0 +1,87 @@
+{# Upload % + restore-in-progress indicator for any <form data-restore-progress>.
+   Include once per page, after the form(s). Upload % is real (XHR upload
+   events); the restore phase runs server-side in one request, so it shows an
+   animated bar + elapsed timer instead of a fake percentage. #}
+<div id="restore-overlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4">
+  <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+    <div class="flex items-center gap-3">
+      <svg class="h-5 w-5 animate-spin text-slate-700" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/>
+        <path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <h3 id="ro-title" class="text-sm font-semibold text-slate-800">Uploading backup…</h3>
+      <span id="ro-pct" class="ml-auto text-sm font-semibold tabular-nums text-slate-700">0%</span>
+    </div>
+    <div class="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+      <div id="ro-bar" class="h-full rounded-full bg-slate-800 transition-all duration-200" style="width:0%"></div>
+    </div>
+    <ol class="mt-4 space-y-1 text-xs text-slate-500">
+      <li id="ro-s1" class="font-semibold text-slate-800">1. Upload file</li>
+      <li id="ro-s2">2. Wipe &amp; rebuild store (products, pages, menus, images)</li>
+      <li id="ro-s3">3. Done</li>
+    </ol>
+    <p id="ro-note" class="mt-3 text-xs text-slate-400">Keep this tab open. Do not refresh.</p>
+  </div>
+</div>
+<style>
+  @keyframes ro-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+  #ro-bar.indet { width: 30% !important; animation: ro-slide 1.4s ease-in-out infinite; }
+</style>
+<script>
+(function () {
+  var ov = document.getElementById('restore-overlay');
+  function $(id) { return document.getElementById(id); }
+  function mark(active) {
+    ['ro-s1', 'ro-s2', 'ro-s3'].forEach(function (id, i) {
+      var on = (i + 1) === active;
+      $(id).className = on ? 'font-semibold text-slate-800' : (i + 1 < active ? 'text-emerald-600' : '');
+    });
+  }
+  document.querySelectorAll('form[data-restore-progress]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      if (!window.XMLHttpRequest || !window.FormData) return;
+      e.preventDefault();
+      var xhr = new XMLHttpRequest(), started = Date.now(), timer = null;
+      ov.classList.remove('hidden'); ov.classList.add('flex');
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) return;
+        var p = Math.round(ev.loaded / ev.total * 100);
+        $('ro-pct').textContent = p + '%';
+        $('ro-bar').style.width = p + '%';
+      };
+      xhr.upload.onload = function () {
+        mark(2);
+        $('ro-title').textContent = 'Restoring store…';
+        $('ro-pct').textContent = '0:00';
+        $('ro-bar').style.width = '';
+        $('ro-bar').classList.add('indet');
+        $('ro-note').textContent = 'Rebuilding your store. This can take a few minutes for large backups — keep this tab open.';
+        var t0 = Date.now();
+        timer = setInterval(function () {
+          var s = Math.floor((Date.now() - t0) / 1000);
+          $('ro-pct').textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
+        }, 500);
+      };
+      xhr.onload = function () {
+        clearInterval(timer);
+        mark(3);
+        $('ro-bar').classList.remove('indet');
+        $('ro-bar').style.width = '100%';
+        $('ro-pct').textContent = '100%';
+        // The redirected page carries the flash message; render it as-is.
+        var url = xhr.responseURL || window.location.href;
+        document.open(); document.write(xhr.responseText); document.close();
+        try { history.replaceState(null, '', url); } catch (err) {}
+      };
+      xhr.onerror = xhr.ontimeout = function () {
+        clearInterval(timer);
+        ov.classList.add('hidden'); ov.classList.remove('flex');
+        alert('Restore request failed or timed out. Reload the page to check whether it finished.');
+      };
+      xhr.timeout = 15 * 60 * 1000;
+      xhr.open('POST', form.action);
+      xhr.send(new FormData(form));
+    });
+  });
+})();
+</script>
