@@ -11,6 +11,8 @@ from django.urls import include, path, re_path
 from django.views.static import serve as _serve_media
 
 from apps.core import health
+from apps.core.landing_pages import PAGES as AD_PAGES
+from apps.core.views import ad_landing
 from apps.core.views import partners as partners_view
 from apps.core.views import root as root_view
 from apps.projects.views import domain_check
@@ -32,6 +34,10 @@ urlpatterns = [
     path("app/", include("apps.shopfront.urls", namespace="shopfront")),
     path("shop/", include("apps.storefront.ornza_urls", namespace="ornza")),
     path("partners/", partners_view, name="partners"),
+    *[
+        path(f"{slug}/", ad_landing, {"slug": slug}, name=f"ad_{slug}")
+        for slug in AD_PAGES
+    ],
     path("", root_view, name="root"),
     path("", include("apps.cms.urls", namespace="cms")),
 ]

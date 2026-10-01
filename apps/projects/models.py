@@ -62,6 +62,11 @@ class Project(TimeStampedModel):
         max_length=253, unique=True, null=True, blank=True, db_index=True
     )
 
+    # Where the owner came from when they self-signed up: the ad's utm_* /
+    # gclid / fbclid params and the landing-page slug ("lp"). Empty for stores
+    # created any other way. Read-only marketing attribution.
+    signup_source = models.JSONField(default=dict, blank=True)
+
     # Opted in to sell wholesale/dropship to other stores on the platform
     # (apps.b2b). Owner-only toggle; reversible, independent of ``status``.
     is_b2b_seller = models.BooleanField(default=False)

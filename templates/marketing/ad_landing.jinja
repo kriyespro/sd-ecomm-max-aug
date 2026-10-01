@@ -1,0 +1,213 @@
+{% extends "base.jinja" %}
+{# Paid-traffic landing page. One goal, one CTA ("Start free trial" -> signup).
+   No site nav, no outbound links. Content comes from apps/core/landing_pages.py #}
+
+{% block title %}{{ page.title }}{% endblock %}
+{% block meta_description %}{{ page.description }}{% endblock %}
+
+{% block head %}
+<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host() }}/{{ slug }}/">
+{% if not site_css_href() %}
+<script>
+  tailwind.config = { theme: { extend: {
+    fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], display: ['"Space Grotesk"','Inter','sans-serif'] },
+    colors: { brand: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' } },
+  } } };
+</script>
+{% endif %}
+<style>
+  html { scroll-behavior: smooth; }
+  .aurora {
+    background:
+      radial-gradient(42rem 42rem at 10% -14%, #e0e7ff 0%, transparent 60%),
+      radial-gradient(34rem 34rem at 96% -6%, #ede9fe 0%, transparent 55%);
+  }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+{% endblock %}
+
+{% block body %}
+{% macro tick(cls="text-emerald-500") %}
+<svg class="h-5 w-5 shrink-0 {{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
+{% endmacro %}
+
+{% macro cta(label="Start free trial", where="hero", dark=false) %}
+<a href="{{ cta_href }}" data-cta="{{ where }}"
+   class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold shadow-lg transition sm:w-auto
+          {{ 'bg-white text-brand-700 shadow-black/10 hover:bg-brand-50' if dark else 'bg-brand-600 text-white shadow-brand-600/25 hover:bg-brand-700' }}">
+  {{ label }}
+  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+</a>
+{% endmacro %}
+
+<div class="bg-white font-sans text-slate-900 pb-20 sm:pb-0">
+
+  {# ---- header: logo (not a link) + the one CTA ---- #}
+  <header class="border-b border-slate-200/70 bg-white/90">
+    <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
+      <span class="font-display text-lg font-bold tracking-tight">shop<span class="text-brand-600">inaday</span></span>
+      <a href="{{ cta_href }}" data-cta="header"
+         class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+        Start free trial
+      </a>
+    </div>
+  </header>
+
+  {# ---- hero ---- #}
+  <section class="aurora">
+    <div class="mx-auto max-w-5xl px-5 pb-14 pt-12 text-center sm:pt-20 sm:pb-20">
+      <p class="mx-auto mb-5 inline-block rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700">{{ page.eyebrow }}</p>
+      <h1 class="mx-auto max-w-3xl font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
+        {{ page.headline }}
+        <span class="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">{{ page.accent }}</span>
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{{ page.sub }}</p>
+
+      <ul class="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
+        {% for c in page.checks %}<li class="inline-flex items-center gap-1.5">{{ tick() }}{{ c }}</li>{% endfor %}
+      </ul>
+
+      <div class="mt-9 flex flex-col items-center gap-3">
+        {{ cta() }}
+        <p class="text-sm text-slate-500">{{ trial_days }}-day free trial · No card needed · Cancel anytime</p>
+      </div>
+
+      {# product mock: pure CSS, no image weight #}
+      <div class="mx-auto mt-14 max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-2xl shadow-slate-900/10">
+        <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+          <span class="h-2.5 w-2.5 rounded-full bg-rose-300"></span><span class="h-2.5 w-2.5 rounded-full bg-amber-300"></span><span class="h-2.5 w-2.5 rounded-full bg-emerald-300"></span>
+          <span class="ml-3 flex-1 rounded-md bg-white px-3 py-1 text-xs text-slate-400 ring-1 ring-slate-200">yourbrand.shopinaday.com</span>
+        </div>
+        <div class="grid grid-cols-3 gap-3 p-4 sm:grid-cols-4 sm:p-5">
+          {% for i in range(8) %}
+          <div class="{{ 'hidden sm:block' if i > 5 else '' }}">
+            <div class="aspect-square rounded-lg bg-gradient-to-br from-brand-100 to-violet-100"></div>
+            <div class="mt-2 h-2.5 w-4/5 rounded bg-slate-200"></div>
+            <div class="mt-1.5 h-2.5 w-1/3 rounded bg-slate-100"></div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="flex items-center justify-between border-t border-slate-100 bg-emerald-50 px-5 py-3 text-sm">
+          <span class="font-semibold text-emerald-700">● New order · Paid via UPI</span>
+          <span class="font-bold text-emerald-800">₹2,480</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {# ---- real social proof, only when the platform has some ---- #}
+  {% if stats and stats.stores and stats.stores >= 5 %}
+  <section class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto flex max-w-5xl flex-col items-center justify-center gap-2 px-5 py-6 text-center sm:flex-row sm:gap-8">
+      <p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.stores }}</span> stores already run on shopinaday</p>
+      {% if stats.products %}<p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.products }}</span> products listed</p>{% endif %}
+      {% if stats.themes %}<p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.themes }}</span> ready-made themes</p>{% endif %}
+    </div>
+  </section>
+  {% endif %}
+
+  {# ---- page-specific value ---- #}
+  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
+    <div class="mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.spot_title }}</h2>
+      <p class="mt-3 text-slate-600">{{ page.spot_sub }}</p>
+    </div>
+    <div class="mt-12 grid gap-5 sm:grid-cols-2">
+      {% for t, b in page.spot %}
+      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 class="flex items-start gap-2 text-lg font-semibold">{{ tick("text-brand-600") }}<span>{{ t }}</span></h3>
+        <p class="mt-2 pl-7 text-slate-600">{{ b }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mt-10 flex justify-center">{{ cta("Start free trial", "mid") }}</div>
+  </section>
+
+  {# ---- how it works ---- #}
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
+      <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Live in three steps</h2>
+      <ol class="mt-12 grid gap-6 sm:grid-cols-3">
+        {% for t, b in steps %}
+        <li class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 font-display font-bold text-white">{{ loop.index }}</span>
+          <h3 class="mt-4 text-lg font-semibold">{{ t }}</h3>
+          <p class="mt-1.5 text-slate-600">{{ b }}</p>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+  </section>
+
+  {# ---- everything included ---- #}
+  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
+    <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Included from day one</h2>
+    <div class="mt-12 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
+      {% for t, b in features %}
+      <div>
+        <h3 class="flex items-start gap-2 font-semibold">{{ tick() }}<span>{{ t }}</span></h3>
+        <p class="mt-1.5 pl-7 text-sm leading-relaxed text-slate-600">{{ b }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    {% if from_price %}
+    <p class="mt-10 text-center text-sm text-slate-500">After your trial, plans start at <span class="font-semibold text-slate-800">&#8377;{{ from_price }}/month</span>. Pick one only if you want to keep going.</p>
+    {% endif %}
+  </section>
+
+  {# ---- FAQ: objections only ---- #}
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20">
+      <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Questions sellers ask</h2>
+      <div class="mt-10 space-y-3">
+        {% for q, a in page.faq %}
+        <details class="rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-slate-200">
+          <summary class="flex cursor-pointer items-center justify-between gap-4 font-semibold">
+            {{ q }}
+            <svg class="chev h-4 w-4 shrink-0 text-slate-400 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+          </summary>
+          <p class="mt-3 text-slate-600">{{ a }}</p>
+        </details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ---- closing CTA ---- #}
+  <section class="bg-gradient-to-br from-brand-700 via-brand-600 to-violet-600">
+    <div class="mx-auto max-w-3xl px-5 py-16 text-center text-white sm:py-20">
+      <h2 class="font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.final }}</h2>
+      <p class="mx-auto mt-4 max-w-xl text-brand-100">{{ trial_days }} days free. No card needed. Sign in with Google and your store is ready to fill.</p>
+      <div class="mt-8 flex justify-center">{{ cta("Start free trial", "final", dark=true) }}</div>
+    </div>
+  </section>
+
+  <footer class="border-t border-slate-200 py-6 text-center text-xs text-slate-400">
+    &copy; {{ now_year }} shopinaday · Hosted commerce for India
+  </footer>
+
+  {# sticky mobile CTA: always one thumb-tap away #}
+  <div class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:hidden">
+    <a href="{{ cta_href }}" data-cta="sticky"
+       class="flex w-full items-center justify-center rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white shadow-lg shadow-brand-600/25">
+      Start free trial · {{ trial_days }} days free
+    </a>
+  </div>
+</div>
+
+<script>
+  /* CTA click -> ad-platform "Lead" signal (the signup itself is reported
+     server-side as CompleteRegistration). Navigation is never blocked. */
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a[data-cta]');
+    if (!a) return;
+    var place = a.getAttribute('data-cta');
+    try { if (window.fbq) fbq('track', 'Lead', { content_name: '{{ slug }}', content_category: place }); } catch (_) {}
+    try { if (window.gtag) gtag('event', 'generate_lead', { landing_page: '{{ slug }}', cta_place: place }); } catch (_) {}
+    try { if (window.ttq) ttq.track('ClickButton', { content_name: '{{ slug }}' }); } catch (_) {}
+  });
+</script>
+{% endblock %}

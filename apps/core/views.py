@@ -32,6 +32,42 @@ def root(request):
     return render(request, "marketing/landing.jinja", _landing_context())
 
 
+def ad_landing(request, slug):
+    """Paid-traffic landing page (see ``apps.core.landing_pages``). Platform
+    host only; a store's own domain has no business serving it. Reads no
+    session/cookie so it stays CDN-cacheable."""
+    from django.http import Http404
+
+    from apps.billing.models import BillingSettings, Plan
+
+    from .landing_pages import COMMON_FEATURES, PAGES, STEPS, signup_href
+
+    page = PAGES.get(slug)
+    if page is None:
+        raise Http404
+    if getattr(request, "project", None):
+        return redirect("/app/")
+    cheapest = (
+        Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0)
+        .order_by("price_monthly").first()
+    )
+    try:
+        trial_days = BillingSettings.load().self_signup_trial_days
+    except Exception:  # noqa: BLE001 — never 500 an ad landing page
+        trial_days = 7
+    ctx = _landing_context()
+    ctx.update({
+        "page": page,
+        "slug": slug,
+        "cta_href": signup_href(reverse("accounts:signup"), request.GET, slug),
+        "trial_days": trial_days,
+        "from_price": int(cheapest.price_monthly) if cheapest else None,
+        "features": COMMON_FEATURES,
+        "steps": STEPS,
+    })
+    return render(request, "marketing/ad_landing.jinja", ctx)
+
+
 def _landing_context():
     from django.utils import timezone
 
