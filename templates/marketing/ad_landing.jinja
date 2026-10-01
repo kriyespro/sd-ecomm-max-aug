@@ -1,12 +1,19 @@
 {% extends "base.jinja" %}
-{# Paid-traffic landing page. One goal, one CTA ("Start free trial" -> signup).
-   No site nav, no outbound links. Content comes from apps/core/landing_pages.py #}
+{# Paid-traffic landing page. One goal: "Start free trial" -> signup.
+   No site nav, no outbound links (only privacy/terms in the footer).
+   Content: apps/core/landing_pages.py #}
 
 {% block title %}{{ page.title }}{% endblock %}
 {% block meta_description %}{{ page.description }}{% endblock %}
 
 {% block head %}
 <link rel="canonical" href="{{ request.scheme }}://{{ request.get_host() }}/{{ slug }}/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="{{ page.title }}">
+<meta property="og:description" content="{{ page.description }}">
+<meta name="theme-color" content="#4f46e5">
+<script type="application/ld+json">{{ faq_jsonld|safe }}</script>
+<script>document.documentElement.classList.add('js');</script>
 {% if not site_css_href() %}
 <script>
   tailwind.config = { theme: { extend: {
@@ -19,13 +26,30 @@
   html { scroll-behavior: smooth; }
   .aurora {
     background:
-      radial-gradient(42rem 42rem at 10% -14%, #e0e7ff 0%, transparent 60%),
-      radial-gradient(34rem 34rem at 96% -6%, #ede9fe 0%, transparent 55%);
+      radial-gradient(44rem 44rem at 8% -16%, #e0e7ff 0%, transparent 60%),
+      radial-gradient(36rem 36rem at 98% -8%, #ede9fe 0%, transparent 55%),
+      radial-gradient(28rem 28rem at 60% 110%, #dbeafe 0%, transparent 60%);
   }
   details > summary { list-style: none; }
   details > summary::-webkit-details-marker { display: none; }
   details[open] .chev { transform: rotate(180deg); }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  .js .rv { opacity: 0; transform: translateY(16px); transition: opacity .55s ease, transform .55s ease; }
+  .js .rv.in { opacity: 1; transform: none; }
+  @keyframes floaty { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+  @keyframes toast { 0%,8% { opacity: 0; transform: translateY(10px) scale(.96) } 14%,40% { opacity: 1; transform: none } 48%,100% { opacity: 0; transform: translateY(-6px) } }
+  @keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(79,70,229,.45) } 100% { box-shadow: 0 0 0 14px rgba(79,70,229,0) } }
+  .floaty { animation: floaty 6s ease-in-out infinite; }
+  .toast { opacity: 0; animation: toast 7s ease-in-out infinite; }
+  .toast-2 { animation-delay: 3.5s; }
+  .pulse { animation: pulse-ring 2.2s ease-out infinite; }
+  #sticky { transition: transform .3s ease; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .floaty, .toast, .pulse { animation: none; }
+    .toast { opacity: 1; }
+    .toast-2 { display: none; }
+    .js .rv { opacity: 1; transform: none; transition: none; }
+  }
 </style>
 {% endblock %}
 
@@ -33,121 +57,271 @@
 {% macro tick(cls="text-emerald-500") %}
 <svg class="h-5 w-5 shrink-0 {{ cls }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4L19 7"/></svg>
 {% endmacro %}
+{% macro cross() %}
+<svg class="h-5 w-5 shrink-0 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+{% endmacro %}
+{% macro arrow() %}
+<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+{% endmacro %}
 
-{% macro cta(label="Start free trial", where="hero", dark=false) %}
+{% macro cta(label="Start free trial", where="mid", dark=false) %}
 <a href="{{ cta_href }}" data-cta="{{ where }}"
-   class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-base font-semibold shadow-lg transition sm:w-auto
+   class="inline-flex w-full items-center justify-center gap-2 rounded-xl px-8 py-4 text-base font-semibold shadow-lg transition hover:-translate-y-0.5 sm:w-auto
           {{ 'bg-white text-brand-700 shadow-black/10 hover:bg-brand-50' if dark else 'bg-brand-600 text-white shadow-brand-600/25 hover:bg-brand-700' }}">
-  {{ label }}
-  <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+  {{ label }} {{ arrow() }}
 </a>
 {% endmacro %}
 
-<div class="bg-white font-sans text-slate-900 pb-20 sm:pb-0">
-
-  {# ---- header: logo (not a link) + the one CTA ---- #}
-  <header class="border-b border-slate-200/70 bg-white/90">
-    <div class="mx-auto flex h-16 max-w-5xl items-center justify-between px-5">
-      <span class="font-display text-lg font-bold tracking-tight">shop<span class="text-brand-600">inaday</span></span>
-      <a href="{{ cta_href }}" data-cta="header"
-         class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-        Start free trial
-      </a>
+{# ---- hero mockups, one per page. Sample data, clearly demo. ---- #}
+{% macro mock_storefront() %}
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+  <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
+    <span class="h-2.5 w-2.5 rounded-full bg-rose-300"></span><span class="h-2.5 w-2.5 rounded-full bg-amber-300"></span><span class="h-2.5 w-2.5 rounded-full bg-emerald-300"></span>
+    <span class="ml-3 flex flex-1 items-center gap-1.5 rounded-md bg-white px-3 py-1 text-xs text-slate-500 ring-1 ring-slate-200">
+      <svg class="h-3 w-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+      <span data-store-url>yourstore</span>.shopinaday.com
+    </span>
+  </div>
+  <div class="p-4 sm:p-5">
+    <div class="mb-4 flex items-center justify-between">
+      <span class="font-display font-bold" data-store-name>{{ page.store_hint }}</span>
+      <span class="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white">Cart (2)</span>
     </div>
-  </header>
-
-  {# ---- hero ---- #}
-  <section class="aurora">
-    <div class="mx-auto max-w-5xl px-5 pb-14 pt-12 text-center sm:pt-20 sm:pb-20">
-      <p class="mx-auto mb-5 inline-block rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700">{{ page.eyebrow }}</p>
-      <h1 class="mx-auto max-w-3xl font-display text-4xl font-bold leading-[1.08] tracking-tight sm:text-6xl">
-        {{ page.headline }}
-        <span class="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">{{ page.accent }}</span>
-      </h1>
-      <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">{{ page.sub }}</p>
-
-      <ul class="mx-auto mt-7 flex max-w-2xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm font-medium text-slate-700">
-        {% for c in page.checks %}<li class="inline-flex items-center gap-1.5">{{ tick() }}{{ c }}</li>{% endfor %}
-      </ul>
-
-      <div class="mt-9 flex flex-col items-center gap-3">
-        {{ cta() }}
-        <p class="text-sm text-slate-500">{{ trial_days }}-day free trial · No card needed · Cancel anytime</p>
-      </div>
-
-      {# product mock: pure CSS, no image weight #}
-      <div class="mx-auto mt-14 max-w-3xl overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-2xl shadow-slate-900/10">
-        <div class="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-4 py-3">
-          <span class="h-2.5 w-2.5 rounded-full bg-rose-300"></span><span class="h-2.5 w-2.5 rounded-full bg-amber-300"></span><span class="h-2.5 w-2.5 rounded-full bg-emerald-300"></span>
-          <span class="ml-3 flex-1 rounded-md bg-white px-3 py-1 text-xs text-slate-400 ring-1 ring-slate-200">yourbrand.shopinaday.com</span>
-        </div>
-        <div class="grid grid-cols-3 gap-3 p-4 sm:grid-cols-4 sm:p-5">
-          {% for i in range(8) %}
-          <div class="{{ 'hidden sm:block' if i > 5 else '' }}">
-            <div class="aspect-square rounded-lg bg-gradient-to-br from-brand-100 to-violet-100"></div>
-            <div class="mt-2 h-2.5 w-4/5 rounded bg-slate-200"></div>
-            <div class="mt-1.5 h-2.5 w-1/3 rounded bg-slate-100"></div>
-          </div>
-          {% endfor %}
-        </div>
-        <div class="flex items-center justify-between border-t border-slate-100 bg-emerald-50 px-5 py-3 text-sm">
-          <span class="font-semibold text-emerald-700">● New order · Paid via UPI</span>
-          <span class="font-bold text-emerald-800">₹2,480</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  {# ---- real social proof, only when the platform has some ---- #}
-  {% if stats and stats.stores and stats.stores >= 5 %}
-  <section class="border-y border-slate-200 bg-slate-50">
-    <div class="mx-auto flex max-w-5xl flex-col items-center justify-center gap-2 px-5 py-6 text-center sm:flex-row sm:gap-8">
-      <p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.stores }}</span> stores already run on shopinaday</p>
-      {% if stats.products %}<p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.products }}</span> products listed</p>{% endif %}
-      {% if stats.themes %}<p class="text-sm text-slate-600"><span class="font-display text-2xl font-bold text-slate-900">{{ stats.themes }}</span> ready-made themes</p>{% endif %}
-    </div>
-  </section>
-  {% endif %}
-
-  {# ---- page-specific value ---- #}
-  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
-    <div class="mx-auto max-w-2xl text-center">
-      <h2 class="font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.spot_title }}</h2>
-      <p class="mt-3 text-slate-600">{{ page.spot_sub }}</p>
-    </div>
-    <div class="mt-12 grid gap-5 sm:grid-cols-2">
-      {% for t, b in page.spot %}
-      <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <h3 class="flex items-start gap-2 text-lg font-semibold">{{ tick("text-brand-600") }}<span>{{ t }}</span></h3>
-        <p class="mt-2 pl-7 text-slate-600">{{ b }}</p>
+    <div class="grid grid-cols-3 gap-3">
+      {% for n, p in [("Cotton kurta","₹899"),("Linen shirt","₹1,299"),("Silk scarf","₹649"),("Denim jacket","₹2,199"),("Printed tee","₹499"),("Tote bag","₹799")] %}
+      <div>
+        <div class="aspect-square rounded-lg bg-gradient-to-br {{ ['from-brand-100 to-violet-100','from-amber-100 to-rose-100','from-sky-100 to-brand-100'][loop.index0 % 3] }}"></div>
+        <p class="mt-1.5 truncate text-xs font-medium">{{ n }}</p><p class="text-xs text-slate-500">{{ p }}</p>
       </div>
       {% endfor %}
     </div>
-    <div class="mt-10 flex justify-center">{{ cta("Start free trial", "mid") }}</div>
-  </section>
+  </div>
+</div>
+{% endmacro %}
 
-  {# ---- how it works ---- #}
-  <section class="bg-slate-50">
-    <div class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
-      <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Live in three steps</h2>
-      <ol class="mt-12 grid gap-6 sm:grid-cols-3">
-        {% for t, b in steps %}
-        <li class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
-          <span class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 font-display font-bold text-white">{{ loop.index }}</span>
-          <h3 class="mt-4 text-lg font-semibold">{{ t }}</h3>
-          <p class="mt-1.5 text-slate-600">{{ b }}</p>
-        </li>
+{% macro mock_bio() %}
+<div class="mx-auto w-64 rounded-[2rem] border-[6px] border-slate-900 bg-white p-4 shadow-2xl shadow-slate-900/20">
+  <div class="flex items-center gap-3">
+    <span class="h-12 w-12 rounded-full bg-gradient-to-br from-rose-400 via-fuchsia-500 to-amber-400"></span>
+    <div><p class="text-sm font-bold" data-store-handle>{{ page.store_hint|lower|replace(' ','_')|replace("'",'') }}</p><p class="text-[11px] text-slate-500">Handmade · Ships across India</p></div>
+  </div>
+  <div class="mt-3 grid grid-cols-3 gap-1">
+    {% for i in range(6) %}<div class="aspect-square rounded bg-gradient-to-br {{ ['from-rose-100 to-amber-100','from-brand-100 to-violet-100','from-sky-100 to-emerald-100'][i % 3] }}"></div>{% endfor %}
+  </div>
+  <div class="pulse mt-3 flex items-center justify-between rounded-xl bg-brand-600 px-3 py-2.5 text-white">
+    <span class="text-xs font-semibold">Shop now · <span data-store-url>yourstore</span>.shopinaday.com</span>{{ arrow() }}
+  </div>
+  <p class="mt-2 text-center text-[10px] text-slate-400">link in bio</p>
+</div>
+{% endmacro %}
+
+{% macro mock_checkout() %}
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+  <div class="border-b border-slate-100 bg-slate-50 px-5 py-3 text-sm font-semibold" data-store-name>{{ page.store_hint }} · Checkout</div>
+  <div class="space-y-3 p-5 text-sm">
+    <div class="flex justify-between"><span class="text-slate-500">Cotton kurta × 2</span><span class="font-medium">₹1,798</span></div>
+    <div class="flex justify-between"><span class="text-slate-500">Shipping</span><span class="font-medium">₹80</span></div>
+    <div class="flex justify-between border-t border-slate-100 pt-3 font-bold"><span>Total</span><span>₹1,878</span></div>
+    <p class="pt-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Pay with</p>
+    <div class="grid grid-cols-2 gap-2 text-xs font-medium">
+      <span class="rounded-lg border-2 border-brand-600 bg-brand-50 px-3 py-2 text-brand-700">UPI</span>
+      <span class="rounded-lg border border-slate-200 px-3 py-2">Cards</span>
+      <span class="rounded-lg border border-slate-200 px-3 py-2">Netbanking</span>
+      <span class="rounded-lg border border-slate-200 px-3 py-2">Cash on Delivery</span>
+    </div>
+    <div class="rounded-xl bg-brand-600 py-3 text-center font-semibold text-white">Pay ₹1,878</div>
+  </div>
+</div>
+{% endmacro %}
+
+{% macro mock_fashion() %}
+<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-900/10">
+  <div class="grid sm:grid-cols-2">
+    <div class="aspect-[4/5] bg-gradient-to-br from-rose-100 via-amber-50 to-fuchsia-100 sm:aspect-auto sm:min-h-[18rem]"></div>
+    <div class="p-5 text-sm">
+      <p class="text-xs font-semibold uppercase tracking-wide text-brand-600" data-store-name>{{ page.store_hint }}</p>
+      <p class="mt-1 font-display text-xl font-bold">Anarkali Kurta Set</p>
+      <p class="mt-1 font-semibold">₹2,499 <span class="text-xs font-normal text-slate-400 line-through">₹3,199</span></p>
+      <p class="mt-4 text-xs font-semibold text-slate-500">Colour</p>
+      <div class="mt-1.5 flex gap-2">
+        <span class="h-6 w-6 rounded-full bg-rose-500 ring-2 ring-brand-600 ring-offset-2"></span><span class="h-6 w-6 rounded-full bg-emerald-600"></span><span class="h-6 w-6 rounded-full bg-amber-400"></span><span class="h-6 w-6 rounded-full bg-slate-800"></span>
+      </div>
+      <p class="mt-4 text-xs font-semibold text-slate-500">Size</p>
+      <div class="mt-1.5 flex flex-wrap gap-2 text-xs font-medium">
+        {% for sz, on, out in [("S",0,0),("M",1,0),("L",0,0),("XL",0,0),("XXL",0,1)] %}
+        <span class="rounded-md border px-3 py-1.5 {{ 'border-brand-600 bg-brand-50 text-brand-700' if on else ('border-slate-200 text-slate-300 line-through' if out else 'border-slate-200') }}">{{ sz }}</span>
         {% endfor %}
-      </ol>
+      </div>
+      <div class="mt-5 rounded-xl bg-slate-900 py-3 text-center font-semibold text-white">Add to cart</div>
+    </div>
+  </div>
+</div>
+{% endmacro %}
+
+<div class="bg-white pb-24 font-sans text-slate-900 sm:pb-0">
+
+  {# ---- header ---- #}
+  <header class="border-b border-slate-200/70 bg-white/90">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <span class="font-display text-lg font-bold tracking-tight">shop<span class="text-brand-600">inaday</span></span>
+      <div class="flex items-center gap-4">
+        <span class="hidden text-sm text-slate-500 md:inline">{{ trial_days }}-day free trial · no card</span>
+        <a href="{{ cta_href }}" data-cta="header" class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">Start free trial</a>
+      </div>
+    </div>
+  </header>
+
+  {# ================= HERO ================= #}
+  <section class="aurora">
+    <div class="mx-auto grid max-w-6xl items-center gap-12 px-5 pb-16 pt-12 lg:grid-cols-[1.05fr_1fr] lg:pb-24 lg:pt-20">
+      <div class="text-center lg:text-left">
+        <p class="mb-5 inline-block rounded-full border border-brand-200 bg-white/80 px-3 py-1 text-xs font-semibold text-brand-700">{{ page.eyebrow }}</p>
+        <h1 class="font-display text-4xl font-bold leading-[1.06] tracking-tight sm:text-5xl lg:text-6xl">
+          {{ page.headline }}
+          <span class="bg-gradient-to-r from-brand-600 to-violet-600 bg-clip-text text-transparent">{{ page.accent }}</span>
+        </h1>
+        <p class="mt-6 text-lg leading-relaxed text-slate-600">{{ page.sub }}</p>
+
+        <ul class="mt-6 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm font-medium text-slate-700 lg:justify-start">
+          {% for c in page.checks %}<li class="inline-flex items-center gap-1.5">{{ tick() }}{{ c }}</li>{% endfor %}
+        </ul>
+
+        {# Store-name form: GET to signup, attribution as hidden fields. The
+           name pre-fills the "name your store" step after Google sign-in. #}
+        <form action="{{ cta_action }}" method="get" class="mt-8">
+          {% for k, v in cta_params.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+          <label for="store" class="mb-2 block text-left text-sm font-semibold text-slate-700">What will you call your store?</label>
+          <div class="flex flex-col gap-3 sm:flex-row">
+            <input id="store" name="store" type="text" maxlength="120" autocomplete="organization"
+                   placeholder="e.g. {{ page.store_hint }}" data-store-input
+                   class="w-full rounded-xl border border-slate-300 bg-white px-4 py-4 text-base shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-100">
+            <button type="submit" data-cta="hero"
+                    class="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-brand-600 px-8 py-4 text-base font-semibold text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-700">
+              Start free trial {{ arrow() }}
+            </button>
+          </div>
+          <p class="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-sm text-slate-500 lg:justify-start">
+            <span>{{ trial_days }}-day free trial</span><span class="text-slate-300">·</span><span>No card needed</span><span class="text-slate-300">·</span><span>Cancel anytime</span>
+          </p>
+        </form>
+      </div>
+
+      <div class="relative mx-auto w-full max-w-md lg:max-w-none">
+        <div class="floaty">
+          {% if page.mock == 'bio' %}{{ mock_bio() }}
+          {% elif page.mock == 'checkout' %}{{ mock_checkout() }}
+          {% elif page.mock == 'fashion' %}{{ mock_fashion() }}
+          {% else %}{{ mock_storefront() }}{% endif %}
+        </div>
+        {# rotating sample-order toasts #}
+        <div class="toast absolute -left-2 bottom-6 w-56 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl sm:-left-6" aria-hidden="true">
+          <p class="font-semibold text-emerald-600">● New order · Paid via UPI</p>
+          <p class="mt-0.5 text-slate-500">Sample · ₹1,878 · Pune</p>
+        </div>
+        <div class="toast toast-2 absolute -right-2 top-8 w-56 rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-xl sm:-right-6" aria-hidden="true">
+          <p class="font-semibold text-brand-600">● New order · Cash on Delivery</p>
+          <p class="mt-0.5 text-slate-500">Sample · ₹2,499 · Jaipur</p>
+        </div>
+      </div>
     </div>
   </section>
 
-  {# ---- everything included ---- #}
-  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-20">
-    <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Included from day one</h2>
+  <div id="hero-end"></div>
+
+  {# ================= TRUST STRIP ================= #}
+  <section class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto grid max-w-6xl gap-4 px-5 py-6 text-sm sm:grid-cols-2 lg:grid-cols-4">
+      {% for t, b in [("Secure payments", "Razorpay handles cards and UPI. We never store card details."),
+                      ("HTTPS on every store", "Automatic SSL, including on your own domain."),
+                      ("No card for the trial", "Pay only if you decide to keep going."),
+                      ("Cancel anytime", "No lock-in and no contracts.")] %}
+      <div class="flex items-start gap-3">{{ tick("text-brand-600 mt-0.5") }}<div><p class="font-semibold">{{ t }}</p><p class="text-slate-500">{{ b }}</p></div></div>
+      {% endfor %}
+    </div>
+    {% if stats and stats.stores and stats.stores >= 5 %}
+    <div class="border-t border-slate-200 py-3 text-center text-sm text-slate-600">
+      <span class="font-display font-bold text-slate-900">{{ stats.stores }}</span> stores already run on shopinaday
+      {% if stats.products %}· <span class="font-display font-bold text-slate-900">{{ stats.products }}</span> products listed{% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  {# ================= PAIN -> FIX ================= #}
+  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-24">
+    <h2 class="rv mx-auto max-w-2xl text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.pains_title }}</h2>
+    <div class="mt-12 space-y-4">
+      {% for pain, fix in page.pains %}
+      <div class="rv grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm sm:grid-cols-2">
+        <div class="flex items-start gap-3 bg-rose-50/60 p-5 text-slate-700">{{ cross() }}<p>{{ pain }}</p></div>
+        <div class="flex items-start gap-3 p-5 font-medium text-slate-900">{{ tick() }}<p>{{ fix }}</p></div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mt-10 flex justify-center">{{ cta("Start free trial", "pain") }}</div>
+  </section>
+
+  {# ================= SPOTLIGHT ================= #}
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-5xl px-5 py-16 sm:py-24">
+      <div class="rv mx-auto max-w-2xl text-center">
+        <h2 class="font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.spot_title }}</h2>
+        <p class="mt-3 text-slate-600">{{ page.spot_sub }}</p>
+      </div>
+      <div class="mt-12 grid gap-5 sm:grid-cols-2">
+        {% for t, b in page.spot %}
+        <div class="rv rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+          <span class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 font-display font-bold text-brand-600">{{ loop.index }}</span>
+          <h3 class="mt-4 text-lg font-semibold">{{ t }}</h3>
+          <p class="mt-2 text-slate-600">{{ b }}</p>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ================= HOW IT WORKS ================= #}
+  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-24">
+    <h2 class="rv text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Live in three steps</h2>
+    <ol class="relative mt-14 grid gap-8 sm:grid-cols-3">
+      <div class="absolute left-[16%] right-[16%] top-5 hidden h-0.5 bg-gradient-to-r from-brand-200 via-brand-400 to-brand-200 sm:block" aria-hidden="true"></div>
+      {% for t, b in steps %}
+      <li class="rv relative text-center">
+        <span class="relative mx-auto inline-flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 font-display font-bold text-white ring-8 ring-white">{{ loop.index }}</span>
+        <h3 class="mt-4 text-lg font-semibold">{{ t }}</h3>
+        <p class="mt-1.5 text-slate-600">{{ b }}</p>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="mt-12 flex justify-center">{{ cta("Start free trial", "steps") }}</div>
+  </section>
+
+  {# ================= COMPARISON ================= #}
+  <section class="bg-slate-50">
+    <div class="mx-auto max-w-4xl px-5 py-16 sm:py-24">
+      <h2 class="rv text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">The difference, side by side</h2>
+      <div class="rv mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="grid grid-cols-[1.1fr_1fr_1fr] bg-slate-900 text-xs font-semibold text-white sm:text-sm">
+          <div class="p-3 sm:p-4"></div>
+          <div class="p-3 sm:p-4">{{ page.compare_head[0] }}</div>
+          <div class="bg-brand-600 p-3 sm:p-4">{{ page.compare_head[1] }}</div>
+        </div>
+        {% for label, them, us in page.compare %}
+        <div class="grid grid-cols-[1.1fr_1fr_1fr] border-t border-slate-100 text-xs sm:text-sm">
+          <div class="p-3 font-semibold sm:p-4">{{ label }}</div>
+          <div class="p-3 text-slate-500 sm:p-4">{{ them }}</div>
+          <div class="flex items-start gap-1.5 bg-brand-50/60 p-3 font-medium text-slate-900 sm:p-4">{{ tick("text-brand-600 h-4 w-4 mt-0.5") }}{{ us }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ================= EVERYTHING INCLUDED ================= #}
+  <section class="mx-auto max-w-5xl px-5 py-16 sm:py-24">
+    <h2 class="rv text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Included from day one</h2>
     <div class="mt-12 grid gap-x-10 gap-y-7 sm:grid-cols-2 lg:grid-cols-3">
       {% for t, b in features %}
-      <div>
+      <div class="rv">
         <h3 class="flex items-start gap-2 font-semibold">{{ tick() }}<span>{{ t }}</span></h3>
         <p class="mt-1.5 pl-7 text-sm leading-relaxed text-slate-600">{{ b }}</p>
       </div>
@@ -158,13 +332,30 @@
     {% endif %}
   </section>
 
-  {# ---- FAQ: objections only ---- #}
+  {# real, permissioned quotes only: hidden while empty #}
+  {% if page.testimonials %}
   <section class="bg-slate-50">
-    <div class="mx-auto max-w-3xl px-5 py-16 sm:py-20">
-      <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Questions sellers ask</h2>
+    <div class="mx-auto max-w-5xl px-5 py-16 sm:py-24">
+      <h2 class="text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">What sellers say</h2>
+      <div class="mt-10 grid gap-5 sm:grid-cols-2">
+        {% for quote, name, role in page.testimonials %}
+        <figure class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200">
+          <blockquote class="text-slate-700">&ldquo;{{ quote }}&rdquo;</blockquote>
+          <figcaption class="mt-4 text-sm"><span class="font-semibold">{{ name }}</span> · <span class="text-slate-500">{{ role }}</span></figcaption>
+        </figure>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+  {% endif %}
+
+  {# ================= FAQ ================= #}
+  <section class="{{ '' if page.testimonials else 'bg-slate-50' }}">
+    <div class="mx-auto max-w-3xl px-5 py-16 sm:py-24">
+      <h2 class="rv text-center font-display text-3xl font-bold tracking-tight sm:text-4xl">Questions sellers ask</h2>
       <div class="mt-10 space-y-3">
         {% for q, a in page.faq %}
-        <details class="rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-slate-200">
+        <details class="rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-slate-200" {{ 'open' if loop.first }}>
           <summary class="flex cursor-pointer items-center justify-between gap-4 font-semibold">
             {{ q }}
             <svg class="chev h-4 w-4 shrink-0 text-slate-400 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
@@ -176,12 +367,12 @@
     </div>
   </section>
 
-  {# ---- closing CTA ---- #}
+  {# ================= FINAL CTA ================= #}
   <section class="bg-gradient-to-br from-brand-700 via-brand-600 to-violet-600">
-    <div class="mx-auto max-w-3xl px-5 py-16 text-center text-white sm:py-20">
-      <h2 class="font-display text-3xl font-bold tracking-tight sm:text-4xl">{{ page.final }}</h2>
-      <p class="mx-auto mt-4 max-w-xl text-brand-100">{{ trial_days }} days free. No card needed. Sign in with Google and your store is ready to fill.</p>
-      <div class="mt-8 flex justify-center">{{ cta("Start free trial", "final", dark=true) }}</div>
+    <div class="mx-auto max-w-3xl px-5 py-16 text-center text-white sm:py-24">
+      <h2 class="font-display text-3xl font-bold tracking-tight sm:text-5xl">{{ page.final }}</h2>
+      <p class="mx-auto mt-4 max-w-xl text-lg text-brand-100">{{ trial_days }} days free. No card needed. Sign in with Google and your store is ready to fill.</p>
+      <div class="mt-9 flex justify-center">{{ cta("Start free trial", "final", dark=true) }}</div>
     </div>
   </section>
 
@@ -191,8 +382,8 @@
     <a href="{{ url('terms') }}" class="hover:text-slate-600">Terms</a>
   </footer>
 
-  {# sticky mobile CTA: always one thumb-tap away #}
-  <div class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:hidden">
+  {# sticky mobile CTA: visible by default; JS hides it only while the hero is on screen #}
+  <div id="sticky" class="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 p-3 backdrop-blur sm:hidden">
     <a href="{{ cta_href }}" data-cta="sticky"
        class="flex w-full items-center justify-center rounded-xl bg-brand-600 py-3.5 text-base font-semibold text-white shadow-lg shadow-brand-600/25">
       Start free trial · {{ trial_days }} days free
@@ -201,15 +392,79 @@
 </div>
 
 <script>
-  /* CTA click -> ad-platform "Lead" signal (the signup itself is reported
-     server-side as CompleteRegistration). Navigation is never blocked. */
+(function () {
+  var slug = '{{ slug }}';
+  var fired = {};
+  function track(meta, ga, tt) {
+    try { if (window.fbq && meta) fbq.apply(null, meta); } catch (_) {}
+    try { if (window.gtag && ga) gtag.apply(null, ga); } catch (_) {}
+    try { if (window.ttq && tt) ttq.track.apply(ttq, tt); } catch (_) {}
+  }
+
+  /* audience + intent signals; the signup itself is reported server-side */
+  track(['track', 'ViewContent', { content_name: slug }], ['event', 'view_item', { landing_page: slug }], ['ViewContent', { content_name: slug }]);
+
   document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('a[data-cta]');
+    var a = e.target.closest && e.target.closest('[data-cta]');
     if (!a) return;
     var place = a.getAttribute('data-cta');
-    try { if (window.fbq) fbq('track', 'Lead', { content_name: '{{ slug }}', content_category: place }); } catch (_) {}
-    try { if (window.gtag) gtag('event', 'generate_lead', { landing_page: '{{ slug }}', cta_place: place }); } catch (_) {}
-    try { if (window.ttq) ttq.track('ClickButton', { content_name: '{{ slug }}' }); } catch (_) {}
+    track(['track', 'Lead', { content_name: slug, content_category: place }],
+          ['event', 'generate_lead', { landing_page: slug, cta_place: place }],
+          ['ClickButton', { content_name: slug }]);
   });
+
+  /* store-name input: live-preview in the mock + carry the name to every CTA link */
+  var input = document.querySelector('[data-store-input]');
+  var links = Array.prototype.slice.call(document.querySelectorAll('a[data-cta]'));
+  var baseHref = links.map(function (a) { return a.getAttribute('href'); });
+  function slugify(s) { return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'yourstore'; }
+  function remember(el) { if (el.dataset.orig === undefined) el.dataset.orig = el.textContent; }
+  if (input) {
+    input.addEventListener('input', function () {
+      var v = input.value.trim();
+      document.querySelectorAll('[data-store-name]').forEach(function (el) {
+        remember(el);
+        el.textContent = v ? (el.dataset.orig.indexOf('Checkout') > -1 ? v + ' · Checkout' : v) : el.dataset.orig;
+      });
+      document.querySelectorAll('[data-store-url]').forEach(function (el) { el.textContent = slugify(v); });
+      document.querySelectorAll('[data-store-handle]').forEach(function (el) {
+        remember(el);
+        el.textContent = v ? slugify(v) : el.dataset.orig;
+      });
+      links.forEach(function (a, i) {
+        var u = baseHref[i];
+        a.setAttribute('href', v ? u + (u.indexOf('?') > -1 ? '&' : '?') + 'store=' + encodeURIComponent(v) : u);
+      });
+    });
+  }
+
+  /* scroll reveal */
+  var rv = document.querySelectorAll('.rv');
+  if ('IntersectionObserver' in window && !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches)) {
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    rv.forEach(function (el) { io.observe(el); });
+  } else { rv.forEach(function (el) { el.classList.add('in'); }); }
+
+  /* sticky mobile bar: hidden while the hero is in view */
+  var bar = document.getElementById('sticky'), end = document.getElementById('hero-end');
+  if (bar && end && 'IntersectionObserver' in window) {
+    bar.style.transform = 'translateY(100%)';
+    new IntersectionObserver(function (es) {
+      var past = !es[0].isIntersecting && es[0].boundingClientRect.top < 0;
+      bar.style.transform = past ? 'none' : 'translateY(100%)';
+    }).observe(end);
+  }
+
+  /* engagement: 50% scroll depth, once */
+  window.addEventListener('scroll', function () {
+    var d = (window.scrollY + innerHeight) / document.documentElement.scrollHeight;
+    if (d > .5 && !fired.half) {
+      fired.half = 1;
+      track(null, ['event', 'scroll_50', { landing_page: slug }], null);
+    }
+  }, { passive: true });
+})();
 </script>
 {% endblock %}

@@ -39,6 +39,9 @@ STEPS = [
     ("Add products and share the link", "Upload photos or import a spreadsheet, then start taking orders."),
 ]
 
+# Optional per page: "testimonials": [(quote, name, role), ...]. Left empty on
+# purpose — add only real, permissioned quotes; the section hides itself when
+# there are none.
 PAGES: dict[str, dict] = {
     "online-store-builder": {
         "title": "Online Store Builder for India | Start Free Trial | shopinaday",
@@ -63,6 +66,22 @@ PAGES: dict[str, dict] = {
             ("How do I receive payments?", "Connect your Razorpay account in a few minutes. You can also accept Cash on Delivery."),
         ],
         "final": "Your store could be live before dinner.",
+        "mock": "storefront",
+        "store_hint": "Aarav Fashions",
+        "pains_title": "Why building a store feels so hard",
+        "pains": [
+            ("Quotes and delays from developers", "Pick a theme and add products yourself. Live the same day."),
+            ("Payments, hosting and SSL to piece together", "Razorpay, COD, hosting and HTTPS are already included."),
+            ("Every small change costs money or time", "Edit prices, photos and pages yourself in minutes."),
+        ],
+        "compare_head": ("Hiring a developer", "shopinaday"),
+        "compare": [
+            ("Time to launch", "Weeks of back-and-forth", "Same day"),
+            ("Upfront cost", "Developer fees", "Free trial, no card"),
+            ("Payments", "Integrate and test yourself", "Razorpay + COD ready"),
+            ("Hosting and HTTPS", "You arrange and renew", "Included, automatic"),
+            ("Making changes", "Wait for a developer", "Do it yourself"),
+        ],
     },
     "instagram-sellers": {
         "title": "Online Store for Instagram Sellers | Start Free Trial | shopinaday",
@@ -87,6 +106,22 @@ PAGES: dict[str, dict] = {
             ("Is it free to try?", "Yes. Start free, no card needed, and bring your products over when you are ready."),
         ],
         "final": "Turn your followers into paying customers.",
+        "mock": "bio",
+        "store_hint": "Ria's Closet",
+        "pains_title": "DM selling is costing you orders",
+        "pains": [
+            ("Answering 'price?' and 'size?' fifty times a day", "Prices, sizes and photos live on your store. Buyers pick for themselves."),
+            ("'Will pay tomorrow' and screenshots that never arrive", "UPI and cards at checkout, or COD when a buyer needs it."),
+            ("Orders buried in chats", "Every order lands in one list with its payment status."),
+        ],
+        "compare_head": ("Selling in DMs", "Your shopinaday store"),
+        "compare": [
+            ("Taking orders", "Back-and-forth chats", "Customers order themselves"),
+            ("Getting paid", "Screenshots and follow-ups", "UPI, cards or COD at checkout"),
+            ("Catalogue", "Scroll the grid to find a price", "Searchable, with sizes and colours"),
+            ("Tracking", "Notes and memory", "All orders in one dashboard"),
+            ("Brand", "Looks informal", "Your own store link"),
+        ],
     },
     "ecommerce-website-india": {
         "title": "Ecommerce Website for India | Razorpay, COD, UPI | shopinaday",
@@ -111,6 +146,22 @@ PAGES: dict[str, dict] = {
             ("What does it cost after the trial?", "Plans start low and you can see them before you commit. The trial needs no card."),
         ],
         "final": "Launch your ecommerce website today.",
+        "mock": "checkout",
+        "store_hint": "Kaveri Handlooms",
+        "pains_title": "Generic stores miss how India buys",
+        "pains": [
+            ("Buyers drop off when their payment method is missing", "UPI, cards, netbanking and COD at checkout."),
+            ("Slow pages on mobile data", "Light, mobile-first pages with optimised images."),
+            ("Customers asking 'where is my order?'", "WhatsApp order updates keep them informed."),
+        ],
+        "compare_head": ("A generic global store", "shopinaday"),
+        "compare": [
+            ("Checkout", "Cards first, local methods extra", "UPI, cards, netbanking, COD"),
+            ("Prices", "Currency settings to configure", "Rupees by default"),
+            ("Order updates", "Email only", "WhatsApp updates"),
+            ("Mobile speed", "Depends on the plugins", "Built mobile-first"),
+            ("Support for India", "Generic", "Built around Indian sellers"),
+        ],
     },
     "shopify-alternative": {
         "title": "Shopify Alternative for India | Free Trial | shopinaday",
@@ -135,6 +186,22 @@ PAGES: dict[str, dict] = {
             ("Can I keep my domain?", "Yes. Connect the domain you already own once you are ready to go live."),
         ],
         "final": "Try it free alongside your current store.",
+        "mock": "storefront",
+        "store_hint": "Urban Weave",
+        "pains_title": "What to check before you pick a platform",
+        "pains": [
+            ("Payments and COD that need extra setup", "Razorpay and Cash on Delivery are ready from day one."),
+            ("A long list of add-ons for basics", "Bulk import, coupons, SEO, pixels and an AI writer are built in."),
+            ("A dashboard that overwhelms new sellers", "Easy mode shows only what you need. Switch to the full view later."),
+        ],
+        "compare_head": ("Check any platform for", "shopinaday"),
+        "compare": [
+            ("UPI + Razorpay checkout", "Ask", "Included"),
+            ("Cash on Delivery", "Ask", "Included"),
+            ("WhatsApp order updates", "Ask", "Included"),
+            ("Meta, Google and TikTok pixels", "Ask", "Included"),
+            ("Bulk import from CSV or Excel", "Ask", "Included"),
+        ],
     },
     "fashion-store": {
         "title": "Start a Fashion Store Online | Free Trial | shopinaday",
@@ -159,6 +226,22 @@ PAGES: dict[str, dict] = {
             ("How do I start?", "Sign in with Google, name your store and add your first product. The trial is free."),
         ],
         "final": "Your next collection deserves its own store.",
+        "mock": "fashion",
+        "store_hint": "Nisha Boutique",
+        "pains_title": "Selling clothes online is harder than it looks",
+        "pains": [
+            ("A separate listing for every size and colour", "One product with all its sizes and colours."),
+            ("Not knowing which sizes are left", "Stock tracked per size and colour."),
+            ("A generic template that hides your photos", "Fashion-ready themes that put your photos first."),
+        ],
+        "compare_head": ("A basic store", "shopinaday for fashion"),
+        "compare": [
+            ("Sizes and colours", "Separate listings", "One product, all options"),
+            ("Stock", "Guesswork", "Tracked per option"),
+            ("Look", "Generic template", "Fashion-ready themes"),
+            ("Offers", "Manual", "Coupons and festive banners"),
+            ("Jewellery trust", "Not covered", "Certificate verification page"),
+        ],
     },
 }
 
@@ -181,3 +264,13 @@ def signup_href(base: str, querydict, slug: str) -> str:
         params["ref"] = ref
     params["lp"] = slug
     return f"{base}?{urlencode(params)}"
+
+
+def cta_params(querydict, slug: str) -> dict:
+    """The same attribution as hidden form fields for the hero's store-name form."""
+    params = attribution_from(querydict)
+    ref = (querydict.get("ref") or "").strip()[:16]
+    if ref:
+        params["ref"] = ref
+    params["lp"] = slug
+    return params

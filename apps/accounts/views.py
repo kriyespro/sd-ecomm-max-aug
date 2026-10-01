@@ -204,6 +204,11 @@ class SignupView(TemplateView):
             source["lp"] = lp
         if source:
             request.session["signup_source"] = source
+        # Store name typed into the landing-page hero form; pre-fills the
+        # "name your store" step after Google sign-in. Plain text, length-capped.
+        store = " ".join((request.GET.get("store") or "").split())[:120]
+        if store:
+            request.session["signup_store_name"] = store
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -404,6 +409,13 @@ class SignupCompleteView(FormView):
             return redirect("accounts:signup")
         return super().dispatch(request, *args, **kwargs)
 
+    def get_initial(self):
+        initial = super().get_initial()
+        store = self.request.session.get("signup_store_name")
+        if store:
+            initial["store_name"] = store
+        return initial
+
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["email"] = self.pending["email"]
@@ -433,6 +445,7 @@ class SignupCompleteView(FormView):
 
         self.request.session.pop(_PENDING, None)
         self.request.session.pop("signup_ref", None)
+        self.request.session.pop("signup_store_name", None)
         source = self.request.session.pop("signup_source", None)
         if source:
             _project.signup_source = source
