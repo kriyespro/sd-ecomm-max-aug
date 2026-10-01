@@ -751,6 +751,18 @@ class StoreProfileView(ActiveProjectMixin, UpdateView):
         kwargs["project"] = self.active_project
         return kwargs
 
+    def get_context_data(self, **kwargs):
+        from apps.control.models import StoreBackupSnapshot
+
+        ctx = super().get_context_data(**kwargs)
+        # Safety backups taken before a demo reset/remove — shown on the Demo
+        # content card with a one-click Restore.
+        ctx["safety_backups"] = list(
+            StoreBackupSnapshot.objects.filter(project=self.active_project, includes_orders=False)
+            .exclude(label="").order_by("-created_at")[:3]
+        )
+        return ctx
+
     def form_valid(self, form):
         response = super().form_valid(form)
         record_audit(actor=self.request.user, project=self.active_project,
@@ -759,31 +771,58 @@ class StoreProfileView(ActiveProjectMixin, UpdateView):
         return response
 
 
+def _safety_backup(request, project, label):
+    """Snapshot the store before a destructive demo action. Returns the
+    snapshot, or ``None`` after flashing an error — the caller must then stop
+    (a wipe with no way back is never acceptable here)."""
+    from apps.control import safety_backup
+    from apps.control.store_backup import BackupError
+
+    try:
+        return safety_backup.take(project, label)
+    except BackupError as exc:
+        messages.error(request, f"Couldn't make the safety backup, so nothing was changed: {exc}")
+    except Exception:  # noqa: BLE001 - storage / disk errors
+        import logging
+
+        logging.getLogger(__name__).exception("safety backup failed for project %s", project.pk)
+        messages.error(request, "Couldn't make the safety backup, so nothing was changed. Please try again.")
+    return None
+
+
 class DemoContentRemoveView(ActiveProjectMixin, View):
     """One-click wipe of the auto-seeded demo catalogue / banners / pages.
 
     Deletes only the rows the seeder recorded on ``feature_flags``; anything the
-    owner has added stays. POST-only, from the "showing demo content" banner.
+    owner has added stays. POST-only. A safety backup is taken first.
     """
 
     def post(self, request, *args, **kwargs):
         from apps.control.starter_content import is_seeded, remove_starter_content
 
+        nxt = safe_next(request, request.POST.get("next"), "control:product_list")
         if not is_seeded(self.active_project):
             messages.info(request, "No demo content to remove.")
-        else:
-            remove_starter_content(self.active_project)
-            record_audit(actor=request.user, project=self.active_project,
-                         action=AuditLog.Action.DELETE, target=self.active_project,
-                         changes={"demo_content": "removed"}, request=request)
-            messages.success(request, "Demo content removed.")
-        return redirect(safe_next(request, request.POST.get("next"), "control:product_list"))
+            return redirect(nxt)
+        if _safety_backup(request, self.active_project, "Before removing demo content") is None:
+            return redirect(nxt)
+        remove_starter_content(self.active_project)
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.DELETE, target=self.active_project,
+                     changes={"demo_content": "removed"}, request=request)
+        messages.success(
+            request,
+            "Demo content removed. A backup was saved first — if anything looks wrong, "
+            "restore it from Store profile → Demo content.",
+        )
+        return redirect(nxt)
 
 
 class DemoContentImportView(ActiveProjectMixin, View):
     """Wipe this store's catalogue + CMS content and replace it with a fresh
     demo set. Destructive — gated behind a typed "DELETE" confirmation, for
-    existing stores that want to start from the template.
+    existing stores that want to start from the template. A safety backup is
+    taken first so the previous catalogue can be restored.
     """
 
     def post(self, request, *args, **kwargs):
@@ -793,6 +832,9 @@ class DemoContentImportView(ActiveProjectMixin, View):
             messages.error(request, 'Type DELETE to confirm — nothing was changed.')
             return redirect(safe_next(request, request.POST.get("next"), "control:cms_store_profile"))
 
+        if _safety_backup(request, self.active_project, "Before demo reset") is None:
+            return redirect(safe_next(request, request.POST.get("next"), "control:cms_store_profile"))
+
         counts = reset_and_seed(self.active_project)
         record_audit(actor=request.user, project=self.active_project,
                      action=AuditLog.Action.DELETE, target=self.active_project,
@@ -800,7 +842,40 @@ class DemoContentImportView(ActiveProjectMixin, View):
                      request=request)
         messages.success(
             request,
-            "Store reset and demo content imported. Edit the samples, then "
-            "swap in your own images.",
+            "Store reset and demo content imported. Your previous catalogue was backed up "
+            "automatically — restore it any time from Store profile → Demo content. "
+            "Edit the samples, then swap in your own images.",
         )
         return redirect("control:product_list")
+
+
+class DemoBackupRestoreView(ActiveProjectMixin, View):
+    """Put the store back to a safety backup taken before a demo action.
+    Catalogue / CMS / theme only — orders and customers are never touched."""
+
+    def post(self, request, pk, *args, **kwargs):
+        from apps.control import store_backup
+        from apps.control.models import StoreBackupSnapshot
+
+        snap = get_object_or_404(StoreBackupSnapshot, pk=pk, project=self.active_project,
+                                 includes_orders=False)
+        nxt = safe_next(request, request.POST.get("next"), "control:cms_store_profile")
+        try:
+            counts = store_backup.restore_store(self.active_project, snap.archive.read(),
+                                                actor=request.user, include_sensitive=False)
+        except store_backup.BackupError as exc:
+            messages.error(request, str(exc))
+            return redirect(nxt)
+        except Exception as exc:  # noqa: BLE001
+            import logging
+
+            logging.getLogger(__name__).exception("safety restore failed")
+            messages.error(request, f"Restore failed: {exc}")
+            return redirect(nxt)
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=self.active_project,
+                     changes={"restored_backup": snap.label, "taken": snap.created_at.isoformat()},
+                     request=request)
+        messages.success(request, f"Restored your store from the backup taken "
+                                  f"{snap.created_at:%d %b %Y, %H:%M} UTC ({sum(counts.values())} items).")
+        return redirect(nxt)

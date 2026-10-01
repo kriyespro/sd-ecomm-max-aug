@@ -20,6 +20,12 @@ class StoreBackupSnapshot(TimeStampedModel):
     archive = models.FileField(upload_to="backups/%Y/%m/%d/")
     size_bytes = models.PositiveBigIntegerField(default=0)
     counts = models.JSONField(default=dict, blank=True)
+    # Safety snapshots taken automatically just before a destructive action
+    # (demo reset / remove) carry a label, hold catalogue + CMS + theme only
+    # (includes_orders=False -- orders/customers are never wiped by those
+    # actions) and are exempt from the daily 7-day prune.
+    label = models.CharField(max_length=80, blank=True)
+    includes_orders = models.BooleanField(default=True)
 
     class Meta:
         ordering = ["-created_at"]

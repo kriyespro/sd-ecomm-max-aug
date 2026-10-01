@@ -110,7 +110,7 @@ def daily_store_backup_task():
         created += 1
 
         cutoff = timezone.now() - timedelta(days=RETENTION_DAYS)
-        for old in StoreBackupSnapshot.objects.filter(project=project, created_at__lt=cutoff):
+        for old in StoreBackupSnapshot.objects.filter(project=project, created_at__lt=cutoff, label=""):
             old.archive.delete(save=False)
             old.delete()
 

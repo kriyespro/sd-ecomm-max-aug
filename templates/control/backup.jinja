@@ -33,7 +33,7 @@
       <tbody class="divide-y divide-slate-100">
         {% for snap in auto_snapshots %}
         <tr>
-          <td class="py-1.5 pr-4">{{ snap.created_at.strftime('%d %b %Y, %H:%M') }}</td>
+          <td class="py-1.5 pr-4">{{ snap.created_at.strftime('%d %b %Y, %H:%M') }}{% if snap.label %} <span class="text-xs text-slate-400">· {{ snap.label }}</span>{% endif %}</td>
           <td class="py-1.5 pr-4 text-slate-500">{{ (snap.size_bytes / 1024 / 1024) | round(1) }} MB</td>
           <td class="py-1.5 text-right whitespace-nowrap">
             <a href="{{ url('control:owner_backup_snapshot_download', kwargs={'pk': snap.pk}) }}"

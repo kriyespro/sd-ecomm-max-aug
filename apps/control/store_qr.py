@@ -42,6 +42,8 @@ def custom_domain_url(project):
     ``StorefrontHostMiddleware`` routes), that isn't the platform itself or one
     of its subdomains. The primary domain wins.
     """
+    if project is None:
+        return None
     verified = sorted(
         (d for d in project.domains.all() if d.is_verified),
         key=lambda d: (not d.is_primary, d.created_at),

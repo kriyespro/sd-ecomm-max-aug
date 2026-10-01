@@ -305,6 +305,7 @@ urlpatterns = [
     path("cms/store-profile/", cmsv.StoreProfileView.as_view(), name="cms_store_profile"),
     path("cms/demo-content/remove/", cmsv.DemoContentRemoveView.as_view(), name="demo_remove"),
     path("cms/demo-content/import/", cmsv.DemoContentImportView.as_view(), name="demo_import"),
+    path("cms/demo-content/restore/<int:pk>/", cmsv.DemoBackupRestoreView.as_view(), name="demo_restore"),
 
     # Domains
     # B2B / dropship marketplace (owner only)

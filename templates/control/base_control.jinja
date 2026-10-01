@@ -181,7 +181,7 @@
             <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></svg>
           </a>
           {% endif %}
-          {% if control_demo_seeded %}
+          {% if control_demo_banner %}
           <form method="post" action="{{ url('control:demo_remove') }}"
                 onsubmit="return confirm('Delete all demo products, banners and pages? Anything you added stays.')"
                 class="shrink-0 inline">
@@ -191,7 +191,7 @@
               Remove demo content
             </button>
           </form>
-          {% elif control_active_project and control_can_manage_store %}
+          {% elif not control_demo_seeded and control_active_project and control_can_manage_store %}
           <a href="{{ url('control:cms_store_profile') }}#demo-content"
              class="shrink-0 inline-flex items-center rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
             Import demo content
@@ -260,7 +260,7 @@
     </div>
     {% endif %}
 
-    {% if control_demo_seeded %}
+    {% if control_demo_banner %}
     <div class="flex flex-wrap items-center justify-between gap-2 bg-{{ _hue }}-100 px-4 py-2 text-sm text-{{ _hue }}-900">
       <span><strong>Demo content</strong> — edit products/banners/pages, swap the grey
         <span class="font-mono text-xs">1600×900</span> placeholders for your own images.</span>

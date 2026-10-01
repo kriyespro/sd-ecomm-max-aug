@@ -12,6 +12,7 @@ from apps.projects.services import projects_for_user
 
 from .mixins import get_active_project
 from .navigation import build_breadcrumb, build_nav
+from .store_qr import custom_domain_url
 
 
 def _chrome_theme(user, store_role_val, platform_scope):
@@ -176,6 +177,9 @@ def control(request):
     except Exception:  # noqa: BLE001 - request.project may be a lazy 404
         host_project, host_mismatch = None, False
 
+    demo_seeded = bool(
+        can_manage and active and (active.feature_flags or {}).get("demo_seeded")
+    )
     return {
         "control_active_project": active,
         "control_host_project": host_project if host_mismatch else None,
@@ -197,9 +201,11 @@ def control(request):
         "control_tour_steps": tour_steps,
         "control_trial_days_left": trial_days_left,
         "control_needs_2fa_setup": needs_2fa_setup,
-        "control_demo_seeded": bool(
-            can_manage and active and (active.feature_flags or {}).get("demo_seeded")
-        ),
+        "control_demo_seeded": demo_seeded,
+        # The global "Demo content" bar + header "Remove demo content" button
+        # go away once the store has its own custom domain (it's live -- the
+        # nudge is noise). The Store profile -> Demo content card stays.
+        "control_demo_banner": bool(demo_seeded and not custom_domain_url(active)),
         # Public storefront URL for the "See your store" header link — a custom
         # domain if the store has one, else its platform subdomain. None -> the
         # link points at domain setup.

@@ -9,47 +9,75 @@
 
 {% block content %}
 
-{# ---- Demo content (top of page — quick access) ---- #}
-<div class="mx-auto mb-6 grid max-w-4xl gap-4 {{ 'md:grid-cols-2' if control_demo_seeded else '' }}">
-  {% if control_demo_seeded %}
-  <div class="rounded-xl border border-slate-200 bg-white p-4">
-    <h2 class="text-sm font-semibold text-slate-700">Demo content</h2>
-    <p class="mt-1 text-xs text-slate-500">
-      This store is showing the sample catalogue. Removing it deletes only the
-      seeded rows — anything you added stays.
-    </p>
-    <form method="post" action="{{ url('control:demo_remove') }}" class="mt-3"
-          onsubmit="return confirm('Remove the demo products, banners and pages?')">
-      {{ csrf_input }}
-      <input type="hidden" name="next" value="{{ request.path }}">
-      <button class="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-        Remove demo content
+{# ---- Demo content: one compact card (top of page — quick access) ---- #}
+<div id="demo-content" x-data="{ reset: false, c: '' }"
+     class="mx-auto mb-4 max-w-2xl rounded-xl border border-slate-200 bg-white px-4 py-3">
+  <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+    <div class="min-w-0">
+      <h2 class="text-sm font-semibold text-slate-700">Demo content</h2>
+      <p class="text-xs text-slate-500">
+        {% if control_demo_seeded %}Sample catalogue is showing — removing it deletes only the seeded rows.
+        {% else %}Start from editable sample products, banners and pages.{% endif %}
+      </p>
+    </div>
+    <div class="flex shrink-0 items-center gap-2">
+      {% if control_demo_seeded %}
+      <form method="post" action="{{ url('control:demo_remove') }}"
+            onsubmit="return confirm('Remove the demo products, banners and pages? A backup is saved first.')">
+        {{ csrf_input }}
+        <input type="hidden" name="next" value="{{ request.path }}">
+        <button class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">Remove demo</button>
+      </form>
+      {% endif %}
+      <button type="button" @click="reset = !reset"
+              class="rounded-lg border border-red-300 px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50">
+        Reset &amp; import demo…
       </button>
-    </form>
+    </div>
   </div>
+
+  <p class="mt-2 flex items-start gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] leading-snug text-emerald-800">
+    <span>🛟</span>
+    <span><strong>Safe to try:</strong> a backup of your catalogue, banners, pages and theme is saved automatically
+      before either action, so you can restore it if anything goes wrong. Orders and customers are never touched.</span>
+  </p>
+
+  {% if safety_backups %}
+  <ul class="mt-2 divide-y divide-slate-100 text-xs">
+    {% for b in safety_backups %}
+    <li class="flex flex-wrap items-center justify-between gap-2 py-1.5">
+      <span class="text-slate-600">{{ b.label }} · <span class="text-slate-400">{{ b.created_at.strftime('%d %b %Y, %H:%M') }} UTC · {{ (b.size_bytes / 1024 / 1024) | round(1) }} MB</span></span>
+      <span class="whitespace-nowrap">
+        <form method="post" action="{{ url('control:demo_restore', kwargs={'pk': b.pk}) }}" class="inline"
+              onsubmit="return confirm('Restore your catalogue, banners, pages and theme to this backup? What you have now is replaced.')">
+          {{ csrf_input }}
+          <input type="hidden" name="next" value="{{ request.path }}">
+          <button class="font-medium text-emerald-700 hover:underline">Restore this backup</button>
+        </form>
+      </span>
+    </li>
+    {% endfor %}
+  </ul>
   {% endif %}
 
-  <div id="demo-content" class="rounded-xl border border-red-300 bg-red-50 p-4" x-data="{ c: '' }">
-    <h2 class="text-sm font-semibold text-red-800">Reset store &amp; import demo content</h2>
-    <p class="mt-1 text-xs leading-relaxed text-red-700">
-      <strong>Permanently deletes</strong> every product, category, brand,
-      banner, page, FAQ, menu, review and shopping cart in
-      <strong>{{ active_project.name }}</strong>, then loads a fresh set of
-      editable demo content. Orders, customers, coupons and settings are kept.
-      This cannot be undone.
+  <div x-show="reset" x-cloak class="mt-2 rounded-lg border border-red-300 bg-red-50 p-3">
+    <p class="text-xs leading-relaxed text-red-700">
+      <strong>Replaces</strong> every product, category, brand, banner, page, FAQ, menu, review and cart in
+      <strong>{{ active_project.name }}</strong> with fresh demo content. Orders, customers, coupons and settings are kept.
+      Your current catalogue is backed up first.
     </p>
-    <form method="post" action="{{ url('control:demo_import') }}" class="mt-3 flex flex-wrap items-end gap-2"
+    <form method="post" action="{{ url('control:demo_import') }}" class="mt-2 flex flex-wrap items-end gap-2"
           onsubmit="return this.confirm.value === 'DELETE'">
       {{ csrf_input }}
       <input type="hidden" name="next" value="{{ request.path }}">
       <label class="text-xs font-medium text-red-800">
         Type <span class="rounded bg-red-100 px-1 font-mono">DELETE</span> to confirm
         <input name="confirm" x-model="c" autocomplete="off" placeholder="DELETE"
-               class="mt-1 block w-40 rounded-lg border border-red-300 bg-white px-3 py-1.5 text-sm outline-none focus:border-red-500">
+               class="mt-1 block w-36 rounded-lg border border-red-300 bg-white px-2.5 py-1 text-sm outline-none focus:border-red-500">
       </label>
       <button type="submit" :disabled="c !== 'DELETE'"
-              class="rounded-lg bg-red-700 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40">
-        Wipe &amp; import demo
+              class="rounded-lg bg-red-700 px-3 py-1 text-xs font-medium text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40">
+        Back up, wipe &amp; import demo
       </button>
     </form>
   </div>

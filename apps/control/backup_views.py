@@ -162,9 +162,12 @@ class _OwnerSnapshotBase(_OwnerOnly):
     snapshot's pk for a store they can otherwise open."""
 
     def get_snapshot(self, pk):
-        if not self._include_sensitive():
+        snap = get_object_or_404(StoreBackupSnapshot, pk=pk, project=self.active_project)
+        # Safety snapshots (catalogue/CMS only) are open to any owner; the
+        # full daily ones carry orders/customers/payments.
+        if snap.includes_orders and not self._include_sensitive():
             raise Http404
-        return get_object_or_404(StoreBackupSnapshot, pk=pk, project=self.active_project)
+        return snap
 
 
 class OwnerBackupSnapshotDownloadView(_OwnerSnapshotBase, View):
@@ -181,7 +184,8 @@ class OwnerBackupSnapshotRestoreView(_OwnerSnapshotBase, View):
         store = self.active_project
         try:
             counts = store_backup.restore_store(
-                store, snap.archive.read(), actor=request.user, include_sensitive=True,
+                store, snap.archive.read(), actor=request.user,
+                include_sensitive=snap.includes_orders,
             )
         except store_backup.BackupError as exc:
             messages.error(request, str(exc))
