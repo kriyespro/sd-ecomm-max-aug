@@ -30,6 +30,11 @@
     </div>
     {% endif %}
 
+    <p class="mt-4 text-xs text-slate-400">
+      By continuing you agree to our <a href="{{ url('terms') }}" class="underline">Terms</a>
+      and <a href="{{ url('privacy') }}" class="underline">Privacy Policy</a>.
+    </p>
+
     <p class="mt-6 text-xs text-slate-500">
       Already have an account?
       <a href="{{ url('accounts:login') }}" class="font-medium text-slate-800 hover:underline">Sign in</a>

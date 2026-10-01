@@ -1,0 +1,60 @@
+{% extends "legal/base_legal.jinja" %}
+{% block title %}Terms of Service | {{ entity }}{% endblock %}
+{% block heading %}Terms of Service{% endblock %}
+
+{% block content %}
+<p>These terms are an agreement between you and {{ entity }} ("we", "us") for the shopinaday platform. By creating an account or using the service you agree to them. If you use it for a business, you confirm you can bind that business.</p>
+
+<h2>The service</h2>
+<p>shopinaday lets you build and run an online store: products, themes, checkout, orders, domains and related tools. We may add, change or remove features, and will give notice of changes that materially hurt existing users.</p>
+
+<h2>Your account</h2>
+<ul>
+  <li>You must be 18 or older and give accurate information.</li>
+  <li>You are responsible for activity under your account and for keeping your sign-in secure. Tell us at once if it is compromised.</li>
+  <li>You are responsible for the team members you add and what they do.</li>
+</ul>
+
+<h2>Free trial and plans</h2>
+<p>New stores start with a {{ trial_days }}-day free trial that needs no card. To keep your store live after the trial you choose a paid plan. Plan prices are shown on our website in rupees and may change with notice; a change does not affect a period you have already paid for. Fees are charged in advance for the period you pick. Any refund is handled as stated at the time of purchase or as the law requires. You can cancel at any time and your plan runs to the end of the paid period.</p>
+
+<h2>Your store and your content</h2>
+<ul>
+  <li>You own your products, images, text and customer data ("Your Content"). You give us a licence to host, display and process it to run the service for you.</li>
+  <li>You are the seller. You are responsible for your products, prices, descriptions, taxes (including GST where it applies), shipping, returns, refunds, customer service and compliance with consumer and e-commerce laws.</li>
+  <li>You must have the rights to everything you upload.</li>
+</ul>
+
+<h2>Payments</h2>
+<p>Online payments from your shoppers are processed by third-party providers such as Razorpay under their own terms, and you need your own account with them. Money from sales goes to you through the provider. We are not a bank and are not a party to the sale between you and your shopper.</p>
+
+<h2>What you must not do</h2>
+<ul>
+  <li>Sell illegal, counterfeit, stolen or dangerous goods, or anything restricted by Indian law or by our payment and advertising partners.</li>
+  <li>Use the service for fraud, spam, phishing, malware or to infringe someone's rights.</li>
+  <li>Attempt to break, overload, scrape or reverse-engineer the platform, or access data that is not yours.</li>
+  <li>Misuse messaging tools, for example sending marketing messages to people who have not agreed to receive them.</li>
+</ul>
+<p>We may suspend or remove a store or content that breaks these terms or the law, with notice where practical.</p>
+
+<h2>Third-party services</h2>
+<p>The service connects to services we do not control, such as payment, shipping, messaging, advertising and domain providers. Your use of them is under their terms, and we are not responsible for them.</p>
+
+<h2>Availability and support</h2>
+<p>We work to keep the service running but do not promise it will be uninterrupted or error free. We may take it down for maintenance.</p>
+
+<h2>Ending the agreement</h2>
+<p>You can stop using the service and close your account at any time. We may suspend or end your access for a breach of these terms, non-payment or legal reasons. On closure, you should export what you need first; we may delete your data after a reasonable period (see the Privacy Policy).</p>
+
+<h2>Liability</h2>
+<p>The service is provided "as is". To the extent the law allows, we are not liable for indirect or consequential loss, lost profit or lost data, and our total liability for any claim is limited to the fees you paid us in the three months before the event. Nothing here limits liability that cannot be limited by law.</p>
+
+<h2>Changes to these terms</h2>
+<p>We may update these terms. We will change the date above and, for material changes, tell you by email or in the dashboard. Continuing to use the service after a change means you accept it.</p>
+
+<h2>Governing law</h2>
+<p>These terms are governed by the laws of India, and the courts in India have jurisdiction over disputes, unless a mandatory law says otherwise.</p>
+
+<h2>Contact</h2>
+<p>{{ entity }}.{% if contact_email %} Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.{% else %} Reach us through a support ticket in your dashboard.{% endif %}</p>
+{% endblock %}
