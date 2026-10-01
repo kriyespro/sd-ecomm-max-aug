@@ -414,3 +414,27 @@ class MediaPurgeView(_MediaTrashBase, View):
         media_svc.delete_asset(self._asset())
         messages.success(request, "Permanently deleted.")
         return redirect(f"{reverse('control:media')}?trash=1")
+
+
+# --- Store QR code ------------------------------------------
+
+class StoreQrView(StoreDataAccessMixin, ActiveProjectMixin, View):
+    """``/admin/store-qr.png`` — the printable QR card. 404 until the store has
+    its own custom domain (see ``store_qr.custom_domain_url``). ``?download=1``
+    sends it as an attachment named after the store."""
+
+    def get(self, request, *args, **kwargs):
+        from django.utils.text import slugify
+
+        from . import store_qr
+
+        project = self.active_project
+        url = store_qr.custom_domain_url(project)
+        if url is None:
+            raise Http404("Add a custom domain to get a store QR code.")
+        resp = HttpResponse(store_qr.render_png(url, project.name), content_type="image/png")
+        resp["Cache-Control"] = "private, max-age=300"
+        if request.GET.get("download"):
+            fname = f"{slugify(project.name) or 'store'}-qr.png"
+            resp["Content-Disposition"] = f'attachment; filename="{fname}"'
+        return resp

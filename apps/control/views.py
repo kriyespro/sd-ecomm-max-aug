@@ -117,6 +117,9 @@ class DashboardView(ControlAccessMixin, TemplateView):
             ctx["active_project"] = self.active_project
             ctx["today"] = today_dashboard(self.active_project)
             ctx["greeting"] = _greeting()
+            from .store_qr import custom_domain_url
+
+            ctx["store_qr_url"] = custom_domain_url(self.active_project)
             if easy:
                 from . import quick_launch
 
