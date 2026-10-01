@@ -193,6 +193,17 @@ class SignupView(TemplateView):
         ref = (request.GET.get("ref") or "").strip()[:16]
         if ref:
             request.session["signup_ref"] = ref
+        # Ad attribution (utm_*/gclid/fbclid + the landing page slug), carried
+        # on the CTA link from /<landing-slug>/. Stored on the session so it
+        # survives the Google OAuth round trip; saved on the new store later.
+        from apps.core.landing_pages import PAGES, attribution_from
+
+        source = attribution_from(request.GET)
+        lp = (request.GET.get("lp") or "").strip()
+        if lp in PAGES:
+            source["lp"] = lp
+        if source:
+            request.session["signup_source"] = source
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
@@ -422,6 +433,10 @@ class SignupCompleteView(FormView):
 
         self.request.session.pop(_PENDING, None)
         self.request.session.pop("signup_ref", None)
+        source = self.request.session.pop("signup_source", None)
+        if source:
+            _project.signup_source = source
+            _project.save(update_fields=["signup_source"])
         _track_signup(self.request, project=_project, email=self.pending["email"],
                      plan=plan, phone=form.cleaned_data["phone"],
                      name=self.pending.get("name") or "",
