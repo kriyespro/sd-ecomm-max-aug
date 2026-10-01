@@ -120,6 +120,12 @@ class DashboardView(ControlAccessMixin, TemplateView):
             from .store_qr import custom_domain_url
 
             ctx["store_qr_url"] = custom_domain_url(self.active_project)
+            from apps.accounts.permissions import OWNER_MANAGER as _OM, store_role as _role
+            from apps.coach.services import panel_context
+
+            if _role(self.request.user, self.active_project) in _OM or is_platform_admin(self.request.user):
+                ctx["coach"] = True
+                ctx.update(panel_context(self.active_project, self.request.user))
             if easy:
                 from . import quick_launch
 

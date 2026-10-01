@@ -12,6 +12,7 @@ from . import coupon_views as coup
 from . import customer_views as custv
 from . import domain_views as domv
 from . import inventory_views as invv
+from . import coach_views as coachv
 from . import learning_views as learnv
 from . import marketing_views as mktv
 from . import order_views as ordv
@@ -389,6 +390,11 @@ urlpatterns = [
 
     # Learning / training videos
     path("training/", learnv.TrainingLibraryView.as_view(), name="training"),
+    path("coach/", coachv.CoachListView.as_view(), name="coach"),
+    path("coach/new/", coachv.CoachCreateView.as_view(), name="coach_create"),
+    path("coach/<int:pk>/", coachv.CoachUpdateView.as_view(), name="coach_edit"),
+    path("coach/<int:pk>/delete/", coachv.CoachDeleteView.as_view(), name="coach_delete"),
+    path("coach/<int:pk>/toggle/", coachv.CoachToggleView.as_view(), name="coach_toggle"),
     path("learning/", learnv.LearningListView.as_view(), name="learning"),
     path("learning/new/", learnv.LearningCreateView.as_view(), name="learning_create"),
     path("learning/<int:pk>/", learnv.LearningUpdateView.as_view(), name="learning_edit"),
