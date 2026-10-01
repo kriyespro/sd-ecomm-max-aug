@@ -34,7 +34,7 @@ class StoreQrTests(TestCase):
         self.assertIsNone(custom_domain_url(Project.objects.get(pk=self.project.pk)))
         self.assertEqual(self.client.get("/admin/store-qr.png").status_code, 404)
         resp = self.client.get("/admin/")
-        self.assertContains(resp, "once you connect a custom domain")
+        self.assertContains(resp, "connect a domain")
         self.assertNotContains(resp, "Download PNG")
 
     def test_unverified_custom_domain_gives_no_qr(self):
