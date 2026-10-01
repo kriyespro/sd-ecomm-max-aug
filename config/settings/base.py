@@ -370,6 +370,11 @@ PLATFORM_BASE_DOMAIN = _bare_host(env("DJANGO_PLATFORM_BASE_DOMAIN", "")) or (
     PLATFORM_HOSTS[0] if PLATFORM_HOSTS else ""
 )
 
+# Shown on /privacy/ and /terms/. Blank contact email -> the pages point people
+# to the in-dashboard support tickets instead.
+LEGAL_ENTITY_NAME = env("DJANGO_LEGAL_ENTITY_NAME", "shopinaday")
+LEGAL_CONTACT_EMAIL = env("DJANGO_LEGAL_CONTACT_EMAIL", "")
+
 # Product image optimisation (apps.media.optimize + apps.catalog.tasks).
 # Uploads are re-encoded to WebP in the background, squeezed under the target
 # size, with responsive renditions generated alongside.

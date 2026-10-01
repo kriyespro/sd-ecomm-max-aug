@@ -32,6 +32,40 @@ def root(request):
     return render(request, "marketing/landing.jinja", _landing_context())
 
 
+LEGAL_UPDATED = "1 October 2026"
+
+
+def legal_page(request, kind):
+    """Public /privacy/ and /terms/ — required by Google/Meta ad review and
+    linked from the marketing + ad landing pages. Platform host only."""
+    from django.conf import settings
+    from django.http import Http404
+
+    if kind not in ("privacy", "terms"):
+        raise Http404
+    if getattr(request, "project", None):
+        return redirect("/app/")
+    try:
+        from apps.billing.models import BillingSettings
+
+        trial_days = BillingSettings.load().self_signup_trial_days
+    except Exception:  # noqa: BLE001
+        trial_days = 7
+    return render(request, f"legal/{kind}.jinja", {
+        "active": kind,
+        "entity": settings.LEGAL_ENTITY_NAME,
+        "contact_email": settings.LEGAL_CONTACT_EMAIL,
+        "updated": LEGAL_UPDATED,
+        "trial_days": trial_days,
+        "now_year": timezone.now().year,
+        "meta": (
+            "How shopinaday collects, uses and protects your data."
+            if kind == "privacy" else
+            "The terms for using the shopinaday online store platform."
+        ),
+    })
+
+
 def ad_landing(request, slug):
     """Paid-traffic landing page (see ``apps.core.landing_pages``). Platform
     host only; a store's own domain has no business serving it. Reads no

@@ -19,7 +19,10 @@ class AdLandingTests(TestCase):
             hrefs = [h for h in re.findall(r'<a [^>]*href="([^"]+)"', body)]
             self.assertTrue(hrefs)
             for h in hrefs:
-                self.assertTrue(h.startswith("/accounts/signup/"), (slug, h))
+                self.assertTrue(
+                    h.startswith("/accounts/signup/") or h in ("/privacy/", "/terms/"),
+                    (slug, h),
+                )
 
     def test_landing_page_sets_no_cookie(self):
         resp = self.client.get("/online-store-builder/", HTTP_HOST="shop.test")
@@ -62,3 +65,22 @@ class AdLandingTests(TestCase):
         self.assertEqual(list(out), ["utm_source"])
         self.assertEqual(len(out["utm_source"]), 200)
         self.assertTrue(signup_href("/accounts/signup/", QueryDict(""), "x").endswith("lp=x"))
+
+
+@override_settings(ALLOWED_HOSTS=["*"], PLATFORM_HOSTS=["shop.test"],
+                   LEGAL_ENTITY_NAME="Acme Pvt Ltd", LEGAL_CONTACT_EMAIL="legal@acme.test")
+class LegalPageTests(TestCase):
+    def test_privacy_and_terms_render(self):
+        for path, needle in (("/privacy/", "Privacy Policy"), ("/terms/", "Terms of Service")):
+            resp = self.client.get(path, HTTP_HOST="shop.test")
+            self.assertEqual(resp.status_code, 200, path)
+            self.assertContains(resp, needle)
+            self.assertContains(resp, "Acme Pvt Ltd")
+            self.assertContains(resp, "legal@acme.test")
+            self.assertEqual(len(resp.cookies), 0)
+
+    def test_landing_and_signup_link_to_legal(self):
+        for path in ("/", "/fashion-store/", "/accounts/signup/"):
+            resp = self.client.get(path, HTTP_HOST="shop.test")
+            self.assertContains(resp, 'href="/privacy/"')
+            self.assertContains(resp, 'href="/terms/"')

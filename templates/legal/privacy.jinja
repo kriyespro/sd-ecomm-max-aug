@@ -1,0 +1,60 @@
+{% extends "legal/base_legal.jinja" %}
+{% block title %}Privacy Policy | {{ entity }}{% endblock %}
+{% block heading %}Privacy Policy{% endblock %}
+
+{% block content %}
+<p>This policy explains what {{ entity }} ("we", "us") collects when you visit our website or use our platform to run an online store, how we use it, and the choices you have. It applies to the shopinaday marketing website and to store owners and their team members. Shoppers who buy from a store built on shopinaday are covered in the section "Your store's customers" below.</p>
+
+<h2>What we collect</h2>
+<ul>
+  <li><strong>Account details.</strong> When you sign in with Google we receive your name and email address. We do not receive your Google password.</li>
+  <li><strong>Store details you give us.</strong> Store name, mobile number, city, state and postal code, business and contact details, products, images, pages and settings.</li>
+  <li><strong>Billing details.</strong> Plan, invoices and payment status. Card, UPI and bank details are handled by our payment provider and are not stored on our servers.</li>
+  <li><strong>Usage and device data.</strong> IP address, browser type, pages viewed, referring website or ad (for example UTM parameters and ad click IDs), and actions taken in your dashboard.</li>
+  <li><strong>Messages you send us.</strong> Support tickets and feedback.</li>
+</ul>
+
+<h2>How we use it</h2>
+<ul>
+  <li>To create your account and store, and to provide, secure and support the service.</li>
+  <li>To bill you and to prevent fraud and abuse.</li>
+  <li>To contact you about your account, trial, invoices and important service changes.</li>
+  <li>To understand which ads and pages bring in sign-ups, and to improve the product.</li>
+  <li>To meet legal obligations.</li>
+</ul>
+
+<h2>Cookies, pixels and advertising</h2>
+<p>Our marketing website may use cookies and tracking tools from advertising and analytics providers, such as Meta (Facebook and Instagram), Google and TikTok. These tell us which ad led to a visit and help us measure sign-ups. When you create a store we may also send the provider a sign-up event that includes hashed contact details (a one-way scrambled version of your email, phone and address) so the sign-up can be matched to an ad. You can block these cookies in your browser settings or limit ad personalisation in your Meta, Google or TikTok account settings.</p>
+<p>Our sign-in and security features use essential cookies that the service needs to work.</p>
+
+<h2>Who we share it with</h2>
+<p>We do not sell your personal data. We share it only with service providers that help us run the platform, under confidentiality obligations, such as:</p>
+<ul>
+  <li>Payment processing (for example Razorpay).</li>
+  <li>Cloud hosting, content delivery and security (for example Cloudflare).</li>
+  <li>Email and messaging delivery, including WhatsApp where you switch it on.</li>
+  <li>Advertising and analytics providers listed above.</li>
+  <li>Authorities, where the law requires it or to protect rights and safety.</li>
+</ul>
+
+<h2>Your store's customers</h2>
+<p>If you run a store, the details of your shoppers (name, phone, address, orders) belong to you. We process them only on your behalf to run your store. You are responsible for telling your shoppers how you use their data and for having a lawful basis to do so. If a shopper asks us about their data, we may refer them to the store.</p>
+
+<h2>How long we keep it</h2>
+<p>We keep account and store data while your account is active. Products and media you delete stay in a Trash for 30 days before they are permanently removed. Backups roll off on a fixed schedule. After you close your account we delete or anonymise your data within a reasonable period, except where we must keep records (for example invoices) under law.</p>
+
+<h2>Security</h2>
+<p>Data is sent over HTTPS and access is limited to people who need it. No system is perfectly secure, so please keep your sign-in safe and tell us right away if you suspect misuse.</p>
+
+<h2>Your rights</h2>
+<p>You can ask to access, correct or delete your personal data, or withdraw consent where we rely on it, subject to the Digital Personal Data Protection Act, 2023 and other applicable law. You can edit most details from your dashboard. For anything else, {% if contact_email %}write to <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>{% else %}raise a support ticket from your dashboard{% endif %}.</p>
+
+<h2>Children</h2>
+<p>The service is for businesses and is not directed to children under 18. We do not knowingly collect their data.</p>
+
+<h2>Changes</h2>
+<p>We may update this policy. We will change the date above and, for material changes, tell account holders by email or in the dashboard.</p>
+
+<h2>Contact</h2>
+<p>{{ entity }}.{% if contact_email %} Email: <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.{% else %} Reach us through a support ticket in your dashboard.{% endif %}</p>
+{% endblock %}
