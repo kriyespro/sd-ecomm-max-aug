@@ -66,6 +66,22 @@ def legal_page(request, kind):
     })
 
 
+def _faq_jsonld(faq):
+    """FAQPage structured data, safe to drop inside a <script> tag."""
+    import json
+
+    data = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {"@type": "Question", "name": q,
+             "acceptedAnswer": {"@type": "Answer", "text": a}}
+            for q, a in faq
+        ],
+    }
+    return json.dumps(data).replace("</", "<\\/")
+
+
 def ad_landing(request, slug):
     """Paid-traffic landing page (see ``apps.core.landing_pages``). Platform
     host only; a store's own domain has no business serving it. Reads no
@@ -74,7 +90,7 @@ def ad_landing(request, slug):
 
     from apps.billing.models import BillingSettings, Plan
 
-    from .landing_pages import COMMON_FEATURES, PAGES, STEPS, signup_href
+    from .landing_pages import COMMON_FEATURES, PAGES, STEPS, cta_params, signup_href
 
     page = PAGES.get(slug)
     if page is None:
@@ -94,6 +110,9 @@ def ad_landing(request, slug):
         "page": page,
         "slug": slug,
         "cta_href": signup_href(reverse("accounts:signup"), request.GET, slug),
+        "cta_action": reverse("accounts:signup"),
+        "cta_params": cta_params(request.GET, slug),
+        "faq_jsonld": _faq_jsonld(page["faq"]),
         "trial_days": trial_days,
         "from_price": int(cheapest.price_monthly) if cheapest else None,
         "features": COMMON_FEATURES,

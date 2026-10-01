@@ -57,6 +57,39 @@ class AdLandingTests(TestCase):
         self.client.get(reverse("accounts:signup") + "?utm_source=x&lp=evil<script>", HTTP_HOST="shop.test")
         self.assertNotIn("lp", self.client.session["signup_source"])
 
+    def test_hero_form_carries_attribution_and_store_field(self):
+        body = self.client.get(
+            "/fashion-store/?utm_source=meta&fbclid=zz", HTTP_HOST="shop.test"
+        ).content.decode()
+        self.assertIn('name="store"', body)
+        self.assertIn('<input type="hidden" name="utm_source" value="meta">', body)
+        self.assertIn('<input type="hidden" name="lp" value="fashion-store">', body)
+        self.assertIn('action="/accounts/signup/"', body)
+
+    def test_faq_jsonld_present_and_script_safe(self):
+        import json
+        import re
+
+        body = self.client.get("/instagram-sellers/", HTTP_HOST="shop.test").content.decode()
+        m = re.search(r'<script type="application/ld\+json">(.*?)</script>', body, re.S)
+        data = json.loads(m.group(1))
+        self.assertEqual(data["@type"], "FAQPage")
+        self.assertEqual(len(data["mainEntity"]), len(PAGES["instagram-sellers"]["faq"]))
+
+    def test_each_page_has_mock_compare_and_pains(self):
+        for slug, page in PAGES.items():
+            for key in ("mock", "store_hint", "pains", "compare", "compare_head"):
+                self.assertIn(key, page, (slug, key))
+
+    def test_store_name_prefills_signup_complete(self):
+        self.client.get(reverse("accounts:signup") + "?store=%20%20Nisha%20%20Boutique", HTTP_HOST="shop.test")
+        self.assertEqual(self.client.session["signup_store_name"], "Nisha Boutique")
+        session = self.client.session
+        session["signup_google"] = {"email": "a@b.test", "name": "A B", "plan": ""}
+        session.save()
+        resp = self.client.get(reverse("accounts:signup_complete"), HTTP_HOST="shop.test")
+        self.assertContains(resp, 'value="Nisha Boutique"')
+
     def test_helpers_trim_and_whitelist(self):
         from django.http import QueryDict
 
