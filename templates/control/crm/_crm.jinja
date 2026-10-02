@@ -22,9 +22,9 @@
 {% endmacro %}
 
 {# Quick-log buttons — one POST each. lead optional. #}
-{% macro quicklog(lead=None, next="") %}
+{% macro quicklog(lead=None, next="", csrf="") %}
 <form method="post" action="{{ url('control:crm_log') }}" class="flex flex-wrap items-center gap-1.5">
-  {{ csrf_input }}
+  {{ csrf }}
   {% if lead %}<input type="hidden" name="lead" value="{{ lead.pk }}">{% endif %}
   <input type="hidden" name="next" value="{{ next }}">
   <button name="kind" value="call" formaction="{{ url('control:crm_log') }}" class="hidden"></button>

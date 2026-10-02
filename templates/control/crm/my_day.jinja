@@ -17,7 +17,7 @@
 
   <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
     <h3 class="mb-2 text-sm font-semibold text-slate-700">Quick log</h3>
-    {{ quicklog(None, url('control:crm_my_day')) }}
+    {{ quicklog(None, url('control:crm_my_day'), csrf_input) }}
     <p class="mt-2 text-xs text-slate-400">Open a lead to log against it. Product entry on an assigned store:</p>
     <form method="post" action="{{ url('control:crm_log') }}" class="mt-1 flex flex-wrap items-center gap-2 text-xs">
       {{ csrf_input }}<input type="hidden" name="kind" value="product_entry"><input type="hidden" name="outcome" value="done">

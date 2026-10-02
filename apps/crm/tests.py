@@ -312,3 +312,35 @@ class StoreWorkTests(CrmBase):
         self.assertEqual(wr.status, WorkRequestStatus.DONE)
         self.assertFalse(StoreAssignment.objects.filter(is_active=True).exists())
         self.assertTrue(Activity.objects.filter(actor=self.b, kind=ActivityKind.STORE_SETUP).exists())
+
+
+class CsrfRenderTests(CrmBase):
+    """Macros can't see template globals — the quick-log form must still carry
+    a CSRF token (the plain test client skips CSRF, so check the HTML)."""
+
+    def _has_token(self, url):
+        from django.test import Client
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(url).content.decode()
+        form = html.split('action="%s"' % reverse("control:crm_log"))[1].split("</form>")[0]
+        self.assertIn('name="csrfmiddlewaretoken"', form)
+
+    def test_my_day_quicklog_has_token(self):
+        self._has_token(reverse("control:crm_my_day"))
+
+    def test_lead_quicklog_has_token(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        self._has_token(reverse("control:crm_lead", kwargs={"pk": lead.pk}))
+
+    def test_quicklog_post_passes_csrf_with_token(self):
+        import re
+        from django.test import Client
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(reverse("control:crm_my_day")).content.decode()
+        tok = re.search(r'name="csrfmiddlewaretoken" value="([^"]+)"', html).group(1)
+        r = c.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected",
+                                                 "csrfmiddlewaretoken": tok})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(Activity.objects.filter(actor=self.a).count(), 1)
