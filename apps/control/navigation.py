@@ -18,9 +18,8 @@ MOUNT = "/admin/"
 _SECTIONS = [
     ("platform", "Platform", "◆", [
         ("stores", "Stores", "\U0001f3e2"),
-        ("crm_board", "CRM board", "\U0001f4ca"),
-        ("crm_my_day", "My day", "\u2600\ufe0f"),
-        ("crm_leads", "Leads", "\U0001f4de"),
+        ("crm_board", "CRM", "\U0001f4ca"),
+        ("crm_my_day", "CRM", "\U0001f4ca"),
         ("my_commissions", "My earnings", "\U0001f4b5"),
         ("affiliate_overview", "Affiliates", "\U0001f517"),
         ("billing", "Billing", "\U0001f4b0"),
@@ -108,7 +107,7 @@ _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
                         "platform_tracking", "learning", "coach", "affiliate_overview", "support_queue",
                         "crm_board"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
-_DGC_ONLY = {"my_commissions"}
+_DGC_ONLY = {"my_commissions", "crm_my_day"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "courier_configs", "domains", "team", "onboarding", "tracking",
                       "whatsapp", "social", "ai_keys", "support", "crm_owner_help"}

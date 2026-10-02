@@ -454,3 +454,19 @@ class NewUxTests(CrmBase):
         self.assertEqual(Lead(phone="98765 43210").wa_number, "919876543210")
         self.assertEqual(Lead(phone="+91 98765 43210").wa_number, "919876543210")
         self.assertEqual(Lead(phone="").wa_number, "")
+
+
+class SidebarTests(TestCase):
+    """The sidebar carries a single CRM entry; the in-page tabs carry the rest."""
+
+    def _names(self, *, admin):
+        from apps.control.navigation import build_nav
+        nav = build_nav(platform_staff=True, platform_admin=admin, active_project=None,
+                        can_manage=False, can_upload_skin=False)
+        return [i["name"] for sec in nav for i in sec["items"] if i["name"].startswith("crm_")]
+
+    def test_admin_sees_only_board(self):
+        self.assertEqual(self._names(admin=True), ["crm_board"])
+
+    def test_dgc_sees_only_my_day_entry(self):
+        self.assertEqual(self._names(admin=False), ["crm_my_day"])
