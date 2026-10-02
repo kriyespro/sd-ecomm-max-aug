@@ -11,7 +11,7 @@
         <h3 class="text-sm font-semibold text-slate-700">Log work on this lead</h3>
         {% if lead.phone %}<a href="tel:{{ lead.phone }}" class="text-sm text-slate-600 hover:underline">☎ {{ lead.phone }}</a>{% endif %}
       </div>
-      {{ quicklog(lead, url('control:crm_lead', kwargs={'pk': lead.pk})) }}
+      {{ quicklog(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input) }}
     </div>
     <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
       <h3 class="mb-2 text-sm font-semibold text-slate-700">History</h3>
