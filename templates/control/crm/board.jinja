@@ -3,7 +3,7 @@
 {% block page_title %}CRM board{% endblock %}
 {% block crm_title %}Team board{% endblock %}
 {% block crm_sub %}{{ range_label }} · {{ start }}{% if end != start %} → {{ end }}{% endif %}{% endblock %}
-{% block crm_actions %}{{ range_tabs(ranges, range_key, ("&active=1" if request.GET.get("active") else "")) }}<a href="{{ url('control:crm_targets') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🎯 Targets</a>{% endblock %}
+{% block crm_actions %}{{ range_tabs(ranges, range_key, ("" if active_only else "&active=0")) }}<a href="{{ url('control:crm_targets') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🎯 Targets</a>{% endblock %}
 
 {% block crm_body %}
 <div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
@@ -48,12 +48,12 @@
         <td class="px-3 py-3">₹{{ r.collection }}{% if r.collection_pending %} <span class="text-xs text-amber-600">(+₹{{ r.collection_pending }})</span>{% endif %}</td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="p-4">{{ empty("👥", "No team members yet.", "Add DGCs from Users, then they appear here with their daily numbers.") }}</td></tr>
+      <tr><td colspan="8" class="p-4">{{ empty("👥", "No activity in this period.", "Nobody has logged calls, demos or money yet. Use Show everyone to see the whole team.") }}</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 <p class="text-xs text-slate-400">
-  {% if request.GET.get("active") %}<a class="text-pink-700 underline" href="?range={{ range_key }}">Show everyone</a>{% else %}<a class="text-pink-700 underline" href="?range={{ range_key }}&active=1">Hide people with no activity</a>{% endif %}
+  {% if active_only %}Showing people with activity · <a class="text-pink-700 underline" href="?range={{ range_key }}&active=0">Show everyone</a>{% else %}Showing everyone · <a class="text-pink-700 underline" href="?range={{ range_key }}">Hide people with no activity</a>{% endif %}
 </p>
 {% endblock %}

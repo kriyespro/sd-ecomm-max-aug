@@ -79,11 +79,13 @@ class CrmBoardView(PlatformAdminRequiredMixin, TemplateView):
         key = self.request.GET.get("range", "today")
         start, end, label = svc.resolve_range(key)
         rows, totals = svc.person_numbers(start, end)
-        rows = [r for r in rows if any((r["calls"], r["demos"], r["trained"], r["collection"],
-                                        r["collection_pending"], r["products"], r["store_work"],
-                                        r["whatsapp"], r["trained_others"]))] \
-            if self.request.GET.get("active") else rows
-        ctx.update(range_key=key, range_label=label, ranges=_RANGES, rows=rows,
+        # Default view hides people with no activity; ?active=0 shows everyone.
+        active_only = self.request.GET.get("active", "1") != "0"
+        if active_only:
+            rows = [r for r in rows if any((
+                r["calls"], r["demos"], r["trained"], r["collection"], r["collection_pending"],
+                r["products"], r["store_work"], r["whatsapp"], r["trained_others"]))]
+        ctx.update(range_key=key, range_label=label, ranges=_RANGES, rows=rows, active_only=active_only,
                    totals=totals, extras=svc.board_extras(), start=start, end=end)
         return ctx
 

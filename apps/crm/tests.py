@@ -470,3 +470,20 @@ class SidebarTests(TestCase):
 
     def test_dgc_sees_only_my_day_entry(self):
         self.assertEqual(self._names(admin=False), ["crm_my_day"])
+
+
+class BoardDefaultTests(CrmBase):
+    def test_default_hides_idle_and_toggle_shows_all(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        self.login(self.admin)
+        url = reverse("control:crm_board")
+        r = self.client.get(url)
+        self.assertContains(r, ">anil<")
+        self.assertNotContains(r, ">bina<")
+        self.assertContains(r, "Show everyone")
+        r = self.client.get(url + "?active=0")
+        self.assertContains(r, ">anil<")
+        self.assertContains(r, ">bina<")
+        self.assertContains(r, "Hide people with no activity")
+        # the range tabs keep the chosen mode
+        self.assertContains(r, "range=7d&amp;active=0")
