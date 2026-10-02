@@ -15,6 +15,12 @@
 ] %}
 
 {% block content %}
+<style>
+  .cf [data-field] > label{font-size:11px;font-weight:600;color:#9d174d;text-transform:uppercase;letter-spacing:.03em}
+  .cf input:not([type=checkbox]):not([type=radio]):not([type=file]),.cf select,.cf textarea{margin-top:2px;padding:.3rem .5rem;font-size:13px}
+  .cf [data-field=note],.cf [data-field=detail]{grid-column:1/-1}
+  .cf textarea{min-height:0}
+</style>
 <div class="-mx-2 space-y-3 sm:-mx-3">
   <div class="rounded-2xl bg-gradient-to-r from-pink-50 via-rose-50 to-white px-3 py-3 ring-1 ring-pink-100 sm:px-4">
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">

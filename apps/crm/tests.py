@@ -487,3 +487,35 @@ class BoardDefaultTests(CrmBase):
         self.assertContains(r, "Hide people with no activity")
         # the range tabs keep the chosen mode
         self.assertContains(r, "range=7d&amp;active=0")
+
+
+class CompactFormTests(CrmBase):
+    def test_forms_render_compact_with_toggle(self):
+        self.login(self.admin)
+        for n in ("crm_tasks", "crm_collections", "crm_training", "crm_work"):
+            html = self.client.get(reverse(f"control:{n}")).content.decode()
+            self.assertIn('id="newform"', html, n)
+            self.assertIn('class="cf hidden', html, n)
+
+    def test_task_form_has_no_lead_dropdown_and_names_people(self):
+        Lead.objects.create(name="LeadXYZ")
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_tasks")).content.decode()
+        self.assertNotIn('name="lead"', html)
+        self.assertNotIn("LeadXYZ", html)
+        self.assertIn(">anil<", html)  # people shown by name, not "User object"
+
+    def test_work_form_preselects_single_store_and_posts(self):
+        self.login(self.admin)
+        Project.objects.exclude(pk=self.store.pk).delete()
+        html = self.client.get(reverse("control:crm_work")).content.decode()
+        self.assertIn(f'value="{self.store.pk}" selected', html)
+        r = self.client.post(reverse("control:crm_work_create"),
+                             {"project": self.store.pk, "kind": "maintenance", "note": "fix menu"})
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(StoreWorkRequest.objects.get().kind, "maintenance")
+
+    def test_collection_form_defaults_upi(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_collections")).content.decode()
+        self.assertIn('value="upi" selected', html)

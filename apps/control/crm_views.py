@@ -329,14 +329,18 @@ class LogActivityView(PlatformStaffRequiredMixin, View):
 class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
-        fields = ["title", "detail", "assignee", "lead", "due_on"]
+        fields = ["title", "assignee", "due_on", "detail"]
         widgets = {"due_on": forms.DateInput(attrs={"type": "date"}),
-                   "detail": forms.Textarea(attrs={"rows": 2})}
+                   "title": forms.TextInput(attrs={"placeholder": "e.g. Call 20 jewellers in Pune"}),
+                   "detail": forms.Textarea(attrs={"rows": 1, "placeholder": "Details (optional)"})}
+        labels = {"due_on": "Due", "assignee": "Give to"}
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["assignee"].queryset = svc.crm_people()
-        self.fields["lead"].required = False
+        self.fields["assignee"].label_from_instance = svc.person_label
+        self.fields["assignee"].empty_label = "Choose person…"
+        self.fields["detail"].required = False
 
 
 class TaskListView(PlatformStaffRequiredMixin, TemplateView):
@@ -379,12 +383,18 @@ class TaskDoneView(PlatformStaffRequiredMixin, View):
 class CollectionForm(forms.ModelForm):
     class Meta:
         model = Collection
-        fields = ["amount", "mode", "reference", "proof", "project", "note", "collected_on"]
-        widgets = {"collected_on": forms.DateInput(attrs={"type": "date"})}
+        fields = ["amount", "mode", "reference", "collected_on", "project", "proof", "note"]
+        widgets = {"collected_on": forms.DateInput(attrs={"type": "date"}),
+                   "note": forms.TextInput(attrs={"placeholder": "Note (optional)"}),
+                   "reference": forms.TextInput(attrs={"placeholder": "UTR / receipt no."})}
+        labels = {"collected_on": "Date", "project": "Store (optional)", "proof": "Proof (optional)",
+                  "amount": "Amount ₹"}
 
     def __init__(self, *a, user=None, **kw):
         super().__init__(*a, **kw)
         self.fields["mode"].choices = [c for c in CollectionMode.choices if c[0] != "subscription"]
+        self.fields["mode"].initial = CollectionMode.UPI
+        self.fields["project"].empty_label = "— none —"
         self.fields["project"].required = False
         self.fields["project"].queryset = managed_projects(user) if user else self.fields["project"].queryset
         self.fields["reference"].required = True
@@ -441,13 +451,17 @@ class TrainingForm(forms.ModelForm):
     class Meta:
         model = TrainingLog
         fields = ["trainer", "topic", "trained_on"]
-        widgets = {"trained_on": forms.DateInput(attrs={"type": "date"})}
+        widgets = {"trained_on": forms.DateInput(attrs={"type": "date"}),
+                   "topic": forms.TextInput(attrs={"placeholder": "e.g. Store setup (optional)"})}
+        labels = {"trainer": "Trained by", "trained_on": "Date"}
 
     def __init__(self, *a, user=None, **kw):
         super().__init__(*a, **kw)
         qs = svc.crm_people()
         self.fields["trainer"].queryset = qs.exclude(pk=user.pk) if user else qs
         self.fields["trainer"].label_from_instance = svc.person_label
+        self.fields["trainer"].empty_label = "Choose trainer…"
+        self.fields["trained_on"].initial = timezone.localdate()
 
 
 class TrainingListView(PlatformStaffRequiredMixin, TemplateView):
