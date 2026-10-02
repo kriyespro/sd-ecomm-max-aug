@@ -1,19 +1,21 @@
-{% extends "control/base_control.jinja" %}
+{% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
 {% block page_title %}Tasks{% endblock %}
+{% block crm_title %}Tasks{% endblock %}
+{% block crm_sub %}Things the super admin hands out — tick them off as you go.{% endblock %}
 
-{% block content %}
+{% block crm_body %}
 <div class="space-y-4">
   {% if is_admin %}
-  <form method="post" action="{{ url('control:crm_task_create') }}" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+  <form method="post" action="{{ url('control:crm_task_create') }}" class="space-y-3 rounded-2xl bg-white shadow-sm p-4 ring-1 ring-pink-100">
     <h3 class="text-sm font-semibold text-slate-700">Assign a task</h3>
     {{ csrf_input }}{{ render_form(form) }}
-    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Assign</button>
+    <button class="rounded-lg bg-pink-600 px-4 py-2 text-sm text-white">Assign</button>
   </form>{% endif %}
-  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
     <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Task</th><th class="px-3 py-2">For</th><th class="px-3 py-2">Due</th><th></th></tr></thead>
-      <tbody class="divide-y divide-slate-100">
+      <thead class="bg-pink-50/70 text-xs uppercase tracking-wide text-pink-500"><tr><th class="px-4 py-2">Task</th><th class="px-3 py-2">For</th><th class="px-3 py-2">Due</th><th></th></tr></thead>
+      <tbody class="divide-y divide-pink-50">
         {% for t in tasks %}
         <tr><td class="px-4 py-2"><div class="font-medium text-slate-800">{{ t.title }}</div>{% if t.lead %}<a class="text-xs text-slate-400 hover:underline" href="{{ url('control:crm_lead', kwargs={'pk': t.lead_id}) }}">{{ t.lead.name }}</a>{% endif %}</td>
           <td class="px-3 py-2 text-slate-500">{{ t.assignee.get_full_name() or t.assignee.email }}</td>

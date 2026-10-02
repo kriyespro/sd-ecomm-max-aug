@@ -1,20 +1,22 @@
-{% extends "control/base_control.jinja" %}
+{% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
-{% block page_title %}Collections{% endblock %}
+{% block page_title %}Money collected{% endblock %}
+{% block crm_title %}Money collected{% endblock %}
+{% block crm_sub %}Subscription invoices appear automatically. Cash / UPI you take offline counts once verified.{% endblock %}
 
-{% block content %}
+{% block crm_body %}
 <div class="space-y-4">
-  <form method="post" action="{{ url('control:crm_collection_create') }}" enctype="multipart/form-data" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+  <form method="post" action="{{ url('control:crm_collection_create') }}" enctype="multipart/form-data" class="space-y-3 rounded-2xl bg-white shadow-sm p-4 ring-1 ring-pink-100">
     <h3 class="text-sm font-semibold text-slate-700">Enter offline cash / UPI collected</h3>
     {{ csrf_input }}{{ render_form(form) }}
     <p class="text-xs text-slate-400">Reference (UTR / receipt no.) is required. It counts on the board after a platform admin verifies it. Subscription invoices appear here automatically.</p>
-    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Submit</button>
+    <button class="rounded-lg bg-pink-600 px-4 py-2 text-sm text-white">Submit</button>
   </form>
   <div class="flex gap-2 text-sm"><a href="?" class="text-slate-500 hover:underline">All</a>{% for v, l in statuses %}<a href="?status={{ v }}" class="text-slate-500 hover:underline">{{ l }}</a>{% endfor %}</div>
-  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+  <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
     <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Date</th><th class="px-3 py-2">By</th><th class="px-3 py-2">₹</th><th class="px-3 py-2">Mode</th><th class="px-3 py-2">Ref</th><th class="px-3 py-2">Status</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
-      <tbody class="divide-y divide-slate-100">
+      <thead class="bg-pink-50/70 text-xs uppercase tracking-wide text-pink-500"><tr><th class="px-4 py-2">Date</th><th class="px-3 py-2">By</th><th class="px-3 py-2">₹</th><th class="px-3 py-2">Mode</th><th class="px-3 py-2">Ref</th><th class="px-3 py-2">Status</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
+      <tbody class="divide-y divide-pink-50">
         {% for c in collections %}
         <tr><td class="px-4 py-2">{{ c.collected_on }}</td><td class="px-3 py-2">{{ c.collected_by.get_full_name() or c.collected_by.email }}</td>
           <td class="px-3 py-2 font-medium">₹{{ c.amount }}</td><td class="px-3 py-2">{{ c.get_mode_display() }}{% if c.project %}<div class="text-xs text-slate-400">{{ c.project.name }}</div>{% endif %}</td>

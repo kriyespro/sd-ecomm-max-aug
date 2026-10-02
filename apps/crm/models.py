@@ -61,6 +61,12 @@ class Lead(TimeStampedModel):
     def is_open(self):
         return self.status in OPEN_LEAD_STATUSES
 
+    @property
+    def wa_number(self):
+        """Digits-only number for a wa.me link; bare 10-digit numbers get +91."""
+        digits = "".join(c for c in self.phone if c.isdigit())
+        return f"91{digits}" if len(digits) == 10 else digits
+
 
 class ActivityKind(models.TextChoices):
     CALL = "call", "Call"

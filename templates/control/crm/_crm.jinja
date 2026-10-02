@@ -1,15 +1,15 @@
 {% macro range_tabs(ranges, current, extra="") %}
-<div class="flex flex-wrap gap-1">
+<div class="inline-flex rounded-full bg-white p-0.5 ring-1 ring-pink-100">
   {% for key, label in ranges %}
-  <a href="?range={{ key }}{{ extra }}" class="rounded-lg px-3 py-1.5 text-sm {{ 'bg-slate-900 text-white' if key == current else 'text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100' }}">{{ label }}</a>
+  <a href="?range={{ key }}{{ extra }}" class="rounded-full px-3 py-1 text-xs font-medium {{ 'bg-pink-600 text-white' if key == current else 'text-pink-800 hover:bg-pink-50' }}">{{ label }}</a>
   {% endfor %}
 </div>
 {% endmacro %}
 
-{% macro tile(label, value, sub="", tone="slate") %}
-<div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-  <div class="text-xs uppercase tracking-wide text-slate-400">{{ label }}</div>
-  <div class="mt-1 text-2xl font-semibold text-{{ tone }}-800">{{ value }}</div>
+{% macro tile(label, value, sub="", tone="pink") %}
+<div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
+  <div class="text-xs font-medium uppercase tracking-wide text-pink-400">{{ label }}</div>
+  <div class="mt-1 text-2xl font-semibold {{ 'text-emerald-600' if tone == 'green' else 'text-pink-700' }}">{{ value }}</div>
   {% if sub %}<div class="mt-0.5 text-xs text-slate-500">{{ sub }}</div>{% endif %}
 </div>
 {% endmacro %}
@@ -17,30 +17,52 @@
 {% macro bar(done, target) %}
 {% if target %}
 {% set pct = [100, (done * 100 // target)] | min %}
-<div class="h-1.5 w-20 rounded bg-slate-100"><div class="h-1.5 rounded {{ 'bg-emerald-500' if pct >= 100 else ('bg-amber-400' if pct >= 50 else 'bg-red-400') }}" style="width: {{ pct }}%"></div></div>
+<div class="mt-1 h-1.5 w-20 rounded-full bg-pink-100"><div class="h-1.5 rounded-full {{ 'bg-emerald-500' if pct >= 100 else 'bg-pink-500' }}" style="width: {{ pct }}%"></div></div>
 {% endif %}
 {% endmacro %}
 
-{# Quick-log buttons — one POST each. lead optional. #}
-{% macro quicklog(lead=None, next="", csrf="") %}
-<form method="post" action="{{ url('control:crm_log') }}" class="flex flex-wrap items-center gap-1.5">
+{% macro empty(icon, title, hint) %}
+<div class="rounded-2xl border border-dashed border-pink-200 bg-pink-50/40 px-6 py-10 text-center">
+  <div class="text-3xl">{{ icon }}</div>
+  <p class="mt-2 text-sm font-medium text-slate-700">{{ title }}</p>
+  <p class="mt-1 text-xs text-slate-500">{{ hint }}</p>
+</div>
+{% endmacro %}
+
+{# One-tap outcome logger. csrf must be passed in — macros can't see csrf_input. #}
+{% macro outcome_buttons(lead, next, csrf) %}
+<form method="post" action="{{ url('control:crm_log') }}" class="space-y-3">
   {{ csrf }}
   {% if lead %}<input type="hidden" name="lead" value="{{ lead.pk }}">{% endif %}
   <input type="hidden" name="next" value="{{ next }}">
-  <button name="kind" value="call" formaction="{{ url('control:crm_log') }}" class="hidden"></button>
-  {% for kind, outcome, label in [
-      ("call", "connected", "📞 Connected"),
-      ("call", "no_answer", "📵 No answer"),
-      ("call", "not_reachable", "🚫 Unreachable"),
-      ("call", "call_back", "🔁 Call back"),
-      ("call", "not_interested", "👎 Not interested"),
-      ("whatsapp", "done", "💬 WhatsApp"),
-      ("demo", "done", "🖥 Demo done")] %}
-  <button type="submit" name="kind" value="{{ kind }}" onclick="this.form.outcome.value='{{ outcome }}'"
-          class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100">{{ label }}</button>
-  {% endfor %}
-  <input type="hidden" name="outcome" value="">
-  <input type="date" name="follow_up" title="Next follow-up" class="rounded-lg border border-slate-300 px-2 py-1 text-xs">
-  <input name="note" maxlength="300" placeholder="Note (optional)" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+  <input type="hidden" name="kind" value="call">
+  <div class="grid grid-cols-2 gap-2 sm:grid-cols-3">
+    {% for outcome, label, cls in [
+        ("connected", "✅ Spoke to them", "bg-emerald-600 text-white hover:bg-emerald-700"),
+        ("no_answer", "📵 No answer", "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"),
+        ("not_reachable", "🚫 Unreachable", "bg-white text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50"),
+        ("call_back", "🔁 Call back later", "bg-amber-100 text-amber-900 ring-1 ring-amber-200 hover:bg-amber-200"),
+        ("not_interested", "👎 Not interested", "bg-rose-50 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100")] %}
+    <button type="submit" name="outcome" value="{{ outcome }}" class="rounded-xl px-3 py-3 text-sm font-medium transition {{ cls }}">{{ label }}</button>
+    {% endfor %}
+    <button type="submit" name="kind" value="demo" class="rounded-xl bg-pink-600 px-3 py-3 text-sm font-medium text-white transition hover:bg-pink-700">🖥 Demo given</button>
+  </div>
+  <div class="flex flex-wrap items-center gap-2 text-xs">
+    <span class="text-slate-500">Follow up:</span>
+    {% for v, l in [("", "None"), ("1", "Tomorrow"), ("3", "3 days"), ("7", "Next week")] %}
+    <label class="cursor-pointer"><input type="radio" name="follow_in" value="{{ v }}" class="peer sr-only" {{ 'checked' if v == '' }}>
+      <span class="inline-block rounded-full px-3 py-1 ring-1 ring-pink-200 text-pink-800 peer-checked:bg-pink-600 peer-checked:text-white peer-checked:ring-pink-600">{{ l }}</span></label>
+    {% endfor %}
+  </div>
+  <input name="note" maxlength="300" placeholder="Quick note (optional)" class="block w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
 </form>
+{% endmacro %}
+
+{% macro contact_buttons(lead) %}
+<div class="flex gap-2">
+  {% if lead.phone %}
+  <a href="tel:{{ lead.phone }}" class="inline-flex items-center gap-1.5 rounded-xl bg-pink-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-pink-700">📞 Call {{ lead.phone }}</a>
+  <a href="https://wa.me/{{ lead.wa_number }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">💬 WhatsApp</a>
+  {% else %}<span class="text-sm text-slate-400">No phone number on this lead</span>{% endif %}
+</div>
 {% endmacro %}

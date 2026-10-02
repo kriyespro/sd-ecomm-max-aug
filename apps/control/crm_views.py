@@ -98,7 +98,15 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
         start, end, label = svc.resolve_range(key)
         rows, totals = svc.person_numbers(start, end, users=[u])
         today = timezone.localdate()
+        skip = [int(i) for i in self.request.GET.get("skip", "").split(",")[:50] if i.isdigit()]
+        queue = svc.call_queue(u, skip=skip)
+        nxt = queue.first()
         ctx.update(
+            nxt=nxt, queue_left=queue.count(), skip_ids=skip,
+            nxt_activity=nxt.activities.select_related("actor")[:3] if nxt else [],
+            skip_param=",".join(map(str, skip + ([nxt.pk] if nxt else []))),
+            today_calls=rows[0]["calls"] if key == "today" else Activity.objects.filter(
+                actor=u, kind=ActivityKind.CALL, occurred_at__gte=svc.day_bounds(today)[0]).count(),
             range_key=key, range_label=label, ranges=_RANGES, me=rows[0], targets=rows[0]["targets"],
             due_leads=Lead.objects.filter(assigned_to=u, next_follow_up__lte=today,
                                           status__in=[s for s in LeadStatus.values
@@ -150,8 +158,11 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
+        g = self.request.GET.copy()
+        g.pop("page", None)
         ctx.update(statuses=LeadStatus.choices, is_admin=_admin(self.request.user),
-                   people=svc.crm_people(), g=self.request.GET, form=LeadForm())
+                   people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
+                   today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "")
         return ctx
 
 
@@ -194,6 +205,18 @@ class LeadDetailView(PlatformStaffRequiredMixin, TemplateView):
             messages.success(request, "Lead updated.")
         else:
             messages.error(request, "Fix the form errors.")
+        return redirect("control:crm_lead", pk=pk)
+
+
+class LeadStatusView(PlatformStaffRequiredMixin, View):
+    """One-tap pipeline move from the lead page stepper."""
+
+    def post(self, request, pk):
+        lead = get_object_or_404(_lead_qs(request.user), pk=pk)
+        new = request.POST.get("status")
+        if new in LeadStatus.values and new != LeadStatus.WON:  # "won" has its own button
+            lead.status = new
+            lead.save(update_fields=["status", "updated_at"])
         return redirect("control:crm_lead", pk=pk)
 
 
@@ -276,7 +299,9 @@ class LogActivityView(PlatformStaffRequiredMixin, View):
         if p.get("project", "").isdigit():
             project = get_object_or_404(self._projects(request.user), pk=int(p["project"]))
         follow = None
-        if p.get("follow_up"):
+        if p.get("follow_in", "").isdigit() and 0 < int(p["follow_in"]) <= 90:
+            follow = timezone.localdate() + dt.timedelta(days=int(p["follow_in"]))
+        elif p.get("follow_up"):
             try:
                 follow = dt.date.fromisoformat(p["follow_up"])
             except ValueError:

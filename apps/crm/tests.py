@@ -142,7 +142,7 @@ class ScreenTests(CrmBase):
         self.login(self.admin)
         r = self.client.get(url)
         self.assertEqual(r.status_code, 200)
-        self.assertContains(r, "Team report")
+        self.assertContains(r, "Team board")
 
     def test_all_screens_render(self):
         Lead.objects.create(name="Zed", assigned_to=self.a)
@@ -327,6 +327,7 @@ class CsrfRenderTests(CrmBase):
         self.assertIn('name="csrfmiddlewaretoken"', form)
 
     def test_my_day_quicklog_has_token(self):
+        Lead.objects.create(name="Q", assigned_to=self.a)
         self._has_token(reverse("control:crm_my_day"))
 
     def test_lead_quicklog_has_token(self):
@@ -336,6 +337,7 @@ class CsrfRenderTests(CrmBase):
     def test_quicklog_post_passes_csrf_with_token(self):
         import re
         from django.test import Client
+        Lead.objects.create(name="Q", assigned_to=self.a)
         c = Client(enforce_csrf_checks=True)
         c.force_login(self.a)
         html = c.get(reverse("control:crm_my_day")).content.decode()
@@ -344,3 +346,111 @@ class CsrfRenderTests(CrmBase):
                                                  "csrfmiddlewaretoken": tok})
         self.assertEqual(r.status_code, 302)
         self.assertEqual(Activity.objects.filter(actor=self.a).count(), 1)
+
+
+class QueueTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+
+    def _q(self, **kw):
+        return list(svc.call_queue(self.a, **kw))
+
+    def test_order_due_followups_first_then_fresh(self):
+        fresh = Lead.objects.create(name="fresh", assigned_to=self.a)
+        due = Lead.objects.create(name="due", assigned_to=self.a,
+                                  next_follow_up=self.today - dt.timedelta(days=2))
+        future = Lead.objects.create(name="future", assigned_to=self.a,
+                                     next_follow_up=self.today + dt.timedelta(days=3))
+        Lead.objects.create(name="other", assigned_to=self.b)
+        Lead.objects.create(name="closed", assigned_to=self.a, status=LeadStatus.LOST)
+        self.assertEqual(self._q(), [due, fresh])
+        self.assertNotIn(future, self._q())
+
+    def test_skip_excludes(self):
+        l1 = Lead.objects.create(name="a", assigned_to=self.a)
+        l2 = Lead.objects.create(name="b", assigned_to=self.a)
+        self.assertEqual(self._q(skip=[l1.pk]), [l2])
+
+    def test_worked_today_drops_out(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=l)
+        self.assertEqual(self._q(), [])
+
+    def test_no_answer_comes_back_tomorrow(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=l)
+        l.refresh_from_db()
+        self.assertEqual(l.next_follow_up, self.today + dt.timedelta(days=1))
+        self.assertEqual(self._q(), [])
+
+    def test_unreachable_two_days_and_explicit_follow_up_wins(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="call", outcome="not_reachable", lead=l)
+        l.refresh_from_db()
+        self.assertEqual(l.next_follow_up, self.today + dt.timedelta(days=2))
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=l,
+                         follow_up=self.today + dt.timedelta(days=7))
+        l.refresh_from_db()
+        self.assertEqual(l.next_follow_up, self.today + dt.timedelta(days=7))
+
+    def test_worked_followup_is_cleared(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a, next_follow_up=self.today)
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=l)
+        l.refresh_from_db()
+        self.assertIsNone(l.next_follow_up)
+        self.assertEqual(self._q(), [])
+
+
+class NewUxTests(CrmBase):
+    def test_follow_in_chip_sets_date(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a)
+        self.login(self.a)
+        self.client.post(reverse("control:crm_log"),
+                         {"kind": "call", "outcome": "connected", "lead": l.pk, "follow_in": "3"})
+        l.refresh_from_db()
+        self.assertEqual(l.next_follow_up, timezone.localdate() + dt.timedelta(days=3))
+
+    def test_my_day_shows_next_lead_and_skip(self):
+        a = Lead.objects.create(name="Alpha Lead", assigned_to=self.a, phone="9876543210")
+        Lead.objects.create(name="Beta Lead", assigned_to=self.a)
+        self.login(self.a)
+        r = self.client.get(reverse("control:crm_my_day"))
+        self.assertContains(r, "Alpha Lead")
+        self.assertContains(r, "tel:9876543210")
+        self.assertContains(r, "wa.me/919876543210")
+        r = self.client.get(reverse("control:crm_my_day") + f"?skip={a.pk}")
+        self.assertContains(r, "Beta Lead")
+        self.assertNotContains(r, "Alpha Lead")
+
+    def test_my_day_empty_queue(self):
+        self.login(self.a)
+        self.assertContains(self.client.get(reverse("control:crm_my_day")), "Queue clear")
+
+    def test_status_stepper_and_won_guard(self):
+        l = Lead.objects.create(name="a", assigned_to=self.a)
+        other = Lead.objects.create(name="b", assigned_to=self.b)
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_status", kwargs={"pk": l.pk}), {"status": "interested"})
+        l.refresh_from_db()
+        self.assertEqual(l.status, LeadStatus.INTERESTED)
+        self.client.post(reverse("control:crm_lead_status", kwargs={"pk": l.pk}), {"status": "won"})
+        l.refresh_from_db()
+        self.assertEqual(l.status, LeadStatus.INTERESTED)  # won only via the store flow
+        self.assertEqual(self.client.post(reverse("control:crm_lead_status", kwargs={"pk": other.pk}),
+                                          {"status": "lost"}).status_code, 404)
+
+    def test_tabs_role_aware_and_pink_theme(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_leads")).content.decode()
+        self.assertIn("My day", html)
+        self.assertNotIn('href="%s"' % reverse("control:crm_board"), html.split("CRM sections")[1].split("</nav>")[0])
+        self.assertIn("bg-pink-600", html)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_leads")).content.decode()
+        self.assertIn('href="%s"' % reverse("control:crm_board"), html.split("CRM sections")[1].split("</nav>")[0])
+
+    def test_wa_number(self):
+        self.assertEqual(Lead(phone="98765 43210").wa_number, "919876543210")
+        self.assertEqual(Lead(phone="+91 98765 43210").wa_number, "919876543210")
+        self.assertEqual(Lead(phone="").wa_number, "")
