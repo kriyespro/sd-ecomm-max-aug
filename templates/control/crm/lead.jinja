@@ -1,37 +1,50 @@
-{% extends "control/base_control.jinja" %}
+{% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
-{% from "control/crm/_crm.jinja" import quicklog %}
+{% from "control/crm/_crm.jinja" import outcome_buttons, contact_buttons, empty %}
 {% block page_title %}{{ lead.name }}{% endblock %}
+{% block crm_title %}{{ lead.name }}{% endblock %}
+{% block crm_sub %}{{ lead.business or "—" }}{% if lead.city %} · {{ lead.city }}{% endif %}{% if lead.assigned_to %} · owner {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}{% endif %}{% endblock %}
+{% block crm_actions %}<a href="{{ url('control:crm_leads') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← All leads</a>{% endblock %}
 
-{% block content %}
+{% block crm_body %}
+{# Pipeline stepper: tap a stage to move the lead #}
+{% set _stages = [("new","New"),("contacted","Contacted"),("interested","Interested"),("demo_booked","Demo booked"),("demo_done","Demo done"),("negotiating","Negotiating")] %}
+<form method="post" action="{{ url('control:crm_lead_status', kwargs={'pk': lead.pk}) }}" class="flex gap-1 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm ring-1 ring-pink-100">
+  {{ csrf_input }}
+  {% for v, l in _stages %}
+  <button name="status" value="{{ v }}" class="shrink-0 rounded-xl px-3 py-2 text-xs font-medium {{ 'bg-pink-600 text-white' if lead.status == v else 'text-pink-800 hover:bg-pink-50' }}">{{ l }}</button>
+  {% endfor %}
+  <button name="status" value="lost" class="ml-auto shrink-0 rounded-xl px-3 py-2 text-xs font-medium {{ 'bg-rose-600 text-white' if lead.status == 'lost' else 'text-rose-600 hover:bg-rose-50' }}">Lost</button>
+</form>
+{% if lead.status == 'won' %}<div class="rounded-2xl bg-emerald-50 p-3 text-sm font-medium text-emerald-800 ring-1 ring-emerald-200">🎉 Won — store created from this lead.</div>{% endif %}
+
 <div class="grid gap-4 lg:grid-cols-3">
   <div class="space-y-4 lg:col-span-2">
-    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-      <div class="mb-2 flex items-center justify-between">
-        <h3 class="text-sm font-semibold text-slate-700">Log work on this lead</h3>
-        {% if lead.phone %}<a href="tel:{{ lead.phone }}" class="text-sm text-slate-600 hover:underline">☎ {{ lead.phone }}</a>{% endif %}
-      </div>
-      {{ quicklog(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input) }}
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-pink-100">
+      <div class="mb-3">{{ contact_buttons(lead) }}</div>
+      <p class="mb-2 text-sm font-medium text-slate-700">Log this contact</p>
+      {{ outcome_buttons(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input) }}
     </div>
-    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
-      <h3 class="mb-2 text-sm font-semibold text-slate-700">History</h3>
+    <div class="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-pink-100">
+      <h3 class="mb-2 text-sm font-semibold text-pink-900">History</h3>
       {% for a in activities %}
-      <div class="flex justify-between border-b border-slate-100 py-1.5 text-sm">
-        <span>{{ a.get_kind_display() }}{% if a.outcome %} · {{ a.get_outcome_display() }}{% endif %}{% if a.note %} — <span class="text-slate-500">{{ a.note }}</span>{% endif %}</span>
-        <span class="text-xs text-slate-400">{{ a.actor.get_full_name() or a.actor.email }} · {{ a.occurred_at.strftime("%d %b %H:%M") }}</span></div>
-      {% else %}<p class="text-sm text-slate-400">Nothing logged yet.</p>{% endfor %}
+      <div class="flex items-start justify-between gap-3 border-b border-pink-50 py-2 text-sm">
+        <span>{{ a.get_kind_display() }}{% if a.outcome %} <span class="text-slate-500">· {{ a.get_outcome_display() }}</span>{% endif %}{% if a.note %}<span class="block text-xs text-slate-500">{{ a.note }}</span>{% endif %}</span>
+        <span class="shrink-0 text-xs text-slate-400">{{ a.actor.get_full_name() or a.actor.email }} · {{ a.occurred_at.strftime("%d %b %H:%M") }}</span></div>
+      {% else %}<p class="text-sm text-slate-400">Nothing logged yet — make the first call. 📞</p>{% endfor %}
     </div>
   </div>
   <div class="space-y-4">
-    <form method="post" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
-      {{ csrf_input }}{{ render_form(form) }}
-      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Save</button>
-    </form>
     {% if lead.is_open %}
     <form method="post" action="{{ url('control:crm_lead_won', kwargs={'pk': lead.pk}) }}">{{ csrf_input }}
-      <button class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Won — create store</button></form>
+      <button class="w-full rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700">🎉 Deal won — create the store</button></form>
     {% endif %}
-    {% if lead.assigned_to %}<p class="text-xs text-slate-400">Assigned to {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}</p>{% endif %}
+    {% if lead.next_follow_up %}<div class="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">⏰ Follow-up {{ lead.next_follow_up }}</div>{% endif %}
+    <details class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100" {{ 'open' if form.errors }}>
+      <summary class="cursor-pointer text-sm font-semibold text-pink-900">Edit details</summary>
+      <form method="post" class="mt-3 space-y-3">{{ csrf_input }}{{ render_form(form) }}
+        <button class="rounded-xl bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700">Save</button></form>
+    </details>
   </div>
 </div>
 {% endblock %}

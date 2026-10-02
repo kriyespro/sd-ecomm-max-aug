@@ -1,60 +1,59 @@
-{% extends "control/base_control.jinja" %}
-{% from "control/crm/_crm.jinja" import range_tabs, tile, bar %}
+{% extends "control/crm/base_crm.jinja" %}
+{% from "control/crm/_crm.jinja" import range_tabs, tile, bar, empty %}
 {% block page_title %}CRM board{% endblock %}
+{% block crm_title %}Team board{% endblock %}
+{% block crm_sub %}{{ range_label }} · {{ start }}{% if end != start %} → {{ end }}{% endif %}{% endblock %}
+{% block crm_actions %}{{ range_tabs(ranges, range_key, ("&active=1" if request.GET.get("active") else "")) }}<a href="{{ url('control:crm_targets') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🎯 Targets</a>{% endblock %}
 
-{% block content %}
-<div class="space-y-5">
-  <div class="flex flex-wrap items-center justify-between gap-3">
-    <div>
-      <h2 class="text-base font-semibold text-slate-800">Team report — {{ range_label }}</h2>
-      <p class="text-xs text-slate-500">{{ start }}{% if end != start %} → {{ end }}{% endif %}</p>
-    </div>
-    {{ range_tabs(ranges, range_key) }}
-  </div>
-
-  <div class="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-    {{ tile("Calls", totals.calls, totals.connected ~ " connected · " ~ totals.connect_pct ~ "%") }}
-    {{ tile("Demos given", totals.demos) }}
-    {{ tile("DGCs trained", totals.trained, "confirmed by trainer") }}
-    {{ tile("Collection", "₹" ~ totals.collection, ("+ ₹" ~ totals.collection_pending ~ " unverified") if totals.collection_pending else "verified only", "emerald") }}
-    {{ tile("Products entered", totals.products, totals.store_work ~ " store jobs") }}
-    {{ tile("WhatsApp", totals.whatsapp) }}
-  </div>
-
-  <div class="flex flex-wrap gap-2 text-sm">
-    {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?due=1" class="rounded-full bg-red-50 px-3 py-1 text-red-700 ring-1 ring-red-200">{{ extras.overdue_follow_ups }} overdue follow-ups</a>{% endif %}
-    {% if extras.unverified %}<a href="{{ url('control:crm_collections') }}?status=unverified" class="rounded-full bg-amber-50 px-3 py-1 text-amber-700 ring-1 ring-amber-200">{{ extras.unverified }} collections to verify</a>{% endif %}
-    {% if extras.pending_training %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-3 py-1 text-amber-700 ring-1 ring-amber-200">{{ extras.pending_training }} trainings awaiting trainer</a>{% endif %}
-    {% if extras.open_requests %}<a href="{{ url('control:crm_work') }}" class="rounded-full bg-blue-50 px-3 py-1 text-blue-700 ring-1 ring-blue-200">{{ extras.open_requests }} store-work requests to assign</a>{% endif %}
-    <span class="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 ring-1 ring-emerald-200">{{ extras.won_today }} stores won today</span>
-    <a href="{{ url('control:crm_targets') }}" class="ml-auto text-xs text-slate-500 hover:underline">Set targets</a>
-  </div>
-
-  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
-    <table class="w-full text-left text-sm">
-      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
-        <tr><th class="px-4 py-2">Person</th><th class="px-3 py-2">Calls</th><th class="px-3 py-2">Connected</th>
-          <th class="px-3 py-2">Demos</th><th class="px-3 py-2">Trained</th><th class="px-3 py-2">Trained others</th>
-          <th class="px-3 py-2">Products</th><th class="px-3 py-2">Collection ₹</th></tr>
-      </thead>
-      <tbody class="divide-y divide-slate-100">
-        {% for r in rows %}
-        <tr class="hover:bg-slate-50">
-          <td class="px-4 py-2 font-medium text-slate-800">{{ r.name }}</td>
-          <td class="px-3 py-2">{{ r.calls }} {% if range_key == 'today' %}{{ bar(r.calls, r.targets.calls) }}{% endif %}</td>
-          <td class="px-3 py-2 text-slate-500">{{ r.connected }}</td>
-          <td class="px-3 py-2">{{ r.demos }} {% if range_key == 'today' %}{{ bar(r.demos, r.targets.demos) }}{% endif %}</td>
-          <td class="px-3 py-2">{{ r.trained }}</td>
-          <td class="px-3 py-2">{{ r.trained_others }}</td>
-          <td class="px-3 py-2">{{ r.products }}</td>
-          <td class="px-3 py-2">₹{{ r.collection }}{% if r.collection_pending %} <span class="text-xs text-amber-600">(+₹{{ r.collection_pending }})</span>{% endif %}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="8" class="px-4 py-6 text-center text-slate-400">No team members yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  <p class="text-xs text-slate-400"><a class="underline" href="?range={{ range_key }}&active=1">Hide idle people</a></p>
+{% block crm_body %}
+<div class="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+  {{ tile("Calls", totals.calls, totals.connected ~ " spoke · " ~ totals.connect_pct ~ "%") }}
+  {{ tile("Demos given", totals.demos) }}
+  {{ tile("DGCs trained", totals.trained, "trainer-confirmed") }}
+  {{ tile("Collection", "₹" ~ totals.collection, ("+₹" ~ totals.collection_pending ~ " unverified") if totals.collection_pending else "verified only", "green") }}
+  {{ tile("Products entered", totals.products, totals.store_work ~ " store jobs") }}
+  {{ tile("Stores won today", extras.won_today) }}
 </div>
+
+{% set _todo = extras.overdue_follow_ups or extras.unverified or extras.pending_training or extras.open_requests %}
+{% if _todo %}
+<div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
+  <h3 class="mb-2 text-sm font-semibold text-pink-900">Needs you</h3>
+  <div class="flex flex-wrap gap-2 text-sm">
+    {% if extras.open_requests %}<a href="{{ url('control:crm_work') }}" class="rounded-full bg-pink-600 px-3 py-1.5 font-medium text-white hover:bg-pink-700">🛠 Assign {{ extras.open_requests }} store-work request{{ 's' if extras.open_requests != 1 }}</a>{% endif %}
+    {% if extras.unverified %}<a href="{{ url('control:crm_collections') }}?status=unverified" class="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">💰 Verify {{ extras.unverified }} collection{{ 's' if extras.unverified != 1 }}</a>{% endif %}
+    {% if extras.pending_training %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">🎓 {{ extras.pending_training }} training awaiting trainer</a>{% endif %}
+    {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?due=1" class="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ extras.overdue_follow_ups }} overdue follow-up{{ 's' if extras.overdue_follow_ups != 1 }}</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
+  <table class="w-full text-left text-sm">
+    <thead class="bg-pink-50/70 text-xs uppercase tracking-wide text-pink-500">
+      <tr><th class="px-4 py-3">Person</th><th class="px-3 py-3">Calls</th><th class="px-3 py-3">Spoke</th>
+        <th class="px-3 py-3">Demos</th><th class="px-3 py-3">Trained</th><th class="px-3 py-3">Trained others</th>
+        <th class="px-3 py-3">Products</th><th class="px-3 py-3">Collection</th></tr>
+    </thead>
+    <tbody class="divide-y divide-pink-50">
+      {% for r in rows %}
+      <tr class="hover:bg-pink-50/40">
+        <td class="px-4 py-3 font-medium text-slate-800">{{ r.name }}</td>
+        <td class="px-3 py-3">{{ r.calls }}{% if range_key == 'today' %}{{ bar(r.calls, r.targets.calls) }}{% endif %}</td>
+        <td class="px-3 py-3 text-slate-500">{{ r.connected }}</td>
+        <td class="px-3 py-3">{{ r.demos }}{% if range_key == 'today' %}{{ bar(r.demos, r.targets.demos) }}{% endif %}</td>
+        <td class="px-3 py-3">{{ r.trained }}</td>
+        <td class="px-3 py-3">{{ r.trained_others }}</td>
+        <td class="px-3 py-3">{{ r.products }}</td>
+        <td class="px-3 py-3">₹{{ r.collection }}{% if r.collection_pending %} <span class="text-xs text-amber-600">(+₹{{ r.collection_pending }})</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" class="p-4">{{ empty("👥", "No team members yet.", "Add DGCs from Users, then they appear here with their daily numbers.") }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="text-xs text-slate-400">
+  {% if request.GET.get("active") %}<a class="text-pink-700 underline" href="?range={{ range_key }}">Show everyone</a>{% else %}<a class="text-pink-700 underline" href="?range={{ range_key }}&active=1">Hide people with no activity</a>{% endif %}
+</p>
 {% endblock %}

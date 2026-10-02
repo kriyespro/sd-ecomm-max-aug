@@ -21,6 +21,7 @@ from .models import (
     DailyTarget,
     Lead,
     LeadStatus,
+    OPEN_LEAD_STATUSES,
     StoreAssignment,
     StoreWorkRequest,
     TargetMetric,
@@ -79,6 +80,14 @@ def resolve_range(key):
 
 # ── activity / lead actions ────────────────────────────────────────────────
 
+# Outcomes that should bring the lead back automatically (days) when the
+# caller didn't pick a follow-up themselves.
+_AUTO_FOLLOW_DAYS = {
+    ActivityOutcome.NO_ANSWER: 1,
+    ActivityOutcome.CALL_BACK: 1,
+    ActivityOutcome.NOT_REACHABLE: 2,
+}
+
 # Outcome → what the lead moves to when quick-logged.
 _CALL_STATUS = {
     ActivityOutcome.CONNECTED: LeadStatus.CONTACTED,
@@ -107,8 +116,15 @@ def log_activity(*, actor, kind, outcome="", lead=None, project=None, note="", c
         elif outcome == ActivityOutcome.NOT_INTERESTED and lead.is_open:
             lead.status = LeadStatus.LOST
             fields.append("status")
+        today = timezone.localdate()
         if follow_up:
             lead.next_follow_up = follow_up
+            fields.append("next_follow_up")
+        elif outcome in _AUTO_FOLLOW_DAYS:
+            lead.next_follow_up = today + dt.timedelta(days=_AUTO_FOLLOW_DAYS[outcome])
+            fields.append("next_follow_up")
+        elif lead.next_follow_up and lead.next_follow_up <= today:
+            lead.next_follow_up = None  # this follow-up has now been worked
             fields.append("next_follow_up")
         if fields:
             lead.save(update_fields=fields + ["updated_at"])
@@ -205,6 +221,26 @@ def complete_work_request(work_request):
     work_request.save(update_fields=["status", "done_at", "updated_at"])
     StoreAssignment.objects.filter(request=work_request, is_active=True).update(
         is_active=False, revoked_at=timezone.now())
+
+
+# ── the caller's queue ─────────────────────────────────────────────────────
+
+def call_queue(user, *, skip=()):
+    """Open leads for ``user`` in the order they should be worked: due
+    follow-ups first (oldest first), then fresh leads. A lead already worked
+    today with no follow-up date drops out until tomorrow."""
+    from django.db.models import Exists, F, OuterRef
+
+    today = timezone.localdate()
+    lo, _ = day_bounds(today)
+    worked = Activity.objects.filter(actor=user, lead=OuterRef("pk"), occurred_at__gte=lo)
+    qs = (Lead.objects.filter(assigned_to=user, status__in=OPEN_LEAD_STATUSES)
+          .annotate(worked_today=Exists(worked))
+          .filter(Q(next_follow_up__lte=today) | Q(next_follow_up__isnull=True, worked_today=False))
+          .order_by(F("next_follow_up").asc(nulls_last=True), "created_at"))
+    if skip:
+        qs = qs.exclude(pk__in=list(skip))
+    return qs
 
 
 # ── targets ────────────────────────────────────────────────────────────────
