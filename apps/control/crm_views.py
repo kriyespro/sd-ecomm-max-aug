@@ -127,7 +127,7 @@ class LeadForm(forms.ModelForm):
         model = Lead
         fields = ["name", "phone", "business", "city", "source", "status", "next_follow_up", "notes"]
         widgets = {"next_follow_up": forms.DateInput(attrs={"type": "date"}),
-                   "notes": forms.Textarea(attrs={"rows": 3})}
+                   "notes": forms.Textarea(attrs={"rows": 2})}
 
 
 def _lead_qs(user):
