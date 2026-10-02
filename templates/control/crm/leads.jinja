@@ -1,0 +1,67 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Leads{% endblock %}
+
+{% block content %}
+<div class="space-y-4" x-data="{ add: false }">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <form class="flex flex-wrap gap-2 text-sm">
+      <input name="q" value="{{ g.get('q','') }}" placeholder="Search name / phone" class="rounded-lg border border-slate-300 px-3 py-1.5">
+      <select name="status" class="rounded-lg border border-slate-300 px-2 py-1.5"><option value="">Any status</option>
+        {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if g.get('status') == v }}>{{ l }}</option>{% endfor %}</select>
+      {% if is_admin %}<select name="assignee" class="rounded-lg border border-slate-300 px-2 py-1.5"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
+        {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('assignee') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
+      <label class="flex items-center gap-1 text-slate-600"><input type="checkbox" name="due" value="1" {{ 'checked' if g.get('due') }}> Follow-up due</label>
+      <button class="rounded-lg bg-slate-900 px-3 py-1.5 text-white">Filter</button>
+    </form>
+    <button @click="add = !add" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white">Add lead</button>
+  </div>
+
+  <form x-show="add" x-cloak method="post" action="{{ url('control:crm_lead_create') }}" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    {{ csrf_input }}{{ render_form(form) }}
+    {% if is_admin %}<label class="block text-sm font-medium text-slate-700">Assign to
+      <select name="assigned_to" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"><option value="">Me</option>
+        {% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select></label>{% endif %}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Save lead</button>
+  </form>
+
+  <form method="post" action="{{ url('control:crm_lead_assign') }}">
+    {{ csrf_input }}<input type="hidden" name="next" value="{{ request.get_full_path() }}">
+    {% if is_admin %}
+    <div class="mb-2 flex flex-wrap items-center gap-2 text-sm">
+      <span class="text-slate-500">With ticked:</span>
+      <select name="assignee" class="rounded-lg border border-slate-300 px-2 py-1">{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+      <button class="rounded-lg bg-slate-900 px-3 py-1 text-white">Assign</button>
+    </div>{% endif %}
+    <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr>
+          {% if is_admin %}<th class="px-3 py-2"></th>{% endif %}<th class="px-3 py-2">Lead</th><th class="px-3 py-2">Phone</th>
+          <th class="px-3 py-2">Status</th><th class="px-3 py-2">Owner</th><th class="px-3 py-2">Follow-up</th></tr></thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for l in leads %}
+          <tr class="hover:bg-slate-50">
+            {% if is_admin %}<td class="px-3 py-2"><input type="checkbox" name="ids" value="{{ l.pk }}"></td>{% endif %}
+            <td class="px-3 py-2"><a class="font-medium text-slate-800 hover:underline" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
+              <div class="text-xs text-slate-400">{{ l.business }} {{ l.city }}</div></td>
+            <td class="px-3 py-2 text-slate-600">{{ l.phone }}</td>
+            <td class="px-3 py-2"><span class="rounded bg-slate-100 px-2 py-0.5 text-xs">{{ l.get_status_display() }}</span></td>
+            <td class="px-3 py-2 text-slate-500">{{ l.assigned_to.get_full_name() or l.assigned_to.email if l.assigned_to else "—" }}</td>
+            <td class="px-3 py-2 text-slate-500">{{ l.next_follow_up or "—" }}</td>
+          </tr>
+          {% else %}<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No leads.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  {% if is_admin %}
+  <form method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl bg-white p-3 text-sm ring-1 ring-slate-200">
+    {{ csrf_input }}<span class="text-slate-600">Import CSV (name, phone, business, city, source):</span>
+    <input type="file" name="file" accept=".csv" required>
+    <select name="assignee" class="rounded-lg border border-slate-300 px-2 py-1"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+    <button class="rounded-lg bg-slate-900 px-3 py-1 text-white">Import</button>
+  </form>{% endif %}
+  {% if page_obj and page_obj.has_other_pages() %}<div class="text-sm">{% if page_obj.has_previous() %}<a href="?page={{ page_obj.previous_page_number() }}">← Prev</a>{% endif %} {% if page_obj.has_next() %}<a href="?page={{ page_obj.next_page_number() }}">Next →</a>{% endif %}</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/crm/_crm.jinja" import range_tabs, tile, bar, quicklog %}
+{% block page_title %}My day{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+  <div class="flex flex-wrap items-center justify-between gap-3">
+    <h2 class="text-base font-semibold text-slate-800">My numbers — {{ range_label }}</h2>
+    {{ range_tabs(ranges, range_key) }}
+  </div>
+  <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+    {{ tile("Calls", me.calls, ("target " ~ targets.calls) if range_key == 'today' else "") }}
+    {{ tile("Demos", me.demos, ("target " ~ targets.demos) if range_key == 'today' else "") }}
+    {{ tile("Trained others", me.trained_others, "confirmed") }}
+    {{ tile("Collection", "₹" ~ me.collection, ("+₹" ~ me.collection_pending ~ " unverified") if me.collection_pending else "", "emerald") }}
+  </div>
+
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="mb-2 text-sm font-semibold text-slate-700">Quick log</h3>
+    {{ quicklog(None, url('control:crm_my_day')) }}
+    <p class="mt-2 text-xs text-slate-400">Open a lead to log against it. Product entry on an assigned store:</p>
+    <form method="post" action="{{ url('control:crm_log') }}" class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+      {{ csrf_input }}<input type="hidden" name="kind" value="product_entry"><input type="hidden" name="outcome" value="done">
+      <select name="project" class="rounded-lg border border-slate-300 px-2 py-1">
+        {% for a in my_work %}<option value="{{ a.project_id }}">{{ a.project.name }}</option>{% endfor %}
+      </select>
+      <input name="count" type="number" min="1" value="10" class="w-20 rounded-lg border border-slate-300 px-2 py-1">
+      <span>products</span>
+      <button class="rounded-lg bg-slate-900 px-3 py-1 text-white">Log</button>
+    </form>
+  </div>
+
+  <div class="grid gap-4 md:grid-cols-2">
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <h3 class="mb-2 text-sm font-semibold text-slate-700">Follow-ups due</h3>
+      {% for l in due_leads %}
+      <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex justify-between border-b border-slate-100 py-1.5 text-sm hover:bg-slate-50">
+        <span>{{ l.name }} <span class="text-xs text-slate-400">{{ l.phone }}</span></span><span class="text-xs text-red-600">{{ l.next_follow_up }}</span></a>
+      {% else %}<p class="text-sm text-slate-400">Nothing due.</p>{% endfor %}
+    </div>
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <h3 class="mb-2 text-sm font-semibold text-slate-700">My tasks</h3>
+      {% for t in open_tasks %}
+      <form method="post" action="{{ url('control:crm_task_done', kwargs={'pk': t.pk}) }}" class="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm">
+        {{ csrf_input }}<input type="hidden" name="next" value="{{ url('control:crm_my_day') }}">
+        <span>{{ t.title }} {% if t.due_on %}<span class="text-xs text-slate-400">· {{ t.due_on }}</span>{% endif %}</span>
+        <button class="text-xs text-emerald-700 hover:underline">Done</button></form>
+      {% else %}<p class="text-sm text-slate-400">No open tasks.</p>{% endfor %}
+    </div>
+  </div>
+
+  {% if my_work %}
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="mb-2 text-sm font-semibold text-slate-700">Stores assigned to me</h3>
+    {% for a in my_work %}<div class="text-sm">{{ a.project.name }} <span class="text-xs text-slate-400">· {{ a.get_scope_display() }}</span></div>{% endfor %}
+    <a href="{{ url('control:crm_work') }}" class="mt-1 inline-block text-xs text-slate-500 hover:underline">Open store work</a>
+  </div>
+  {% endif %}
+  {% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="block rounded-xl bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">{{ pending_confirm }} DGC(s) say you trained them — confirm.</a>{% endif %}
+</div>
+{% endblock %}

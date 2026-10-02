@@ -1,0 +1,46 @@
+{% macro range_tabs(ranges, current, extra="") %}
+<div class="flex flex-wrap gap-1">
+  {% for key, label in ranges %}
+  <a href="?range={{ key }}{{ extra }}" class="rounded-lg px-3 py-1.5 text-sm {{ 'bg-slate-900 text-white' if key == current else 'text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100' }}">{{ label }}</a>
+  {% endfor %}
+</div>
+{% endmacro %}
+
+{% macro tile(label, value, sub="", tone="slate") %}
+<div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+  <div class="text-xs uppercase tracking-wide text-slate-400">{{ label }}</div>
+  <div class="mt-1 text-2xl font-semibold text-{{ tone }}-800">{{ value }}</div>
+  {% if sub %}<div class="mt-0.5 text-xs text-slate-500">{{ sub }}</div>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro bar(done, target) %}
+{% if target %}
+{% set pct = [100, (done * 100 // target)] | min %}
+<div class="h-1.5 w-20 rounded bg-slate-100"><div class="h-1.5 rounded {{ 'bg-emerald-500' if pct >= 100 else ('bg-amber-400' if pct >= 50 else 'bg-red-400') }}" style="width: {{ pct }}%"></div></div>
+{% endif %}
+{% endmacro %}
+
+{# Quick-log buttons — one POST each. lead optional. #}
+{% macro quicklog(lead=None, next="") %}
+<form method="post" action="{{ url('control:crm_log') }}" class="flex flex-wrap items-center gap-1.5">
+  {{ csrf_input }}
+  {% if lead %}<input type="hidden" name="lead" value="{{ lead.pk }}">{% endif %}
+  <input type="hidden" name="next" value="{{ next }}">
+  <button name="kind" value="call" formaction="{{ url('control:crm_log') }}" class="hidden"></button>
+  {% for kind, outcome, label in [
+      ("call", "connected", "📞 Connected"),
+      ("call", "no_answer", "📵 No answer"),
+      ("call", "not_reachable", "🚫 Unreachable"),
+      ("call", "call_back", "🔁 Call back"),
+      ("call", "not_interested", "👎 Not interested"),
+      ("whatsapp", "done", "💬 WhatsApp"),
+      ("demo", "done", "🖥 Demo done")] %}
+  <button type="submit" name="kind" value="{{ kind }}" onclick="this.form.outcome.value='{{ outcome }}'"
+          class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-100">{{ label }}</button>
+  {% endfor %}
+  <input type="hidden" name="outcome" value="">
+  <input type="date" name="follow_up" title="Next follow-up" class="rounded-lg border border-slate-300 px-2 py-1 text-xs">
+  <input name="note" maxlength="300" placeholder="Note (optional)" class="min-w-0 flex-1 rounded-lg border border-slate-300 px-2 py-1 text-xs">
+</form>
+{% endmacro %}

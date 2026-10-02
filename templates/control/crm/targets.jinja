@@ -1,0 +1,14 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Daily targets{% endblock %}
+
+{% block content %}
+<form method="post" class="mx-auto max-w-md space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+  {{ csrf_input }}
+  <h3 class="text-sm font-semibold text-slate-700">Default daily target for every DGC / staff</h3>
+  {% for key, label in metrics %}
+  <label class="block text-sm text-slate-700">{{ label }}
+    <input type="number" min="0" name="{{ key }}" value="{{ defaults[key] }}" class="mt-1 block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></label>
+  {% endfor %}
+  <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Save</button>
+</form>
+{% endblock %}

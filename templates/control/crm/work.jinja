@@ -1,0 +1,45 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Store work{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <form method="post" action="{{ url('control:crm_work_create') }}" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">Request product entry / maintenance for a store</h3>
+    {{ csrf_input }}{{ render_form(form) }}
+    <p class="text-xs text-slate-400">The super admin assigns it to a DGC — nobody can self-claim.</p>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Send request</button>
+  </form>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Store</th><th class="px-3 py-2">Work</th><th class="px-3 py-2">From</th><th class="px-3 py-2">Status</th><th></th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for r in requests %}
+        <tr><td class="px-4 py-2 font-medium text-slate-800">{{ r.project.name }}<div class="text-xs font-normal text-slate-400">{{ r.note }}</div></td>
+          <td class="px-3 py-2">{{ r.get_kind_display() }}</td>
+          <td class="px-3 py-2 text-slate-500">{{ (r.requested_by.get_full_name() or r.requested_by.email) if r.requested_by else "—" }}</td>
+          <td class="px-3 py-2">{{ r.get_status_display() }}{% if r.assigned_to %} → {{ r.assigned_to.get_full_name() or r.assigned_to.email }}{% endif %}</td>
+          <td class="px-3 py-2 text-right">
+            {% if r.status == 'open' and is_admin %}
+            <form method="post" action="{{ url('control:crm_work_assign', kwargs={'pk': r.pk}) }}" class="flex justify-end gap-1">{{ csrf_input }}
+              <select name="assignee" class="rounded-lg border border-slate-300 px-2 py-1 text-xs">{% for p in dgcs %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+              <button class="rounded-lg bg-slate-900 px-2 py-1 text-xs text-white">Assign</button></form>
+            {% elif r.status == 'assigned' and (is_admin or r.assigned_to_id == request.user.pk) %}
+            <form method="post" action="{{ url('control:crm_work_done', kwargs={'pk': r.pk}) }}">{{ csrf_input }}<button class="text-xs text-emerald-700 hover:underline">Mark done</button></form>{% endif %}
+          </td></tr>
+        {% else %}<tr><td colspan="5" class="px-4 py-6 text-center text-slate-400">No requests.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="mb-2 text-sm font-semibold text-slate-700">Active access {{ "(all)" if is_admin else "(mine)" }}</h3>
+    {% for a in assignments %}
+    <div class="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm">
+      <span>{{ a.assignee.get_full_name() or a.assignee.email }} → {{ a.project.name }} <span class="text-xs text-slate-400">· {{ a.get_scope_display() }}</span></span>
+      {% if is_admin %}<form method="post" action="{{ url('control:crm_work_revoke', kwargs={'pk': a.pk}) }}">{{ csrf_input }}<button class="text-xs text-red-600 hover:underline">Remove access</button></form>{% endif %}
+    </div>{% else %}<p class="text-sm text-slate-400">None.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

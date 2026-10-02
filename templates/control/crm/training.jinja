@@ -1,0 +1,30 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}DGC training log{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <form method="post" action="{{ url('control:crm_training_create') }}" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">I was trained by another DGC</h3>
+    {{ csrf_input }}{{ render_form(form) }}
+    <p class="text-xs text-slate-400">Your trainer gets a request to confirm. Only confirmed trainings count on the board.</p>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Send for confirmation</button>
+  </form>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Date</th><th class="px-3 py-2">Trainee</th><th class="px-3 py-2">Trained by</th><th class="px-3 py-2">Topic</th><th class="px-3 py-2">Status</th><th></th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in logs %}
+        <tr><td class="px-4 py-2">{{ t.trained_on }}</td><td class="px-3 py-2">{{ t.trainee.get_full_name() or t.trainee.email }}</td>
+          <td class="px-3 py-2">{{ t.trainer.get_full_name() or t.trainer.email }}</td><td class="px-3 py-2 text-slate-500">{{ t.topic }}</td>
+          <td class="px-3 py-2"><span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if t.status == 'confirmed' else ('bg-red-100 text-red-700' if t.status == 'rejected' else 'bg-amber-100 text-amber-700') }}">{{ t.get_status_display() }}</span></td>
+          <td class="px-3 py-2 text-right">{% if t.status == 'pending' and (is_admin or t.trainer_id == request.user.pk) %}
+            <form method="post" action="{{ url('control:crm_training_respond', kwargs={'pk': t.pk}) }}" class="inline">{{ csrf_input }}
+              <button name="action" value="confirm" class="text-xs text-emerald-700 hover:underline">Confirm</button>
+              <button name="action" value="reject" class="ml-2 text-xs text-red-600 hover:underline">Reject</button></form>{% endif %}</td></tr>
+        {% else %}<tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No training logged.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

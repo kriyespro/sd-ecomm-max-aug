@@ -22,7 +22,11 @@ def projects_for_user(user):
 
     member_q = models.Q(memberships__user=user, memberships__is_active=True)
     if profile and profile.is_platform_staff:
-        return Project.objects.filter(member_q | models.Q(subscription__manager=user)).distinct()
+        # Plus stores the platform admin has assigned them to for product entry /
+        # maintenance (apps.crm.StoreAssignment) — scoped access, not commission.
+        assigned_q = models.Q(work_assignments__assignee=user, work_assignments__is_active=True)
+        return Project.objects.filter(
+            member_q | models.Q(subscription__manager=user) | assigned_q).distinct()
 
     return Project.objects.filter(member_q).distinct()
 

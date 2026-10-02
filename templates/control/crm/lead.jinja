@@ -1,0 +1,37 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% from "control/crm/_crm.jinja" import quicklog %}
+{% block page_title %}{{ lead.name }}{% endblock %}
+
+{% block content %}
+<div class="grid gap-4 lg:grid-cols-3">
+  <div class="space-y-4 lg:col-span-2">
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <div class="mb-2 flex items-center justify-between">
+        <h3 class="text-sm font-semibold text-slate-700">Log work on this lead</h3>
+        {% if lead.phone %}<a href="tel:{{ lead.phone }}" class="text-sm text-slate-600 hover:underline">☎ {{ lead.phone }}</a>{% endif %}
+      </div>
+      {{ quicklog(lead, url('control:crm_lead', kwargs={'pk': lead.pk})) }}
+    </div>
+    <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      <h3 class="mb-2 text-sm font-semibold text-slate-700">History</h3>
+      {% for a in activities %}
+      <div class="flex justify-between border-b border-slate-100 py-1.5 text-sm">
+        <span>{{ a.get_kind_display() }}{% if a.outcome %} · {{ a.get_outcome_display() }}{% endif %}{% if a.note %} — <span class="text-slate-500">{{ a.note }}</span>{% endif %}</span>
+        <span class="text-xs text-slate-400">{{ a.actor.get_full_name() or a.actor.email }} · {{ a.occurred_at.strftime("%d %b %H:%M") }}</span></div>
+      {% else %}<p class="text-sm text-slate-400">Nothing logged yet.</p>{% endfor %}
+    </div>
+  </div>
+  <div class="space-y-4">
+    <form method="post" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+      {{ csrf_input }}{{ render_form(form) }}
+      <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Save</button>
+    </form>
+    {% if lead.is_open %}
+    <form method="post" action="{{ url('control:crm_lead_won', kwargs={'pk': lead.pk}) }}">{{ csrf_input }}
+      <button class="w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700">Won — create store</button></form>
+    {% endif %}
+    {% if lead.assigned_to %}<p class="text-xs text-slate-400">Assigned to {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}</p>{% endif %}
+  </div>
+</div>
+{% endblock %}

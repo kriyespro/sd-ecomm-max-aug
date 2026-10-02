@@ -18,6 +18,13 @@ MOUNT = "/admin/"
 _SECTIONS = [
     ("platform", "Platform", "◆", [
         ("stores", "Stores", "\U0001f3e2"),
+        ("crm_board", "CRM board", "\U0001f4ca"),
+        ("crm_my_day", "My day", "\u2600\ufe0f"),
+        ("crm_leads", "Leads", "\U0001f4de"),
+        ("crm_tasks", "Tasks", "\u2705"),
+        ("crm_collections", "Collections", "\U0001f4b0"),
+        ("crm_training", "DGC training log", "\U0001f393"),
+        ("crm_work", "Store work", "\U0001f6e0"),
         ("my_commissions", "My earnings", "\U0001f4b5"),
         ("affiliate_overview", "Affiliates", "\U0001f517"),
         ("billing", "Billing", "\U0001f4b0"),
@@ -39,6 +46,7 @@ _SECTIONS = [
         ("customers", "Customers", "\U0001f9d1"),
         ("training", "Training", "\U0001f3ac"),
         ("support", "Support & ideas", "\U0001f4ac"),
+        ("crm_owner_help", "Ask for help", "\U0001f6e0"),
     ]),
     ("catalog", "Catalog", "\U0001f4e6", [
         ("product_list", "Products", "\U0001f4e6"),
@@ -101,12 +109,13 @@ _SECTIONS = [
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
                         "partner_applications", "showcase_list", "platform_backups",
-                        "platform_tracking", "learning", "coach", "affiliate_overview", "support_queue"}
+                        "platform_tracking", "learning", "coach", "affiliate_overview", "support_queue",
+                        "crm_board"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "courier_configs", "domains", "team", "onboarding", "tracking",
-                      "whatsapp", "social", "ai_keys", "support"}
+                      "whatsapp", "social", "ai_keys", "support", "crm_owner_help"}
 # Owner only — not even a manager. B2B/wholesale moves money between stores.
 _OWNER_ONLY = {"b2b_settings", "b2b_marketplace", "b2b_orders", "b2b_payables",
                "store_showcase", "owner_backup"}

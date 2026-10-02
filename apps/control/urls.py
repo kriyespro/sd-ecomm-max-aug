@@ -13,6 +13,7 @@ from . import customer_views as custv
 from . import domain_views as domv
 from . import inventory_views as invv
 from . import coach_views as coachv
+from . import crm_views as crmv
 from . import learning_views as learnv
 from . import marketing_views as mktv
 from . import order_views as ordv
@@ -388,6 +389,33 @@ urlpatterns = [
     path("marketing/tracking/<int:pk>/", mktv.TrackingUpdateView.as_view(), name="tracking_edit"),
     path("marketing/tracking/<int:pk>/delete/", mktv.TrackingDeleteView.as_view(), name="tracking_delete"),
     path("platform-tracking/", mktv.PlatformTrackingView.as_view(), name="platform_tracking"),
+
+    # CRM + daily reporting (platform team)
+    path("crm/", crmv.CrmBoardView.as_view(), name="crm_board"),
+    path("crm/my-day/", crmv.MyDayView.as_view(), name="crm_my_day"),
+    path("crm/log/", crmv.LogActivityView.as_view(), name="crm_log"),
+    path("crm/leads/", crmv.LeadListView.as_view(), name="crm_leads"),
+    path("crm/leads/new/", crmv.LeadCreateView.as_view(), name="crm_lead_create"),
+    path("crm/leads/assign/", crmv.LeadAssignView.as_view(), name="crm_lead_assign"),
+    path("crm/leads/import/", crmv.LeadImportView.as_view(), name="crm_lead_import"),
+    path("crm/leads/<int:pk>/", crmv.LeadDetailView.as_view(), name="crm_lead"),
+    path("crm/leads/<int:pk>/won/", crmv.LeadWonView.as_view(), name="crm_lead_won"),
+    path("crm/tasks/", crmv.TaskListView.as_view(), name="crm_tasks"),
+    path("crm/tasks/new/", crmv.TaskCreateView.as_view(), name="crm_task_create"),
+    path("crm/tasks/<int:pk>/done/", crmv.TaskDoneView.as_view(), name="crm_task_done"),
+    path("crm/collections/", crmv.CollectionListView.as_view(), name="crm_collections"),
+    path("crm/collections/new/", crmv.CollectionCreateView.as_view(), name="crm_collection_create"),
+    path("crm/collections/<int:pk>/verify/", crmv.CollectionVerifyView.as_view(), name="crm_collection_verify"),
+    path("crm/training/", crmv.TrainingListView.as_view(), name="crm_training"),
+    path("crm/training/new/", crmv.TrainingCreateView.as_view(), name="crm_training_create"),
+    path("crm/training/<int:pk>/respond/", crmv.TrainingRespondView.as_view(), name="crm_training_respond"),
+    path("crm/work/", crmv.WorkQueueView.as_view(), name="crm_work"),
+    path("crm/work/new/", crmv.WorkRequestCreateView.as_view(), name="crm_work_create"),
+    path("crm/work/<int:pk>/assign/", crmv.WorkAssignView.as_view(), name="crm_work_assign"),
+    path("crm/work/<int:pk>/done/", crmv.WorkDoneView.as_view(), name="crm_work_done"),
+    path("crm/work/assignment/<int:pk>/revoke/", crmv.WorkRevokeView.as_view(), name="crm_work_revoke"),
+    path("crm/targets/", crmv.TargetsView.as_view(), name="crm_targets"),
+    path("help-request/", crmv.OwnerHelpView.as_view(), name="crm_owner_help"),
 
     # Learning / training videos
     path("training/", learnv.TrainingLibraryView.as_view(), name="training"),
