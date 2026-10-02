@@ -1,0 +1,32 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Collections{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <form method="post" action="{{ url('control:crm_collection_create') }}" enctype="multipart/form-data" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">Enter offline cash / UPI collected</h3>
+    {{ csrf_input }}{{ render_form(form) }}
+    <p class="text-xs text-slate-400">Reference (UTR / receipt no.) is required. It counts on the board after a platform admin verifies it. Subscription invoices appear here automatically.</p>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Submit</button>
+  </form>
+  <div class="flex gap-2 text-sm"><a href="?" class="text-slate-500 hover:underline">All</a>{% for v, l in statuses %}<a href="?status={{ v }}" class="text-slate-500 hover:underline">{{ l }}</a>{% endfor %}</div>
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Date</th><th class="px-3 py-2">By</th><th class="px-3 py-2">₹</th><th class="px-3 py-2">Mode</th><th class="px-3 py-2">Ref</th><th class="px-3 py-2">Status</th>{% if is_admin %}<th></th>{% endif %}</tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in collections %}
+        <tr><td class="px-4 py-2">{{ c.collected_on }}</td><td class="px-3 py-2">{{ c.collected_by.get_full_name() or c.collected_by.email }}</td>
+          <td class="px-3 py-2 font-medium">₹{{ c.amount }}</td><td class="px-3 py-2">{{ c.get_mode_display() }}{% if c.project %}<div class="text-xs text-slate-400">{{ c.project.name }}</div>{% endif %}</td>
+          <td class="px-3 py-2 font-mono text-xs">{{ c.reference }}{% if c.proof %} <a href="{{ c.proof.url }}" target="_blank" class="underline">proof</a>{% endif %}</td>
+          <td class="px-3 py-2"><span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if c.status == 'verified' else ('bg-red-100 text-red-700' if c.status == 'rejected' else 'bg-amber-100 text-amber-700') }}">{{ c.get_status_display() }}</span></td>
+          {% if is_admin %}<td class="px-3 py-2 text-right">{% if c.status == 'unverified' %}
+            <form method="post" action="{{ url('control:crm_collection_verify', kwargs={'pk': c.pk}) }}" class="inline">{{ csrf_input }}
+              <button name="action" value="verify" class="text-xs text-emerald-700 hover:underline">Verify</button>
+              <button name="action" value="reject" class="ml-2 text-xs text-red-600 hover:underline">Reject</button></form>{% endif %}</td>{% endif %}</tr>
+        {% else %}<tr><td colspan="7" class="px-4 py-6 text-center text-slate-400">Nothing yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Tasks{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  {% if is_admin %}
+  <form method="post" action="{{ url('control:crm_task_create') }}" class="space-y-3 rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="text-sm font-semibold text-slate-700">Assign a task</h3>
+    {{ csrf_input }}{{ render_form(form) }}
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Assign</button>
+  </form>{% endif %}
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400"><tr><th class="px-4 py-2">Task</th><th class="px-3 py-2">For</th><th class="px-3 py-2">Due</th><th></th></tr></thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in tasks %}
+        <tr><td class="px-4 py-2"><div class="font-medium text-slate-800">{{ t.title }}</div>{% if t.lead %}<a class="text-xs text-slate-400 hover:underline" href="{{ url('control:crm_lead', kwargs={'pk': t.lead_id}) }}">{{ t.lead.name }}</a>{% endif %}</td>
+          <td class="px-3 py-2 text-slate-500">{{ t.assignee.get_full_name() or t.assignee.email }}</td>
+          <td class="px-3 py-2 text-slate-500">{{ t.due_on or "—" }}</td>
+          <td class="px-3 py-2 text-right"><form method="post" action="{{ url('control:crm_task_done', kwargs={'pk': t.pk}) }}">{{ csrf_input }}<button class="text-xs text-emerald-700 hover:underline">Mark done</button></form></td></tr>
+        {% else %}<tr><td colspan="4" class="px-4 py-6 text-center text-slate-400">No open tasks.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if done %}<details class="text-sm text-slate-500"><summary>Recently done</summary>{% for t in done %}<div class="py-0.5">✓ {{ t.title }} — {{ t.assignee.get_full_name() or t.assignee.email }}</div>{% endfor %}</details>{% endif %}
+</div>
+{% endblock %}

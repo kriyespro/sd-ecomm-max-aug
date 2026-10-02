@@ -90,6 +90,7 @@ LOCAL_APPS = [
     "apps.social",
     "apps.certificates",
     "apps.learning",
+    "apps.crm",
     "apps.coach",
     "apps.support",
     "apps.ai",

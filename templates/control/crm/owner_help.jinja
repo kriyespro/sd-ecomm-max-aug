@@ -1,0 +1,26 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Ask for help{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-2xl space-y-4">
+  <form method="post" class="space-y-3 rounded-xl bg-white p-5 ring-1 ring-slate-200">
+    {{ csrf_input }}
+    <h3 class="text-sm font-semibold text-slate-700">Need our team to add products or maintain your store?</h3>
+    <select name="kind" class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">{% for v, l in kinds %}<option value="{{ v }}">{{ l }}</option>{% endfor %}</select>
+    <textarea name="note" rows="3" maxlength="1000" placeholder="What should we do?" class="block w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"></textarea>
+    <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm text-white">Send request</button>
+  </form>
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="mb-2 text-sm font-semibold text-slate-700">Who can work on your store</h3>
+    {% for a in assignments %}
+    <form method="post" class="flex items-center justify-between border-b border-slate-100 py-1.5 text-sm">{{ csrf_input }}
+      <span>{{ a.assignee.get_full_name() or a.assignee.email }} <span class="text-xs text-slate-400">· {{ a.get_scope_display() }}</span></span>
+      <button name="revoke" value="{{ a.pk }}" class="text-xs text-red-600 hover:underline">Remove access</button></form>
+    {% else %}<p class="text-sm text-slate-400">Nobody from the platform team currently has work access.</p>{% endfor %}
+  </div>
+  <div class="rounded-xl bg-white p-4 ring-1 ring-slate-200">
+    <h3 class="mb-2 text-sm font-semibold text-slate-700">Your requests</h3>
+    {% for r in requests %}<div class="py-1 text-sm">{{ r.get_kind_display() }} — {{ r.get_status_display() }} <span class="text-xs text-slate-400">{{ r.created_at.strftime("%d %b") }}</span></div>{% else %}<p class="text-sm text-slate-400">None yet.</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}
