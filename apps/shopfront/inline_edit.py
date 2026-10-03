@@ -94,7 +94,7 @@ def can_edit_storefront(user, project) -> bool:
     return has_store_role(user, project, OWNER_MANAGER)
 
 
-def handoff_url(user, project):
+def handoff_url(user, project, admin_origin=""):
     """Admin -> storefront link for a person whose login lives on another host
     (platform admin / DGC working from the platform domain). Carries a short-lived
     signed token that the store host trades for an *editor-only* session flag —
@@ -102,7 +102,9 @@ def handoff_url(user, project):
     base = project.public_url
     if not base or not can_edit_storefront(user, project):
         return None
-    token = signing.dumps({"u": user.pk, "p": project.pk}, salt=HANDOFF_SALT)
+    # ``o``: the origin the person is logged into Mission Control on — the
+    # storefront's product cards link back to the admin form there.
+    token = signing.dumps({"u": user.pk, "p": project.pk, "o": admin_origin or ""}, salt=HANDOFF_SALT)
     return f"{base}?sd_edit={token}"
 
 
@@ -117,7 +119,8 @@ def accept_handoff(request, project, token) -> bool:
     user = get_user_model().objects.filter(pk=uid, is_active=True).first()
     if user is None or not can_edit_storefront(user, project):
         return False
-    request.session[DELEGATE_KEY] = {"u": uid, "p": pid, "t": time.time()}
+    origin = data.get("o") if isinstance(data.get("o"), str) else ""
+    request.session[DELEGATE_KEY] = {"u": uid, "p": pid, "t": time.time(), "o": origin}
     request.session[SESSION_KEY] = True
     return True
 
@@ -150,6 +153,12 @@ def _pk(obj):
     if isinstance(obj, dict):
         return obj.get("id")
     return getattr(obj, "pk", None)
+
+
+def delegate_admin_origin(request):
+    """Mission Control origin recorded by a hand-off ("" if none / not delegated)."""
+    d = request.session.get(DELEGATE_KEY) or {}
+    return d.get("o") or ""
 
 
 def ed(kind, obj=None, field="", placeholder=None):

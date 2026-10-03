@@ -24,7 +24,7 @@ class EditStoreView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
     role_denied_message = "Only the store owner or a manager can edit the storefront."
 
     def get(self, request):
-        url = handoff_url(request.user, self.active_project)
+        url = handoff_url(request.user, self.active_project, f"{request.scheme}://{request.get_host()}")
         if not url:
             messages.info(request, "Connect a domain first — then you can edit your storefront live.")
             return redirect("control:domains")

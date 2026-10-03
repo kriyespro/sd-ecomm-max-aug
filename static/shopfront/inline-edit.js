@@ -320,7 +320,9 @@
   // ---- product cards: "Edit product" opens the admin form, which returns here ----
   var cardChips = [];
   function editProductUrl(pk) {
-    var back = location.pathname + location.search;
+    // Admin on another origin (platform host): send the full storefront URL back.
+    var crossOrigin = /^https?:/.test(cfg.product) && cfg.product.indexOf(location.origin) !== 0;
+    var back = crossOrigin ? location.href : location.pathname + location.search;
     return cfg.product.replace('/0/', '/' + pk + '/') + '?next=' + encodeURIComponent(back);
   }
   function buildCardChips() {
