@@ -881,3 +881,144 @@ class InlineStatusListTests(CrmBase):
         self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "contacted"})
         lead.refresh_from_db()
         self.assertEqual(lead.status, LeadStatus.CONTACTED)
+
+
+class ArchiveLeadsTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+        self.url = reverse("control:crm_lead_archive")
+
+    def _lead(self, name, who=None, **kw):
+        return Lead.objects.create(name=name, assigned_to=who or self.a, **kw)
+
+    def test_bulk_archive_hides_from_list_board_queue_counts(self):
+        keep = self._lead("Keepme")
+        gone = self._lead("Archiveme", next_follow_up=self.today - dt.timedelta(days=2))
+        self.login(self.a)
+        r = self.client.post(self.url, {"ids": [gone.pk], "action": "archive"})
+        self.assertEqual(r.status_code, 302)
+        gone.refresh_from_db()
+        self.assertTrue(gone.is_archived)
+        self.assertEqual(gone.archived_by, self.a)
+        self.assertIsNotNone(gone.archived_at)
+        lst = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn("Keepme", lst)
+        self.assertNotIn("Archiveme", lst)
+        board = self.client.get(reverse("control:crm_lead_board")).content.decode()
+        self.assertNotIn("Archiveme", board)
+        self.assertEqual(list(svc.call_queue(self.a)), [keep])
+        self.assertEqual({c["status"]: c["count"] for c in svc.board_columns(self.a)["columns"]}["new"], 1)
+        self.assertEqual(svc.board_extras()["overdue_follow_ups"], 0)
+        self.assertNotContains(self.client.get(reverse("control:crm_my_day")), "Archiveme")
+
+    def test_archived_filter_shows_them_and_restore_brings_back(self):
+        lead = self._lead("Archiveme")
+        self.login(self.a)
+        self.client.post(self.url, {"ids": [lead.pk], "action": "archive"})
+        r = self.client.get(reverse("control:crm_leads") + "?archived=1")
+        self.assertContains(r, "Archiveme")
+        self.assertContains(r, "Restore")
+        self.client.post(self.url, {"ids": [lead.pk], "action": "restore"})
+        lead.refresh_from_db()
+        self.assertFalse(lead.is_archived)
+        self.assertIsNone(lead.archived_at)
+        self.assertContains(self.client.get(reverse("control:crm_lead_board")), "Archiveme")
+
+    def test_dgc_cannot_archive_someone_elses_lead(self):
+        mine, theirs = self._lead("Mine"), self._lead("Theirs", who=self.b)
+        self.login(self.a)
+        self.client.post(self.url, {"ids": [mine.pk, theirs.pk], "action": "archive"})
+        mine.refresh_from_db(); theirs.refresh_from_db()
+        self.assertTrue(mine.is_archived)
+        self.assertFalse(theirs.is_archived)
+
+    def test_admin_can_archive_any(self):
+        theirs = self._lead("Theirs", who=self.b)
+        self.login(self.admin)
+        self.client.post(self.url, {"ids": [theirs.pk], "action": "archive"})
+        theirs.refresh_from_db()
+        self.assertTrue(theirs.is_archived)
+
+    def test_limits_and_empty_selection(self):
+        lead = self._lead("L")
+        self.login(self.a)
+        self.client.post(self.url, {"action": "archive"})
+        self.client.post(self.url, {"ids": list(range(1, svc.BULK_ARCHIVE_MAX + 2)), "action": "archive"})
+        lead.refresh_from_db()
+        self.assertFalse(lead.is_archived)
+
+    def test_owner_blocked_and_csrf_enforced(self):
+        from django.test import Client
+        lead = self._lead("L")
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.post(self.url, {"ids": [lead.pk], "action": "archive"}).status_code, 403)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        self.assertEqual(c.post(self.url, {"ids": [lead.pk], "action": "archive"}).status_code, 403)
+
+    def test_htmx_style_call_returns_204(self):
+        lead = self._lead("L")
+        self.login(self.a)
+        r = self.client.post(self.url, {"ids": [lead.pk], "action": "archive"}, HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204)
+
+    def test_open_redirect_guard(self):
+        lead = self._lead("L")
+        self.login(self.a)
+        r = self.client.post(self.url, {"ids": [lead.pk], "action": "archive", "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+
+    def test_list_has_bulk_checkboxes_and_archive_button_for_dgc_and_admin(self):
+        self._lead("L")
+        for who in (self.a, self.admin):
+            self.login(who)
+            html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+            self.assertIn('name="ids"', html)
+            self.assertIn('value="archive"', html)
+            self.assertIn("🗄 Archived", html)
+        self.login(self.a)  # DGC has no assign controls
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertNotIn("give to", html)
+        self.login(self.admin)
+        self.assertIn("give to", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+
+    def test_archived_view_offers_restore_not_archive(self):
+        lead = self._lead("L")
+        svc.archive_leads(Lead.objects.filter(pk=lead.pk), actor=self.a)
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_leads") + "?archived=1").content.decode()
+        self.assertIn('value="restore"', html)
+        self.assertNotIn('value="archive"', html)
+
+    def test_lead_page_shows_archive_then_restore(self):
+        lead = self._lead("L")
+        self.login(self.a)
+        url = reverse("control:crm_lead", kwargs={"pk": lead.pk})
+        self.assertIn('value="archive"', self.client.get(url).content.decode())
+        self.client.post(self.url, {"ids": [lead.pk], "action": "archive"})
+        html = self.client.get(url).content.decode()   # archived lead still reachable by owner
+        self.assertIn("This lead is archived", html)
+        self.assertIn('value="restore"', html)
+
+    def test_board_menu_has_archive_and_script_syntax_hooks(self):
+        self._lead("L")
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_lead_board")).content.decode()
+        self.assertIn("archive(", html)
+        self.assertIn("data-archive-url", html)
+
+    def test_import_dedupe_still_sees_archived_phone(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        lead = self._lead("Old", phone="9000000009")
+        svc.archive_leads(Lead.objects.filter(pk=lead.pk), actor=self.a)
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_import"),
+                         {"file": SimpleUploadedFile("l.csv", b"Dup,9000000009\n", content_type="text/csv")})
+        self.assertEqual(Lead.objects.count(), 1)
+
+    def test_archive_writes_audit(self):
+        from apps.core.models import AuditLog
+        lead = self._lead("L")
+        svc.archive_leads(Lead.objects.filter(pk=lead.pk), actor=self.a)
+        self.assertTrue(AuditLog.objects.filter(actor=self.a, changes__crm_leads_archived=1).exists())

@@ -4,7 +4,7 @@
 {% set _n = page_obj.paginator.count if page_obj else leads|length %}
 {% block page_title %}Leads{% endblock %}
 {% block crm_title %}Leads{% endblock %}
-{% block crm_sub %}· {{ _n }} lead{{ 's' if _n != 1 }}{% if not is_admin %} assigned to you{% endif %}{% endblock %}
+{% block crm_sub %}· {{ _n }} {{ 'archived ' if archived_view }}lead{{ 's' if _n != 1 }}{% if not is_admin %} assigned to you{% endif %}{% endblock %}
 {% block crm_actions %}
 <div class="inline-flex rounded-full bg-white p-0.5 ring-1 ring-pink-100">
   <a href="{{ url('control:crm_leads') }}?view=list" class="rounded-full bg-pink-600 px-3 py-1 text-xs font-medium text-white">☰ List</a>
@@ -41,25 +41,26 @@
   {% if is_admin %}<select name="assignee" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
     {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('assignee') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
   <label class="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="due" value="1" class="h-3 w-3 rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('due') }}> Due</label>
+  <label class="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="archived" value="1" class="h-3 w-3 rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('archived') }}> 🗄 Archived</label>
   <button class="h-7 rounded-md bg-pink-50 px-2.5 text-[11px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Filter</button>
-  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') %}<a href="{{ url('control:crm_leads') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
+  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') or g.get('archived') %}<a href="{{ url('control:crm_leads') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
 </form>
 
 <form method="post" action="{{ url('control:crm_lead_assign') }}" x-data="{ n: 0 }"
       @change="n = $el.querySelectorAll('input[name=ids]:checked').length">
-  {{ csrf_input }}<input type="hidden" name="next" value="{{ request.get_full_path() }}">
+  {{ csrf_input }}
   <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
     <table class="w-full text-left text-[13px]">
       <thead class="bg-pink-50/70 text-[11px] uppercase tracking-wide text-pink-500"><tr>
-        {% if is_admin %}<th class="w-8 px-3 py-2"><input type="checkbox" title="Select all" class="rounded border-pink-300 text-pink-600"
-          @change="$el.closest('table').querySelectorAll('input[name=ids]').forEach(c => c.checked = $el.checked); n = $el.checked ? $el.closest('table').querySelectorAll('input[name=ids]').length : 0"></th>{% endif %}
+        <th class="w-8 px-3 py-2"><input type="checkbox" title="Select all" class="rounded border-pink-300 text-pink-600"
+          @change="$el.closest('table').querySelectorAll('input[name=ids]').forEach(c => c.checked = $el.checked); n = $el.checked ? $el.closest('table').querySelectorAll('input[name=ids]').length : 0"></th>
         <th class="px-3 py-2">Lead</th><th class="px-3 py-2">Status</th>
         {% if is_admin %}<th class="hidden px-3 py-2 sm:table-cell">Owner</th>{% endif %}
         <th class="px-3 py-2">Follow-up</th><th class="px-3 py-2"></th></tr></thead>
       <tbody class="divide-y divide-pink-50">
         {% for l in leads %}
         <tr class="hover:bg-pink-50/40">
-          {% if is_admin %}<td class="px-3 py-1.5"><input type="checkbox" name="ids" value="{{ l.pk }}" class="rounded border-pink-300 text-pink-600"></td>{% endif %}
+          <td class="px-3 py-1.5"><input type="checkbox" name="ids" value="{{ l.pk }}" class="rounded border-pink-300 text-pink-600"></td>
           <td class="px-3 py-1.5">
             <a class="font-medium text-slate-800 hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
             <span class="text-xs text-slate-400">{% if l.business %}· {{ l.business }}{% endif %}{% if l.city %} · {{ l.city }}{% endif %}{% if l.phone %} · {{ l.phone }}{% endif %}</span>
@@ -84,23 +85,29 @@
             <a href="https://wa.me/{{ l.wa_number }}" target="_blank" rel="noopener" title="WhatsApp" class="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs ring-1 ring-emerald-200 hover:bg-emerald-100">💬</a>{% endif %}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6" class="p-3">{{ empty("📭", "No leads here yet.", "Add one with the button above" ~ (" or import a CSV below." if is_admin else ", or ask the super admin to assign some to you.")) }}</td></tr>
+        <tr><td colspan="7" class="p-3">{{ empty("🗄" if archived_view else "📭", "Nothing archived." if archived_view else "No leads here yet.", "Archived leads show up here and can be restored." if archived_view else "Add one with the button above" ~ (" or import a CSV below." if is_admin else ", or ask the super admin to assign some to you.")) }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  {# Floating assign bar — only when something is ticked #}
-  {% if is_admin %}
+  {# Floating bulk bar — only when something is ticked #}
+  <input type="hidden" name="next" value="{{ request.get_full_path() }}">
   <div x-show="n > 0" x-cloak x-transition
        class="sticky bottom-3 z-10 mx-auto mt-3 flex w-fit max-w-full flex-wrap items-center gap-2 rounded-full bg-pink-900 py-1.5 pl-4 pr-1.5 text-[13px] text-white shadow-lg">
     <span><b x-text="n"></b> selected</span>
+    {% if is_admin and not archived_view %}
     <span class="text-pink-300">→ give to</span>
     <select name="assignee" class="rounded-full border-0 bg-white py-1 pl-3 pr-8 text-[13px] text-slate-800 focus:ring-2 focus:ring-pink-300">
       {% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
     <button class="rounded-full bg-pink-500 px-4 py-1 font-semibold text-white hover:bg-pink-400">Assign</button>
+    {% endif %}
+    {% if archived_view %}
+    <button formaction="{{ url('control:crm_lead_archive') }}" name="action" value="restore" class="rounded-full bg-emerald-500 px-4 py-1 font-semibold text-white hover:bg-emerald-400">↩ Restore</button>
+    {% else %}
+    <button formaction="{{ url('control:crm_lead_archive') }}" name="action" value="archive" class="rounded-full bg-white/15 px-4 py-1 font-semibold text-white ring-1 ring-white/30 hover:bg-white/25">🗄 Archive</button>
+    {% endif %}
   </div>
-  {% endif %}
 </form>
 
 <form id="import" method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-pink-200 bg-pink-50/40 px-3 py-2 text-[13px]">

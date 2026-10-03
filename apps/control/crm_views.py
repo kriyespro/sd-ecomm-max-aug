@@ -110,7 +110,7 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
             today_calls=rows[0]["calls"] if key == "today" else Activity.objects.filter(
                 actor=u, kind=ActivityKind.CALL, occurred_at__gte=svc.day_bounds(today)[0]).count(),
             range_key=key, range_label=label, ranges=_RANGES, me=rows[0], targets=rows[0]["targets"],
-            due_leads=Lead.objects.filter(assigned_to=u, next_follow_up__lte=today,
+            due_leads=Lead.objects.filter(assigned_to=u, is_archived=False, next_follow_up__lte=today,
                                           status__in=[s for s in LeadStatus.values
                                                       if s not in ("won", "lost")])[:20],
             open_tasks=Task.objects.filter(assignee=u, status=TaskStatus.OPEN)[:20],
@@ -157,7 +157,7 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         # for the list explicitly.
         g = request.GET
         wants_list = (g.get("view") == "list" or request.COOKIES.get(LEADS_VIEW_COOKIE) == "list"
-                      or any(g.get(k) for k in ("q", "status", "assignee", "due", "page")))
+                      or any(g.get(k) for k in ("q", "status", "assignee", "due", "page", "archived")))
         if not wants_list:
             return redirect("control:crm_lead_board")
         resp = super().get(request, *args, **kwargs)
@@ -167,7 +167,7 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
 
     def get_queryset(self):
         g = self.request.GET
-        qs = _lead_qs(self.request.user)
+        qs = _lead_qs(self.request.user).filter(is_archived=bool(g.get("archived")))
         if g.get("status") in LeadStatus.values:
             qs = qs.filter(status=g["status"])
         if g.get("assignee") == "none":
@@ -189,7 +189,8 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
                    # Inline status edit: everything except "won" (that has its own store flow)
                    editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
                    people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
-                   today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "")
+                   today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "",
+                   archived_view=bool(self.request.GET.get("archived")))
         return ctx
 
 
@@ -297,6 +298,29 @@ class LeadAssignView(PlatformAdminRequiredMixin, View):
         else:
             n = svc.assign_leads(Lead.objects.filter(pk__in=ids), who, actor=request.user)
             messages.success(request, f"{n} lead(s) assigned to {svc.person_label(who)}.")
+        return redirect(_post_next(request, reverse("control:crm_leads")))
+
+
+class LeadArchiveView(PlatformStaffRequiredMixin, View):
+    """Bulk (or single) archive / restore. Scoped like everything else: a DGC
+    only ever touches their own leads, whatever ids they send."""
+
+    def post(self, request):
+        from django.http import HttpResponse
+
+        ids = [int(i) for i in request.POST.getlist("ids") if i.isdigit()]
+        restore = request.POST.get("action") == "restore"
+        if not ids:
+            messages.error(request, "Tick at least one lead first.")
+        elif len(ids) > svc.BULK_ARCHIVE_MAX:
+            messages.error(request, f"Pick at most {svc.BULK_ARCHIVE_MAX} leads at a time.")
+        else:
+            n = svc.archive_leads(_lead_qs(request.user).filter(pk__in=ids),
+                                  actor=request.user, restore=restore)
+            if request.headers.get("HX-Request"):
+                return HttpResponse(status=204)
+            verb, hint = ("Restored", "") if restore else ("Archived", " — find them under “Archived” to restore.")
+            messages.success(request, f"{verb} {n} lead(s){hint}")
         return redirect(_post_next(request, reverse("control:crm_leads")))
 
 

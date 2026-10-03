@@ -48,6 +48,12 @@ class Lead(TimeStampedModel):
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                    related_name="+")
     next_follow_up = models.DateField(null=True, blank=True, db_index=True)
+    # Archive = hide from every working view (list, board, queue, counts) but
+    # keep the row and its history. Restorable; nothing here deletes a lead.
+    is_archived = models.BooleanField(default=False, db_index=True)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
     # When the lead entered its current stage — drives "3d in stage" on the board.
     stage_changed_at = models.DateTimeField(null=True, blank=True)
     converted_project = models.ForeignKey("projects.Project", null=True, blank=True,

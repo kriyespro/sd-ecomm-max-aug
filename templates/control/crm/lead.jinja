@@ -4,9 +4,16 @@
 {% block page_title %}{{ lead.name }}{% endblock %}
 {% block crm_title %}{{ lead.name }}{% endblock %}
 {% block crm_sub %}{{ lead.business or "—" }}{% if lead.city %} · {{ lead.city }}{% endif %}{% if lead.assigned_to %} · owner {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}{% endif %}{% endblock %}
-{% block crm_actions %}<a href="{{ url('control:crm_leads') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← All leads</a>{% endblock %}
+{% block crm_actions %}
+<form method="post" action="{{ url('control:crm_lead_archive') }}" class="inline">{{ csrf_input }}
+  <input type="hidden" name="ids" value="{{ lead.pk }}"><input type="hidden" name="next" value="{{ url('control:crm_leads') }}{{ '?archived=1' if lead.is_archived else '' }}">
+  {% if lead.is_archived %}<button name="action" value="restore" class="rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">↩ Restore</button>
+  {% else %}<button name="action" value="archive" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🗄 Archive</button>{% endif %}
+</form>
+<a href="{{ url('control:crm_leads') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← All leads</a>{% endblock %}
 
 {% block crm_body %}
+{% if lead.is_archived %}<div class="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">🗄 This lead is archived — hidden from your list, board and queue. Use Restore to bring it back.</div>{% endif %}
 {# Pipeline stepper: tap a stage to move the lead #}
 {% set _stages = [("new","New"),("contacted","Contacted"),("interested","Interested"),("demo_booked","Demo booked"),("demo_done","Demo done"),("negotiating","Negotiating")] %}
 <form method="post" action="{{ url('control:crm_lead_status', kwargs={'pk': lead.pk}) }}" class="flex gap-1 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm ring-1 ring-pink-100">
