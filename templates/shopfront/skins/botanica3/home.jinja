@@ -53,17 +53,17 @@
   <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[4/1] overflow-hidden rounded-3xl bg-ink">
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}" alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
+      <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}"{{ ed('banner', b, 'image') }} alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
            class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
     </picture>
     {% if not b.hide_overlay %}<div class="absolute inset-0 bg-ink/30"></div>{% endif %}
     {% if (not b.text_hidden and (b.heading or b.subheading)) or (not b.hide_cta and b.cta_label) %}
     <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 p-6 sm:p-8 lg:p-14">
       {% if not b.text_hidden %}
-      {% if b.subheading %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-paper/80">{{ b.subheading }}</p>{% endif %}
-      {% if b.heading %}<h2 class="max-w-xl font-display text-2xl text-paper sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
+      {% if b.subheading %}<p{{ ed('banner', b, 'subheading') }} class="text-[11px] font-semibold uppercase tracking-luxe text-paper/80">{{ b.subheading }}</p>{% endif %}
+      {% if b.heading %}<h2{{ ed('banner', b, 'heading') }} class="max-w-xl font-display text-2xl text-paper sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
       {% endif %}
-      {% if not b.hide_cta and b.cta_label %}<span class="mt-2 bg-paper px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors group-hover:bg-accent group-hover:text-paper">{{ b.cta_label }}</span>{% endif %}
+      {% if not b.hide_cta and b.cta_label %}<span{{ ed('banner', b, 'cta_label') }} class="mt-2 bg-paper px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors group-hover:bg-accent group-hover:text-paper">{{ b.cta_label }}</span>{% endif %}
     </div>
     {% endif %}
   </a>
@@ -104,7 +104,7 @@
     {% else %}
     <picture>
       {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
-      <img src="{{ b.image | media_src(1600, 520, 'Hero banner') }}" alt="{{ '' if b.text_hidden else b.heading }}"
+      <img src="{{ b.image | media_src(1600, 520, 'Hero banner') }}"{{ ed('banner', b, 'image') }} alt="{{ '' if b.text_hidden else b.heading }}"
            {{ 'fetchpriority=high' if loop.first else 'loading=lazy' }} decoding="async"
            class="block w-full h-auto">
     </picture>
@@ -116,18 +116,18 @@
       {% if not b.text_hidden %}
       {% if b.subheading %}
       <p class="hidden items-center gap-2 text-[10px] font-semibold uppercase tracking-luxe text-gold sm:flex">
-        <span class="h-px w-6 shrink-0 bg-gold"></span><span class="min-w-0">{{ b.subheading }}</span>
+        <span class="h-px w-6 shrink-0 bg-gold"></span><span{{ ed('banner', b, 'subheading') }} class="min-w-0">{{ b.subheading }}</span>
       </p>
       {% endif %}
       {% if b.heading %}
-      <h1 class="mt-1 max-w-xl font-display text-lg leading-tight text-paper sm:text-2xl lg:text-4xl">{{ b.heading }}</h1>
+      <h1{{ ed('banner', b, 'heading') }} class="mt-1 max-w-xl font-display text-lg leading-tight text-paper sm:text-2xl lg:text-4xl">{{ b.heading }}</h1>
       {% endif %}
       {% endif %}
       {% if not b.hide_cta and b.cta_label %}
       <div class="mt-2 sm:mt-4">
-        <a href="{{ b.cta_url or url('shopfront:shop') }}"
+        <a href="{{ b.cta_url or url('shopfront:shop') }}"{{ ed_link('banner', b, 'cta_url') }}
            class="inline-block bg-paper px-4 py-1.5 text-[10px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:bg-accent hover:text-paper sm:px-6 sm:py-2.5">
-          {{ b.cta_label }}
+          <span{{ ed('banner', b, 'cta_label') }}>{{ b.cta_label }}</span>
         </a>
       </div>
       {% endif %}
@@ -172,10 +172,10 @@
   <div class="mx-auto grid max-w-7xl grid-cols-2 divide-line sm:grid-cols-4 sm:divide-x">
     {% for item in trust_strip %}
     <div class="flex items-center gap-3 border-t border-line px-5 py-5 sm:border-t-0">
-      <span class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">{{ item.icon or '✦' }}</span>
+      <span{{ ed('benefit', item, 'icon') }} class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">{{- item.icon or '✦' -}}</span>
       <div>
-        <p class="text-[12px] font-semibold leading-tight text-ink">{{ item.title }}</p>
-        <p class="mt-0.5 text-[10px] uppercase tracking-luxe text-mute">{{ item.description }}</p>
+        <p{{ ed('benefit', item, 'title') }} class="text-[12px] font-semibold leading-tight text-ink">{{- item.title -}}</p>
+        <p{{ ed('benefit', item, 'description') }} class="mt-0.5 text-[10px] uppercase tracking-luxe text-mute">{{- item.description -}}</p>
       </div>
     </div>
     {% endfor %}
@@ -245,9 +245,9 @@
     <div class="mt-12 grid gap-10 sm:grid-cols-3">
       {% for item in _benefits %}
       <div class="text-center">
-        <span class="mx-auto grid h-11 w-11 place-items-center rounded-full border border-paper/40 text-lg">{{ item.icon or '✦' }}</span>
-        <p class="mt-4 font-display text-lg">{{ item.title }}</p>
-        {% if item.description %}<p class="mt-2 text-sm leading-relaxed text-paper/75">{{ item.description }}</p>{% endif %}
+        <span{{ ed('benefit', item, 'icon') }} class="mx-auto grid h-11 w-11 place-items-center rounded-full border border-paper/40 text-lg">{{- item.icon or '✦' -}}</span>
+        <p{{ ed('benefit', item, 'title') }} class="mt-4 font-display text-lg">{{- item.title -}}</p>
+        {% if item.description %}<p{{ ed('benefit', item, 'description') }} class="mt-2 text-sm leading-relaxed text-paper/75">{{- item.description -}}</p>{% endif %}
       </div>
       {% endfor %}
     </div>
@@ -328,7 +328,7 @@
   'featured': _section_featured, 'benefits': _section_benefits, 'new_arrivals': _section_new_arrivals,
   'testimonials': _section_testimonials, 'newsletter': _section_newsletter, 'instagram': _section_instagram,
 } %}
-{% for _key in section_order %}{% if _key in _sections %}{{ _sections[_key]() }}{% endif %}{% endfor %}
+{% for _key in section_order %}{% if _key in _sections %}{% if is_editing() %}<div{{ ed_section(_key) }}>{{ _sections[_key]() }}</div>{% else %}{{ _sections[_key]() }}{% endif %}{% endif %}{% endfor %}
 
 {# ============ PROMO BANNER — 2nd and later, just above the footer ============ #}
 {% for b in promo_banners[1:] %}{{ promo_card(b) }}{% endfor %}
@@ -337,8 +337,8 @@
 
 {# ============ POPUP BANNER — placement "popup"; once per visitor ============ #}
 {% if popup_banner %}
-<div x-data="{ open: false }"
-     x-init="setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200)"
+<div x-data="{ open: false }"{% if is_editing() %} data-ed-popup{% endif %}
+     x-init="{% if not is_editing() %}setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200){% endif %}"
      x-show="open" x-cloak
      class="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4"
      @keydown.escape.window="open = false">
@@ -347,14 +347,14 @@
             @click="open = false; try { localStorage.setItem('sd_popup_{{ popup_banner.id }}', '1') } catch (e) {}"
             class="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-paper/80 text-lg text-ink hover:bg-paper">&times;</button>
     <a href="{{ popup_banner.cta_url or url('shopfront:shop') }}">
-      {% if popup_banner.image %}<img src="{{ popup_banner.image.url }}" alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
+      {% if popup_banner.image or is_editing() %}<img src="{{ popup_banner.image | media_src(800, 500, 'Popup banner') }}"{{ ed('banner', popup_banner, 'image') }} alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
       {% if not popup_banner.text_hidden and (popup_banner.heading or popup_banner.subheading) or (not popup_banner.hide_cta and popup_banner.cta_label) %}
       <div class="p-6 text-center">
         {% if not popup_banner.text_hidden %}
-        {% if popup_banner.heading %}<h3 class="font-display text-2xl text-ink">{{ popup_banner.heading }}</h3>{% endif %}
-        {% if popup_banner.subheading %}<p class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
+        {% if popup_banner.heading %}<h3{{ ed('banner', popup_banner, 'heading') }} class="font-display text-2xl text-ink">{{ popup_banner.heading }}</h3>{% endif %}
+        {% if popup_banner.subheading %}<p{{ ed('banner', popup_banner, 'subheading') }} class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
         {% endif %}
-        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span class="mt-4 inline-block bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper">{{ popup_banner.cta_label }}</span>{% endif %}
+        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span{{ ed('banner', popup_banner, 'cta_label') }} class="mt-4 inline-block bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper">{{ popup_banner.cta_label }}</span>{% endif %}
       </div>
       {% endif %}
     </a>

@@ -136,7 +136,7 @@
 {% endmacro %}
 
 {% set _sections = {'categories': _section_categories, 'new_arrivals': _section_new_arrivals} %}
-{% for _key in section_order %}{% if _key in _sections %}{{ _sections[_key]() }}{% endif %}{% endfor %}
+{% for _key in section_order %}{% if _key in _sections %}{% if is_editing() %}<div{{ ed_section(_key) }}>{{ _sections[_key]() }}</div>{% else %}{{ _sections[_key]() }}{% endif %}{% endif %}{% endfor %}
 
 {# ── BEST SELLERS ── #}
 <section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
@@ -188,8 +188,8 @@
 {% include "shopfront/partials/_ugc_shorts.jinja" %}
 
 {% if popup_banner %}
-<div x-data="{ open: false }"
-     x-init="setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200)"
+<div x-data="{ open: false }"{% if is_editing() %} data-ed-popup{% endif %}
+     x-init="{% if not is_editing() %}setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200){% endif %}"
      x-show="open" x-cloak
      class="fixed inset-0 z-[60] flex items-center justify-center bg-[#080604]/70 p-4"
      @keydown.escape.window="open = false">
@@ -198,14 +198,14 @@
             @click="open = false; try { localStorage.setItem('sd_popup_{{ popup_banner.id }}', '1') } catch (e) {}"
             class="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center bg-paper/80 text-lg text-ink hover:bg-paper">&times;</button>
     <a href="{{ popup_banner.cta_url or url('shopfront:shop') }}">
-      {% if popup_banner.image %}<img src="{{ popup_banner.image.url }}" alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
+      {% if popup_banner.image or is_editing() %}<img src="{{ popup_banner.image | media_src(800, 500, 'Popup banner') }}"{{ ed('banner', popup_banner, 'image') }} alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
       {% if not popup_banner.text_hidden and (popup_banner.heading or popup_banner.subheading) or (not popup_banner.hide_cta and popup_banner.cta_label) %}
       <div class="p-6 text-center">
         {% if not popup_banner.text_hidden %}
-        {% if popup_banner.heading %}<h3 class="font-display text-2xl text-ink">{{ popup_banner.heading }}</h3>{% endif %}
-        {% if popup_banner.subheading %}<p class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
+        {% if popup_banner.heading %}<h3{{ ed('banner', popup_banner, 'heading') }} class="font-display text-2xl text-ink">{{ popup_banner.heading }}</h3>{% endif %}
+        {% if popup_banner.subheading %}<p{{ ed('banner', popup_banner, 'subheading') }} class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
         {% endif %}
-        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span class="mt-4 inline-block bg-accent px-6 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604]">{{ popup_banner.cta_label }}</span>{% endif %}
+        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span{{ ed('banner', popup_banner, 'cta_label') }} class="mt-4 inline-block bg-accent px-6 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#080604]">{{ popup_banner.cta_label }}</span>{% endif %}
       </div>
       {% endif %}
     </a>

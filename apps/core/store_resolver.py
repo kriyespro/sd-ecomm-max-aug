@@ -122,7 +122,7 @@ def _serialize_menu_items(menu):
         by_parent.setdefault(it.parent_id, []).append(it)
 
     def node(it):
-        d = {"label": it.label, "link_type": it.link_type,
+        d = {"id": it.id, "label": it.label, "link_type": it.link_type,
              "url": it.url or "", "slug": "", "new_tab": it.open_in_new_tab,
              "children": [node(c) for c in by_parent.get(it.id, [])]}
         if it.link_type == "page" and it.page_id:

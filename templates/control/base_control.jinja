@@ -180,6 +180,13 @@
             See your store
             <svg class="h-3 w-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17 17 7M9 7h8v8"/></svg>
           </a>
+          {% if control_storefront_url and control_can_manage_store %}
+          <a href="{{ url('control:edit_store') }}" target="_blank" rel="noopener"
+             title="Click any text or image on your live store to edit it"
+             class="shrink-0 inline-flex items-center gap-1 rounded-md bg-indigo-600 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-indigo-700">
+            ✎ Edit store
+          </a>
+          {% endif %}
           {% endif %}
           {% if control_demo_banner %}
           <form method="post" action="{{ url('control:demo_remove') }}"

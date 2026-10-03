@@ -3,7 +3,7 @@
 {% set imgs = p.images.all() | list %}
 {% set img = imgs[0] if imgs else none %}
 {% set img2 = imgs[1] if imgs|length > 1 else none %}
-<article class="group relative flex h-full flex-col">
+<article{{ ed_product(p) }} class="group relative flex h-full flex-col">
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="relative block overflow-hidden rounded-sm bg-accent-soft">
     <div class="relative aspect-[4/5] overflow-hidden">
       <img src="{{ (img.image if img else none) | media_src(1000, 1250, 'Product photo') }}"
@@ -31,8 +31,8 @@
   </button>
 
   <div class="mt-3 flex-1">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block text-[15px] font-medium leading-snug hover:text-accent">{{ p.title }}</a>
-    <p class="mt-1 text-sm">
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block text-[15px] font-medium leading-snug hover:text-accent">{{ p.title }}</a>
+    <p{{ ed_money(p) }} class="mt-1 text-sm">
       {% if p.on_sale %}
       <span class="font-semibold text-accent">{{ p.current_price | money }}</span>
       <span class="ml-1.5 text-mute line-through">{{ p.price | money }}</span>

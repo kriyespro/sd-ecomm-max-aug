@@ -11,6 +11,7 @@ from . import cms_views as cmsv
 from . import coupon_views as coup
 from . import customer_views as custv
 from . import domain_views as domv
+from . import inline_edit_views as inlv
 from . import inventory_views as invv
 from . import coach_views as coachv
 from . import crm_views as crmv
@@ -37,6 +38,7 @@ app_name = "control"
 
 urlpatterns = [
     path("", views.DashboardView.as_view(), name="dashboard"),
+    path("edit-store/", inlv.EditStoreView.as_view(), name="edit_store"),
     path("ui-mode/toggle/", views.UiModeToggleView.as_view(), name="ui_mode_toggle"),
     path("guides/toggle/", views.GuideToggleView.as_view(), name="guide_toggle"),
     path("stats/", views.StatsCardsView.as_view(), name="stats_cards"),

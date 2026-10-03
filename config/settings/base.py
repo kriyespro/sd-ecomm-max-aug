@@ -120,6 +120,7 @@ MIDDLEWARE = [
     "apps.core.middleware.ProjectResolverMiddleware",
     "apps.core.middleware.StorefrontHostMiddleware",
     "apps.shopfront.middleware.StorefrontSkinMiddleware",
+    "apps.shopfront.middleware.InlineEditMiddleware",
     "apps.shopfront.middleware.NoStoreStorefrontMiddleware",
     "apps.shopfront.middleware.SeoInjectionMiddleware",
     "apps.shopfront.middleware.TrackingInjectionMiddleware",

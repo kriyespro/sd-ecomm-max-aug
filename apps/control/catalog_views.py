@@ -26,7 +26,7 @@ from apps.catalog.models import Brand, Product, ProductImage, ProductKind, Produ
 from apps.categories.models import Category
 from apps.core.events import Events, emit
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import record_audit, safe_next
 
 from .forms import (
     BrandForm,
@@ -503,8 +503,19 @@ class ProductUpdateView(_ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
     form_class = ProductForm
     template_name = "control/catalog/product_form.jinja"
 
+    def _next_url(self):
+        """Same-host path to return to after saving (the storefront inline
+        editor's "Edit product" button passes the page the card was on)."""
+        raw = self.request.POST.get("next") or self.request.GET.get("next") or ""
+        return safe_next(self.request, raw, "") if raw.startswith("/") else ""
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["next_url"] = self._next_url()
+        return ctx
+
     def get_success_url(self):
-        return reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
+        return self._next_url() or reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
 
     def form_valid(self, form):
         response = super().form_valid(form)

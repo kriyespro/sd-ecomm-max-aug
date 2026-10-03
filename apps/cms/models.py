@@ -777,3 +777,30 @@ class StoreProfile(TenantScopedModel):
             )
             if url
         ]
+
+
+class InlineEditLog(TenantScopedModel):
+    """One change made through the storefront inline editor.
+
+    Holds the value before and after so the editor can undo/redo it (and so
+    there is a trail of who edited what). Image fields store the storage *name*
+    — an undo points the field back at the earlier file, which is never deleted.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="inline_edits",
+    )
+    kind = models.CharField(max_length=20)
+    object_id = models.PositiveBigIntegerField(default=0)
+    field = models.CharField(max_length=40)
+    old_value = models.TextField(blank=True)
+    new_value = models.TextField(blank=True)
+    undone_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-id"]
+        indexes = [models.Index(fields=["project", "-id"], name="inlineedit_project_idx")]
+
+    def __str__(self):
+        return f"{self.kind}:{self.object_id}.{self.field}"

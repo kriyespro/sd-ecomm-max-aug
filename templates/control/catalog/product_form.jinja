@@ -5,6 +5,12 @@
 {% block content %}
 <div class="mx-auto max-w-3xl space-y-4">
   <div class="flex flex-wrap items-center gap-2">
+    {% if next_url %}
+    <a href="{{ next_url }}"
+       class="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+      ← Back to your store
+    </a>
+    {% endif %}
     <a href="{{ url('control:product_create') }}"
        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
       + Add another product
@@ -24,6 +30,7 @@
 
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {{ csrf_input }}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     <div class="grid gap-4 rounded-xl bg-white p-6 ring-1 ring-slate-200 md:grid-cols-2">
       {{ render_form(form, exclude=['hsn_sac', 'tax_class']) }}
     </div>

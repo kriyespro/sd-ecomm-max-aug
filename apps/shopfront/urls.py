@@ -3,7 +3,7 @@ from django.urls import path
 
 from apps.seo.views import IndexNowKeyView
 
-from . import views
+from . import inline_edit, views
 
 app_name = "shopfront"
 
@@ -44,6 +44,12 @@ urlpatterns = [
     path("verify/<str:code>/", views.VerifyView.as_view(), name="verify_code"),
 
     path("beacon/", views.BeaconView.as_view(), name="beacon"),
+
+    # Owner-only storefront inline editor (see apps.shopfront.inline_edit).
+    path("_edit/save/", inline_edit.save_view, name="edit_save"),
+    path("_edit/image/", inline_edit.image_view, name="edit_image"),
+    path("_edit/undo/", inline_edit.undo_view, name="edit_undo"),
+    path("_edit/redo/", inline_edit.redo_view, name="edit_redo"),
 ]
 
 if settings.SEO_INDEXNOW_KEY:

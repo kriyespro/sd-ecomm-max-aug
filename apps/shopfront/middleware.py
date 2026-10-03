@@ -359,3 +359,108 @@ def _resolve_skin(project):
 
         return slug, Skin.objects.filter(pk=skin_id).first()
     return slug, None
+
+
+_EDIT_SKIP = ("/cart", "/checkout", "/_edit")
+
+_EDIT_CSS = (
+    "<style id=\"sd-ed-css\">"
+    "body.sd-ed [data-ed]{cursor:text;transition:outline-color .12s}"
+    "body.sd-ed [data-ed]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
+    "body.sd-ed [data-ed][data-ed-t=image]{cursor:pointer}"
+    "body.sd-ed [data-ed]:empty::before{content:attr(data-ed-ph);opacity:.55;font-style:italic}"
+    "body.sd-ed [data-ed][contenteditable=true]{outline:2px solid #6366f1!important;outline-offset:3px;"
+    "text-transform:none;min-width:2ch}"
+    "</style>"
+)
+
+
+class InlineEditMiddleware:
+    """Owner-facing storefront inline editor (see ``apps.shopfront.inline_edit``).
+
+    For an owner / manager / the store's DGC / a platform admin only: reads the
+    ``?edit=1|0`` toggle into the session, binds edit mode around the view (so
+    the ``ed()`` template global stamps ``data-ed`` markers), and splices the
+    editor script into the HTML. Anyone else — every shopper, every anonymous
+    CDN-cached request — takes the first early return and is never touched.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.http import HttpResponseRedirect
+
+        from .inline_edit import SESSION_KEY, accept_handoff, can_edit_storefront, editor_for
+        from .runtime import use_edit_mode, use_product_form
+
+        token = request.GET.get("sd_edit") if request.method == "GET" else None
+        if (
+            not _is_storefront_request(request)
+            # No session cookie and no hand-off = an anonymous, CDN-cacheable
+            # visitor: leave without touching the session.
+            or (not token and settings.SESSION_COOKIE_NAME not in request.COOKIES)
+        ):
+            return self.get_response(request)
+        project = getattr(request, "project", None) or None
+        probe = _rel_path(request.path).rstrip("/") or "/"
+        if project is None or probe.startswith(_EDIT_SKIP):
+            return self.get_response(request)
+
+        if token and accept_handoff(request, project, token):
+            return HttpResponseRedirect(request.path)  # drop the token from the URL
+        if editor_for(request, project) is None:
+            return self.get_response(request)
+
+        if request.method == "GET" and request.GET.get("edit") in ("0", "1"):
+            request.session[SESSION_KEY] = request.GET["edit"] == "1"
+        editing = bool(request.session.get(SESSION_KEY))
+
+        # A real login on this host can open the admin product form; a
+        # hand-off (DGC / platform admin) session can't, so it keeps the
+        # inline title/price editing.
+        user = getattr(request, "user", None)
+        product_form = bool(
+            editing and user is not None and user.is_authenticated and can_edit_storefront(user, project)
+        )
+        with use_edit_mode(editing), use_product_form(product_form):
+            response = self.get_response(request)
+
+        if (
+            request.method != "GET"
+            or getattr(response, "streaming", False)
+            or response.status_code != 200
+            or request.headers.get("HX-Request") == "true"
+            or "text/html" not in response.get("Content-Type", "")
+        ):
+            return response
+        try:
+            content = response.content.decode(response.charset or "utf-8")
+        except (UnicodeDecodeError, AttributeError):
+            return response
+        if "</body>" not in content:
+            return response
+
+        from django.middleware.csrf import get_token
+        from django.urls import reverse
+        from django.utils.html import format_html
+
+        base = request.path
+        script = format_html(
+            '<script src="/static/shopfront/inline-edit.js" defer data-active="{}" '
+            'data-csrf="{}" data-save="{}" data-image="{}" data-undo="{}" data-redo="{}" '
+            'data-on="{}?edit=1" data-off="{}?edit=0" data-admin="/admin/" data-product="{}"></script>',
+            "1" if editing else "0", get_token(request),
+            reverse("shopfront:edit_save"), reverse("shopfront:edit_image"),
+            reverse("shopfront:edit_undo"), reverse("shopfront:edit_redo"),
+            base, base,
+            reverse("control:product_edit", kwargs={"pk": 0}) if product_form else "",
+        )
+        if editing and "</head>" in content:
+            content = content.replace("</head>", _EDIT_CSS + "</head>", 1)
+        content = content.replace("</body>", script + "\n</body>", 1)
+        response.content = content.encode(response.charset or "utf-8")
+        if response.has_header("Content-Length"):
+            response["Content-Length"] = str(len(response.content))
+        response["Cache-Control"] = "private, no-store"
+        return response

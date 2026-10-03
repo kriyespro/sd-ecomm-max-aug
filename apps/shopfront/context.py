@@ -29,6 +29,7 @@ def _menu_href(node):
 
 def _nav_node(node):
     return {
+        "id": node.get("id"),
         "label": node["label"],
         "url": _menu_href(node),
         "new_tab": node.get("new_tab", False),

@@ -4,7 +4,7 @@
 {% set img = _imgs[0] if _imgs else none %}
 {% set img2 = _imgs[1] if _imgs | length > 1 else none %}
 {% set pct = (((p.price - p.current_price) / p.price) * 100) | round | int if (p.on_sale and p.price) else 0 %}
-<article class="group relative flex flex-col rounded-2xl border border-line bg-panel p-3 b2-card b2-soft">
+<article{{ ed_product(p) }} class="group relative flex flex-col rounded-2xl border border-line bg-panel p-3 b2-card b2-soft">
   <div class="relative">
     <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden rounded-xl bg-line/40">
       <div class="relative aspect-[4/5] overflow-hidden">
@@ -45,13 +45,13 @@
   </div>
 
   <div class="flex flex-1 flex-col px-1 pt-3">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="font-display text-[15px] leading-tight text-ink hover:text-accent sm:text-base">{{ p.title }}</a>
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="font-display text-[15px] leading-tight text-ink hover:text-accent sm:text-base">{{ p.title }}</a>
 
     {% if p.rating_count %}
     <p class="mt-1 text-[11px] text-gold">{{ '★' * (p.rating_avg | round | int) }}<span class="text-mute"> ({{ p.rating_count }})</span></p>
     {% endif %}
 
-    <div class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+    <div{{ ed_money(p) }} class="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
       <span class="font-display text-lg text-ink">{{ p.current_price | money }}</span>
       {% if p.on_sale %}
       <span class="text-[13px] text-mute line-through">{{ p.price | money }}</span>
