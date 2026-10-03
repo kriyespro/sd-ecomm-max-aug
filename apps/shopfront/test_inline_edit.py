@@ -488,3 +488,29 @@ class InlineEditV2Tests(TestCase):
             self.assertNotIn("Back to your store", body, bad)
             for evil in ('name="next" value="https://evil', 'name="next" value="//evil', 'name="next" value="javascript'):
                 self.assertNotIn(evil, body, bad)
+
+    # --- regressions reported from the live site ---------------------------------
+    def test_script_url_is_content_versioned(self):
+        self.client.force_login(self.owner)
+        body = self.client.get("/", HTTP_HOST=HOST).content.decode()
+        import re
+
+        m = re.search(r'<script src="([^"]*inline-edit[^"]*)"', body)
+        self.assertIsNotNone(m, body[-600:])
+        self.assertIn("?v=", m.group(1))   # a year-long static cache can't pin an old copy
+
+    def test_category_nav_is_editable_when_store_has_no_menu(self):
+        from apps.categories.models import Category
+        from apps.cms.models import Menu
+
+        Menu.objects.filter(project=self.project).delete()
+        cat = Category.objects.create(project=self.project, name="Necklaces", is_active=True)
+        self.client.force_login(self.owner)
+        body = self.client.get("/?edit=1", HTTP_HOST=HOST).content.decode()
+        self.assertIn(f'data-ed="category:{cat.pk}:name"', body)
+        self.assertEqual(self.save("category", cat.pk, "name", "Chains").status_code, 200)
+        cat.refresh_from_db()
+        self.assertEqual((cat.name, cat.slug), ("Chains", "necklaces"))   # links keep working
+        theirs = Category.objects.create(project=self.other, name="X")
+        self.assertEqual(self.save("category", theirs.pk, "name", "Hacked").status_code, 400)
+        self.assertEqual(self.save("category", cat.pk, "slug", "x").status_code, 400)
