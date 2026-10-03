@@ -1231,3 +1231,70 @@ class TrainingFlowTests(CrmBase):
         t = TrainingLog.objects.create(trainee=self.b, trainer=self.a, initiated_by=self.b)
         self.assertTrue(svc.can_confirm_training(t, self.a))
         self.assertFalse(svc.can_confirm_training(t, self.b))
+
+
+class LeadLogStepsTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.lead = Lead.objects.create(name="Zed", phone="9213529044", assigned_to=self.a)
+        self.login(self.a)
+        self.page = self.client.get(reverse("control:crm_lead", kwargs={"pk": self.lead.pk})).content.decode()
+        self.form = self.page.split("What happened?")[0].rsplit("<form", 1)[1] + "What happened?" + \
+            self.page.split("What happened?")[1].split("</form>")[0]
+
+    def test_three_labelled_steps_and_one_save(self):
+        for needle in ("What happened?", "Remind me to follow up", "Save", "Phone call", "Something else"):
+            self.assertIn(needle, self.form)
+        # nothing on this page saves on a single outcome tap any more
+        self.assertNotIn('type="submit" name="outcome"', self.page)
+        self.assertEqual(self.form.count("<button"), 1)           # exactly one submit button
+
+    def test_every_choice_has_a_hint_and_a_label(self):
+        import re
+        choices = re.findall(r'<input type="radio" value="([a-z_]+\|[a-z_]+)"', self.form)
+        self.assertEqual(len(choices), 7)
+        for c in choices:
+            self.assertGreaterEqual(self.form.count(f"'{c}'"), 2, c)  # hints + labels maps
+
+    def test_follow_up_options_default_to_automatic(self):
+        self.assertIn('name="follow_in" value="" x-model="follow" class="peer sr-only" checked', self.form)
+        for lab in ("Automatic", "Tomorrow", "In 3 days", "Next week"):
+            self.assertIn(lab, self.form)
+
+    def test_form_posts_what_server_expects(self):
+        url = reverse("control:crm_log")
+        base = {"lead": self.lead.pk, "next": reverse("control:crm_lead", kwargs={"pk": self.lead.pk})}
+        r = self.client.post(url, {**base, "kind": "call", "outcome": "no_answer", "follow_in": "", "note": "voicemail"})
+        self.assertEqual(r.status_code, 302)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=1))  # "Automatic"
+        act = Activity.objects.get(lead=self.lead)
+        self.assertEqual((act.kind, act.outcome, act.note), ("call", "no_answer", "voicemail"))
+        self.client.post(url, {**base, "kind": "call", "outcome": "connected", "follow_in": "7"})
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=7))
+        self.client.post(url, {**base, "kind": "demo", "outcome": "done", "follow_in": ""})
+        self.assertTrue(Activity.objects.filter(lead=self.lead, kind="demo").exists())
+        self.client.post(url, {**base, "kind": "whatsapp", "outcome": "done", "follow_in": ""})
+        self.assertTrue(Activity.objects.filter(lead=self.lead, kind="whatsapp").exists())
+
+    def test_not_interested_closes_lead(self):
+        self.client.post(reverse("control:crm_log"), {"lead": self.lead.pk, "kind": "call", "outcome": "not_interested"})
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, LeadStatus.LOST)
+
+    def test_saving_without_a_choice_is_a_friendly_error_not_a_404(self):
+        r = self.client.post(reverse("control:crm_log"), {"lead": self.lead.pk, "kind": "", "outcome": "",
+                                                          "next": reverse("control:crm_lead", kwargs={"pk": self.lead.pk})})
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(Activity.objects.exists())
+        self.assertEqual(self.client.post(reverse("control:crm_log"), {"kind": "bogus"}).status_code, 404)
+
+    def test_my_day_keeps_one_tap_buttons(self):
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn('type="submit" name="outcome"', html)
+
+    def test_page_still_carries_csrf_and_call_buttons(self):
+        self.assertIn('name="csrfmiddlewaretoken"', self.form)
+        self.assertIn("tel:9213529044", self.page)
+        self.assertIn("wa.me/919213529044", self.page)

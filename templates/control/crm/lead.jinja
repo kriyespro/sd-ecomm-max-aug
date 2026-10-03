@@ -1,6 +1,6 @@
 {% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
-{% from "control/crm/_crm.jinja" import outcome_buttons, contact_buttons, empty %}
+{% from "control/crm/_crm.jinja" import log_form, contact_buttons, empty %}
 {% block page_title %}{{ lead.name }}{% endblock %}
 {% block crm_title %}{{ lead.name }}{% endblock %}
 {% block crm_sub %}{{ lead.business or "—" }}{% if lead.city %} · {{ lead.city }}{% endif %}{% if lead.assigned_to %} · owner {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}{% endif %}{% endblock %}
@@ -30,7 +30,7 @@
   <div class="space-y-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-pink-100">
     <h3 class="text-sm font-semibold text-pink-900">Log this contact</h3>
     {{ contact_buttons(lead, true) }}
-    {{ outcome_buttons(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input, true) }}
+    {{ log_form(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input) }}
     {% if lead.is_open %}
     <form method="post" action="{{ url('control:crm_lead_won', kwargs={'pk': lead.pk}) }}" class="border-t border-pink-50 pt-3">{{ csrf_input }}
       <button class="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">🎉 Deal won — create the store</button></form>

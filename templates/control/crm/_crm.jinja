@@ -66,3 +66,72 @@
   {% else %}<span class="text-sm text-slate-400">No phone number on this lead</span>{% endif %}
 </div>
 {% endmacro %}
+
+
+{# Lead-page logger: pick what happened -> optional follow-up/note -> one Save.
+   (My day keeps outcome_buttons: there one tap = one logged call, for speed.) #}
+{% macro log_form(lead, next, csrf) %}
+<form method="post" action="{{ url('control:crm_log') }}" class="space-y-3"
+      x-data="{ choice: '', follow: '',
+        get kind() { return this.choice.split('|')[0] }, get outcome() { return this.choice.split('|')[1] || '' },
+        hints: {
+          'call|connected': 'You spoke to them. No follow-up unless you pick one below.',
+          'call|no_answer': 'Auto follow-up: tomorrow (unless you pick another).',
+          'call|not_reachable': 'Auto follow-up: in 2 days (unless you pick another).',
+          'call|call_back': 'Auto follow-up: tomorrow (unless you pick another).',
+          'call|not_interested': 'This will mark the lead Lost and take it off your queue.',
+          'demo|done': 'Demo counted. Lead moves to Demo done.',
+          'whatsapp|done': 'WhatsApp counted. No follow-up unless you pick one below.' },
+        labels: { 'call|connected': 'Spoke to them', 'call|no_answer': 'No answer', 'call|not_reachable': 'Unreachable',
+          'call|call_back': 'Call back later', 'call|not_interested': 'Not interested', 'demo|done': 'Demo given', 'whatsapp|done': 'WhatsApp sent' } }">
+  {{ csrf }}
+  <input type="hidden" name="lead" value="{{ lead.pk }}">
+  <input type="hidden" name="next" value="{{ next }}">
+  <input type="hidden" name="kind" :value="kind">
+  <input type="hidden" name="outcome" :value="outcome">
+
+  <div>
+    <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-pink-700"><span class="mr-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-white">1</span> What happened?</p>
+    <p class="mb-1 text-[11px] text-slate-400">Phone call</p>
+    <div class="flex flex-wrap gap-1.5">
+      {% for v, label, tone in [
+          ("call|connected", "✅ Spoke to them", "emerald"), ("call|no_answer", "📵 No answer", "slate"),
+          ("call|not_reachable", "🚫 Unreachable", "slate"), ("call|call_back", "🔁 Call back later", "amber"),
+          ("call|not_interested", "👎 Not interested", "rose")] %}
+      <label class="cursor-pointer"><input type="radio" value="{{ v }}" x-model="choice" class="peer sr-only">
+        <span class="block rounded-lg px-2.5 py-1.5 text-xs font-medium ring-1 transition
+          {{ {'emerald': 'text-emerald-800 ring-emerald-200 hover:bg-emerald-50 peer-checked:bg-emerald-600 peer-checked:text-white peer-checked:ring-emerald-600',
+              'slate': 'text-slate-700 ring-slate-300 hover:bg-slate-50 peer-checked:bg-slate-700 peer-checked:text-white peer-checked:ring-slate-700',
+              'amber': 'text-amber-900 ring-amber-200 hover:bg-amber-50 peer-checked:bg-amber-500 peer-checked:text-white peer-checked:ring-amber-500',
+              'rose': 'text-rose-700 ring-rose-200 hover:bg-rose-50 peer-checked:bg-rose-600 peer-checked:text-white peer-checked:ring-rose-600'}[tone] }}">{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    <p class="mb-1 mt-2 text-[11px] text-slate-400">Something else</p>
+    <div class="flex flex-wrap gap-1.5">
+      {% for v, label in [("demo|done", "🖥 Demo given"), ("whatsapp|done", "💬 WhatsApp sent")] %}
+      <label class="cursor-pointer"><input type="radio" value="{{ v }}" x-model="choice" class="peer sr-only">
+        <span class="block rounded-lg px-2.5 py-1.5 text-xs font-medium text-pink-800 ring-1 ring-pink-200 transition hover:bg-pink-50 peer-checked:bg-pink-600 peer-checked:text-white peer-checked:ring-pink-600">{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    <p class="mt-2 min-h-[1rem] text-[11px] text-slate-500" x-text="hints[choice] || 'Pick one to continue.'"></p>
+  </div>
+
+  <div x-show="choice" x-cloak x-transition>
+    <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-pink-700"><span class="mr-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-white">2</span> Remind me to follow up <span class="font-normal normal-case text-slate-400">(optional)</span></p>
+    <div class="flex flex-wrap gap-1.5 text-xs">
+      {% for v, l in [("", "Automatic"), ("1", "Tomorrow"), ("3", "In 3 days"), ("7", "Next week")] %}
+      <label class="cursor-pointer"><input type="radio" name="follow_in" value="{{ v }}" x-model="follow" class="peer sr-only" {{ 'checked' if v == '' }}>
+        <span class="inline-block rounded-full px-3 py-1 text-pink-800 ring-1 ring-pink-200 peer-checked:bg-pink-600 peer-checked:text-white peer-checked:ring-pink-600">{{ l }}</span></label>
+      {% endfor %}
+    </div>
+    <input name="note" maxlength="300" placeholder="Add a note (optional)" class="mt-2 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+  </div>
+
+  <div>
+    <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-pink-700"><span class="mr-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-white">3</span> Save</p>
+    <button :disabled="!choice" :class="choice ? 'bg-pink-600 hover:bg-pink-700 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'"
+            class="w-full rounded-lg px-3 py-2 text-[13px] font-semibold transition">
+      <span x-text="choice ? 'Save — ' + labels[choice] : 'Save'"></span></button>
+  </div>
+</form>
+{% endmacro %}
