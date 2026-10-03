@@ -79,5 +79,6 @@
   </form>
 </div>
 {% endif %}
-{% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="block rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">{{ pending_confirm }} DGC(s) say you trained them — tap to confirm.</a>{% endif %}
+{% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="block rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">{{ pending_confirm }} training{{ '' if pending_confirm == 1 else 's' }} waiting for your confirmation — tap to review.</a>{% endif %}
+{% if waiting_to_train %}<a href="{{ url('control:crm_training') }}" class="block rounded-2xl bg-violet-50 p-4 text-sm text-violet-800 ring-1 ring-violet-200">🧑‍🏫 {{ waiting_to_train }} {{ 'person is' if waiting_to_train == 1 else 'people are' }} waiting for you to train them.</a>{% endif %}
 {% endblock %}

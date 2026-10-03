@@ -1022,3 +1022,212 @@ class ArchiveLeadsTests(CrmBase):
         lead = self._lead("L")
         svc.archive_leads(Lead.objects.filter(pk=lead.pk), actor=self.a)
         self.assertTrue(AuditLog.objects.filter(actor=self.a, changes__crm_leads_archived=1).exists())
+
+
+class TrainingFlowTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.c = _dgc("chetan")
+        self.url = reverse("control:crm_training_create")
+
+    def _post(self, who, **data):
+        self.login(who)
+        return self.client.post(self.url, data)
+
+    def _resp(self, log, who, action="confirm"):
+        self.login(who)
+        return self.client.post(reverse("control:crm_training_respond", kwargs={"pk": log.pk}), {"action": action})
+
+    # ---- "I trained someone"
+    def test_trainer_adds_student_account_student_confirms(self):
+        self._post(self.a, mode="trained_student", student=self.b.pk, topic="Setup")
+        t = TrainingLog.objects.get()
+        self.assertEqual((t.trainer, t.trainee, t.initiated_by, t.status), (self.a, self.b, self.a, "pending"))
+        # the trainer who created it cannot confirm their own claim
+        self.assertEqual(self._resp(t, self.a).status_code, 403)
+        # a third DGC cannot either
+        self.assertEqual(self._resp(t, self.c).status_code, 403)
+        self.assertEqual(self._resp(t, self.b).status_code, 302)
+        t.refresh_from_db()
+        self.assertEqual(t.status, TrainingStatus.CONFIRMED)
+
+    def test_name_only_student_needs_admin_to_confirm(self):
+        self._post(self.a, mode="trained_student", student="__new", student_name="Ravi Kumar", student_phone="9000000000")
+        t = TrainingLog.objects.get()
+        self.assertIsNone(t.trainee)
+        self.assertEqual((t.student_name, t.student_phone, t.status), ("Ravi Kumar", "9000000000", "pending"))
+        self.assertEqual(t.student_label, "Ravi Kumar")
+        self.assertEqual(self._resp(t, self.a).status_code, 403)   # can't self-verify
+        self.assertEqual(self._resp(t, self.b).status_code, 403)
+        self.assertEqual(self._resp(t, self.admin).status_code, 302)
+        t.refresh_from_db()
+        self.assertEqual(t.status, TrainingStatus.CONFIRMED)
+
+    def test_student_validation(self):
+        self._post(self.a, mode="trained_student", student=self.a.pk)            # self
+        self._post(self.a, mode="trained_student", student="__new", student_name="  ")  # no name
+        self._post(self.a, mode="trained_student")                               # nothing
+        self.assertFalse(TrainingLog.objects.exists())
+
+    # ---- "I was trained by"  (original flow, unchanged)
+    def test_trained_by_flow_trainer_confirms(self):
+        self._post(self.b, mode="trained_by", trainer=self.a.pk)
+        t = TrainingLog.objects.get()
+        self.assertEqual((t.trainee, t.trainer, t.initiated_by), (self.b, self.a, self.b))
+        self.assertEqual(self._resp(t, self.b).status_code, 403)
+        self.assertEqual(self._resp(t, self.a).status_code, 302)
+
+    def test_cannot_name_self_as_trainer(self):
+        self._post(self.b, mode="trained_by", trainer=self.b.pk)
+        self.assertFalse(TrainingLog.objects.exists())
+
+    # ---- request -> assign -> trained -> confirm
+    def test_full_request_assign_train_confirm_cycle(self):
+        self._post(self.b, mode="request", topic="Demo script")        # for myself
+        t = TrainingLog.objects.get()
+        self.assertEqual((t.trainee, t.trainer, t.status), (self.b, None, TrainingStatus.REQUESTED))
+        # counts nowhere yet
+        self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 0)
+        # only the super admin assigns; a DGC cannot, not even self-claim
+        self.login(self.a)
+        aurl = reverse("control:crm_training_assign", kwargs={"pk": t.pk})
+        self.assertEqual(self.client.post(aurl, {"trainer": self.a.pk}).status_code, 403)
+        self.login(self.b)
+        self.assertEqual(self.client.post(aurl, {"trainer": self.b.pk}).status_code, 403)
+        t.refresh_from_db()
+        self.assertIsNone(t.trainer)
+        self.login(self.admin)
+        self.client.post(aurl, {"trainer": self.a.pk})
+        t.refresh_from_db()
+        self.assertEqual((t.status, t.trainer, t.assigned_by), (TrainingStatus.ASSIGNED, self.a, self.admin))
+        # only the assigned trainer marks it trained
+        murl = reverse("control:crm_training_trained", kwargs={"pk": t.pk})
+        self.login(self.c)
+        self.assertEqual(self.client.post(murl).status_code, 403)
+        self.login(self.a)
+        self.assertEqual(self.client.post(murl).status_code, 302)
+        t.refresh_from_db()
+        self.assertEqual((t.status, t.initiated_by), (TrainingStatus.PENDING, self.a))
+        # the student confirms; the trainer cannot confirm their own claim
+        self.assertEqual(self._resp(t, self.a).status_code, 403)
+        self.assertEqual(self._resp(t, self.b).status_code, 302)
+        rows, totals = svc.person_numbers(timezone.localdate())
+        by = {r["user"].pk: r for r in rows}
+        self.assertEqual((totals["trained"], by[self.b.pk]["trained"], by[self.a.pk]["trained_others"]), (1, 1, 1))
+
+    def test_admin_can_assign_and_reassign_but_not_self_train(self):
+        t = TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
+        self.login(self.admin)
+        aurl = reverse("control:crm_training_assign", kwargs={"pk": t.pk})
+        self.client.post(aurl, {"trainer": self.b.pk})            # trainee as own trainer -> refused
+        t.refresh_from_db()
+        self.assertIsNone(t.trainer)
+        self.client.post(aurl, {"trainer": self.a.pk})
+        self.client.post(aurl, {"trainer": self.c.pk})            # reassign
+        t.refresh_from_db()
+        self.assertEqual((t.trainer, t.status), (self.c, TrainingStatus.ASSIGNED))
+
+    def test_admin_marking_trained_confirms_directly(self):
+        t = TrainingLog.objects.create(trainee=self.b, trainer=self.a, status=TrainingStatus.ASSIGNED, initiated_by=self.b)
+        self.login(self.admin)
+        self.client.post(reverse("control:crm_training_trained", kwargs={"pk": t.pk}))
+        t.refresh_from_db()
+        self.assertEqual(t.status, TrainingStatus.CONFIRMED)
+        self.assertIsNotNone(t.confirmed_at)
+
+    def test_request_for_someone_new_and_admin_on_behalf(self):
+        self._post(self.a, mode="request", for_user="__new", student_name="New Recruit", student_phone="9111111111")
+        t = TrainingLog.objects.get()
+        self.assertEqual((t.trainee, t.student_name, t.initiated_by), (None, "New Recruit", self.a))
+        self._post(self.a, mode="request", for_user="__new")                      # nameless -> refused
+        self.assertEqual(TrainingLog.objects.count(), 1)
+        self._post(self.a, mode="request", for_user=self.b.pk)                    # DGC can't file for others
+        self.assertEqual(TrainingLog.objects.count(), 1)
+        self._post(self.admin, mode="request", for_user=self.b.pk)               # admin can
+        self.assertEqual(TrainingLog.objects.count(), 2)
+        self.assertEqual(TrainingLog.objects.latest("pk").trainee, self.b)
+
+    def test_cancel_request_by_requester_or_admin_only(self):
+        t = TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
+        curl = reverse("control:crm_training_cancel", kwargs={"pk": t.pk})
+        self.login(self.c)
+        self.assertEqual(self.client.post(curl).status_code, 403)
+        self.login(self.b)
+        self.assertEqual(self.client.post(curl).status_code, 302)
+        t.refresh_from_db()
+        self.assertEqual(t.status, TrainingStatus.REJECTED)
+
+    def test_cannot_assign_or_mark_a_finished_training(self):
+        t = TrainingLog.objects.create(trainee=self.b, trainer=self.a, status=TrainingStatus.CONFIRMED, initiated_by=self.b)
+        self.login(self.admin)
+        self.client.post(reverse("control:crm_training_assign", kwargs={"pk": t.pk}), {"trainer": self.c.pk})
+        t.refresh_from_db()
+        self.assertEqual(t.trainer, self.a)
+        self.login(self.a)
+        self.assertEqual(self.client.post(reverse("control:crm_training_trained", kwargs={"pk": t.pk})).status_code, 403)
+
+    # ---- visibility + counting
+    def test_dgc_sees_only_own_trainings(self):
+        TrainingLog.objects.create(trainee=self.b, trainer=self.a, topic="Mine-ish", initiated_by=self.b)
+        TrainingLog.objects.create(trainee=self.c, trainer=self.c, student_name="", topic="Unrelated", initiated_by=self.c)
+        self.login(self.b)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        self.assertIn("Mine-ish", html)
+        self.assertNotIn("Unrelated", html)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        self.assertIn("Mine-ish", html)
+        self.assertIn("Unrelated", html)
+
+    def test_page_shows_assign_only_to_admin_and_mark_to_trainer(self):
+        TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
+        assigned = TrainingLog.objects.create(trainee=self.c, trainer=self.a, status=TrainingStatus.ASSIGNED, initiated_by=self.c)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        self.assertIn("/assign/", html)
+        self.login(self.b)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        self.assertNotIn("/assign/", html)
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        self.assertIn("Mark trained", html)
+        self.assertIn("waiting for you to train", html)
+        self.login(self.c)
+        self.assertNotIn("Mark trained", self.client.get(reverse("control:crm_training")).content.decode())
+
+    def test_board_counts_name_only_student_and_shows_request_chip(self):
+        TrainingLog.objects.create(trainer=self.a, student_name="Walk In", status=TrainingStatus.CONFIRMED, initiated_by=self.a)
+        TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
+        self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 1)
+        self.assertEqual(svc.board_extras()["training_requests"], 1)
+        self.login(self.admin)
+        self.assertContains(self.client.get(reverse("control:crm_board")), "Assign a trainer to 1 request")
+
+    def test_my_day_shows_confirm_and_waiting_cards(self):
+        TrainingLog.objects.create(trainee=self.b, trainer=self.a, status=TrainingStatus.PENDING, initiated_by=self.a)
+        TrainingLog.objects.create(trainee=self.c, trainer=self.b, status=TrainingStatus.ASSIGNED, initiated_by=self.c)
+        self.login(self.b)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("waiting for your confirmation", html)
+        self.assertIn("waiting for you to train", html)
+
+    def test_owner_blocked_and_csrf(self):
+        from django.test import Client
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.post(self.url, {"mode": "request"}).status_code, 403)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        self.assertEqual(c.post(self.url, {"mode": "request"}).status_code, 403)
+
+    def test_form_has_three_modes_and_token(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_training")).content.decode()
+        for needle in ("I trained someone", "I was trained by", "Wants training", 'name="mode"',
+                       "__new", 'name="csrfmiddlewaretoken"'):
+            self.assertIn(needle, html)
+
+    def test_migration_backfill_marks_old_rows_trainee_initiated(self):
+        # rows created through the old flow keep working: trainer confirms, trainee cannot
+        t = TrainingLog.objects.create(trainee=self.b, trainer=self.a, initiated_by=self.b)
+        self.assertTrue(svc.can_confirm_training(t, self.a))
+        self.assertFalse(svc.can_confirm_training(t, self.b))

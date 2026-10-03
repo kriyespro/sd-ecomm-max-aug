@@ -177,12 +177,120 @@ def verify_collection(collection, *, actor, ok=True):
 
 # ── training ───────────────────────────────────────────────────────────────
 
+class TrainingError(Exception):
+    """A training action the caller isn't allowed to / can't do (user-facing text)."""
+
+
+def can_confirm_training(log, user):
+    """Platform admins can confirm anything pending; otherwise only the *other*
+    side of the log (never whoever created it, never a name-only student)."""
+    if log.status != TrainingStatus.PENDING:
+        return False
+    if getattr(getattr(user, "profile", None), "is_platform_admin", False) or user.is_superuser:
+        return True
+    return user.pk in (log.trainee_id, log.trainer_id) and user.pk != log.initiated_by_id
+
+
 def respond_training(log, *, actor, ok):
-    """Trainer (or a platform admin) confirms / rejects a claimed training."""
+    """Confirm / reject a pending training (see ``can_confirm_training``)."""
+    if not can_confirm_training(log, actor):
+        raise TrainingError("Only the other person in this training (or a platform admin) can confirm it.")
     log.status = TrainingStatus.CONFIRMED if ok else TrainingStatus.REJECTED
     log.confirmed_at = timezone.now()
     log.save(update_fields=["status", "confirmed_at", "updated_at"])
     return log
+
+
+def _clean_student(name, phone):
+    return (name or "").strip()[:120], (phone or "").strip()[:20]
+
+
+def log_trained_by(*, trainee, trainer, topic="", trained_on=None):
+    """"I was trained by X" — the trainer confirms."""
+    if trainer is None or trainer.pk == trainee.pk:
+        raise TrainingError("Pick the DGC who trained you.")
+    return TrainingLog.objects.create(
+        trainee=trainee, trainer=trainer, topic=topic[:160], initiated_by=trainee,
+        trained_on=trained_on or timezone.localdate(), status=TrainingStatus.PENDING)
+
+
+def add_trained_student(*, trainer, student=None, name="", phone="", topic="", trained_on=None):
+    """"I trained this person" — an existing account confirms it; a name-only
+    student (no login yet) can only be confirmed by a platform admin."""
+    name, phone = _clean_student(name, phone)
+    if student is not None and student.pk == trainer.pk:
+        raise TrainingError("You can't be your own student.")
+    if student is None and not name:
+        raise TrainingError("Choose a student or type their name.")
+    return TrainingLog.objects.create(
+        trainer=trainer, trainee=student, student_name="" if student else name,
+        student_phone="" if student else phone, topic=topic[:160], initiated_by=trainer,
+        trained_on=trained_on or timezone.localdate(), status=TrainingStatus.PENDING)
+
+
+def request_training(*, requester, for_user=None, name="", phone="", topic=""):
+    """"Wants training" — no trainer yet; a platform admin assigns one.
+    ``for_user`` None + no name = the requester asks for themselves."""
+    name, phone = _clean_student(name, phone)
+    if for_user is None and not name:
+        for_user = requester
+    return TrainingLog.objects.create(
+        trainee=for_user, student_name="" if for_user else name,
+        student_phone="" if for_user else phone, topic=topic[:160],
+        initiated_by=requester, status=TrainingStatus.REQUESTED)
+
+
+def assign_trainer(log, trainer, *, actor):
+    """Platform admin picks the trainer for a request."""
+    if log.status not in (TrainingStatus.REQUESTED, TrainingStatus.ASSIGNED):
+        raise TrainingError("This training is already done.")
+    if trainer is None:
+        raise TrainingError("Choose a trainer.")
+    if log.trainee_id and trainer.pk == log.trainee_id:
+        raise TrainingError("A person can't train themselves.")
+    log.trainer, log.assigned_by, log.assigned_at = trainer, actor, timezone.now()
+    log.status = TrainingStatus.ASSIGNED
+    log.save(update_fields=["trainer", "assigned_by", "assigned_at", "status", "updated_at"])
+    record_audit(actor=actor, action=AuditLog.Action.UPDATE, target=log,
+                 changes={"crm_training_trainer": trainer.pk})
+    return log
+
+
+def mark_trained(log, *, actor):
+    """The assigned trainer says it's done -> the student confirms. A platform
+    admin marking it done closes it straight to confirmed."""
+    if log.status != TrainingStatus.ASSIGNED:
+        raise TrainingError("Nothing to mark — this isn't an assigned training.")
+    is_admin = actor.is_superuser or getattr(getattr(actor, "profile", None), "is_platform_admin", False)
+    if not (is_admin or log.trainer_id == actor.pk):
+        raise TrainingError("Only the assigned trainer can mark this trained.")
+    log.trained_on = timezone.localdate()
+    log.initiated_by = actor
+    if is_admin:
+        log.status, log.confirmed_at = TrainingStatus.CONFIRMED, timezone.now()
+        log.save(update_fields=["trained_on", "initiated_by", "status", "confirmed_at", "updated_at"])
+    else:
+        log.status = TrainingStatus.PENDING
+        log.save(update_fields=["trained_on", "initiated_by", "status", "updated_at"])
+    return log
+
+
+def cancel_training_request(log, *, actor):
+    """Requester or platform admin withdraws a request that isn't done yet."""
+    is_admin = actor.is_superuser or getattr(getattr(actor, "profile", None), "is_platform_admin", False)
+    if log.status not in (TrainingStatus.REQUESTED, TrainingStatus.ASSIGNED):
+        raise TrainingError("Only open requests can be cancelled.")
+    if not (is_admin or log.initiated_by_id == actor.pk):
+        raise TrainingError("Only the requester or a platform admin can cancel this.")
+    log.status = TrainingStatus.REJECTED
+    log.save(update_fields=["status", "updated_at"])
+    return log
+
+
+def trainings_to_confirm(user):
+    """Pending trainings where ``user`` is the one who has to confirm."""
+    return TrainingLog.objects.filter(status=TrainingStatus.PENDING).filter(
+        Q(trainee=user) | Q(trainer=user)).exclude(initiated_by=user)
 
 
 # ── store work: request → admin assigns ────────────────────────────────────
@@ -324,6 +432,8 @@ def person_numbers(start, end=None, *, users=None):
     totals = {k: sum(r[k] for r in rows) for k in (
         "calls", "connected", "demos", "whatsapp", "products", "store_work",
         "trained", "collection", "collection_pending")}
+    if users is None:  # board-wide: also count students who have no login yet
+        totals["trained"] = tr.count()
     totals["connect_pct"] = round(100 * totals["connected"] / totals["calls"]) if totals["calls"] else 0
     return rows, totals
 
@@ -337,6 +447,7 @@ def board_extras():
                                                   if s not in (LeadStatus.WON, LeadStatus.LOST)]).count(),
         "unverified": Collection.objects.filter(status=CollectionStatus.UNVERIFIED).count(),
         "pending_training": TrainingLog.objects.filter(status=TrainingStatus.PENDING).count(),
+        "training_requests": TrainingLog.objects.filter(status=TrainingStatus.REQUESTED).count(),
         "open_requests": StoreWorkRequest.objects.filter(status=WorkRequestStatus.OPEN).count(),
     }
 
