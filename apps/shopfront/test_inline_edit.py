@@ -431,6 +431,7 @@ class InlineEditV2Tests(TestCase):
             body = resp.content.decode()
             self.assertIn(f'data-ed-product="{self.product.pk}"', body, f"{slug} card edit button")
             self.assertIn('data-product="/admin/products/0/"', body, slug)
+            self.assertIn("[data-ed-product]:hover", body, f"{slug} card hover outline")
             self.assertNotIn(f'data-ed="product:{self.product.pk}:title"', body, f"{slug} inline title")
             self.assertNotIn("data-ed-money", body, f"{slug} inline price")
             self.assertIn(f'data-ed="menuitem:{self.item.pk}:label"', body, f"{slug} menu")
