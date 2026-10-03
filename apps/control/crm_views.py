@@ -311,7 +311,7 @@ class LeadWonView(PlatformStaffRequiredMixin, View):
         return redirect("control:store_create")
 
 
-class LeadImportSampleView(PlatformAdminRequiredMixin, View):
+class LeadImportSampleView(PlatformStaffRequiredMixin, View):
     """A ready-to-edit CSV in exactly the shape LeadImportView reads. UTF-8 with
     a BOM so Excel opens it with the right encoding."""
 
@@ -332,8 +332,11 @@ class LeadImportSampleView(PlatformAdminRequiredMixin, View):
         return resp
 
 
-class LeadImportView(PlatformAdminRequiredMixin, View):
-    """CSV: name,phone,business,city,source (header row optional)."""
+class LeadImportView(PlatformStaffRequiredMixin, View):
+    """CSV: name,phone,business,city,source (header row optional).
+
+    Admins may assign the batch to anyone; a DGC's import always lands on
+    their own list (the assignee field is ignored for them)."""
 
     def post(self, request):
         f = request.FILES.get("file")
@@ -345,7 +348,10 @@ class LeadImportView(PlatformAdminRequiredMixin, View):
         except UnicodeDecodeError:
             messages.error(request, "CSV must be UTF-8.")
             return redirect("control:crm_leads")
-        who = User.objects.filter(pk=request.POST.get("assignee") or 0).first()
+        if _admin(request.user):
+            who = User.objects.filter(pk=request.POST.get("assignee") or 0).first()
+        else:
+            who = request.user
         made = skipped = 0
         for i, row in enumerate(csv.reader(io.StringIO(text))):
             row = [c.strip() for c in row] + [""] * 5
@@ -362,7 +368,8 @@ class LeadImportView(PlatformAdminRequiredMixin, View):
                                 assigned_to=who, assigned_by=request.user if who else None,
                                 created_by=request.user)
             made += 1
-        messages.success(request, f"Imported {made} lead(s); skipped {skipped}.")
+        messages.success(request, f"Imported {made} lead(s); skipped {skipped} "
+                                  "(blank name or phone already in the CRM).")
         return redirect("control:crm_leads")
 
 

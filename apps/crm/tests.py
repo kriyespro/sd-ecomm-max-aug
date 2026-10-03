@@ -769,14 +769,61 @@ class SampleCsvTests(CrmBase):
         self.client.post(reverse("control:crm_lead_import"), {"file": up})
         self.assertEqual(Lead.objects.count(), 3)
 
-    def test_sample_is_admin_only_and_linked(self):
+    def test_sample_and_import_box_visible_to_dgc_and_admin(self):
         url = reverse("control:crm_lead_import_sample")
-        self.login(self.a)
+        for who in (self.a, self.admin):
+            self.login(who)
+            self.assertEqual(self.client.get(url).status_code, 200)
+            html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+            self.assertIn(url, html)
+            self.assertIn("Download sample CSV", html)
+            self.assertIn('id="import"', html)
+            board = self.client.get(reverse("control:crm_lead_board")).content.decode()
+            self.assertIn("#import", board)
+        # a store owner (not platform staff) still has no access
+        self.login(self.owner, store=True)
         self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_assignee_picker_admin_only_in_import_box(self):
+        self.login(self.a)
+        box = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode().split('id="import"')[1]
+        self.assertNotIn('name="assignee"', box.split("</form>")[0])
+        self.assertIn("added to your own list", box)
         self.login(self.admin)
-        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
-        self.assertIn(url, html)
-        self.assertIn("Download sample CSV", html)
+        box = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode().split('id="import"')[1]
+        self.assertIn('name="assignee"', box.split("</form>")[0])
+
+    def test_dgc_import_lands_on_own_list_even_if_assignee_forged(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_bytes = b"name,phone,business,city,source\nAsha,9000000001,Asha Store,Pune,Fair\nBhanu,9000000002,,,\n"
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_import"), {
+            "file": SimpleUploadedFile("l.csv", csv_bytes, content_type="text/csv"),
+            "assignee": self.b.pk})  # forged: try to push leads onto another DGC
+        self.assertEqual(r.status_code, 302)
+        leads = Lead.objects.all()
+        self.assertEqual(leads.count(), 2)
+        self.assertTrue(all(l.assigned_to == self.a and l.created_by == self.a for l in leads))
+        # and they show up on that DGC's board, not the other's
+        self.assertContains(self.client.get(reverse("control:crm_lead_board")), "Asha")
+        self.login(self.b)
+        self.assertNotContains(self.client.get(reverse("control:crm_lead_board")), "Asha")
+
+    def test_owner_cannot_import(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.login(self.owner, store=True)
+        r = self.client.post(reverse("control:crm_lead_import"), {
+            "file": SimpleUploadedFile("l.csv", b"x,1\n", content_type="text/csv")})
+        self.assertEqual(r.status_code, 403)
+        self.assertFalse(Lead.objects.exists())
+
+    def test_admin_import_can_still_pick_assignee(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.login(self.admin)
+        self.client.post(reverse("control:crm_lead_import"), {
+            "file": SimpleUploadedFile("l.csv", b"Zed,9111111111\n", content_type="text/csv"),
+            "assignee": self.b.pk})
+        self.assertEqual(Lead.objects.get(name="Zed").assigned_to, self.b)
 
 
 class CompactToolbarTests(CrmBase):
