@@ -1,0 +1,186 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% from "control/crm/_crm.jinja" import empty %}
+{% block page_title %}Leads board{% endblock %}
+{% block crm_title %}Leads{% endblock %}
+{% block crm_sub %}· {{ total }} in pipeline{% if not is_admin %} · yours{% endif %}{% endblock %}
+{% block crm_actions %}
+<div class="inline-flex rounded-full bg-white p-0.5 ring-1 ring-pink-100">
+  <a href="{{ url('control:crm_leads') }}?view=list" class="rounded-full px-3 py-1 text-xs font-medium text-pink-800 hover:bg-pink-50">☰ List</a>
+  <a href="{{ url('control:crm_lead_board') }}" class="rounded-full bg-pink-600 px-3 py-1 text-xs font-medium text-white">▦ Board</a>
+</div>
+{% endblock %}
+
+{% block crm_body %}
+<form class="flex flex-wrap items-center gap-1.5 text-[13px]">
+  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+  {% if is_admin %}<select name="owner" onchange="this.form.submit()" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7">
+    <option value="">Everyone</option><option value="none" {{ 'selected' if g.get('owner') == 'none' }}>Unassigned</option>
+    {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('owner') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
+  <button class="rounded-lg bg-pink-50 px-3 py-1.5 font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Search</button>
+  {% if g.get('q') or g.get('owner') %}<a href="{{ url('control:crm_lead_board') }}" class="text-xs text-slate-500 underline">Clear</a>{% endif %}
+  <span class="ml-auto hidden text-[11px] text-slate-400 sm:inline">Drag a card to a new stage · ⋯ on a card for the menu</span>
+</form>
+
+<div x-data="leadBoard()" data-move-url="{{ url('control:crm_lead_move', kwargs={'pk': 0}) }}"
+     data-won-url="{{ url('control:crm_lead_won', kwargs={'pk': 0}) }}" data-log-url="{{ url('control:crm_log') }}"
+     class="relative">
+  {{ csrf_input }}
+  <div x-show="msg" x-cloak x-transition class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-rose-600 px-4 py-2 text-sm text-white shadow-lg" x-text="msg"></div>
+
+  <div class="flex snap-x gap-2 overflow-x-auto pb-3">
+    {% for col in columns %}
+    <section class="w-64 shrink-0 snap-start">
+      <header class="mb-1.5 flex items-center justify-between px-1">
+        <h3 class="text-[12px] font-semibold uppercase tracking-wide text-pink-900">{{ col.label }}</h3>
+        <span class="flex items-center gap-1">
+          {% if col.stale %}<span title="{{ col.stale }} with no contact in 7 days" class="rounded-full bg-amber-100 px-1.5 text-[10px] font-medium text-amber-800">⚠ {{ col.stale }}</span>{% endif %}
+          <span data-count="{{ col.status }}" class="rounded-full bg-pink-100 px-2 text-[11px] font-semibold text-pink-800">{{ col.count }}</span>
+        </span>
+      </header>
+      <div data-body="{{ col.status }}" @dragover.prevent="over = '{{ col.status }}'" @dragleave="if (over === '{{ col.status }}') over = null" @drop.prevent="drop('{{ col.status }}')"
+           :class="over === '{{ col.status }}' ? 'bg-pink-100 ring-2 ring-pink-300' : 'bg-pink-50/60'"
+           class="min-h-[5rem] space-y-1.5 rounded-xl p-1.5 transition">
+        {% for l in col.cards %}
+        <article data-card="{{ l.pk }}" data-status="{{ l.status }}" draggable="true" @dragstart="dragStart($event, {{ l.pk }})" @dragend="dragging = null; over = null"
+                 class="cursor-grab rounded-lg bg-white p-2 text-[13px] shadow-sm ring-1 {{ 'ring-rose-200' if l.overdue_flag else 'ring-pink-100' }} active:cursor-grabbing">
+          <div class="flex items-start justify-between gap-1">
+            <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="min-w-0 truncate font-medium text-slate-800 hover:text-pink-700">{{ l.name }}</a>
+            <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
+              <button type="button" @click="open = !open" class="rounded px-1 text-slate-400 hover:bg-pink-50 hover:text-pink-700" aria-label="Card menu">⋯</button>
+              <div x-show="open" x-cloak class="absolute right-0 z-20 mt-1 w-44 rounded-xl bg-white py-1 text-xs shadow-lg ring-1 ring-pink-100">
+                <button type="button" @click="open = false; quick({{ l.pk }}, 'connected')" class="block w-full px-3 py-1.5 text-left hover:bg-pink-50">✅ Spoke to them</button>
+                <button type="button" @click="open = false; quick({{ l.pk }}, 'no_answer')" class="block w-full px-3 py-1.5 text-left hover:bg-pink-50">📵 No answer</button>
+                <p class="mt-1 border-t border-pink-50 px-3 pb-0.5 pt-1.5 text-[10px] uppercase tracking-wide text-slate-400">Move to</p>
+                {% for v, lab in statuses %}{% if v != l.status %}
+                <button type="button" @click="open = false; {{ 'lostFor = ' ~ l.pk if v == 'lost' else 'move(' ~ l.pk ~ ", '" ~ v ~ "')" }}" class="block w-full px-3 py-1 text-left hover:bg-pink-50">{{ lab }}</button>
+                {% endif %}{% endfor %}
+                <button type="button" @click="open = false; won({{ l.pk }})" class="block w-full border-t border-pink-50 px-3 py-1.5 text-left font-medium text-emerald-700 hover:bg-emerald-50">🎉 Deal won — create store</button>
+              </div>
+            </div>
+          </div>
+          {% if l.business or l.city %}<p class="truncate text-[11px] text-slate-500">{{ l.business }}{% if l.business and l.city %} · {% endif %}{{ l.city }}</p>{% endif %}
+          <div class="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
+            {% if l.overdue_flag %}<span class="rounded-full bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700">⏰ due {{ l.next_follow_up.strftime("%d %b") }}</span>
+            {% elif l.next_follow_up %}<span class="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-800">⏰ {{ l.next_follow_up.strftime("%d %b") }}</span>{% endif %}
+            {% if l.stale %}<span class="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800" title="No contact for {{ l.idle_days }} days">⚠ {{ l.idle_days }}d quiet</span>{% endif %}
+            <span class="text-slate-400">{{ l.stage_days }}d here</span>
+            {% if is_admin and l.assigned_to %}<span class="ml-auto rounded-full bg-pink-100 px-1.5 py-0.5 font-semibold text-pink-800" title="{{ l.assigned_to.get_full_name() or l.assigned_to.email }}">{{ (l.assigned_to.first_name or l.assigned_to.email)[:2]|upper }}</span>{% endif %}
+          </div>
+          {% if l.phone %}
+          <div class="mt-1.5 flex gap-1">
+            <a href="tel:{{ l.phone }}" class="rounded-md bg-pink-600 px-2 py-0.5 text-[11px] text-white hover:bg-pink-700">📞 Call</a>
+            <a href="https://wa.me/{{ l.wa_number }}" target="_blank" rel="noopener" class="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] ring-1 ring-emerald-200 hover:bg-emerald-100">💬</a>
+          </div>{% endif %}
+        </article>
+        {% endfor %}
+      </div>
+      {% if col.more %}<a href="?full={{ col.status }}{{ '&q=' ~ g.get('q') if g.get('q') }}{{ '&owner=' ~ g.get('owner') if g.get('owner') }}" class="mt-1 block text-center text-[11px] text-pink-700 hover:underline">+ {{ col.more }} more — show</a>{% endif %}
+      {% if col.status == 'new' %}
+      <div class="mt-1.5" x-data="{ add: false }">
+        <button type="button" x-show="!add" @click="add = true" class="w-full rounded-lg border border-dashed border-pink-300 py-1 text-[12px] text-pink-700 hover:bg-pink-50">＋ Add lead</button>
+        <form x-show="add" x-cloak method="post" action="{{ url('control:crm_lead_create') }}" class="space-y-1 rounded-lg bg-white p-1.5 shadow-sm ring-1 ring-pink-200">
+          {{ csrf_input }}<input type="hidden" name="next" value="{{ url('control:crm_lead_board') }}">
+          <input name="name" required placeholder="Name" class="block w-full rounded-md border border-slate-200 px-2 py-1 text-[13px]">
+          <input name="phone" placeholder="Phone" inputmode="tel" class="block w-full rounded-md border border-slate-200 px-2 py-1 text-[13px]">
+          <div class="flex gap-1"><button class="rounded-md bg-pink-600 px-3 py-1 text-xs font-medium text-white">Add</button><button type="button" @click="add = false" class="text-xs text-slate-500">Cancel</button></div>
+        </form>
+      </div>
+      {% endif %}
+    </section>
+    {% endfor %}
+
+    {# Won / Lost: narrow drop lanes (no cards — see list view) #}
+    <section class="w-28 shrink-0 snap-start space-y-2">
+      <div data-body="won" @dragover.prevent="over = 'won'" @dragleave="if (over === 'won') over = null" @drop.prevent="drop('won')"
+           :class="over === 'won' ? 'bg-emerald-100 ring-2 ring-emerald-400' : 'bg-emerald-50'" class="rounded-xl p-3 text-center transition">
+        <div class="text-lg">🎉</div><div class="text-[11px] font-semibold uppercase text-emerald-800">Won</div>
+        <div class="text-lg font-semibold text-emerald-700" data-count="won">{{ won }}</div>
+        <div class="text-[10px] text-emerald-700/70">drop to create store</div>
+      </div>
+      <div data-body="lost" @dragover.prevent="over = 'lost'" @dragleave="if (over === 'lost') over = null" @drop.prevent="drop('lost')"
+           :class="over === 'lost' ? 'bg-rose-100 ring-2 ring-rose-300' : 'bg-slate-100'" class="rounded-xl p-3 text-center transition">
+        <div class="text-lg">🚫</div><div class="text-[11px] font-semibold uppercase text-slate-600">Lost</div>
+        <div class="text-lg font-semibold text-slate-700" data-count="lost">{{ lost }}</div>
+        <a href="{{ url('control:crm_leads') }}?view=list&status=lost" class="text-[10px] text-pink-700 hover:underline">view list</a>
+      </div>
+    </section>
+  </div>
+
+  {# Lost reason chooser #}
+  <div x-show="lostFor" x-cloak x-transition.opacity class="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 p-4" @keydown.escape.window="lostFor = null">
+    <div @click.outside="lostFor = null" class="w-full max-w-xs rounded-2xl bg-white p-4 shadow-xl">
+      <p class="text-sm font-semibold text-slate-800">Why was it lost?</p>
+      <div class="mt-3 flex flex-wrap gap-1.5">
+        {% for r in ["Not interested", "Too expensive", "No response", "Chose a competitor", "Other"] %}
+        <button type="button" @click="move(lostFor, 'lost', '{{ r }}'); lostFor = null" class="rounded-full bg-pink-50 px-3 py-1.5 text-xs font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">{{ r }}</button>
+        {% endfor %}
+      </div>
+      <button type="button" @click="lostFor = null" class="mt-3 text-xs text-slate-500 hover:underline">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+  Alpine.data('leadBoard', () => ({
+    msg: '', lostFor: null, over: null, dragging: null, timer: null,
+    get root() { return this.$root; },
+    token() { return this.root.querySelector('[name=csrfmiddlewaretoken]').value; },
+    url(key, id) { return this.root.dataset[key].replace('/0/', '/' + id + '/'); },
+    flash(text) { this.msg = text; clearTimeout(this.timer); this.timer = setTimeout(() => this.msg = '', 3500); },
+    card(id) { return this.root.querySelector('[data-card="' + id + '"]'); },
+    bump(status, d) {
+      const el = this.root.querySelector('[data-count="' + status + '"]');
+      if (el) el.textContent = Math.max(0, (parseInt(el.textContent, 10) || 0) + d);
+    },
+    dragStart(ev, id) { this.dragging = id; ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', String(id)); },
+    drop(status) {
+      const id = this.dragging; this.over = null; this.dragging = null;
+      if (!id) return;
+      const c = this.card(id);
+      if (!c || c.dataset.status === status) return;
+      if (status === 'won') return this.won(id);
+      if (status === 'lost') { this.lostFor = id; return; }
+      this.move(id, status);
+    },
+    move(id, status, reason = '') {
+      const c = this.card(id);
+      if (!c) return;
+      const from = c.dataset.status, parent = c.parentElement, next = c.nextElementSibling;
+      const target = this.root.querySelector('[data-body="' + status + '"]');
+      if (status === 'lost' || !target) { c.remove(); } else { target.prepend(c); c.dataset.status = status; }
+      this.bump(from, -1); this.bump(status, 1);
+      const fd = new FormData();
+      fd.append('status', status); fd.append('reason', reason); fd.append('csrfmiddlewaretoken', this.token());
+      fetch(this.url('moveUrl', id), { method: 'POST', body: fd, credentials: 'same-origin' })
+        .then(async r => {
+          if (r.ok) return;
+          let err = 'Could not move that lead.';
+          try { err = (await r.json()).error || err; } catch (e) {}
+          throw new Error(err);
+        })
+        .catch(e => {
+          parent.insertBefore(c, next); c.dataset.status = from;
+          this.bump(from, 1); this.bump(status, -1);
+          this.flash(e.message || 'Could not move that lead.');
+        });
+    },
+    won(id) {
+      const f = document.createElement('form');
+      f.method = 'post'; f.action = this.url('wonUrl', id);
+      const t = document.createElement('input');
+      t.type = 'hidden'; t.name = 'csrfmiddlewaretoken'; t.value = this.token(); f.appendChild(t);
+      document.body.appendChild(f); f.submit();
+    },
+    quick(id, outcome) {
+      const fd = new FormData();
+      fd.append('kind', 'call'); fd.append('outcome', outcome); fd.append('lead', id);
+      fd.append('csrfmiddlewaretoken', this.token());
+      fetch(this.root.dataset.logUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'HX-Request': 'true' } })
+        .then(r => { if (!r.ok) throw new Error(); location.reload(); })
+        .catch(() => this.flash('Could not log that.'));
+    },
+  }));
+});
+</script>
+{% endblock %}

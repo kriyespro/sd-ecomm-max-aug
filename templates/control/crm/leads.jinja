@@ -6,6 +6,10 @@
 {% block crm_title %}Leads{% endblock %}
 {% block crm_sub %}· {{ _n }} lead{{ 's' if _n != 1 }}{% if not is_admin %} assigned to you{% endif %}{% endblock %}
 {% block crm_actions %}
+<div class="inline-flex rounded-full bg-white p-0.5 ring-1 ring-pink-100">
+  <a href="{{ url('control:crm_leads') }}?view=list" class="rounded-full bg-pink-600 px-3 py-1 text-xs font-medium text-white">☰ List</a>
+  <a href="{{ url('control:crm_lead_board') }}" class="rounded-full px-3 py-1 text-xs font-medium text-pink-800 hover:bg-pink-50">▦ Board</a>
+</div>
 <button type="button" onclick="document.getElementById('addlead').classList.toggle('hidden')" class="rounded-full bg-pink-600 px-3.5 py-1 text-[13px] font-medium text-white hover:bg-pink-700">＋ Add lead</button>
 {% endblock %}
 

@@ -146,7 +146,7 @@ class ScreenTests(CrmBase):
 
     def test_all_screens_render(self):
         Lead.objects.create(name="Zed", assigned_to=self.a)
-        names = ["crm_my_day", "crm_leads", "crm_tasks", "crm_collections", "crm_training", "crm_work"]
+        names = ["crm_my_day", "crm_lead_board", "crm_tasks", "crm_collections", "crm_training", "crm_work"]
         for who in (self.admin, self.a):
             self.login(who)
             for n in names:
@@ -165,7 +165,7 @@ class ScreenTests(CrmBase):
         mine = Lead.objects.create(name="Mine", assigned_to=self.a)
         theirs = Lead.objects.create(name="Theirs", assigned_to=self.b)
         self.login(self.a)
-        r = self.client.get(reverse("control:crm_leads"))
+        r = self.client.get(reverse("control:crm_leads") + "?view=list")
         self.assertContains(r, "Mine")
         self.assertNotContains(r, "Theirs")
         self.assertEqual(self.client.get(reverse("control:crm_lead", kwargs={"pk": theirs.pk})).status_code, 404)
@@ -442,12 +442,12 @@ class NewUxTests(CrmBase):
 
     def test_tabs_role_aware_and_pink_theme(self):
         self.login(self.a)
-        html = self.client.get(reverse("control:crm_leads")).content.decode()
+        html = self.client.get(reverse("control:crm_lead_board")).content.decode()
         self.assertIn("My day", html)
         self.assertNotIn('href="%s"' % reverse("control:crm_board"), html.split("CRM sections")[1].split("</nav>")[0])
         self.assertIn("bg-pink-600", html)
         self.login(self.admin)
-        html = self.client.get(reverse("control:crm_leads")).content.decode()
+        html = self.client.get(reverse("control:crm_lead_board")).content.decode()
         self.assertIn('href="%s"' % reverse("control:crm_board"), html.split("CRM sections")[1].split("</nav>")[0])
 
     def test_wa_number(self):
@@ -519,3 +519,213 @@ class CompactFormTests(CrmBase):
         self.login(self.a)
         html = self.client.get(reverse("control:crm_collections")).content.decode()
         self.assertIn('value="upi" selected', html)
+
+
+class KanbanTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+
+    def _lead(self, name="L", who=None, **kw):
+        return Lead.objects.create(name=name, assigned_to=who or self.a, **kw)
+
+    # -- default view + cookie
+    def test_leads_defaults_to_board_and_remembers_list(self):
+        self.login(self.a)
+        r = self.client.get(reverse("control:crm_leads"))
+        self.assertRedirects(r, reverse("control:crm_lead_board"))
+        self.assertEqual(self.client.get(reverse("control:crm_leads") + "?view=list").status_code, 200)
+        self.assertEqual(self.client.get(reverse("control:crm_leads")).status_code, 200)  # cookie: list
+        self.client.get(reverse("control:crm_lead_board"))
+        self.assertEqual(self.client.get(reverse("control:crm_leads")).status_code, 302)  # cookie: board
+
+    def test_filtered_list_url_is_not_redirected(self):
+        self.login(self.a)
+        self.assertEqual(self.client.get(reverse("control:crm_leads") + "?q=x").status_code, 200)
+        self.assertEqual(self.client.get(reverse("control:crm_leads") + "?status=new").status_code, 200)
+
+    # -- board content + isolation
+    def test_board_shows_columns_and_only_own_leads(self):
+        self._lead("Alpha Co", status=LeadStatus.INTERESTED)
+        self._lead("Bravo Co", who=self.b)
+        self.login(self.a)
+        r = self.client.get(reverse("control:crm_lead_board"))
+        self.assertContains(r, "Alpha Co")
+        self.assertNotContains(r, "Bravo Co")
+        for label in ("New", "Contacted", "Interested", "Demo booked", "Demo done", "Negotiating", "Won", "Lost"):
+            self.assertContains(r, label)
+
+    def test_admin_board_sees_all_and_filters_owner(self):
+        self._lead("Alpha Co")
+        self._lead("Bravo Co", who=self.b)
+        self.login(self.admin)
+        r = self.client.get(reverse("control:crm_lead_board"))
+        self.assertContains(r, "Alpha Co")
+        self.assertContains(r, "Bravo Co")
+        r = self.client.get(reverse("control:crm_lead_board") + f"?owner={self.b.pk}")
+        self.assertNotContains(r, "Alpha Co")
+        self.assertContains(r, "Bravo Co")
+
+    def test_dgc_cannot_widen_board_with_owner_param(self):
+        self._lead("Bravo Co", who=self.b)
+        self.login(self.a)
+        r = self.client.get(reverse("control:crm_lead_board") + f"?owner={self.b.pk}")
+        self.assertNotContains(r, "Bravo Co")
+
+    def test_owner_user_blocked(self):
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.get(reverse("control:crm_lead_board")).status_code, 403)
+
+    # -- ordering / stale / caps
+    def test_card_order_overdue_first_then_oldest_untouched(self):
+        fresh = self._lead("fresh")
+        due = self._lead("due", next_follow_up=self.today - dt.timedelta(days=1))
+        touched = self._lead("touched")
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=touched)
+        cols = {c["status"]: c for c in svc.board_columns(self.a)["columns"]}
+        # "touched" moved to contacted by the call; fresh/due stay in new
+        names = [c.name for c in cols["new"]["cards"]]
+        self.assertEqual(names[0], "due")
+        self.assertIn("fresh", names)
+
+    def test_stale_flag_and_count(self):
+        old = self._lead("old")
+        Lead.objects.filter(pk=old.pk).update(created_at=timezone.now() - dt.timedelta(days=10))
+        self._lead("new_one")
+        col = {c["status"]: c for c in svc.board_columns(self.a)["columns"]}["new"]
+        self.assertEqual(col["stale"], 1)
+        flags = {c.name: c.stale for c in col["cards"]}
+        self.assertEqual(flags, {"old": True, "new_one": False})
+        old_card = [c for c in col["cards"] if c.name == "old"][0]
+        self.assertGreaterEqual(old_card.idle_days, 10)
+
+    def test_recent_contact_clears_stale(self):
+        old = self._lead("old")
+        Lead.objects.filter(pk=old.pk).update(created_at=timezone.now() - dt.timedelta(days=10))
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=Lead.objects.get(pk=old.pk))
+        cols = {c["status"]: c for c in svc.board_columns(self.a)["columns"]}
+        self.assertEqual(sum(c["stale"] for c in cols.values()), 0)
+
+    def test_column_cap_and_full(self):
+        Lead.objects.bulk_create([Lead(name=f"n{i}", assigned_to=self.a) for i in range(35)])
+        col = {c["status"]: c for c in svc.board_columns(self.a)["columns"]}["new"]
+        self.assertEqual((len(col["cards"]), col["count"], col["more"]), (30, 35, 5))
+        col = {c["status"]: c for c in svc.board_columns(self.a, full="new")["columns"]}["new"]
+        self.assertEqual((len(col["cards"]), col["more"]), (35, 0))
+
+    def test_won_lost_counts(self):
+        self._lead("w", status=LeadStatus.WON)
+        self._lead("l1", status=LeadStatus.LOST)
+        self._lead("l2", status=LeadStatus.LOST)
+        data = svc.board_columns(self.a)
+        self.assertEqual((data["won"], data["lost"]), (1, 2))
+        self.assertEqual(sum(len(c["cards"]) for c in data["columns"]), 0)
+
+    # -- moving
+    def test_move_endpoint_changes_stage_and_writes_history(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "demo_booked"})
+        self.assertEqual(r.status_code, 204)
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.DEMO_BOOKED)
+        act = Activity.objects.get(lead=lead, kind=ActivityKind.STAGE)
+        self.assertIn("New → Demo booked", act.note)
+
+    def test_move_to_lost_records_reason(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}),
+                         {"status": "lost", "reason": "Too expensive"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.LOST)
+        self.assertIn("Too expensive", Activity.objects.get(lead=lead).note)
+
+    def test_cannot_drag_to_won_or_move_a_won_lead(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "won"})
+        self.assertEqual(r.status_code, 409)
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.NEW)
+        won = self._lead("w", status=LeadStatus.WON)
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": won.pk}), {"status": "new"})
+        self.assertEqual(r.status_code, 409)
+
+    def test_bad_stage_and_foreign_lead(self):
+        mine = self._lead("m")
+        theirs = self._lead("t", who=self.b)
+        self.login(self.a)
+        self.assertEqual(self.client.post(reverse("control:crm_lead_move", kwargs={"pk": mine.pk}),
+                                          {"status": "nonsense"}).status_code, 409)
+        self.assertEqual(self.client.post(reverse("control:crm_lead_move", kwargs={"pk": theirs.pk}),
+                                          {"status": "contacted"}).status_code, 404)
+        theirs.refresh_from_db()
+        self.assertEqual(theirs.status, LeadStatus.NEW)
+
+    def test_move_requires_post(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        self.assertEqual(self.client.get(reverse("control:crm_lead_move", kwargs={"pk": lead.pk})).status_code, 405)
+
+    def test_move_enforces_csrf(self):
+        from django.test import Client
+        lead = self._lead("m")
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        r = c.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "contacted"})
+        self.assertEqual(r.status_code, 403)
+
+    def test_board_page_carries_csrf_token_for_js(self):
+        from django.test import Client
+        self._lead("m")
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(reverse("control:crm_lead_board")).content.decode()
+        self.assertIn('name="csrfmiddlewaretoken"', html.split('x-data="leadBoard()"')[1])
+
+    def test_stage_changed_at_tracks_stage_moves_only(self):
+        lead = self._lead("m")
+        first = lead.stage_changed_at
+        self.assertIsNotNone(first)
+        lead = Lead.objects.get(pk=lead.pk)
+        lead.notes = "x"
+        lead.save()
+        lead.refresh_from_db()
+        self.assertEqual(lead.stage_changed_at, first)
+        svc.move_lead(lead, "interested", actor=self.a)
+        lead.refresh_from_db()
+        self.assertGreater(lead.stage_changed_at, first)
+
+    def test_stepper_writes_history_and_blocks_won(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_status", kwargs={"pk": lead.pk}), {"status": "interested"})
+        self.assertTrue(Activity.objects.filter(lead=lead, kind=ActivityKind.STAGE).exists())
+        self.client.post(reverse("control:crm_lead_status", kwargs={"pk": lead.pk}), {"status": "won"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.INTERESTED)
+
+    def test_quick_add_from_board_returns_to_board(self):
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_create"),
+                             {"name": "Quick", "phone": "9000000000", "next": reverse("control:crm_lead_board")})
+        self.assertRedirects(r, reverse("control:crm_lead_board"))
+        self.assertEqual(Lead.objects.get(name="Quick").assigned_to, self.a)
+        # open-redirect guard
+        r = self.client.post(reverse("control:crm_lead_create"), {"name": "Q2", "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+
+    def test_stage_moves_do_not_count_as_calls(self):
+        lead = self._lead("m")
+        svc.move_lead(lead, "contacted", actor=self.a)
+        rows, totals = svc.person_numbers(timezone.localdate())
+        self.assertEqual(totals["calls"], 0)
+
+    def test_quick_log_from_board_menu_endpoint(self):
+        lead = self._lead("m")
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected", "lead": lead.pk},
+                             HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204)
+        self.assertEqual(Activity.objects.filter(lead=lead, kind="call").count(), 1)

@@ -319,3 +319,96 @@ def board_extras():
         "pending_training": TrainingLog.objects.filter(status=TrainingStatus.PENDING).count(),
         "open_requests": StoreWorkRequest.objects.filter(status=WorkRequestStatus.OPEN).count(),
     }
+
+
+# ── kanban board ───────────────────────────────────────────────────────────
+
+BOARD_STAGES = [LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.INTERESTED,
+                LeadStatus.DEMO_BOOKED, LeadStatus.DEMO_DONE, LeadStatus.NEGOTIATING]
+BOARD_LIMIT = 30
+BOARD_LIMIT_FULL = 300
+STALE_DAYS = 7
+
+
+class MoveError(Exception):
+    """Raised for a stage move the board must refuse (message is user-facing)."""
+
+
+def move_lead(lead, new_status, *, actor, reason=""):
+    """Move a lead to a stage and write it into the lead's history.
+
+    "Won" is deliberately not reachable here: it has its own flow that creates
+    the store, so a drag can never mark a deal won without one.
+    """
+    if new_status not in LeadStatus.values:
+        raise MoveError("Unknown stage.")
+    if new_status == LeadStatus.WON:
+        raise MoveError("Use “Deal won” to create the store.")
+    if lead.status == LeadStatus.WON:
+        raise MoveError("This deal is already won.")
+    if new_status == lead.status:
+        return lead
+    old = lead.get_status_display()
+    lead.status = new_status
+    lead.save(update_fields=["status", "updated_at"])
+    note = f"{old} → {lead.get_status_display()}"
+    if reason:
+        note += f" ({reason[:80]})"
+    Activity.objects.create(actor=actor, kind=ActivityKind.STAGE, lead=lead, note=note[:300])
+    return lead
+
+
+def board_columns(user, *, owner=None, q="", full=None, admin=False):
+    """Everything the kanban needs: per-stage cards (capped), true counts,
+    stale counts, plus Won / Lost totals.
+
+    ``owner``: None = the caller's own leads (DGC) / everyone (admin);
+    "none" = unassigned; a user id = that person (admin only).
+    """
+    from django.db.models import Case, Exists, F, IntegerField, OuterRef, Subquery, When
+
+    today = timezone.localdate()
+    now = timezone.now()
+    cutoff = now - dt.timedelta(days=STALE_DAYS)
+
+    base = Lead.objects.all()
+    if not admin:
+        base = base.filter(assigned_to=user)
+    elif owner == "none":
+        base = base.filter(assigned_to__isnull=True)
+    elif owner and str(owner).isdigit():
+        base = base.filter(assigned_to_id=int(owner))
+    if q:
+        base = base.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(business__icontains=q))
+
+    counts = {r["status"]: r["n"] for r in base.values("status").annotate(n=Count("id"))}
+
+    recent = Activity.objects.filter(lead=OuterRef("pk"), occurred_at__gte=cutoff)
+    last = Activity.objects.filter(lead=OuterRef("pk")).order_by("-occurred_at").values("occurred_at")[:1]
+    annotated = base.annotate(has_recent=Exists(recent), last_touch=Subquery(last))
+    open_q = annotated.filter(status__in=BOARD_STAGES)
+    stale_q = Q(has_recent=False, created_at__lt=cutoff)
+    stale_counts = {r["status"]: r["n"] for r in
+                    open_q.filter(stale_q).values("status").annotate(n=Count("id"))}
+
+    columns = []
+    for st in BOARD_STAGES:
+        cap = BOARD_LIMIT_FULL if full == st else BOARD_LIMIT
+        qs = (open_q.filter(status=st).select_related("assigned_to")
+              .annotate(overdue=Case(When(next_follow_up__lte=today, then=0), default=1,
+                                     output_field=IntegerField()))
+              .order_by("overdue", F("last_touch").asc(nulls_first=True), "-created_at"))
+        cards = list(qs[:cap])
+        for c in cards:
+            ref = c.last_touch or c.created_at
+            c.stale = (not c.has_recent) and c.created_at < cutoff
+            c.idle_days = (now - ref).days
+            c.stage_days = (now - (c.stage_changed_at or c.created_at)).days
+            c.overdue_flag = bool(c.next_follow_up and c.next_follow_up <= today)
+        columns.append({
+            "status": st.value, "label": st.label, "cards": cards,
+            "count": counts.get(st.value, 0), "stale": stale_counts.get(st.value, 0),
+            "more": max(0, counts.get(st.value, 0) - len(cards)),
+        })
+    return {"columns": columns, "won": counts.get(LeadStatus.WON.value, 0),
+            "lost": counts.get(LeadStatus.LOST.value, 0), "today": today}

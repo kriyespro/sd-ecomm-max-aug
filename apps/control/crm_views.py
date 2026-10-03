@@ -131,16 +131,39 @@ class LeadForm(forms.ModelForm):
         widgets = {"next_follow_up": forms.DateInput(attrs={"type": "date"}),
                    "notes": forms.Textarea(attrs={"rows": 2})}
 
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        # Quick-add (board, imports) only sends a name + phone; omitted status
+        # falls back to the model default ("new").
+        self.fields["status"].required = False
+
 
 def _lead_qs(user):
     qs = Lead.objects.select_related("assigned_to")
     return qs if _admin(user) else qs.filter(assigned_to=user)
 
 
+LEADS_VIEW_COOKIE = "crm_leads_view"
+
+
 class LeadListView(PlatformStaffRequiredMixin, ListView):
     template_name = "control/crm/leads.jinja"
     context_object_name = "leads"
     paginate_by = 50
+
+    def get(self, request, *args, **kwargs):
+        # Board is the default; a plain /leads/ visit goes there unless the
+        # user last chose the list (cookie) or is filtering / paging / asking
+        # for the list explicitly.
+        g = request.GET
+        wants_list = (g.get("view") == "list" or request.COOKIES.get(LEADS_VIEW_COOKIE) == "list"
+                      or any(g.get(k) for k in ("q", "status", "assignee", "due", "page")))
+        if not wants_list:
+            return redirect("control:crm_lead_board")
+        resp = super().get(request, *args, **kwargs)
+        if g.get("view") == "list":
+            resp.set_cookie(LEADS_VIEW_COOKIE, "list", max_age=60 * 60 * 24 * 365, samesite="Lax")
+        return resp
 
     def get_queryset(self):
         g = self.request.GET
@@ -183,7 +206,7 @@ class LeadCreateView(PlatformStaffRequiredMixin, View):
         lead.assigned_by = request.user
         lead.save()
         messages.success(request, "Lead added.")
-        return redirect("control:crm_lead", pk=lead.pk)
+        return redirect(_post_next(request, reverse("control:crm_lead", kwargs={"pk": lead.pk})))
 
 
 class LeadDetailView(PlatformStaffRequiredMixin, TemplateView):
@@ -210,15 +233,54 @@ class LeadDetailView(PlatformStaffRequiredMixin, TemplateView):
         return redirect("control:crm_lead", pk=pk)
 
 
+class LeadBoardView(PlatformStaffRequiredMixin, TemplateView):
+    """Kanban of the pipeline. Staff see their own leads; admins can filter
+    by owner. Each column is capped (``?full=<stage>`` lifts it)."""
+
+    template_name = "control/crm/leads_board.jinja"
+
+    def get(self, request, *args, **kwargs):
+        resp = super().get(request, *args, **kwargs)
+        resp.set_cookie(LEADS_VIEW_COOKIE, "board", max_age=60 * 60 * 24 * 365, samesite="Lax")
+        return resp
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        g = self.request.GET
+        admin = _admin(self.request.user)
+        data = svc.board_columns(
+            self.request.user, owner=g.get("owner") or None, q=(g.get("q") or "").strip(),
+            full=g.get("full"), admin=admin)
+        ctx.update(data, total=sum(c["count"] for c in data["columns"]), is_admin=admin, g=g, people=svc.crm_people() if admin else [],
+                   statuses=[(s.value, s.label) for s in svc.BOARD_STAGES] + [("lost", "Lost")],
+                   limit=svc.BOARD_LIMIT)
+        return ctx
+
+
+class LeadMoveView(PlatformStaffRequiredMixin, View):
+    """Board drag / menu move. JSON in spirit: 204 ok, 400/409 with a message."""
+
+    def post(self, request, pk):
+        from django.http import HttpResponse, JsonResponse
+
+        lead = get_object_or_404(_lead_qs(request.user), pk=pk)
+        try:
+            svc.move_lead(lead, request.POST.get("status", ""), actor=request.user,
+                          reason=request.POST.get("reason", ""))
+        except svc.MoveError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=409)
+        return HttpResponse(status=204)
+
+
 class LeadStatusView(PlatformStaffRequiredMixin, View):
     """One-tap pipeline move from the lead page stepper."""
 
     def post(self, request, pk):
         lead = get_object_or_404(_lead_qs(request.user), pk=pk)
-        new = request.POST.get("status")
-        if new in LeadStatus.values and new != LeadStatus.WON:  # "won" has its own button
-            lead.status = new
-            lead.save(update_fields=["status", "updated_at"])
+        try:
+            svc.move_lead(lead, request.POST.get("status", ""), actor=request.user)
+        except svc.MoveError:
+            pass  # "won" has its own button; unknown stages are ignored
         return redirect("control:crm_lead", pk=pk)
 
 
