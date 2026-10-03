@@ -116,8 +116,8 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
             open_tasks=Task.objects.filter(assignee=u, status=TaskStatus.OPEN)[:20],
             recent=Activity.objects.filter(actor=u).select_related("lead")[:15],
             my_work=StoreAssignment.objects.filter(assignee=u, is_active=True).select_related("project"),
-            pending_confirm=TrainingLog.objects.filter(trainer=u, status=TrainingStatus.PENDING)
-            .select_related("trainee").count(),
+            pending_confirm=svc.trainings_to_confirm(u).count(),
+            waiting_to_train=TrainingLog.objects.filter(trainer=u, status=TrainingStatus.ASSIGNED).count(),
         )
         return ctx
 
@@ -563,21 +563,18 @@ class CollectionVerifyView(PlatformAdminRequiredMixin, View):
 
 # ───────────────────────────── DGC training ─────────────────────────────
 
-class TrainingForm(forms.ModelForm):
-    class Meta:
-        model = TrainingLog
-        fields = ["trainer", "topic", "trained_on"]
-        widgets = {"trained_on": forms.DateInput(attrs={"type": "date"}),
-                   "topic": forms.TextInput(attrs={"placeholder": "e.g. Store setup (optional)"})}
-        labels = {"trainer": "Trained by", "trained_on": "Date"}
+def _person(pk, *, exclude=None):
+    qs = svc.crm_people()
+    if exclude is not None:
+        qs = qs.exclude(pk=exclude.pk)
+    return qs.filter(pk=pk).first() if str(pk or "").isdigit() else None
 
-    def __init__(self, *a, user=None, **kw):
-        super().__init__(*a, **kw)
-        qs = svc.crm_people()
-        self.fields["trainer"].queryset = qs.exclude(pk=user.pk) if user else qs
-        self.fields["trainer"].label_from_instance = svc.person_label
-        self.fields["trainer"].empty_label = "Choose trainer…"
-        self.fields["trained_on"].initial = timezone.localdate()
+
+def _date_or_today(raw):
+    try:
+        return dt.date.fromisoformat(raw) if raw else timezone.localdate()
+    except ValueError:
+        return timezone.localdate()
 
 
 class TrainingListView(PlatformStaffRequiredMixin, TemplateView):
@@ -586,31 +583,106 @@ class TrainingListView(PlatformStaffRequiredMixin, TemplateView):
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
         u, admin = self.request.user, _admin(self.request.user)
-        qs = TrainingLog.objects.select_related("trainee", "trainer")
-        mine = qs if admin else qs.filter(Q(trainee=u) | Q(trainer=u))
-        ctx.update(logs=mine[:200], is_admin=admin, form=TrainingForm(user=u))
+        qs = TrainingLog.objects.select_related("trainee", "trainer", "initiated_by")
+        if not admin:
+            qs = qs.filter(Q(trainee=u) | Q(trainer=u) | Q(initiated_by=u))
+        logs = list(qs[:200])
+        for t in logs:  # what this viewer may do with each row
+            t.can_confirm = svc.can_confirm_training(t, u)
+            t.can_mark = t.status == TrainingStatus.ASSIGNED and (admin or t.trainer_id == u.pk)
+            t.can_assign = admin and t.status in (TrainingStatus.REQUESTED, TrainingStatus.ASSIGNED)
+            t.can_cancel = t.status in (TrainingStatus.REQUESTED, TrainingStatus.ASSIGNED) and (
+                admin or t.initiated_by_id == u.pk)
+        ctx.update(logs=logs, is_admin=admin, people=svc.crm_people().exclude(pk=u.pk),
+                   today=timezone.localdate(),
+                   waiting_for_me=sum(1 for t in logs if t.status == TrainingStatus.ASSIGNED
+                                      and t.trainer_id == u.pk),
+                   to_confirm=sum(1 for t in logs if t.can_confirm and not admin))
         return ctx
 
 
 class TrainingCreateView(PlatformStaffRequiredMixin, View):
+    """One endpoint, three modes: ``trained_by`` (I was trained by X),
+    ``trained_student`` (I trained someone), ``request`` (wants training)."""
+
     def post(self, request):
-        form = TrainingForm(request.POST, user=request.user)
-        if form.is_valid():
-            t = form.save(commit=False)
-            t.trainee = request.user
-            t.save()
-            messages.success(request, f"Sent to {svc.person_label(t.trainer)} to confirm.")
-        else:
-            messages.error(request, "Pick the DGC who trained you.")
+        p, me = request.POST, request.user
+        mode = p.get("mode", "trained_by")
+        topic, when = p.get("topic", "").strip(), _date_or_today(p.get("trained_on"))
+        try:
+            if mode == "trained_student":
+                student = _person(p.get("student"), exclude=me)
+                svc.add_trained_student(trainer=me, student=student, name=p.get("student_name", ""),
+                                        phone=p.get("student_phone", ""), topic=topic, trained_on=when)
+                msg = ("Added — your student confirms it." if student else
+                       "Added — a platform admin will verify it (they have no login yet).")
+            elif mode == "request":
+                for_user, fu = None, p.get("for_user", "")
+                if fu.isdigit():  # admin may file one on someone's behalf
+                    if not _admin(me):
+                        raise svc.TrainingError("Only a platform admin can request for someone else.")
+                    for_user = _person(fu)
+                elif fu == "__new" and not p.get("student_name", "").strip():
+                    raise svc.TrainingError("Type the new person's name.")
+                svc.request_training(requester=me, for_user=for_user,
+                                     name=p.get("student_name", "") if fu == "__new" else "",
+                                     phone=p.get("student_phone", ""), topic=topic)
+                msg = "Training request sent — the super admin will assign a trainer."
+            elif mode == "trained_by":
+                trainer = _person(p.get("trainer"), exclude=me)
+                svc.log_trained_by(trainee=me, trainer=trainer, topic=topic, trained_on=when)
+                msg = f"Sent to {svc.person_label(trainer)} to confirm."
+            else:
+                raise svc.TrainingError("Unknown entry type.")
+            messages.success(request, msg)
+        except svc.TrainingError as exc:
+            messages.error(request, str(exc))
         return redirect("control:crm_training")
 
 
 class TrainingRespondView(PlatformStaffRequiredMixin, View):
     def post(self, request, pk):
         log = get_object_or_404(TrainingLog, pk=pk)
-        if not (_admin(request.user) or log.trainer_id == request.user.pk):
-            raise PermissionDenied("Only the trainer can confirm this.")
-        svc.respond_training(log, actor=request.user, ok=request.POST.get("action") != "reject")
+        try:
+            svc.respond_training(log, actor=request.user, ok=request.POST.get("action") != "reject")
+        except svc.TrainingError as exc:
+            raise PermissionDenied(str(exc))
+        return redirect("control:crm_training")
+
+
+class TrainingAssignView(PlatformAdminRequiredMixin, View):
+    """Only the super admin assigns a trainer (no self-claiming)."""
+
+    def post(self, request, pk):
+        log = get_object_or_404(TrainingLog, pk=pk)
+        trainer = _person(request.POST.get("trainer"))
+        try:
+            svc.assign_trainer(log, trainer, actor=request.user)
+            messages.success(request, f"{svc.person_label(trainer)} will train {log.student_label}.")
+        except svc.TrainingError as exc:
+            messages.error(request, str(exc))
+        return redirect("control:crm_training")
+
+
+class TrainingMarkTrainedView(PlatformStaffRequiredMixin, View):
+    def post(self, request, pk):
+        log = get_object_or_404(TrainingLog, pk=pk)
+        try:
+            svc.mark_trained(log, actor=request.user)
+        except svc.TrainingError as exc:
+            raise PermissionDenied(str(exc))
+        messages.success(request, "Marked trained — waiting for confirmation." if log.status ==
+                         TrainingStatus.PENDING else "Marked trained and confirmed.")
+        return redirect("control:crm_training")
+
+
+class TrainingCancelView(PlatformStaffRequiredMixin, View):
+    def post(self, request, pk):
+        log = get_object_or_404(TrainingLog, pk=pk)
+        try:
+            svc.cancel_training_request(log, actor=request.user)
+        except svc.TrainingError as exc:
+            raise PermissionDenied(str(exc))
         return redirect("control:crm_training")
 
 

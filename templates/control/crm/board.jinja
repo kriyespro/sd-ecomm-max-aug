@@ -15,13 +15,14 @@
   {{ tile("Stores won today", extras.won_today) }}
 </div>
 
-{% set _todo = extras.overdue_follow_ups or extras.unverified or extras.pending_training or extras.open_requests %}
+{% set _todo = extras.overdue_follow_ups or extras.unverified or extras.pending_training or extras.open_requests or extras.training_requests %}
 {% if _todo %}
 <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
   <h3 class="mb-2 text-sm font-semibold text-pink-900">Needs you</h3>
   <div class="flex flex-wrap gap-2 text-sm">
     {% if extras.open_requests %}<a href="{{ url('control:crm_work') }}" class="rounded-full bg-pink-600 px-3 py-1.5 font-medium text-white hover:bg-pink-700">🛠 Assign {{ extras.open_requests }} store-work request{{ 's' if extras.open_requests != 1 }}</a>{% endif %}
     {% if extras.unverified %}<a href="{{ url('control:crm_collections') }}?status=unverified" class="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">💰 Verify {{ extras.unverified }} collection{{ 's' if extras.unverified != 1 }}</a>{% endif %}
+    {% if extras.training_requests %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-pink-600 px-3 py-1.5 font-medium text-white hover:bg-pink-700">🙋 Assign a trainer to {{ extras.training_requests }} request{{ 's' if extras.training_requests != 1 }}</a>{% endif %}
     {% if extras.pending_training %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-3 py-1.5 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">🎓 {{ extras.pending_training }} training awaiting trainer</a>{% endif %}
     {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?due=1" class="rounded-full bg-rose-50 px-3 py-1.5 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ extras.overdue_follow_ups }} overdue follow-up{{ 's' if extras.overdue_follow_ups != 1 }}</a>{% endif %}
   </div>

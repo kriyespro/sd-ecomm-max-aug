@@ -188,28 +188,56 @@ class Collection(TimeStampedModel):
 
 
 class TrainingStatus(models.TextChoices):
-    PENDING = "pending", "Awaiting trainer"
+    REQUESTED = "requested", "Wants training"
+    ASSIGNED = "assigned", "Trainer assigned"
+    PENDING = "pending", "Awaiting confirmation"
     CONFIRMED = "confirmed", "Confirmed"
     REJECTED = "rejected", "Rejected"
 
 
 class TrainingLog(TimeStampedModel):
-    """A DGC was trained by another DGC. The trainee logs it and names the
-    trainer; it counts once the trainer (or a platform admin) confirms."""
+    """One training: someone learns, someone teaches.
 
-    trainee = models.ForeignKey(User, on_delete=models.CASCADE, related_name="crm_trainings")
-    trainer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="crm_trained")
+    Three ways in, one table:
+    * trainee logs "I was trained by X"           -> pending (trainer confirms)
+    * trainer adds a student they trained         -> pending (student confirms;
+      a name-only student has no account, so only a platform admin can confirm)
+    * someone asks for training                   -> requested; only a platform
+      admin assigns a trainer (-> assigned); the trainer marks it trained
+      (-> pending) and the other side confirms.
+    It counts on the board only once confirmed.
+    """
+
+    trainee = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name="crm_trainings")
+    trainer = models.ForeignKey(User, null=True, blank=True, on_delete=models.CASCADE,
+                                related_name="crm_trained")
+    # A student who has no login yet (new recruit) — name + phone instead of a user.
+    student_name = models.CharField(max_length=120, blank=True)
+    student_phone = models.CharField(max_length=20, blank=True)
     topic = models.CharField(max_length=160, blank=True)
     trained_on = models.DateField(default=timezone.localdate, db_index=True)
     status = models.CharField(max_length=10, choices=TrainingStatus.choices,
                               default=TrainingStatus.PENDING, db_index=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
+    # Who created / last advanced it — the *other* side is the one who confirms.
+    initiated_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
+                                     related_name="+")
+    assigned_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
+                                    related_name="+")
+    assigned_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-trained_on", "-created_at"]
 
+    @property
+    def student_label(self):
+        if self.trainee_id:
+            return self.trainee.get_full_name() or self.trainee.email or self.trainee.get_username()
+        return self.student_name or "—"
+
     def __str__(self):
-        return f"{self.trainee} trained by {self.trainer}"
+        return f"{self.student_label} / {self.trainer or 'no trainer yet'} ({self.status})"
 
 
 class TaskStatus(models.TextChoices):
