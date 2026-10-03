@@ -40,3 +40,57 @@ def use_skin(slug):
         yield
     finally:
         reset_active_skin(token)
+
+
+# Inline editor ("edit mode"): while true, templates stamp ``data-ed`` markers
+# on editable text/images via the ``ed()`` Jinja global. Only the owner-facing
+# ``InlineEditMiddleware`` ever sets it, and such responses are never cached.
+_edit_mode: "contextvars.ContextVar[bool]" = contextvars.ContextVar(
+    "shopfront_edit_mode", default=False
+)
+
+
+def is_editing() -> bool:
+    try:
+        return bool(_edit_mode.get())
+    except LookupError:
+        return False
+
+
+@contextmanager
+def use_edit_mode(on):
+    token = _edit_mode.set(bool(on))
+    try:
+        yield
+    finally:
+        try:
+            _edit_mode.reset(token)
+        except (ValueError, LookupError):
+            _edit_mode.set(False)
+
+
+# Edit mode where the logged-in user can open Mission Control on this host: the
+# product cards then get an "Edit product" button that opens the full admin form
+# (and returns here) instead of inline title/price editing.
+_product_form: "contextvars.ContextVar[bool]" = contextvars.ContextVar(
+    "shopfront_edit_product_form", default=False
+)
+
+
+def has_product_form() -> bool:
+    try:
+        return bool(_product_form.get())
+    except LookupError:
+        return False
+
+
+@contextmanager
+def use_product_form(on):
+    token = _product_form.set(bool(on))
+    try:
+        yield
+    finally:
+        try:
+            _product_form.reset(token)
+        except (ValueError, LookupError):
+            _product_form.set(False)

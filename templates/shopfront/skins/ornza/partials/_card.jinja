@@ -1,6 +1,6 @@
 {# Ornza product card — expects `p` #}
 {% set img = (p.images.all() | first) %}
-<article class="group relative">
+<article{{ ed_product(p) }} class="group relative">
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden bg-panel">
     <div class="ornza-frame aspect-[4/5] overflow-hidden bg-line/40">
       <img src="{{ (img.image if img else none) | media_src(1000, 1250, 'Product photo') }}"
@@ -31,11 +31,11 @@
   </div>
 
   <div class="mt-4 text-center">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block font-display text-lg leading-tight hover:text-accent">{{ p.title }}</a>
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block font-display text-lg leading-tight hover:text-accent">{{ p.title }}</a>
     {% if p.rating_count %}
     <p class="mt-1 text-xs text-accent">{{ '★' * (p.rating_avg | round | int) }}<span class="text-mute"> ({{ p.rating_count }})</span></p>
     {% endif %}
-    <p class="mt-1.5 text-sm">
+    <p{{ ed_money(p) }} class="mt-1.5 text-sm">
       {% if p.on_sale %}
       <span class="text-mute line-through">{{ p.price | money }}</span>
       <span class="ml-1 font-medium text-accent">{{ p.current_price | money }}</span>

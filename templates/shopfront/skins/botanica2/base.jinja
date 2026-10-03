@@ -143,15 +143,15 @@
         {% for it in primary_nav %}
         {% if it.children %}
         <div class="relative group">
-          <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="b2-underline hover:text-accent">{{ it.label }}</a>
+          <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="b2-underline hover:text-accent"><span{{ ed('menuitem', it, 'label') }}>{{ it.label }}</span></a>
           <div class="invisible absolute left-0 top-full z-40 min-w-44 rounded-lg border border-line bg-paper p-2 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100">
             {% for c in it.children %}
-            <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block rounded px-2 py-1.5 hover:bg-panel hover:text-accent">{{ c.label }}</a>
+            <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block rounded px-2 py-1.5 hover:bg-panel hover:text-accent"><span{{ ed('menuitem', c, 'label') }}>{{ c.label }}</span></a>
             {% endfor %}
           </div>
         </div>
         {% else %}
-        <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="b2-underline hover:text-accent">{{ it.label }}</a>
+        <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="b2-underline hover:text-accent"><span{{ ed('menuitem', it, 'label') }}>{{ it.label }}</span></a>
         {% endif %}
         {% endfor %}
       </nav>
@@ -194,9 +194,9 @@
       <button @click="menuOpen=false" class="mb-6 text-mute">✕</button>
       <a href="{{ url('shopfront:shop') }}" class="block py-2 text-sm font-medium">Shop All</a>
       {% for it in primary_nav %}
-      <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-2 text-sm">{{ it.label }}</a>
+      <a href="{{ it.url }}"{% if it.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-2 text-sm"><span{{ ed('menuitem', it, 'label') }}>{{ it.label }}</span></a>
       {% for c in it.children %}
-      <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-1.5 pl-4 text-sm text-mute">{{ c.label }}</a>
+      <a href="{{ c.url }}"{% if c.new_tab %} target="_blank" rel="noopener"{% endif %} class="block py-1.5 pl-4 text-sm text-mute"><span{{ ed('menuitem', c, 'label') }}>{{ c.label }}</span></a>
       {% endfor %}
       {% endfor %}
       <a href="{{ url('shopfront:account') }}" class="mt-4 block border-t border-line py-3 text-sm">Account</a>
