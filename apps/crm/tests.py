@@ -762,3 +762,15 @@ class SampleCsvTests(CrmBase):
         html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
         self.assertIn(url, html)
         self.assertIn("Download sample CSV", html)
+
+
+class CompactToolbarTests(CrmBase):
+    def test_board_and_list_toolbars_use_small_controls(self):
+        self.login(self.admin)
+        for url in (reverse("control:crm_lead_board"), reverse("control:crm_leads") + "?view=list"):
+            html = self.client.get(url).content.decode()
+            bar = html.split('leading-none">')[1].split("</form>")[0]
+            self.assertIn("h-7", bar)
+            self.assertNotIn("text-[13px]", bar)
+            self.assertNotIn("py-1.5", bar)
+            self.assertIn("Unassigned", bar)

@@ -34,15 +34,15 @@
 </form>
 
 {# One-row filter toolbar #}
-<form class="flex flex-wrap items-center gap-1.5 text-[13px]">
-  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
-  <select name="status" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7"><option value="">Any status</option>
+<form class="flex flex-wrap items-center gap-1 text-[11px] leading-none">
+  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="h-7 min-w-[9rem] flex-1 rounded-md border border-slate-200 px-2 py-0 text-[11px] focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+  <select name="status" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]"><option value="">Any status</option>
     {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if g.get('status') == v }}>{{ l }}</option>{% endfor %}</select>
-  {% if is_admin %}<select name="assignee" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
+  {% if is_admin %}<select name="assignee" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
     {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('assignee') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
-  <label class="flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="due" value="1" class="rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('due') }}> Due</label>
-  <button class="rounded-lg bg-pink-50 px-3 py-1.5 font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Filter</button>
-  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') %}<a href="{{ url('control:crm_leads') }}" class="text-xs text-slate-500 underline">Clear</a>{% endif %}
+  <label class="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="due" value="1" class="h-3 w-3 rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('due') }}> Due</label>
+  <button class="h-7 rounded-md bg-pink-50 px-2.5 text-[11px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Filter</button>
+  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') %}<a href="{{ url('control:crm_leads') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
 </form>
 
 <form method="post" action="{{ url('control:crm_lead_assign') }}" x-data="{ n: 0 }"
@@ -96,7 +96,7 @@
   {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">columns: name, phone, business, city, source</span>
   <a href="{{ url('control:crm_lead_import_sample') }}" class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">⬇ Download sample CSV</a>
   <input type="file" name="file" accept=".csv" required class="text-xs">
-  <select name="assignee" class="rounded-lg border border-pink-200 bg-white py-1 pl-2 pr-7"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+  <select name="assignee" class="h-7 rounded-md border border-pink-200 bg-white py-0 pl-1.5 pr-6 text-[11px]"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
   <button class="rounded-lg bg-pink-600 px-3 py-1 font-medium text-white hover:bg-pink-700">Import</button>
 </form>{% endif %}
 {% if page_obj and page_obj.has_other_pages() %}<div class="flex gap-3 text-sm text-pink-700">{% if page_obj.has_previous() %}<a href="?{{ qs }}page={{ page_obj.previous_page_number() }}">← Prev</a>{% endif %}{% if page_obj.has_next() %}<a href="?{{ qs }}page={{ page_obj.next_page_number() }}">Next →</a>{% endif %}</div>{% endif %}
