@@ -405,6 +405,9 @@ class LogActivityView(PlatformStaffRequiredMixin, View):
     def post(self, request):
         p = request.POST
         kind = p.get("kind")
+        if not kind:  # form submitted without picking what happened
+            messages.error(request, "Pick what happened first.")
+            return redirect(_post_next(request, reverse("control:crm_my_day")))
         if kind not in ActivityKind.values:
             raise Http404
         outcome = p.get("outcome", "")
