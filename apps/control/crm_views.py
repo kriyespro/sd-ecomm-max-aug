@@ -186,6 +186,8 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         g = self.request.GET.copy()
         g.pop("page", None)
         ctx.update(statuses=LeadStatus.choices, is_admin=_admin(self.request.user),
+                   # Inline status edit: everything except "won" (that has its own store flow)
+                   editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
                    people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
                    today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "")
         return ctx

@@ -774,3 +774,48 @@ class CompactToolbarTests(CrmBase):
             self.assertNotIn("text-[13px]", bar)
             self.assertNotIn("py-1.5", bar)
             self.assertIn("Unassigned", bar)
+
+
+class InlineStatusListTests(CrmBase):
+    def _list(self, who):
+        self.login(who)
+        return self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+
+    def test_status_select_rendered_without_won_and_won_row_locked(self):
+        live = Lead.objects.create(name="Livelead", assigned_to=self.a, status=LeadStatus.INTERESTED)
+        won = Lead.objects.create(name="Wonlead", assigned_to=self.a, status=LeadStatus.WON)
+        html = self._list(self.a)
+        row = html.split(f'data-lead="{live.pk}"')[1].split("</tr>")[0]
+        self.assertIn(reverse("control:crm_lead_move", kwargs={"pk": live.pk}), row)
+        self.assertIn('value="interested" selected', row)
+        self.assertIn('value="lost"', row)
+        self.assertNotIn('value="won"', row)
+        won_row = html.split("Wonlead")[1].split("</tr>")[0]
+        self.assertNotIn("<select", won_row)
+        self.assertIn("Won", won_row)
+
+    def test_script_injected_once(self):
+        Lead.objects.create(name="L", assigned_to=self.a)
+        self.assertEqual(self._list(self.a).count("select[data-lead]"), 1)
+
+    def test_form_carries_csrf_token_for_inline_edit(self):
+        from django.test import Client
+        Lead.objects.create(name="L", assigned_to=self.a)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        pre = html.split("data-lead=")[0]
+        self.assertIn('name="csrfmiddlewaretoken"', pre[pre.rindex("<form"):])
+
+    def test_inline_change_persists_via_move_endpoint_and_logs(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "lost"})
+        self.assertEqual(r.status_code, 204)
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.LOST)
+        self.assertTrue(Activity.objects.filter(lead=lead, kind=ActivityKind.STAGE).exists())
+        # and back to an open stage
+        self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "contacted"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.CONTACTED)
