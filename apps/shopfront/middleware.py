@@ -363,6 +363,36 @@ def _resolve_skin(project):
 
 _EDIT_SKIP = ("/cart", "/checkout", "/_edit")
 
+_editor_js_src = None
+
+
+def _editor_script_src():
+    """URL of the editor script, unique per file content.
+
+    Production serves static files from WhiteNoise with a year-long max-age, so a
+    fixed ``/static/shopfront/inline-edit.js`` stays cached in browsers / the CDN
+    after an update and editors keep running the old script (new controls never
+    appear). The manifest-hashed name (when collectstatic built one) plus a
+    content-hash query string make every change a new URL.
+    """
+    global _editor_js_src
+    if _editor_js_src is None:
+        import hashlib
+
+        from django.contrib.staticfiles import finders
+        from django.templatetags.static import static
+
+        try:
+            url = static("shopfront/inline-edit.js")
+        except ValueError:  # manifest storage without a collected copy
+            url = "/static/shopfront/inline-edit.js"
+        path = finders.find("shopfront/inline-edit.js")
+        if path:
+            with open(path, "rb") as fh:
+                url += "?v=" + hashlib.md5(fh.read()).hexdigest()[:10]
+        _editor_js_src = url
+    return _editor_js_src
+
 _EDIT_CSS = (
     "<style id=\"sd-ed-css\">"
     "body.sd-ed [data-ed]{cursor:text;transition:outline-color .12s}"
@@ -447,10 +477,10 @@ class InlineEditMiddleware:
 
         base = request.path
         script = format_html(
-            '<script src="/static/shopfront/inline-edit.js" defer data-active="{}" '
+            '<script src="{}" defer data-active="{}" '
             'data-csrf="{}" data-save="{}" data-image="{}" data-undo="{}" data-redo="{}" '
             'data-on="{}?edit=1" data-off="{}?edit=0" data-admin="/admin/" data-product="{}"></script>',
-            "1" if editing else "0", get_token(request),
+            _editor_script_src(), "1" if editing else "0", get_token(request),
             reverse("shopfront:edit_save"), reverse("shopfront:edit_image"),
             reverse("shopfront:edit_undo"), reverse("shopfront:edit_redo"),
             base, base,

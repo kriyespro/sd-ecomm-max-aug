@@ -29,6 +29,7 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.permissions import OWNER_MANAGER, has_store_role
 from apps.catalog.models import Product
+from apps.categories.models import Category
 from apps.cms.homepage_sections import effective_order, section_keys_for_skin, sections_for_skin
 from apps.cms.models import (
     Banner, BenefitItem, InlineEditLog, MenuItem, Page, StoreProfile, ThemeSettings,
@@ -64,6 +65,7 @@ REGISTRY = {
     "theme": (ThemeSettings, {"primary_color": COLOR, "homepage_sections": SECTIONS}),
     "benefit": (BenefitItem, {"icon": TEXT, "title": TEXT, "description": TEXT}),
     "menuitem": (MenuItem, {"label": TEXT}),
+    "category": (Category, {"name": TEXT}),
     "product": (Product, {"title": TEXT, "price": DECIMAL, "sale_price": DECIMAL}),
 }
 # Models that have no ``project`` column: how to reach it.
@@ -178,6 +180,14 @@ def ed_link(kind, obj=None, field=""):
     if spec is None or field not in spec[1] or pk is None or spec[1][field] != LINK:
         return ""
     return format_html(' data-ed-link="{}:{}:{}"', kind, pk, field)
+
+
+def ed_nav(node):
+    """Marker for a main-nav label: a CMS menu item, or — when the store has no
+    menu and the nav falls back to its categories — the category name."""
+    if isinstance(node, dict) and node.get("cat"):
+        return ed("category", node, "name")
+    return ed("menuitem", node, "label")
 
 
 def ed_money(product):

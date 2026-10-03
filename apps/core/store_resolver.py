@@ -94,7 +94,7 @@ def bust_project_skin(project_id):
 # change only when the owner edits categories, pages, banners, the theme colour
 # or a shipping method — all of which bust the key via apps.core.signals.
 
-_CHROME_KEY = "storechrome:v1:{}"
+_CHROME_KEY = "storechrome:v2:{}"
 
 
 def store_chrome(project):

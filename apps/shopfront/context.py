@@ -45,7 +45,7 @@ def primary_nav(chrome):
         return [_nav_node(n) for n in menu]
     shop = reverse("shopfront:shop")
     return [
-        {"label": c.name, "url": f"{shop}?category={c.slug}",
+        {"id": c.pk, "cat": True, "label": c.name, "url": f"{shop}?category={c.slug}",
          "new_tab": False, "children": []}
         for c in (chrome or {}).get("categories", [])[:8]
     ]
