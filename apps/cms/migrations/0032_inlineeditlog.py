@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('cms', '0031_storeprofile_whatsapp_enquiry_on_detail'),
-        ('projects', '0009_project_brand'),
+        ('projects', '0008_project_signup_source'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
