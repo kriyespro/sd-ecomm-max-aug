@@ -17,7 +17,7 @@
     <option value="">Everyone</option><option value="none" {{ 'selected' if g.get('owner') == 'none' }}>Unassigned</option>
     {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('owner') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
   <button class="h-7 rounded-md bg-pink-50 px-2.5 text-[11px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Search</button>
-  {% if is_admin %}<a href="{{ url('control:crm_leads') }}?view=list#import" class="inline-flex h-7 items-center rounded-md px-2 text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">📥 Import</a>{% endif %}
+  <a href="{{ url('control:crm_leads') }}?view=list#import" class="inline-flex h-7 items-center rounded-md px-2 text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">📥 Import</a>
   {% if g.get('q') or g.get('owner') %}<a href="{{ url('control:crm_lead_board') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
   <span class="ml-auto hidden text-[10px] text-slate-400 sm:inline">Drag a card to a new stage · ⋯ for the menu</span>
 </form>
