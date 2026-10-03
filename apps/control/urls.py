@@ -399,6 +399,7 @@ urlpatterns = [
     path("crm/leads/", crmv.LeadListView.as_view(), name="crm_leads"),
     path("crm/leads/new/", crmv.LeadCreateView.as_view(), name="crm_lead_create"),
     path("crm/leads/assign/", crmv.LeadAssignView.as_view(), name="crm_lead_assign"),
+    path("crm/leads/import/sample/", crmv.LeadImportSampleView.as_view(), name="crm_lead_import_sample"),
     path("crm/leads/import/", crmv.LeadImportView.as_view(), name="crm_lead_import"),
     path("crm/leads/<int:pk>/", crmv.LeadDetailView.as_view(), name="crm_lead"),
     path("crm/leads/board/", crmv.LeadBoardView.as_view(), name="crm_lead_board"),

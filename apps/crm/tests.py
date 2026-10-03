@@ -729,3 +729,36 @@ class KanbanTests(CrmBase):
                              HTTP_HX_REQUEST="true")
         self.assertEqual(r.status_code, 204)
         self.assertEqual(Activity.objects.filter(lead=lead, kind="call").count(), 1)
+
+
+class SampleCsvTests(CrmBase):
+    def test_sample_downloads_and_round_trips_through_import(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        url = reverse("control:crm_lead_import_sample")
+        self.login(self.admin)
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn("leads-sample.csv", r["Content-Disposition"])
+        body = r.content
+        self.assertTrue(body.startswith("﻿".encode()))  # Excel-safe BOM
+        self.assertIn(b"name,phone,business,city,source", body)
+        # import the untouched sample: header skipped, 3 leads created, assigned
+        up = SimpleUploadedFile("leads-sample.csv", body, content_type="text/csv")
+        self.client.post(reverse("control:crm_lead_import"), {"file": up, "assignee": self.a.pk})
+        self.assertEqual(Lead.objects.count(), 3)
+        self.assertFalse(Lead.objects.filter(name="name").exists())
+        self.assertEqual(Lead.objects.get(name="Anita Rao").assigned_to, self.a)
+        # importing it again creates no duplicates (phone match)
+        up = SimpleUploadedFile("leads-sample.csv", body, content_type="text/csv")
+        self.client.post(reverse("control:crm_lead_import"), {"file": up})
+        self.assertEqual(Lead.objects.count(), 3)
+
+    def test_sample_is_admin_only_and_linked(self):
+        url = reverse("control:crm_lead_import_sample")
+        self.login(self.a)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn(url, html)
+        self.assertIn("Download sample CSV", html)

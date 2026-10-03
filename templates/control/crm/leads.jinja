@@ -92,8 +92,9 @@
 </form>
 
 {% if is_admin %}
-<form method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-pink-200 bg-pink-50/40 px-3 py-2 text-[13px]">
-  {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">name, phone, business, city, source</span>
+<form id="import" method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-pink-200 bg-pink-50/40 px-3 py-2 text-[13px]">
+  {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">columns: name, phone, business, city, source</span>
+  <a href="{{ url('control:crm_lead_import_sample') }}" class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">⬇ Download sample CSV</a>
   <input type="file" name="file" accept=".csv" required class="text-xs">
   <select name="assignee" class="rounded-lg border border-pink-200 bg-white py-1 pl-2 pr-7"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
   <button class="rounded-lg bg-pink-600 px-3 py-1 font-medium text-white hover:bg-pink-700">Import</button>
