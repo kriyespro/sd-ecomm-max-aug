@@ -223,6 +223,26 @@ def complete_work_request(work_request):
         is_active=False, revoked_at=timezone.now())
 
 
+# ── archive ────────────────────────────────────────────────────────────────
+
+BULK_ARCHIVE_MAX = 500
+
+
+def archive_leads(leads_qs, *, actor, restore=False):
+    """Archive (or restore) the leads in ``leads_qs``; returns how many changed.
+    Callers pass an already access-scoped queryset."""
+    if restore:
+        n = leads_qs.filter(is_archived=True).update(
+            is_archived=False, archived_at=None, archived_by=None, updated_at=timezone.now())
+    else:
+        n = leads_qs.filter(is_archived=False).update(
+            is_archived=True, archived_at=timezone.now(), archived_by=actor, updated_at=timezone.now())
+    if n:
+        record_audit(actor=actor, action=AuditLog.Action.UPDATE,
+                     changes={"crm_leads_restored" if restore else "crm_leads_archived": n})
+    return n
+
+
 # ── the caller's queue ─────────────────────────────────────────────────────
 
 def call_queue(user, *, skip=()):
@@ -234,7 +254,7 @@ def call_queue(user, *, skip=()):
     today = timezone.localdate()
     lo, _ = day_bounds(today)
     worked = Activity.objects.filter(actor=user, lead=OuterRef("pk"), occurred_at__gte=lo)
-    qs = (Lead.objects.filter(assigned_to=user, status__in=OPEN_LEAD_STATUSES)
+    qs = (Lead.objects.filter(assigned_to=user, status__in=OPEN_LEAD_STATUSES, is_archived=False)
           .annotate(worked_today=Exists(worked))
           .filter(Q(next_follow_up__lte=today) | Q(next_follow_up__isnull=True, worked_today=False))
           .order_by(F("next_follow_up").asc(nulls_last=True), "created_at"))
@@ -313,7 +333,7 @@ def board_extras():
     return {
         "won_today": Lead.objects.filter(status=LeadStatus.WON, updated_at__date=today).count(),
         "overdue_follow_ups": Lead.objects.filter(
-            next_follow_up__lt=today, status__in=[s for s in LeadStatus.values
+            is_archived=False, next_follow_up__lt=today, status__in=[s for s in LeadStatus.values
                                                   if s not in (LeadStatus.WON, LeadStatus.LOST)]).count(),
         "unverified": Collection.objects.filter(status=CollectionStatus.UNVERIFIED).count(),
         "pending_training": TrainingLog.objects.filter(status=TrainingStatus.PENDING).count(),
@@ -371,7 +391,7 @@ def board_columns(user, *, owner=None, q="", full=None, admin=False):
     now = timezone.now()
     cutoff = now - dt.timedelta(days=STALE_DAYS)
 
-    base = Lead.objects.all()
+    base = Lead.objects.filter(is_archived=False)
     if not admin:
         base = base.filter(assigned_to=user)
     elif owner == "none":

@@ -23,10 +23,10 @@
 </form>
 
 <div x-data="leadBoard()" data-move-url="{{ url('control:crm_lead_move', kwargs={'pk': 0}) }}"
-     data-won-url="{{ url('control:crm_lead_won', kwargs={'pk': 0}) }}" data-log-url="{{ url('control:crm_log') }}"
+     data-won-url="{{ url('control:crm_lead_won', kwargs={'pk': 0}) }}" data-log-url="{{ url('control:crm_log') }}" data-archive-url="{{ url('control:crm_lead_archive') }}"
      class="relative">
   {{ csrf_input }}
-  <div x-show="msg" x-cloak x-transition class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-rose-600 px-4 py-2 text-sm text-white shadow-lg" x-text="msg"></div>
+  <div x-show="msg" x-cloak x-transition class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full px-4 py-2 text-sm text-white shadow-lg" :class="ok ? 'bg-slate-800' : 'bg-rose-600'" x-text="msg"></div>
 
   <div class="flex snap-x gap-2 overflow-x-auto pb-3">
     {% for col in columns %}
@@ -55,6 +55,7 @@
                 {% for v, lab in statuses %}{% if v != l.status %}
                 <button type="button" @click="open = false; {{ 'lostFor = ' ~ l.pk if v == 'lost' else 'move(' ~ l.pk ~ ", '" ~ v ~ "')" }}" class="block w-full px-3 py-1 text-left hover:bg-pink-50">{{ lab }}</button>
                 {% endif %}{% endfor %}
+                <button type="button" @click="open = false; archive({{ l.pk }})" class="block w-full border-t border-pink-50 px-3 py-1.5 text-left hover:bg-pink-50">🗄 Archive</button>
                 <button type="button" @click="open = false; won({{ l.pk }})" class="block w-full border-t border-pink-50 px-3 py-1.5 text-left font-medium text-emerald-700 hover:bg-emerald-50">🎉 Deal won — create store</button>
               </div>
             </div>
@@ -124,11 +125,11 @@
 <script>
 document.addEventListener('alpine:init', () => {
   Alpine.data('leadBoard', () => ({
-    msg: '', lostFor: null, over: null, dragging: null, timer: null,
+    msg: '', ok: false, lostFor: null, over: null, dragging: null, timer: null,
     get root() { return this.$root; },
     token() { return this.root.querySelector('[name=csrfmiddlewaretoken]').value; },
     url(key, id) { return this.root.dataset[key].replace('/0/', '/' + id + '/'); },
-    flash(text) { this.msg = text; clearTimeout(this.timer); this.timer = setTimeout(() => this.msg = '', 3500); },
+    flash(text, ok = false) { this.ok = ok; this.msg = text; clearTimeout(this.timer); this.timer = setTimeout(() => this.msg = '', 3500); },
     card(id) { return this.root.querySelector('[data-card="' + id + '"]'); },
     bump(status, d) {
       const el = this.root.querySelector('[data-count="' + status + '"]');
@@ -172,6 +173,17 @@ document.addEventListener('alpine:init', () => {
       const t = document.createElement('input');
       t.type = 'hidden'; t.name = 'csrfmiddlewaretoken'; t.value = this.token(); f.appendChild(t);
       document.body.appendChild(f); f.submit();
+    },
+    archive(id) {
+      const c = this.card(id);
+      if (!c) return;
+      const from = c.dataset.status, parent = c.parentElement, next = c.nextElementSibling;
+      c.remove(); this.bump(from, -1);
+      const fd = new FormData();
+      fd.append('ids', id); fd.append('action', 'archive'); fd.append('csrfmiddlewaretoken', this.token());
+      fetch(this.root.dataset.archiveUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'HX-Request': 'true' } })
+        .then(r => { if (!r.ok) throw new Error(); this.flash('Archived — find it under Leads › Archived.', true); })
+        .catch(() => { parent.insertBefore(c, next); this.bump(from, 1); this.flash('Could not archive that lead.'); });
     },
     quick(id, outcome) {
       const fd = new FormData();
