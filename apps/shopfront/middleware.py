@@ -423,7 +423,9 @@ class InlineEditMiddleware:
     def __call__(self, request):
         from django.http import HttpResponseRedirect
 
-        from .inline_edit import SESSION_KEY, accept_handoff, can_edit_storefront, editor_for
+        from .inline_edit import (
+            SESSION_KEY, accept_handoff, can_edit_storefront, delegate_admin_origin, editor_for,
+        )
         from .runtime import use_edit_mode, use_product_form
 
         token = request.GET.get("sd_edit") if request.method == "GET" else None
@@ -448,13 +450,14 @@ class InlineEditMiddleware:
             request.session[SESSION_KEY] = request.GET["edit"] == "1"
         editing = bool(request.session.get(SESSION_KEY))
 
-        # A real login on this host can open the admin product form; a
-        # hand-off (DGC / platform admin) session can't, so it keeps the
-        # inline title/price editing.
+        # Product cards open the admin form. A real login on this host reaches it
+        # at the same origin; a hand-off (DGC / platform admin) session reaches it
+        # on the origin they clicked "Edit store" from. Without either, cards fall
+        # back to inline title / price editing.
         user = getattr(request, "user", None)
-        product_form = bool(
-            editing and user is not None and user.is_authenticated and can_edit_storefront(user, project)
-        )
+        direct = bool(user is not None and user.is_authenticated and can_edit_storefront(user, project))
+        admin_origin = "" if direct else delegate_admin_origin(request).rstrip("/")
+        product_form = bool(editing and (direct or admin_origin))
         with use_edit_mode(editing), use_product_form(product_form):
             response = self.get_response(request)
 
@@ -486,7 +489,7 @@ class InlineEditMiddleware:
             reverse("shopfront:edit_save"), reverse("shopfront:edit_image"),
             reverse("shopfront:edit_undo"), reverse("shopfront:edit_redo"),
             base, base,
-            reverse("control:product_edit", kwargs={"pk": 0}) if product_form else "",
+            (admin_origin + reverse("control:product_edit", kwargs={"pk": 0})) if product_form else "",
         )
         if editing and "</head>" in content:
             content = content.replace("</head>", _EDIT_CSS + "</head>", 1)

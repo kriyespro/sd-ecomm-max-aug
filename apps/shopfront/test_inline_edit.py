@@ -515,3 +515,23 @@ class InlineEditV2Tests(TestCase):
         theirs = Category.objects.create(project=self.other, name="X")
         self.assertEqual(self.save("category", theirs.pk, "name", "Hacked").status_code, 400)
         self.assertEqual(self.save("category", cat.pk, "slug", "x").status_code, 400)
+
+    def test_handoff_session_gets_cards_that_open_the_admin_on_its_origin(self):
+        self.client.logout()
+        tok = inline_edit.handoff_url(self.admin, self.project, "https://platform.test")
+        self.client.get(f"/?sd_edit={tok.split('sd_edit=')[1]}&edit=1", HTTP_HOST=HOST)
+        body = self.client.get("/", HTTP_HOST=HOST).content.decode()
+        self.assertIn(f'data-ed-product="{self.product.pk}"', body)
+        self.assertIn('data-product="https://platform.test/admin/products/0/"', body)
+        self.assertNotIn(f'data-ed="product:{self.product.pk}:title"', body)   # no inline fallback
+
+    def test_product_form_next_may_be_this_stores_own_domain_only(self):
+        self._admin_session()
+        url = f"/admin/products/{self.product.pk}/"
+        ok = f"https://{HOST}/shop/?x=1"
+        body = self.client.get(url, {"next": ok}, HTTP_HOST="platform.test").content.decode()
+        self.assertIn(f'name="next" value="{ok}"', body)
+        self.assertIn("Back to your store", body)
+        for bad in ("https://evil.test/shop/", "https://other-store.test/", f"https://{HOST}.evil.test/", "ftp://acme.test/"):
+            page = self.client.get(url, {"next": bad}, HTTP_HOST="platform.test").content.decode()
+            self.assertNotIn("Back to your store", page, bad)

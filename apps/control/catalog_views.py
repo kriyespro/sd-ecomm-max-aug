@@ -504,10 +504,25 @@ class ProductUpdateView(_ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
     template_name = "control/catalog/product_form.jinja"
 
     def _next_url(self):
-        """Same-host path to return to after saving (the storefront inline
-        editor's "Edit product" button passes the page the card was on)."""
+        """Where to return after saving: the storefront page the inline editor's
+        card click came from. A same-host path, or an absolute URL on one of
+        *this store's own* domains (the admin may live on the platform host while
+        the storefront is on the store's domain). Anything else is ignored."""
+        from urllib.parse import urlparse
+
         raw = self.request.POST.get("next") or self.request.GET.get("next") or ""
-        return safe_next(self.request, raw, "") if raw.startswith("/") else ""
+        if not raw:
+            return ""
+        if raw.startswith("/"):
+            return safe_next(self.request, raw, "")
+        parts = urlparse(raw)
+        if parts.scheme in ("http", "https") and parts.hostname:
+            project = self.active_project
+            hosts = {d.host.strip().lower() for d in project.domains.all() if d.is_verified}
+            hosts.add((project.primary_domain or "").strip().lower())
+            if parts.hostname.lower() in hosts:
+                return raw
+        return ""
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
