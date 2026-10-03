@@ -11,14 +11,15 @@
 {% endblock %}
 
 {% block crm_body %}
-<form class="flex flex-wrap items-center gap-1.5 text-[13px]">
-  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
-  {% if is_admin %}<select name="owner" onchange="this.form.submit()" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7">
+<form class="flex flex-wrap items-center gap-1 text-[11px] leading-none">
+  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="h-7 min-w-[9rem] flex-1 rounded-md border border-slate-200 px-2 py-0 text-[11px] focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+  {% if is_admin %}<select name="owner" onchange="this.form.submit()" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]">
     <option value="">Everyone</option><option value="none" {{ 'selected' if g.get('owner') == 'none' }}>Unassigned</option>
     {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('owner') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
-  <button class="rounded-lg bg-pink-50 px-3 py-1.5 font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Search</button>
-  {% if g.get('q') or g.get('owner') %}<a href="{{ url('control:crm_lead_board') }}" class="text-xs text-slate-500 underline">Clear</a>{% endif %}
-  <span class="ml-auto hidden text-[11px] text-slate-400 sm:inline">Drag a card to a new stage · ⋯ on a card for the menu</span>
+  <button class="h-7 rounded-md bg-pink-50 px-2.5 text-[11px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Search</button>
+  {% if is_admin %}<a href="{{ url('control:crm_leads') }}?view=list#import" class="inline-flex h-7 items-center rounded-md px-2 text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">📥 Import</a>{% endif %}
+  {% if g.get('q') or g.get('owner') %}<a href="{{ url('control:crm_lead_board') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
+  <span class="ml-auto hidden text-[10px] text-slate-400 sm:inline">Drag a card to a new stage · ⋯ for the menu</span>
 </form>
 
 <div x-data="leadBoard()" data-move-url="{{ url('control:crm_lead_move', kwargs={'pk': 0}) }}"

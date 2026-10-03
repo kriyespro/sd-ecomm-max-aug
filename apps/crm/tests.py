@@ -744,3 +744,93 @@ class LeadPageLayoutTests(CrmBase):
         self.assertNotIn("<details", html)  # edit form is always open now
         r = self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected", "lead": lead.pk})
         self.assertEqual(r.status_code, 302)
+
+
+class SampleCsvTests(CrmBase):
+    def test_sample_downloads_and_round_trips_through_import(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        url = reverse("control:crm_lead_import_sample")
+        self.login(self.admin)
+        r = self.client.get(url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn("leads-sample.csv", r["Content-Disposition"])
+        body = r.content
+        self.assertTrue(body.startswith("﻿".encode()))  # Excel-safe BOM
+        self.assertIn(b"name,phone,business,city,source", body)
+        # import the untouched sample: header skipped, 3 leads created, assigned
+        up = SimpleUploadedFile("leads-sample.csv", body, content_type="text/csv")
+        self.client.post(reverse("control:crm_lead_import"), {"file": up, "assignee": self.a.pk})
+        self.assertEqual(Lead.objects.count(), 3)
+        self.assertFalse(Lead.objects.filter(name="name").exists())
+        self.assertEqual(Lead.objects.get(name="Anita Rao").assigned_to, self.a)
+        # importing it again creates no duplicates (phone match)
+        up = SimpleUploadedFile("leads-sample.csv", body, content_type="text/csv")
+        self.client.post(reverse("control:crm_lead_import"), {"file": up})
+        self.assertEqual(Lead.objects.count(), 3)
+
+    def test_sample_is_admin_only_and_linked(self):
+        url = reverse("control:crm_lead_import_sample")
+        self.login(self.a)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn(url, html)
+        self.assertIn("Download sample CSV", html)
+
+
+class CompactToolbarTests(CrmBase):
+    def test_board_and_list_toolbars_use_small_controls(self):
+        self.login(self.admin)
+        for url in (reverse("control:crm_lead_board"), reverse("control:crm_leads") + "?view=list"):
+            html = self.client.get(url).content.decode()
+            bar = html.split('leading-none">')[1].split("</form>")[0]
+            self.assertIn("h-7", bar)
+            self.assertNotIn("text-[13px]", bar)
+            self.assertNotIn("py-1.5", bar)
+            self.assertIn("Unassigned", bar)
+
+
+class InlineStatusListTests(CrmBase):
+    def _list(self, who):
+        self.login(who)
+        return self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+
+    def test_status_select_rendered_without_won_and_won_row_locked(self):
+        live = Lead.objects.create(name="Livelead", assigned_to=self.a, status=LeadStatus.INTERESTED)
+        won = Lead.objects.create(name="Wonlead", assigned_to=self.a, status=LeadStatus.WON)
+        html = self._list(self.a)
+        row = html.split(f'data-lead="{live.pk}"')[1].split("</tr>")[0]
+        self.assertIn(reverse("control:crm_lead_move", kwargs={"pk": live.pk}), row)
+        self.assertIn('value="interested" selected', row)
+        self.assertIn('value="lost"', row)
+        self.assertNotIn('value="won"', row)
+        won_row = html.split("Wonlead")[1].split("</tr>")[0]
+        self.assertNotIn("<select", won_row)
+        self.assertIn("Won", won_row)
+
+    def test_script_injected_once(self):
+        Lead.objects.create(name="L", assigned_to=self.a)
+        self.assertEqual(self._list(self.a).count("select[data-lead]"), 1)
+
+    def test_form_carries_csrf_token_for_inline_edit(self):
+        from django.test import Client
+        Lead.objects.create(name="L", assigned_to=self.a)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        pre = html.split("data-lead=")[0]
+        self.assertIn('name="csrfmiddlewaretoken"', pre[pre.rindex("<form"):])
+
+    def test_inline_change_persists_via_move_endpoint_and_logs(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        self.login(self.a)
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "lost"})
+        self.assertEqual(r.status_code, 204)
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.LOST)
+        self.assertTrue(Activity.objects.filter(lead=lead, kind=ActivityKind.STAGE).exists())
+        # and back to an open stage
+        self.client.post(reverse("control:crm_lead_move", kwargs={"pk": lead.pk}), {"status": "contacted"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.status, LeadStatus.CONTACTED)

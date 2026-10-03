@@ -186,6 +186,8 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         g = self.request.GET.copy()
         g.pop("page", None)
         ctx.update(statuses=LeadStatus.choices, is_admin=_admin(self.request.user),
+                   # Inline status edit: everything except "won" (that has its own store flow)
+                   editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
                    people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
                    today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "")
         return ctx
@@ -307,6 +309,27 @@ class LeadWonView(PlatformStaffRequiredMixin, View):
         lead.save(update_fields=["status", "updated_at"])
         messages.success(request, "Marked won — create the store now.")
         return redirect("control:store_create")
+
+
+class LeadImportSampleView(PlatformAdminRequiredMixin, View):
+    """A ready-to-edit CSV in exactly the shape LeadImportView reads. UTF-8 with
+    a BOM so Excel opens it with the right encoding."""
+
+    ROWS = [
+        ["name", "phone", "business", "city", "source"],
+        ["Ramesh Sharma", "9876543210", "Sharma Jewellers", "Pune", "Cold call"],
+        ["Anita Rao", "9123456780", "Rao Boutique", "Hyderabad", "Referral"],
+        ["Imran Khan", "9988776655", "Khan Mobiles", "Jaipur", "Instagram ad"],
+    ]
+
+    def get(self, request):
+        from django.http import HttpResponse
+
+        buf = io.StringIO()
+        csv.writer(buf).writerows(self.ROWS)
+        resp = HttpResponse("\ufeff" + buf.getvalue(), content_type="text/csv; charset=utf-8")
+        resp["Content-Disposition"] = 'attachment; filename="leads-sample.csv"'
+        return resp
 
 
 class LeadImportView(PlatformAdminRequiredMixin, View):

@@ -34,15 +34,15 @@
 </form>
 
 {# One-row filter toolbar #}
-<form class="flex flex-wrap items-center gap-1.5 text-[13px]">
-  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="min-w-[10rem] flex-1 rounded-lg border border-slate-200 px-2.5 py-1.5 focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
-  <select name="status" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7"><option value="">Any status</option>
+<form class="flex flex-wrap items-center gap-1 text-[11px] leading-none">
+  <input name="q" value="{{ g.get('q','') }}" placeholder="🔍 Search name, phone, business" class="h-7 min-w-[9rem] flex-1 rounded-md border border-slate-200 px-2 py-0 text-[11px] focus:border-pink-400 focus:outline-none focus:ring-1 focus:ring-pink-400">
+  <select name="status" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]"><option value="">Any status</option>
     {% for v, l in statuses %}<option value="{{ v }}" {{ 'selected' if g.get('status') == v }}>{{ l }}</option>{% endfor %}</select>
-  {% if is_admin %}<select name="assignee" class="rounded-lg border border-slate-200 py-1.5 pl-2 pr-7"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
+  {% if is_admin %}<select name="assignee" class="h-7 rounded-md border border-slate-200 py-0 pl-1.5 pr-6 text-[11px]"><option value="">Anyone</option><option value="none" {{ 'selected' if g.get('assignee') == 'none' }}>Unassigned</option>
     {% for p in people %}<option value="{{ p.pk }}" {{ 'selected' if g.get('assignee') == p.pk|string }}>{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% endif %}
-  <label class="flex items-center gap-1 rounded-lg bg-white px-2 py-1.5 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="due" value="1" class="rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('due') }}> Due</label>
-  <button class="rounded-lg bg-pink-50 px-3 py-1.5 font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Filter</button>
-  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') %}<a href="{{ url('control:crm_leads') }}" class="text-xs text-slate-500 underline">Clear</a>{% endif %}
+  <label class="inline-flex h-7 items-center gap-1 rounded-md bg-white px-2 text-slate-600 ring-1 ring-slate-200"><input type="checkbox" name="due" value="1" class="h-3 w-3 rounded border-pink-300 text-pink-600" {{ 'checked' if g.get('due') }}> Due</label>
+  <button class="h-7 rounded-md bg-pink-50 px-2.5 text-[11px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-100">Filter</button>
+  {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') %}<a href="{{ url('control:crm_leads') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
 </form>
 
 <form method="post" action="{{ url('control:crm_lead_assign') }}" x-data="{ n: 0 }"
@@ -64,7 +64,19 @@
             <a class="font-medium text-slate-800 hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
             <span class="text-xs text-slate-400">{% if l.business %}· {{ l.business }}{% endif %}{% if l.city %} · {{ l.city }}{% endif %}{% if l.phone %} · {{ l.phone }}{% endif %}</span>
           </td>
-          <td class="px-3 py-1.5"><span class="whitespace-nowrap rounded-full bg-pink-50 px-2 py-0.5 text-[11px] font-medium text-pink-800">{{ l.get_status_display() }}</span></td>
+          <td class="px-3 py-1.5">
+            {% if l.status == 'won' %}
+            <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" title="Won deals are locked">🎉 Won</span>
+            {% else %}
+            <span class="inline-flex items-center gap-1">
+              <select data-lead="{{ l.pk }}" data-prev="{{ l.status }}" data-url="{{ url('control:crm_lead_move', kwargs={'pk': l.pk}) }}" aria-label="Change status of {{ l.name }}"
+                      class="h-6 cursor-pointer rounded-full border-0 py-0 pl-2 pr-6 text-[11px] font-medium focus:ring-1 focus:ring-pink-400 {{ 'bg-slate-100 text-slate-600' if l.status == 'lost' else 'bg-pink-50 text-pink-800' }}">
+                {% for v, lab in editable_statuses %}<option value="{{ v }}" {{ 'selected' if l.status == v }}>{{ lab }}</option>{% endfor %}
+              </select>
+              <span data-flash class="text-[11px] text-emerald-600 opacity-0 transition-opacity">✓</span>
+            </span>
+            {% endif %}
+          </td>
           {% if is_admin %}<td class="hidden px-3 py-1.5 text-slate-500 sm:table-cell">{{ (l.assigned_to.get_full_name() or l.assigned_to.email) if l.assigned_to else "—" }}</td>{% endif %}
           <td class="whitespace-nowrap px-3 py-1.5 {{ 'font-medium text-rose-600' if l.next_follow_up and l.next_follow_up <= today else 'text-slate-500' }}">{{ l.next_follow_up or "—" }}</td>
           <td class="whitespace-nowrap px-3 py-1.5 text-right">
@@ -92,11 +104,45 @@
 </form>
 
 {% if is_admin %}
-<form method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-pink-200 bg-pink-50/40 px-3 py-2 text-[13px]">
-  {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">name, phone, business, city, source</span>
+<form id="import" method="post" action="{{ url('control:crm_lead_import') }}" enctype="multipart/form-data" class="flex flex-wrap items-center gap-2 rounded-xl border border-dashed border-pink-200 bg-pink-50/40 px-3 py-2 text-[13px]">
+  {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">columns: name, phone, business, city, source</span>
+  <a href="{{ url('control:crm_lead_import_sample') }}" class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">⬇ Download sample CSV</a>
   <input type="file" name="file" accept=".csv" required class="text-xs">
-  <select name="assignee" class="rounded-lg border border-pink-200 bg-white py-1 pl-2 pr-7"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+  <select name="assignee" class="h-7 rounded-md border border-pink-200 bg-white py-0 pl-1.5 pr-6 text-[11px]"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
   <button class="rounded-lg bg-pink-600 px-3 py-1 font-medium text-white hover:bg-pink-700">Import</button>
 </form>{% endif %}
 {% if page_obj and page_obj.has_other_pages() %}<div class="flex gap-3 text-sm text-pink-700">{% if page_obj.has_previous() %}<a href="?{{ qs }}page={{ page_obj.previous_page_number() }}">← Prev</a>{% endif %}{% if page_obj.has_next() %}<a href="?{{ qs }}page={{ page_obj.next_page_number() }}">Next →</a>{% endif %}</div>{% endif %}
+
+<div x-data="{ err: '' }" x-init="window.__crmListErr = m => { err = m; setTimeout(() => err = '', 3500) }">
+  <div x-show="err" x-cloak x-transition class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-rose-600 px-4 py-2 text-sm text-white shadow-lg" x-text="err"></div>
+</div>
+<script>
+document.addEventListener('change', async (ev) => {
+  const sel = ev.target.closest && ev.target.closest('select[data-lead]');
+  if (!sel) return;
+  const prev = sel.dataset.prev, next = sel.value;
+  if (prev === next) return;
+  const tok = sel.form && sel.form.querySelector('[name=csrfmiddlewaretoken]');
+  const fd = new FormData();
+  fd.append('status', next);
+  fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
+  sel.disabled = true;
+  try {
+    const r = await fetch(sel.dataset.url, { method: 'POST', body: fd, credentials: 'same-origin' });
+    if (!r.ok) {
+      let msg = 'Could not change the status.';
+      try { msg = (await r.json()).error || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    sel.dataset.prev = next;
+    sel.classList.toggle('bg-slate-100', next === 'lost'); sel.classList.toggle('text-slate-600', next === 'lost');
+    sel.classList.toggle('bg-pink-50', next !== 'lost'); sel.classList.toggle('text-pink-800', next !== 'lost');
+    const f = sel.parentElement.querySelector('[data-flash]');
+    if (f) { f.style.opacity = 1; setTimeout(() => f.style.opacity = 0, 1400); }
+  } catch (e) {
+    sel.value = prev;
+    if (window.__crmListErr) window.__crmListErr(e.message || 'Could not change the status.');
+  } finally { sel.disabled = false; }
+});
+</script>
 {% endblock %}
