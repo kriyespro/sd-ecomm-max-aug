@@ -48,11 +48,30 @@ class Lead(TimeStampedModel):
     created_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                    related_name="+")
     next_follow_up = models.DateField(null=True, blank=True, db_index=True)
+    # When the lead entered its current stage — drives "3d in stage" on the board.
+    stage_changed_at = models.DateTimeField(null=True, blank=True)
     converted_project = models.ForeignKey("projects.Project", null=True, blank=True,
                                           on_delete=models.SET_NULL, related_name="+")
 
     class Meta:
         ordering = ["-created_at"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._orig_status = self.__dict__.get("status")
+
+    def refresh_from_db(self, *args, **kwargs):
+        super().refresh_from_db(*args, **kwargs)
+        self._orig_status = self.__dict__.get("status")
+
+    def save(self, *args, **kwargs):
+        if self.pk is None or self.status != self._orig_status:
+            self.stage_changed_at = timezone.now()
+            uf = kwargs.get("update_fields")
+            if uf is not None:
+                kwargs["update_fields"] = set(uf) | {"stage_changed_at"}
+        super().save(*args, **kwargs)
+        self._orig_status = self.status
 
     def __str__(self):
         return f"{self.name} ({self.get_status_display()})"
@@ -76,6 +95,7 @@ class ActivityKind(models.TextChoices):
     STORE_SETUP = "store_setup", "Store set-up"
     PRODUCT_ENTRY = "product_entry", "Product entry"
     MAINTENANCE = "maintenance", "Store maintenance"
+    STAGE = "stage_change", "Stage change"
 
 
 class ActivityOutcome(models.TextChoices):
