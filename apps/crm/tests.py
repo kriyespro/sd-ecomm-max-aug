@@ -729,3 +729,18 @@ class KanbanTests(CrmBase):
                              HTTP_HX_REQUEST="true")
         self.assertEqual(r.status_code, 204)
         self.assertEqual(Activity.objects.filter(lead=lead, kind="call").count(), 1)
+
+
+class LeadPageLayoutTests(CrmBase):
+    def test_three_cards_compact_buttons_and_working_post(self):
+        lead = Lead.objects.create(name="Zed", phone="9876543210", assigned_to=self.a)
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_lead", kwargs={"pk": lead.pk})).content.decode()
+        for heading in ("Log this contact", ">History<", "Edit details"):
+            self.assertIn(heading, html)
+        self.assertIn("xl:grid-cols-3", html)
+        self.assertIn("rounded-lg px-2.5 py-1.5 text-xs", html)   # compact outcome buttons
+        self.assertNotIn("py-3 text-sm font-medium transition", html.split("Log this contact")[1])
+        self.assertNotIn("<details", html)  # edit form is always open now
+        r = self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected", "lead": lead.pk})
+        self.assertEqual(r.status_code, 302)
