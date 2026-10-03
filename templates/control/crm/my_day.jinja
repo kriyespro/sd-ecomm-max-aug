@@ -1,84 +1,112 @@
 {% extends "control/crm/base_crm.jinja" %}
-{% from "control/crm/_crm.jinja" import range_tabs, tile, bar, outcome_buttons, contact_buttons, empty %}
+{% from "control/crm/_crm.jinja" import range_tabs, bar, outcome_buttons, contact_buttons, empty %}
 {% block page_title %}My day{% endblock %}
 {% block crm_title %}My day{% endblock %}
-{% block crm_sub %}Work your queue top to bottom — one lead at a time.{% endblock %}
+{% block crm_sub %}· work your queue, one lead at a time{% endblock %}
 {% block crm_actions %}{{ range_tabs(ranges, range_key) }}{% endblock %}
 
 {% block crm_body %}
-{# Progress strip #}
-<div class="grid grid-cols-2 gap-3 md:grid-cols-4">
-  <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
-    <div class="text-xs font-medium uppercase tracking-wide text-pink-400">Calls today</div>
-    <div class="mt-1 text-2xl font-semibold text-pink-700">{{ today_calls }}<span class="text-sm font-normal text-slate-400"> / {{ targets.calls }}</span></div>
+{# ── numbers: one slim strip ───────────────────────────────────────────── #}
+<div class="grid grid-cols-2 divide-x divide-pink-50 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-pink-100 sm:grid-cols-4">
+  <div class="px-3.5 py-2.5">
+    <div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">Calls today</div>
+    <div class="text-lg font-semibold leading-tight text-pink-700">{{ today_calls }}<span class="text-xs font-normal text-slate-400"> / {{ targets.calls }}</span></div>
     {{ bar(today_calls, targets.calls) }}
   </div>
-  {{ tile("Demos", me.demos, ("goal " ~ targets.demos) if range_key == 'today' else range_label) }}
-  {{ tile("Trained others", me.trained_others, "confirmed") }}
-  {{ tile("Collected", "₹" ~ me.collection, ("+₹" ~ me.collection_pending ~ " awaiting verify") if me.collection_pending else "verified", "green") }}
+  <div class="px-3.5 py-2.5">
+    <div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">Demos{% if range_key != 'today' %} · {{ range_label|lower }}{% endif %}</div>
+    <div class="text-lg font-semibold leading-tight text-pink-700">{{ me.demos }}{% if range_key == 'today' %}<span class="text-xs font-normal text-slate-400"> / {{ targets.demos }}</span>{% endif %}</div>
+  </div>
+  <div class="border-t border-pink-50 px-3.5 py-2.5 sm:border-t-0">
+    <div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">Trained others</div>
+    <div class="text-lg font-semibold leading-tight text-pink-700">{{ me.trained_others }}</div>
+  </div>
+  <div class="border-t border-pink-50 px-3.5 py-2.5 sm:border-t-0">
+    <div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">Collected</div>
+    <div class="text-lg font-semibold leading-tight text-emerald-600">₹{{ me.collection }}</div>
+    {% if me.collection_pending %}<div class="text-[10px] text-amber-600">+₹{{ me.collection_pending }} to verify</div>{% endif %}
+  </div>
 </div>
 
-{# Next up #}
+{# ── things waiting on me: slim chips ──────────────────────────────────── #}
+{% if pending_confirm or waiting_to_train %}
+<div class="flex flex-wrap gap-1.5 text-[12px]">
+  {% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-3 py-1 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">✅ {{ pending_confirm }} training{{ '' if pending_confirm == 1 else 's' }} to confirm</a>{% endif %}
+  {% if waiting_to_train %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-violet-50 px-3 py-1 text-violet-800 ring-1 ring-violet-200 hover:bg-violet-100">🧑‍🏫 {{ waiting_to_train }} waiting for you to train</a>{% endif %}
+</div>
+{% endif %}
+
+{# ── next up ──────────────────────────────────────────────────────────── #}
 {% if nxt %}
-<div class="rounded-2xl bg-white p-5 shadow-sm ring-2 ring-pink-200">
-  <div class="flex flex-wrap items-start justify-between gap-3">
+<div class="rounded-2xl bg-white p-3.5 shadow-sm ring-2 ring-pink-200">
+  <div class="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
     <div class="min-w-0">
-      <p class="text-xs font-semibold uppercase tracking-wide text-pink-500">Next up · {{ queue_left }} in your queue</p>
-      <h2 class="mt-1 truncate text-2xl font-semibold text-slate-900">{{ nxt.name }}</h2>
-      <p class="text-sm text-slate-500">{{ nxt.business or "—" }}{% if nxt.city %} · {{ nxt.city }}{% endif %} · <span class="rounded-full bg-pink-50 px-2 py-0.5 text-xs text-pink-700">{{ nxt.get_status_display() }}</span>
-        {% if nxt.next_follow_up %}<span class="text-xs text-amber-700">· follow-up {{ nxt.next_follow_up }}</span>{% endif %}</p>
+      <p class="text-[10px] font-semibold uppercase tracking-wide text-pink-500">Next up · {{ queue_left }} in queue</p>
+      <h2 class="truncate text-lg font-semibold leading-tight text-slate-900">{{ nxt.name }}</h2>
+      <p class="mt-0.5 text-xs text-slate-500">{{ nxt.business or "—" }}{% if nxt.city %} · {{ nxt.city }}{% endif %}
+        <span class="ml-1 rounded-full bg-pink-50 px-1.5 py-0.5 text-[10px] font-medium text-pink-700">{{ nxt.get_status_display() }}</span>
+        {% if nxt.next_follow_up %}<span class="ml-1 text-[11px] text-amber-700">⏰ {{ nxt.next_follow_up.strftime("%d %b") }}</span>{% endif %}</p>
     </div>
-    {{ contact_buttons(nxt) }}
+    {{ contact_buttons(nxt, true) }}
   </div>
-  {% if nxt.notes %}<p class="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{{ nxt.notes }}</p>{% endif %}
-  {% if nxt_activity %}<div class="mt-3 text-xs text-slate-400">Last: {% for a in nxt_activity %}{{ a.get_kind_display() }}{% if a.outcome %} ({{ a.get_outcome_display() }}){% endif %} · {{ a.occurred_at.strftime("%d %b") }}{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
-  <div class="mt-4 border-t border-pink-100 pt-4">
-    <p class="mb-2 text-sm font-medium text-slate-700">How did it go?</p>
-    {{ outcome_buttons(nxt, url('control:crm_my_day'), csrf_input) }}
+  {% if nxt.notes %}<p class="mt-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">{{ nxt.notes }}</p>{% endif %}
+  {% if nxt_activity %}<p class="mt-1.5 text-[11px] text-slate-400">Last: {% for a in nxt_activity %}{{ a.get_kind_display() }}{% if a.outcome %} ({{ a.get_outcome_display() }}){% endif %} · {{ a.occurred_at.strftime("%d %b") }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  <div class="mt-3 border-t border-pink-50 pt-3">
+    {{ outcome_buttons(nxt, url('control:crm_my_day'), csrf_input, true) }}
   </div>
-  <div class="mt-3 flex items-center justify-between text-xs">
+  <div class="mt-2 flex items-center justify-between text-[11px]">
     <a href="{{ url('control:crm_lead', kwargs={'pk': nxt.pk}) }}" class="text-pink-700 hover:underline">Open full lead →</a>
     <a href="?skip={{ skip_param }}" class="text-slate-500 hover:underline">Skip for now</a>
   </div>
 </div>
 {% else %}
-{{ empty("🎉", "Queue clear — nothing to call right now.", "Leads come back when a follow-up is due. Ask the super admin for more leads, or add your own.") }}
-<div><a href="{{ url('control:crm_leads') }}" class="inline-flex rounded-xl bg-pink-600 px-4 py-2 text-sm font-medium text-white hover:bg-pink-700">Go to leads</a></div>
+<div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-dashed border-pink-200 bg-pink-50/40 px-4 py-4">
+  <div><p class="text-sm font-medium text-slate-700">🎉 Queue clear — nothing to call right now.</p>
+    <p class="text-xs text-slate-500">Leads come back when a follow-up is due. Add your own or import a list.</p></div>
+  <a href="{{ url('control:crm_leads') }}" class="rounded-lg bg-pink-600 px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-pink-700">Go to leads</a>
+</div>
 {% endif %}
 
-<div class="grid gap-4 md:grid-cols-2">
-  <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
-    <h3 class="mb-2 text-sm font-semibold text-pink-900">Follow-ups due</h3>
-    {% for l in due_leads %}
-    <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex justify-between border-b border-pink-50 py-2 text-sm hover:bg-pink-50/50">
-      <span>{{ l.name }} <span class="text-xs text-slate-400">{{ l.phone }}</span></span><span class="text-xs text-rose-600">{{ l.next_follow_up }}</span></a>
-    {% else %}<p class="text-sm text-slate-400">Nothing due. 👌</p>{% endfor %}
+{# ── due follow-ups + tasks: compact lists ─────────────────────────────── #}
+<div class="grid gap-3 md:grid-cols-2">
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <div class="mb-1 flex items-center justify-between">
+      <h3 class="text-[13px] font-semibold text-pink-900">Follow-ups due <span class="ml-1 rounded-full bg-pink-100 px-1.5 text-[11px] text-pink-800">{{ due_leads|length }}</span></h3>
+      {% if due_leads|length > 6 %}<a href="{{ url('control:crm_leads') }}?view=list&due=1" class="text-[11px] text-pink-700 hover:underline">all →</a>{% endif %}
+    </div>
+    {% for l in due_leads[:6] %}
+    <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex items-center justify-between gap-2 border-t border-pink-50 py-1.5 text-[13px] hover:bg-pink-50/50">
+      <span class="min-w-0 truncate">{{ l.name }} <span class="text-[11px] text-slate-400">{{ l.phone }}</span></span>
+      <span class="shrink-0 text-[11px] text-rose-600">{{ l.next_follow_up.strftime("%d %b") }}</span></a>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-xs text-slate-400">Nothing due. 👌</p>{% endfor %}
   </div>
-  <div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
-    <h3 class="mb-2 text-sm font-semibold text-pink-900">My tasks</h3>
-    {% for t in open_tasks %}
-    <form method="post" action="{{ url('control:crm_task_done', kwargs={'pk': t.pk}) }}" class="flex items-center justify-between border-b border-pink-50 py-2 text-sm">
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <div class="mb-1 flex items-center justify-between">
+      <h3 class="text-[13px] font-semibold text-pink-900">My tasks <span class="ml-1 rounded-full bg-pink-100 px-1.5 text-[11px] text-pink-800">{{ open_tasks|length }}</span></h3>
+      <a href="{{ url('control:crm_tasks') }}" class="text-[11px] text-pink-700 hover:underline">all →</a>
+    </div>
+    {% for t in open_tasks[:6] %}
+    <form method="post" action="{{ url('control:crm_task_done', kwargs={'pk': t.pk}) }}" class="flex items-center justify-between gap-2 border-t border-pink-50 py-1.5 text-[13px]">
       {{ csrf_input }}<input type="hidden" name="next" value="{{ url('control:crm_my_day') }}">
-      <span>{{ t.title }}{% if t.due_on %} <span class="text-xs text-slate-400">· {{ t.due_on }}</span>{% endif %}</span>
-      <button class="rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">Done</button></form>
-    {% else %}<p class="text-sm text-slate-400">No open tasks.</p>{% endfor %}
+      <span class="min-w-0 truncate">{{ t.title }}{% if t.due_on %} <span class="text-[11px] text-slate-400">· {{ t.due_on.strftime("%d %b") }}</span>{% endif %}</span>
+      <button class="shrink-0 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">✓ Done</button></form>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-xs text-slate-400">No open tasks.</p>{% endfor %}
   </div>
 </div>
 
+{# ── stores assigned to me ─────────────────────────────────────────────── #}
 {% if my_work %}
-<div class="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-pink-100">
-  <h3 class="mb-2 text-sm font-semibold text-pink-900">Stores assigned to me</h3>
-  {% for a in my_work %}<div class="flex items-center justify-between border-b border-pink-50 py-2 text-sm"><span>{{ a.project.name }} <span class="text-xs text-slate-400">· {{ a.get_scope_display() }}</span></span></div>{% endfor %}
-  <form method="post" action="{{ url('control:crm_log') }}" class="mt-3 flex flex-wrap items-center gap-2 text-sm">
+<div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+  <h3 class="mb-1 text-[13px] font-semibold text-pink-900">Stores assigned to me</h3>
+  <div class="flex flex-wrap gap-1.5 text-xs">{% for a in my_work %}<span class="rounded-full bg-pink-50 px-2.5 py-0.5 text-pink-800">{{ a.project.name }} <span class="text-pink-400">· {{ a.get_scope_display() }}</span></span>{% endfor %}</div>
+  <form method="post" action="{{ url('control:crm_log') }}" class="mt-2 flex flex-wrap items-center gap-1.5 text-[12px]">
     {{ csrf_input }}<input type="hidden" name="kind" value="product_entry"><input type="hidden" name="outcome" value="done"><input type="hidden" name="next" value="{{ url('control:crm_my_day') }}">
     <span class="text-slate-600">I added</span>
-    <input name="count" type="number" min="1" value="10" class="w-20 rounded-lg border border-slate-200 px-2 py-1">
+    <input name="count" type="number" min="1" value="10" class="h-7 w-16 rounded-md border border-slate-200 px-2 py-0 text-[12px]">
     <span class="text-slate-600">products to</span>
-    <select name="project" class="rounded-lg border border-slate-200 px-2 py-1">{% for a in my_work %}<option value="{{ a.project_id }}">{{ a.project.name }}</option>{% endfor %}</select>
-    <button class="rounded-lg bg-pink-600 px-3 py-1 text-white hover:bg-pink-700">Log it</button>
+    <select name="project" class="h-7 rounded-md border border-slate-200 py-0 pl-2 pr-7 text-[12px]">{% for a in my_work %}<option value="{{ a.project_id }}">{{ a.project.name }}</option>{% endfor %}</select>
+    <button class="h-7 rounded-md bg-pink-600 px-3 text-[12px] font-medium text-white hover:bg-pink-700">Log it</button>
   </form>
 </div>
 {% endif %}
-{% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="block rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 ring-1 ring-amber-200">{{ pending_confirm }} training{{ '' if pending_confirm == 1 else 's' }} waiting for your confirmation — tap to review.</a>{% endif %}
-{% if waiting_to_train %}<a href="{{ url('control:crm_training') }}" class="block rounded-2xl bg-violet-50 p-4 text-sm text-violet-800 ring-1 ring-violet-200">🧑‍🏫 {{ waiting_to_train }} {{ 'person is' if waiting_to_train == 1 else 'people are' }} waiting for you to train them.</a>{% endif %}
 {% endblock %}

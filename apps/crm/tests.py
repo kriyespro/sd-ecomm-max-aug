@@ -1208,7 +1208,7 @@ class TrainingFlowTests(CrmBase):
         TrainingLog.objects.create(trainee=self.c, trainer=self.b, status=TrainingStatus.ASSIGNED, initiated_by=self.c)
         self.login(self.b)
         html = self.client.get(reverse("control:crm_my_day")).content.decode()
-        self.assertIn("waiting for your confirmation", html)
+        self.assertIn("1 training to confirm", html)
         self.assertIn("waiting for you to train", html)
 
     def test_owner_blocked_and_csrf(self):
@@ -1298,3 +1298,89 @@ class LeadLogStepsTests(CrmBase):
         self.assertIn('name="csrfmiddlewaretoken"', self.form)
         self.assertIn("tel:9213529044", self.page)
         self.assertIn("wa.me/919213529044", self.page)
+
+
+class MyDayCompactTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+        self.url = reverse("control:crm_my_day")
+
+    def _html(self):
+        return self.client.get(self.url).content.decode()
+
+    def test_followup_and_note_come_before_the_result_buttons(self):
+        Lead.objects.create(name="Alpha Lead", phone="9876543210", assigned_to=self.a)
+        html = self._html()
+        form = html.split("Next up")[1]
+        self.assertLess(form.index('name="follow_in"'), form.index('type="submit" name="outcome"'))
+        self.assertLess(form.index('name="note"'), form.index('type="submit" name="outcome"'))
+        self.assertIn("Tap the result", form)
+        self.assertEqual(form.count('type="submit" name="outcome"'), 5)   # 5 call results
+        self.assertIn('name="kind" value="demo"', form)                    # + demo
+
+    def test_compact_markers_and_slim_stats_strip(self):
+        Lead.objects.create(name="Alpha Lead", assigned_to=self.a)
+        html = self._html()
+        self.assertIn("divide-x", html)                  # one strip, not four tall tiles
+        self.assertIn("Calls today", html)
+        self.assertNotIn("py-3 text-sm font-medium transition", html)   # old big result buttons gone
+        strip = html.split("Calls today")[0][-400:] + html.split("Calls today")[1].split("Next up")[0]
+        self.assertNotIn("text-2xl", strip)              # stat numbers are text-lg now
+
+    def test_one_tap_result_with_note_and_followup_posts(self):
+        lead = Lead.objects.create(name="Alpha Lead", assigned_to=self.a)
+        r = self.client.post(reverse("control:crm_log"), {
+            "lead": lead.pk, "kind": "call", "outcome": "no_answer", "follow_in": "3",
+            "note": "try evening", "next": self.url})
+        self.assertRedirects(r, self.url, fetch_redirect_response=False)
+        lead.refresh_from_db()
+        self.assertEqual(lead.next_follow_up, timezone.localdate() + dt.timedelta(days=3))
+        self.assertEqual(Activity.objects.get(lead=lead).note, "try evening")
+
+    def test_lists_cap_at_six_with_see_all_links(self):
+        for i in range(8):
+            Lead.objects.create(name=f"Due{i}", assigned_to=self.a, status=LeadStatus.CONTACTED,
+                                next_follow_up=timezone.localdate() - dt.timedelta(days=1))
+        for i in range(8):
+            Task.objects.create(title=f"Task{i}", assignee=self.a)
+        html = self._html()
+        due_box = html.split("Follow-ups due")[1].split("My tasks")[0]
+        task_box = html.split("My tasks")[1]
+        self.assertEqual(sum(f"Due{i}" in due_box for i in range(8)), 6)      # list capped at 6
+        self.assertEqual(sum(f"Task{i}" in task_box for i in range(8)), 6)
+        self.assertIn("view=list&due=1", due_box)                             # "all →" link
+        self.assertIn(reverse("control:crm_tasks"), task_box)
+        self.assertRegex(due_box, r">\s*8\s*<")                              # badge shows the true total
+        self.assertRegex(task_box.split("</h3>")[0], r">\s*8\s*<")
+
+    def test_empty_queue_is_a_slim_banner_with_a_next_step(self):
+        html = self._html()
+        self.assertIn("Queue clear", html)
+        self.assertIn(reverse("control:crm_leads"), html)
+
+    def test_alert_chips_only_when_something_waits(self):
+        self.assertNotIn("to confirm", self._html())
+        TrainingLog.objects.create(trainee=self.a, trainer=self.b, status=TrainingStatus.PENDING, initiated_by=self.b)
+        self.assertIn("1 training to confirm", self._html())
+
+    def test_store_logger_only_for_assigned_dgcs(self):
+        self.assertNotIn("products to", self._html())
+        wr = StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.owner)
+        svc.assign_store_work(wr, self.a, actor=self.admin)
+        html = self._html()
+        self.assertIn("products to", html)
+        self.assertIn("ShopCo", html)
+
+    def test_range_tabs_still_work(self):
+        for key in ("today", "yesterday", "7d", "month"):
+            self.assertEqual(self.client.get(self.url + f"?range={key}").status_code, 200)
+
+    def test_csrf_present_on_the_logging_form(self):
+        from django.test import Client
+        Lead.objects.create(name="Alpha Lead", assigned_to=self.a)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        html = c.get(self.url).content.decode()
+        form = html.split('action="%s"' % reverse("control:crm_log"))[1].split("</form>")[0]
+        self.assertIn('name="csrfmiddlewaretoken"', form)
