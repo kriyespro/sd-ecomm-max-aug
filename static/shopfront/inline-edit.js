@@ -430,6 +430,12 @@
       if (t.dataset.edT === 'image') pickImage(t); else startEdit(t);
       return;
     }
+    var card = cfg.product && e.target.closest && e.target.closest('[data-ed-product]');
+    if (card) {       // click anywhere on a product card -> its admin form (returns here after Save)
+      e.preventDefault(); e.stopPropagation();
+      location.href = editProductUrl(card.dataset.edProduct);
+      return;
+    }
     var m = e.target.closest && e.target.closest('[data-ed-money]');
     if (m) { e.preventDefault(); e.stopPropagation(); openMoney(m); return; }
     var a = e.target.closest && e.target.closest('a[data-ed-link]');

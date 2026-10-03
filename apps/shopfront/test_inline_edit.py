@@ -431,6 +431,7 @@ class InlineEditV2Tests(TestCase):
             body = resp.content.decode()
             self.assertIn(f'data-ed-product="{self.product.pk}"', body, f"{slug} card edit button")
             self.assertIn('data-product="/admin/products/0/"', body, slug)
+            self.assertIn("[data-ed-product]:hover", body, f"{slug} card hover outline")
             self.assertNotIn(f'data-ed="product:{self.product.pk}:title"', body, f"{slug} inline title")
             self.assertNotIn("data-ed-money", body, f"{slug} inline price")
             self.assertIn(f'data-ed="menuitem:{self.item.pk}:label"', body, f"{slug} menu")
@@ -443,7 +444,7 @@ class InlineEditV2Tests(TestCase):
                 self.assertIn(f'data-ed="benefit:{self.trust.pk}:title"', body, f"{slug} trust")
             off = self.client.get("/", HTTP_HOST=HOST, data={"preview_skin": skin.pk, "edit": "0"})
             off_body = off.content.decode()
-            for marker in ("data-ed=", "data-ed-money", "data-ed-section", "data-ed-popup", "data-ed-product"):
+            for marker in ("data-ed=", "data-ed-money", "data-ed-section", "data-ed-popup", 'data-ed-product="'):
                 self.assertNotIn(marker, off_body, f"{slug} {marker} leaked outside edit mode")
             self.assertIn("setTimeout(() => { try { if (!localStorage", off_body, f"{slug} popup must still auto-open")
 
@@ -454,7 +455,7 @@ class InlineEditV2Tests(TestCase):
         tok = inline_edit.handoff_url(self.admin, self.project)
         self.client.get(f"/?sd_edit={tok.split('sd_edit=')[1]}&edit=1", HTTP_HOST=HOST)
         body = self.client.get("/", HTTP_HOST=HOST).content.decode()
-        self.assertNotIn("data-ed-product", body)
+        self.assertNotIn('data-ed-product="', body)   # (the stylesheet mentions the selector)
         self.assertIn(f'data-ed-money="{self.product.pk}"', body)
         self.assertIn(f'data-ed="product:{self.product.pk}:title"', body)
 

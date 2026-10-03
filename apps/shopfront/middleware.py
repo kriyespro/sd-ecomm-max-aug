@@ -398,6 +398,8 @@ _EDIT_CSS = (
     "body.sd-ed [data-ed]{cursor:text;transition:outline-color .12s}"
     "body.sd-ed [data-ed]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
     "body.sd-ed [data-ed][data-ed-t=image]{cursor:pointer}"
+    "body.sd-ed [data-ed-product]{cursor:pointer}"
+    "body.sd-ed [data-ed-product]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
     "body.sd-ed [data-ed]:empty::before{content:attr(data-ed-ph);opacity:.55;font-style:italic}"
     "body.sd-ed [data-ed][contenteditable=true]{outline:2px solid #6366f1!important;outline-offset:3px;"
     "text-transform:none;min-width:2ch}"
