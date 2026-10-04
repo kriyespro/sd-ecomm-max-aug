@@ -52,6 +52,9 @@
             </span>
             <span class="text-xs text-mute">Card · UPI · Netbanking · Wallet</span>
             {% elif p.key == 'cod' %}Cash on delivery
+            {% elif p.key == 'whatsapp' %}
+            <span class="font-semibold" style="color:#128C7E">Order on WhatsApp</span>
+            <span class="text-xs text-mute">We save your order, then you send it to us on WhatsApp</span>
             {% else %}{{ p.label }}{% endif %}
           </label>
           {% else %}
@@ -89,7 +92,7 @@
         {% include "shopfront/partials/_checkout_summary.jinja" %}
       </div>
 
-      <button class="mt-6 w-full bg-ink py-4 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Place order</button>
+      <button class="mt-6 w-full bg-ink py-4 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">{% if payment_providers | length == 1 and payment_providers[0].key == 'whatsapp' %}Order on WhatsApp{% else %}Place order{% endif %}</button>
     </aside>
   </form>
 </div>

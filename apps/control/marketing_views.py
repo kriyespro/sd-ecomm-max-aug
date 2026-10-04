@@ -349,8 +349,11 @@ class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
 class WhatsAppEnquiryForm(forms.ModelForm):
     class Meta:
         model = StoreProfile
-        fields = ["whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"]
+        fields = ["whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail",
+                  "whatsapp_order_enabled", "whatsapp_only"]
         labels = {
+            "whatsapp_order_enabled": "Offer \"Order on WhatsApp\" at checkout",
+            "whatsapp_only": "WhatsApp-only store (checkout offers only Order on WhatsApp)",
             "whatsapp_enquiry_enabled": "Show a WhatsApp button next to Add to cart "
                                         "on every product card",
             "whatsapp_enquiry_on_detail": "Also show it on the product page itself, "
@@ -359,13 +362,23 @@ class WhatsAppEnquiryForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-        if (
-            (cleaned.get("whatsapp_enquiry_enabled") or cleaned.get("whatsapp_enquiry_on_detail"))
-            and not self.instance.whatsapp
-        ):
-            for field in ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"):
-                if cleaned.get(field):
-                    self.add_error(field, "Add a WhatsApp number on Store profile first.")
+        flags = ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail",
+                 "whatsapp_order_enabled", "whatsapp_only")
+        if any(cleaned.get(f) for f in flags):
+            digits = "".join(c for c in self.instance.whatsapp if c.isdigit())
+            if not digits:
+                for field in flags:
+                    if cleaned.get(field):
+                        self.add_error(field, "Add a WhatsApp number on Store profile first.")
+            elif not 8 <= len(digits) <= 15 and (
+                cleaned.get("whatsapp_order_enabled") or cleaned.get("whatsapp_only")
+            ):
+                self.add_error(
+                    "whatsapp_order_enabled",
+                    "The WhatsApp number on Store profile looks invalid — use international format, e.g. +9198…",
+                )
+        if cleaned.get("whatsapp_only"):
+            cleaned["whatsapp_order_enabled"] = True
         return cleaned
 
 
@@ -387,7 +400,9 @@ class WhatsAppEnquiryView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView
                      changes={
                          "whatsapp_enquiry_enabled": self.object.whatsapp_enquiry_enabled,
                          "whatsapp_enquiry_on_detail": self.object.whatsapp_enquiry_on_detail,
+                         "whatsapp_order_enabled": self.object.whatsapp_order_enabled,
+                         "whatsapp_only": self.object.whatsapp_only,
                      },
                      request=self.request)
-        messages.success(self.request, "WhatsApp enquiry button settings saved.")
+        messages.success(self.request, "WhatsApp settings saved.")
         return resp

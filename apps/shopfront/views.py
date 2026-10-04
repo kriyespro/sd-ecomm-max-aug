@@ -38,6 +38,7 @@ from apps.customers import services as customers_svc
 from apps.orders.models import Order
 from apps.accounts import ratelimit as login_ratelimit
 from apps.referrals import services as referrals_svc
+from . import whatsapp_order as wa_order
 from apps.referrals.models import CommissionStatus as ReferralCommissionStatus
 from apps.reviews import services as reviews_svc
 from apps.reviews.models import ReviewStatus
@@ -463,6 +464,11 @@ def _checkout_payment_providers(project):
         out.append({"key": cfg.provider, "label": cfg.label})
     # Online gateways first, Cash on delivery last.
     out.sort(key=lambda p: p["key"] == "cod")
+    wa = wa_order.ordering_profile(project)
+    if wa:
+        option = {"key": wa_order.WHATSAPP_METHOD, "label": "Order on WhatsApp"}
+        # WhatsApp-only store: it is the single option. Otherwise it sits last.
+        out = [option] if wa.whatsapp_only else out + [option]
     return out
 
 
@@ -508,10 +514,17 @@ class CheckoutView(View):
                 return redirect("shopfront:checkout")
 
         method_key = (request.POST.get("payment_method") or "cod").strip()
+        wa_profile = wa_order.ordering_profile(project)
+        if wa_profile and wa_profile.whatsapp_only:
+            method_key = wa_order.WHATSAPP_METHOD
+        use_whatsapp = method_key == wa_order.WHATSAPP_METHOD
+        if use_whatsapp and not wa_profile:
+            messages.error(request, "That payment method is not available.")
+            return redirect("shopfront:checkout")
         # A gateway (Razorpay) needs the final amount — shipping included — before
         # its remote order is created, so create the order first with no payment,
         # price shipping onto it, then initiate the gateway payment.
-        gateway = method_key not in ("cod", "manual")
+        gateway = method_key not in ("cod", "manual") and not use_whatsapp
 
         shipping_method = None
         if method_id:
@@ -530,7 +543,7 @@ class CheckoutView(View):
                 phone=address["phone"], shipping_address=address,
                 customer_note=request.POST.get("customer_note", "").strip(),
                 coupon_code=coupon or None,
-                payment_method=None if gateway else method_key,
+                payment_method=None if (gateway or use_whatsapp) else method_key,
                 user=request.user if request.user.is_authenticated else None,
                 shipping_method=shipping_method,
             )
@@ -539,6 +552,10 @@ class CheckoutView(View):
             return redirect("shopfront:checkout")
 
         referrals_svc.attribute_order(order, request.COOKIES.get(_REF_COOKIE))
+        if use_whatsapp:
+            # No payment row: the seller confirms the order and agrees payment
+            # over WhatsApp. (Orders without payments are never auto-cancelled.)
+            Order.objects.filter(pk=order.pk).update(admin_note="Placed via WhatsApp checkout")
 
         placed = request.session.get("shopfront_orders", [])
         request.session["shopfront_orders"] = list({*placed, order.number})
@@ -569,6 +586,8 @@ class CheckoutView(View):
             )
             return render(request, "shopfront/checkout_pay.jinja", ctx)
 
+        if use_whatsapp:
+            return redirect(reverse("shopfront:order", kwargs={"number": order.number}) + "?wa=1")
         return redirect("shopfront:order", number=order.number)
 
 
@@ -638,7 +657,14 @@ class OrderView(View):
             "content_type": "product",
             "order_id": order.number,
         }, order.number)
-        return render(request, "shopfront/order.jinja", base_context(request, project, order=order))
+        ctx = base_context(request, project, order=order)
+        # Offer the hand-off while the order has no payment attempt (WhatsApp
+        # orders are saved payment-less); ?wa=1 means "just placed, open it".
+        wa_profile = wa_order.ordering_profile(project)
+        if wa_profile and order.status == "pending" and not order.payments.exists():
+            ctx["wa_order_url"] = wa_order.build_link(wa_profile, order, project.name)
+            ctx["wa_auto_open"] = request.GET.get("wa") == "1"
+        return render(request, "shopfront/order.jinja", ctx)
 
 
 class OrderPayRetryView(View):

@@ -719,6 +719,16 @@ class StoreProfile(TenantScopedModel):
         default=False,
         help_text="Also show it on the product page itself, next to Buy now / Add to bag.",
     )
+    whatsapp_order_enabled = models.BooleanField(
+        default=False,
+        help_text="Offer \"Order on WhatsApp\" as a checkout option: the order is saved "
+                  "in the dashboard, then the shopper sends it to your WhatsApp number.",
+    )
+    whatsapp_only = models.BooleanField(
+        default=False,
+        help_text="WhatsApp-only store: checkout offers only \"Order on WhatsApp\" "
+                  "(no online payment or COD).",
+    )
     address = models.TextField(
         blank=True, help_text="Full postal address, shown in the footer.",
     )
@@ -755,6 +765,14 @@ class StoreProfile(TenantScopedModel):
 
         shrink_image_field(self.logo, target_kb=40, max_edge=512)
         super().save(*args, **kwargs)
+
+    @property
+    def whatsapp_ordering_on(self):
+        """True when WhatsApp checkout can actually run (flag + a usable number)."""
+        return bool(
+            (self.whatsapp_order_enabled or self.whatsapp_only)
+            and 8 <= len(self.whatsapp_digits) <= 15
+        )
 
     @property
     def whatsapp_digits(self):
