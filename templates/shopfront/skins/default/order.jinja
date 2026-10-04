@@ -36,6 +36,23 @@
     <p>{{ order.shipping_address.get('city') }}, {{ order.shipping_address.get('state') }} {{ order.shipping_address.get('postal_code') }} · {{ order.shipping_address.get('country') }}</p>
   </div>
 
+  {% if wa_order_url %}
+  <div class="mt-8 border border-[#25D366]/40 bg-[#25D366]/5 p-5 text-left">
+    <p class="text-sm font-medium text-ink">One last step — send your order to us on WhatsApp.</p>
+    <p class="mt-1 text-xs text-mute">Your order is saved. Tap the button and press Send in WhatsApp so we can confirm it and arrange payment.</p>
+    <a id="wa-send" href="{{ wa_order_url }}" class="mt-3 inline-block bg-[#25D366] px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-[#1ebe5b]">Send order on WhatsApp</a>
+  </div>
+  {% if wa_auto_open %}
+  <script>
+    (function () {
+      var key = "wa_sent_{{ order.number }}";
+      try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (e) {}
+      setTimeout(function () { window.location.href = document.getElementById("wa-send").href; }, 900);
+    })();
+  </script>
+  {% endif %}
+  {% endif %}
+
   {% if order.can_retry_payment %}
   <div class="mt-8 border border-rose-200 bg-rose-50 p-5 text-left">
     <p class="text-sm font-medium text-rose-700">Payment didn't complete.</p>
