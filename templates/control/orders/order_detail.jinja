@@ -122,10 +122,14 @@
         <div class="rounded-lg border border-slate-200 p-3 text-sm">
           <div class="flex items-center justify-between">
             <span class="font-medium text-slate-700">{{ p.get_provider_display() }}</span>
-            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if p.status == 'paid' else 'bg-amber-100 text-amber-700' if 'refund' in p.status else 'bg-slate-200 text-slate-600' }}">{{ p.get_status_display() }}</span>
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 font-bold text-emerald-700' if p.status == 'paid' else 'bg-amber-100 text-amber-700' if 'refund' in p.status else 'bg-orange-100 font-bold text-orange-700' if (p.provider == 'upi' and p.status == 'pending') else 'bg-slate-200 text-slate-600' }}">{{ p.get_status_display() }}</span>
           </div>
           <p class="mt-1 text-slate-500">{{ p.currency }} {{ p.amount }}{% if p.amount_refunded %} · refunded {{ p.amount_refunded }}{% endif %}</p>
-          {% if p.provider_payment_id %}<p class="text-xs text-slate-400">{{ p.provider_payment_id }}</p>{% endif %}
+          {% if p.provider == 'upi' and p.status == 'pending' %}
+          <p class="mt-1 rounded bg-orange-50 px-2 py-1 text-xs font-bold text-orange-700">
+            {% if p.provider_payment_id %}Customer says paid · UTR <span class="select-all font-mono">{{ p.provider_payment_id }}</span> — check your UPI app, then capture.{% else %}Waiting for the customer to pay / send UTR.{% endif %}
+          </p>
+          {% elif p.provider_payment_id %}<p class="text-xs text-slate-400">{{ p.provider_payment_id }}</p>{% endif %}
           {% if p.error_message %}<p class="text-xs text-red-600">{{ p.error_message }}</p>{% endif %}
 
           {% if p.status in ['pending', 'authorized', 'created'] %}

@@ -113,3 +113,61 @@ class UpiFormTests(TestCase):
 
     def test_enable_requires_upi_id(self):
         self.assertFalse(self._form(upi_id="").is_valid())
+
+
+class UpiStatusBannerTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="UpiBan", status="active", currency="INR")
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider=Provider.UPI, is_enabled=True,
+            credentials={"upi_id": "shop@okhdfcbank"},
+        )
+        self.order = Order.objects.create(
+            project=self.project, number="UPI-9", email="b@t.test", grand_total=Decimal("100"),
+        )
+
+    def test_state_pending_then_paid(self):
+        from apps.shopfront import views
+
+        self.assertIsNone(views._upi_state(self.order))
+        p = pay.record_offline_payment(order=self.order, provider_key=Provider.UPI)
+        self.assertEqual(views._upi_state(self.order), {"state": "pending", "utr": ""})
+        pay.submit_upi_reference(payment=p, utr="412345678901")
+        self.assertEqual(views._upi_state(self.order)["utr"], "412345678901")
+        pay.capture_payment(payment=p)
+        self.assertEqual(views._upi_state(self.order)["state"], "paid")
+
+
+class UpiOrderPageRenderTests(TestCase):
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="UpiPage", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="upi.page.test", is_verified=True)
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider=Provider.UPI, is_enabled=True,
+            credentials={"upi_id": "shop@okhdfcbank"},
+        )
+        self.order = Order.objects.create(
+            project=self.project, number="UPG-1", email="b@t.test", grand_total=Decimal("100"),
+        )
+        self.payment = pay.record_offline_payment(order=self.order, provider_key=Provider.UPI)
+        s = self.client.session
+        s["shopfront_orders"] = ["UPG-1"]
+        s.save()
+
+    def _get(self):
+        return self.client.get("/order/UPG-1/", HTTP_HOST="upi.page.test")
+
+    def test_pending_banner_orange_then_utr_post_then_paid_green(self):
+        r = self._get()
+        self.assertContains(r, "Payment pending")
+        self.assertContains(r, "text-orange-600")
+        r = self.client.post("/order/UPG-1/upi/", {"utr": "412345678901"},
+                             HTTP_HOST="upi.page.test", follow=True)
+        self.assertContains(r, "We got your reference")
+        pay.capture_payment(payment=self.payment)
+        r = self._get()
+        self.assertContains(r, "Payment confirmed")
+        self.assertContains(r, "text-emerald-700")
+        self.assertNotContains(r, "Payment pending")
