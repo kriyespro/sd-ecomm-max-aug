@@ -243,6 +243,46 @@ PAGES: dict[str, dict] = {
             ("Jewellery trust", "Not covered", "Certificate verification page"),
         ],
     },
+    "whatsapp-store": {
+        "title": "Sell on WhatsApp with Your Own Store | Free Trial | shopinaday",
+        "description": "Turn WhatsApp into your order desk. Customers pick products on your store, you get a ready-made order on WhatsApp. Orders saved in your dashboard. Free trial, no card.",
+        "eyebrow": "WhatsApp store for India",
+        "headline": "Take orders on WhatsApp",
+        "accent": "without the back-and-forth",
+        "sub": "Share one store link. Customers choose products and send you a ready-made order on WhatsApp. No more copying orders from chats.",
+        "checks": ["Order arrives on your WhatsApp", "Saved in your dashboard too", "Optional WhatsApp-only store"],
+        "spot_title": "WhatsApp ordering that stays organised",
+        "spot_sub": "Your customers keep using WhatsApp. You get a proper store behind it.",
+        "spot": [
+            ("Ready-made order message", "Items, quantities, total, name, phone and address, filled in for the customer. They just press Send."),
+            ("Every order saved", "Orders also land in your dashboard, so nothing is lost in a chat. Stock updates and customers are recorded."),
+            ("WhatsApp-only store", "Want no online payment at all? Turn on WhatsApp-only and checkout offers just Order on WhatsApp. You agree payment in chat."),
+            ("Or offer both", "Keep UPI and Cash on Delivery and add Order on WhatsApp as one more choice. You decide per store."),
+        ],
+        "faq": [
+            ("How does a customer order?", "They add products to the cart on your store, fill in their delivery details and tap Order on WhatsApp. WhatsApp opens with the order ready to send to you."),
+            ("Do I still see the order in my dashboard?", "Yes. The order is saved first, as pending, so it shows in your Orders list even if the customer forgets to press Send."),
+            ("Can I run a store with only WhatsApp ordering?", "Yes. Switch on WhatsApp-only store and checkout shows just Order on WhatsApp, with no online payment or COD."),
+            ("Do I need a WhatsApp Business API account?", "No. Ordering uses your normal WhatsApp number through a click-to-chat link. The optional automatic order updates need the WhatsApp Cloud API."),
+        ],
+        "final": "Your customers are already on WhatsApp. Meet them there.",
+        "mock": "whatsapp",
+        "store_hint": "Sharma Bakery",
+        "pains_title": "Taking orders in WhatsApp chats gets messy",
+        "pains": [
+            ("Typing out prices and items for every customer", "Customers pick from your store and the order message writes itself."),
+            ("Orders buried in chats and forgotten", "Every order is saved in your dashboard."),
+            ("Missing address or phone number", "Checkout collects name, phone and address before the order is sent."),
+        ],
+        "compare_head": ("Orders by chat only", "shopinaday on WhatsApp"),
+        "compare": [
+            ("Order message", "Typed by hand", "Filled in automatically"),
+            ("Order record", "Scroll through chats", "Saved in your dashboard"),
+            ("Address and phone", "Ask again and again", "Collected at checkout"),
+            ("Product catalogue", "Photos in chat", "A proper store link"),
+            ("Online payment", "Not possible", "Add UPI and COD any time"),
+        ],
+    },
 }
 
 

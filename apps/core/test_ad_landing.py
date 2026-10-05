@@ -117,3 +117,17 @@ class LegalPageTests(TestCase):
             resp = self.client.get(path, HTTP_HOST="shop.test")
             self.assertContains(resp, 'href="/privacy/"')
             self.assertContains(resp, 'href="/terms/"')
+
+
+@override_settings(ALLOWED_HOSTS=["*"], PLATFORM_HOSTS=["shop.test"])
+class WhatsAppStoreLandingTests(TestCase):
+    def test_renders_with_whatsapp_mock_and_signup_cta(self):
+        resp = self.client.get("/whatsapp-store/?utm_source=meta", HTTP_HOST="shop.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Take orders on WhatsApp")
+        self.assertContains(resp, "Send order on WhatsApp")  # chat mock
+        self.assertContains(resp, "lp=whatsapp-store")
+        self.assertContains(resp, "utm_source=meta")
+
+    def test_no_testimonials_section_without_real_quotes(self):
+        self.assertFalse(PAGES["whatsapp-store"].get("testimonials"))
