@@ -1,0 +1,46 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Testimonials{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-slate-700">Testimonials</h2>
+    <a href="{{ url('control:testimonial_create') }}" class="rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-800">Add testimonial</a>
+  </div>
+  <p class="text-xs text-slate-500">
+    Real seller quotes shown under “What sellers say” on the landing pages. A quote
+    goes live only when it is <b>published</b> and you have confirmed the seller's
+    <b>permission</b>. Changes show on the pages within a few minutes.
+  </p>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+        <tr><th class="px-4 py-2">Quote</th><th class="px-4 py-2">Seller</th>
+          <th class="px-4 py-2">Pages</th><th class="px-4 py-2">Permission</th>
+          <th class="px-4 py-2">Live</th><th class="px-4 py-2"></th></tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in testimonials %}
+        <tr class="hover:bg-slate-50">
+          <td class="max-w-xs px-4 py-2 text-slate-700">{{ t.quote | truncate(90) }}</td>
+          <td class="px-4 py-2 text-slate-500">{{ t.name }}{% if t.role %}<br><span class="text-xs">{{ t.role }}</span>{% endif %}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ t.pages | join(', ') or "All pages" }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if t.consent_confirmed else 'bg-amber-100 text-amber-700' }}">
+              {{ "confirmed" if t.consent_confirmed else "missing" }}</span>
+          </td>
+          <td class="px-4 py-2">
+            <span class="rounded px-2 py-0.5 text-xs {{ 'bg-emerald-100 text-emerald-700' if (t.is_published and t.consent_confirmed) else 'bg-slate-200 text-slate-600' }}">
+              {{ "yes" if (t.is_published and t.consent_confirmed) else "no" }}</span>
+          </td>
+          <td class="px-4 py-2 text-right"><a href="{{ url('control:testimonial_edit', kwargs={'pk': t.pk}) }}" class="text-slate-600 hover:underline">Edit</a></td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="px-4 py-6 text-center text-slate-400">No testimonials yet. Add real quotes from sellers who agreed to be quoted.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

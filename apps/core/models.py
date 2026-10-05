@@ -84,3 +84,66 @@ class AuditLog(TimeStampedModel):
     def __str__(self):
         who = self.actor or "system"
         return f"{who} {self.action} {self.target_type}#{self.target_id}"
+
+
+_TESTIMONIALS_CACHE_KEY = "marketing:testimonials:v1"
+_TESTIMONIALS_CACHE_TTL = 300
+
+
+class Testimonial(TimeStampedModel):
+    """A real seller quote shown on the public marketing/ad landing pages.
+
+    Platform-admin managed (not tenant-scoped). A quote only goes live when it
+    is both published AND ``consent_confirmed`` -- i.e. the seller agreed to
+    be quoted -- so a half-entered row can never reach a paid-ad page.
+    """
+
+    quote = models.TextField(max_length=500)
+    name = models.CharField(max_length=80)
+    role = models.CharField(
+        max_length=120, blank=True,
+        help_text="e.g. “Owner, Nisha Boutique, Pune”.",
+    )
+    pages = models.JSONField(
+        default=list, blank=True,
+        help_text="Landing-page slugs this quote appears on. Leave empty for all pages.",
+    )
+    consent_confirmed = models.BooleanField(
+        default=False,
+        help_text="I have this seller's permission to publish their name and words.",
+    )
+    is_published = models.BooleanField(default=False)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "-created_at"]
+
+    def __str__(self):
+        return f"{self.name}: {self.quote[:40]}"
+
+    def save(self, *args, **kwargs):
+        from django.core.cache import cache
+
+        super().save(*args, **kwargs)
+        cache.delete(_TESTIMONIALS_CACHE_KEY)
+
+    def delete(self, *args, **kwargs):
+        from django.core.cache import cache
+
+        out = super().delete(*args, **kwargs)
+        cache.delete(_TESTIMONIALS_CACHE_KEY)
+        return out
+
+
+def testimonials_for(slug):
+    """Live quotes for a landing page as ``[(quote, name, role), ...]``."""
+    from django.core.cache import cache
+
+    rows = cache.get(_TESTIMONIALS_CACHE_KEY)
+    if rows is None:
+        rows = list(
+            Testimonial.objects.filter(is_published=True, consent_confirmed=True)
+            .values_list("quote", "name", "role", "pages")
+        )
+        cache.set(_TESTIMONIALS_CACHE_KEY, rows, _TESTIMONIALS_CACHE_TTL)
+    return [(q, n, r) for q, n, r, pages in rows if not pages or slug in pages]
