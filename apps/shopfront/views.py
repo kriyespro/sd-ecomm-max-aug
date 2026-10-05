@@ -659,7 +659,8 @@ class OrderView(View):
             "content_type": "product",
             "order_id": order.number,
         }, order.number)
-        ctx = base_context(request, project, order=order, upi=upi, upi_state=upi_state)
+        ctx = base_context(request, project, order=order, upi=upi, upi_state=upi_state,
+                           **_order_page_extras(order))
         # Offer the hand-off while the order has no payment attempt (WhatsApp
         # orders are saved payment-less); ?wa=1 means "just placed, open it".
         wa_profile = wa_order.ordering_profile(project)
@@ -698,6 +699,27 @@ def _upi_panel(project, order):
         "qr_url": qr_url,
         "qr_svg": qr_svg,
         "utr": payment.provider_payment_id,
+    }
+
+
+_TIMELINE_LABEL = {"status": "Order {}", "payment": "Payment {}", "fulfillment": "Delivery {}"}
+
+
+def _order_page_extras(order):
+    """Customer-facing pieces of the thank-you page: payment method, and the
+    status timeline (newest first). Staff ``note`` events are internal — never
+    shown to the shopper."""
+    payment = order.payments.order_by("-created_at").first()
+    timeline = []
+    for e in order.events.exclude(kind="note").order_by("-created_at", "-id"):
+        fmt = _TIMELINE_LABEL.get(e.kind)
+        if not fmt or not e.to_value:
+            continue
+        timeline.append({"label": fmt.format(e.to_value.replace("_", " ")).capitalize(), "at": e.created_at})
+    return {
+        "pay_provider": payment.provider if payment else "",
+        "pay_method": payment.get_provider_display() if payment else "",
+        "timeline": timeline,
     }
 
 
