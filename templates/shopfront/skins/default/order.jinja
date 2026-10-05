@@ -2,121 +2,239 @@
 {% block title %}Order {{ order.number }} · {{ store.name }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-2xl px-5 py-16 text-center lg:px-8">
-  {% if upi_state %}
-  {% if upi_state.state == 'paid' %}
-  <div role="status" class="mb-8 border-2 border-emerald-500 bg-emerald-50 px-5 py-4 text-left">
-    <p class="text-base font-bold text-emerald-700">✓ Payment confirmed</p>
-    <p class="mt-0.5 text-xs font-semibold text-emerald-700">The store has received your UPI payment{% if upi_state.utr %} · ref {{ upi_state.utr }}{% endif %}.</p>
-  </div>
-  {% else %}
-  <div role="status" data-upi-pending class="mb-8 border-2 border-orange-400 bg-orange-50 px-5 py-4 text-left">
-    <p class="text-base font-bold text-orange-600">⏳ Payment pending</p>
-    <p class="mt-0.5 text-xs font-semibold text-orange-600">{% if upi_state.utr %}We got your reference ({{ upi_state.utr }}). The store is verifying it — this page updates automatically.{% else %}Pay by UPI and submit your UTR below so the store can confirm.{% endif %}</p>
-  </div>
-  {% if upi_state.utr %}
-  <script>
-    setTimeout(function () {
-      var a = document.activeElement;
-      if (a && a.tagName === "INPUT") return;
-      location.reload();
-    }, 30000);
-  </script>
-  {% endif %}
-  {% endif %}
-  {% endif %}
+{# Status → colour. Solid, bold chips so every state reads at a glance. #}
+{% set os_tone = {'pending': 'orange', 'confirmed': 'blue', 'processing': 'indigo', 'packed': 'violet', 'shipped': 'cyan', 'delivered': 'green', 'cancelled': 'red', 'failed': 'red', 'returned': 'pink', 'refunded': 'pink'} %}
+{% set ps_tone = {'pending': 'orange', 'authorized': 'blue', 'paid': 'green', 'partially_refunded': 'violet', 'refunded': 'pink', 'failed': 'red'} %}
+{% set fs_tone = {'unfulfilled': 'gray', 'partial': 'blue', 'fulfilled': 'green'} %}
+{% set tone_hex = {'orange': '#ea580c', 'blue': '#2563eb', 'indigo': '#4f46e5', 'violet': '#7c3aed', 'cyan': '#0891b2', 'green': '#16a34a'} %}
+{% set step_idx = {'pending': 0, 'confirmed': 1, 'processing': 1, 'packed': 2, 'shipped': 3, 'delivered': 4} %}
+{% set steps = ['Placed', 'Confirmed', 'Packed', 'Shipped', 'Delivered'] %}
+{% set ended = order.status in ['cancelled', 'failed', 'returned', 'refunded'] %}
+{% set cur = step_idx.get(order.status, 0) %}
+{% set cod_due = pay_provider == 'cod' and order.payment_status == 'pending' %}
+{% set addr = order.shipping_address %}
 
-  <p class="font-display text-5xl text-accent">✓</p>
-  <h1 class="mt-4 font-display text-3xl">Thank you</h1>
-  <p class="mt-2 text-sm text-mute">Order <span class="font-medium text-ink">{{ order.number }}</span> · {{ order.get_status_display() }} · {{ order.get_payment_status_display() }}</p>
+<style>
+  .op-wrap{max-width:68rem;margin:0 auto;padding:2.5rem 1.25rem 4rem}
+  .op-grid{display:grid;gap:1.5rem}
+  @media(min-width:900px){.op-grid{grid-template-columns:1.15fr .85fr;align-items:start;gap:2rem}}
+  .op-col{display:grid;gap:1.5rem;min-width:0}
+  .op-card{border:1px solid rgba(128,128,128,.3);padding:1.25rem 1.4rem}
+  .op-h{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;opacity:.6;margin:0 0 .8rem}
+  .op-chip{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem .8rem;border-radius:999px;font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#fff;background:#6b7280}
+  .op-chip small{font-size:10px;font-weight:700;opacity:.85;letter-spacing:.08em}
+  .op-chip[data-tone=green]{background:#16a34a}.op-chip[data-tone=orange]{background:#ea580c}
+  .op-chip[data-tone=blue]{background:#2563eb}.op-chip[data-tone=indigo]{background:#4f46e5}
+  .op-chip[data-tone=violet]{background:#7c3aed}.op-chip[data-tone=cyan]{background:#0891b2}
+  .op-chip[data-tone=red]{background:#dc2626}.op-chip[data-tone=pink]{background:#db2777}
+  .op-chip[data-tone=gray]{background:#6b7280}
+  .op-steps{display:flex;list-style:none;margin:0;padding:0}
+  .op-step{flex:1;text-align:center;position:relative;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;opacity:.45}
+  .op-step::before{content:"";display:block;width:26px;height:26px;border-radius:50%;margin:0 auto .45rem;background:rgba(128,128,128,.35);position:relative;z-index:1}
+  .op-step::after{content:"";position:absolute;top:12px;left:-50%;width:100%;height:3px;background:rgba(128,128,128,.3)}
+  .op-step:first-child::after{display:none}
+  .op-step[data-s=done]{opacity:1;color:#16a34a}
+  .op-step[data-s=done]::before{background:#16a34a;content:"✓";color:#fff;font-size:14px;line-height:26px}
+  .op-step[data-s=done]::after{background:#16a34a}
+  .op-step[data-s=now]{opacity:1;font-weight:900}
+  .op-step[data-s=now]::before{background:var(--op-now,#ea580c);box-shadow:0 0 0 5px color-mix(in srgb,var(--op-now,#ea580c) 25%,transparent)}
+  .op-step[data-s=now]::after{background:#16a34a}
+  .op-row{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.55rem 0;font-size:14px}
+  .op-row+.op-row{border-top:1px solid rgba(128,128,128,.2)}
+  .op-total{font-size:18px;font-weight:800}
+  .op-tl{list-style:none;margin:0;padding:0 0 0 1.1rem;border-left:2px solid rgba(128,128,128,.3);font-size:13px}
+  .op-tl li{position:relative;padding:0 0 .9rem}
+  .op-tl li::before{content:"";position:absolute;left:-1.5rem;top:.3rem;width:10px;height:10px;border-radius:50%;background:#16a34a}
+  .op-tl li:first-child::before{box-shadow:0 0 0 4px rgba(22,163,74,.25)}
+  .op-tl b{font-weight:800}
+  .op-banner{padding:1rem 1.25rem;border:2px solid;text-align:left}
+  .op-banner[data-k=ok]{border-color:#22c55e;background:rgba(34,197,94,.1)}
+  .op-banner[data-k=wait]{border-color:#fb923c;background:rgba(251,146,60,.12)}
+  .op-banner[data-k=bad]{border-color:#ef4444;background:rgba(239,68,68,.1)}
+  .op-banner p{margin:0}
+  .op-banner .t{font-size:16px;font-weight:800}
+  .op-banner .s{font-size:12px;font-weight:600;margin-top:.15rem}
+</style>
 
-  <div class="mt-10 border-y border-line py-6 text-left">
-    <table class="w-full text-sm">
-      <tbody class="divide-y divide-line">
-        {% for i in order.items.all() %}
-        <tr>
-          <td class="py-3">{{ i.quantity }} × {{ i.product_title }}{% if i.variant_name %} · {{ i.variant_name }}{% endif %}</td>
-          <td class="py-3 text-right">{{ i.line_total | money }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-      <tfoot>
-        <tr><td class="pt-4 text-mute">Subtotal</td><td class="pt-4 text-right">{{ order.subtotal | money }}</td></tr>
-        {% if order.discount_total and order.discount_total > 0 %}
-        <tr><td class="text-emerald-700">Discount{% if order.coupon_code %} · {{ order.coupon_code }}{% endif %}</td><td class="text-right text-emerald-700">− {{ order.discount_total | money }}</td></tr>
-        {% endif %}
-        <tr><td class="text-mute">Shipping</td><td class="text-right">{{ order.shipping_total | money }}</td></tr>
-        <tr><td class="text-mute">Tax</td><td class="text-right">{{ order.tax_total | money }}</td></tr>
-        <tr class="font-display text-lg"><td class="pt-3">Total</td><td class="pt-3 text-right">{{ order.grand_total | money }}</td></tr>
-      </tfoot>
-    </table>
-  </div>
-
-  <div class="mt-8 text-left text-sm text-mute">
-    <p class="font-medium text-ink">Delivering to</p>
-    <p>{{ order.shipping_address.get('name') }}</p>
-    <p>{{ order.shipping_address.get('line1') }}{% if order.shipping_address.get('line2') %}, {{ order.shipping_address.get('line2') }}{% endif %}</p>
-    <p>{{ order.shipping_address.get('city') }}, {{ order.shipping_address.get('state') }} {{ order.shipping_address.get('postal_code') }} · {{ order.shipping_address.get('country') }}</p>
-  </div>
-
-  {% if wa_order_url %}
-  <div class="mt-8 border border-[#25D366]/40 bg-[#25D366]/5 p-5 text-left">
-    <p class="text-sm font-medium text-ink">One last step — send your order to us on WhatsApp.</p>
-    <p class="mt-1 text-xs text-mute">Your order is saved. Tap the button and press Send in WhatsApp so we can confirm it and arrange payment.</p>
-    <a id="wa-send" href="{{ wa_order_url }}" class="mt-3 inline-block bg-[#25D366] px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-[#1ebe5b]">Send order on WhatsApp</a>
-  </div>
-  {% if wa_auto_open %}
-  <script>
-    (function () {
-      var key = "wa_sent_{{ order.number }}";
-      try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (e) {}
-      setTimeout(function () { window.location.href = document.getElementById("wa-send").href; }, 900);
-    })();
-  </script>
-  {% endif %}
-  {% endif %}
-
-  {% if upi %}
-  <div class="mt-8 border border-accent/40 bg-accent/5 p-5 text-left">
-    <p class="text-sm font-semibold text-ink">Pay {{ order.grand_total | money }} by UPI</p>
-    <div class="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-      {% if upi.qr_url or upi.qr_svg %}
-      <img src="{{ upi.qr_url or upi.qr_svg }}" alt="UPI QR code" width="176" height="176" class="h-44 w-44 border border-line bg-white p-1">
+<div class="op-wrap">
+  {# --- hero --- #}
+  <div class="text-center">
+    <p class="font-display text-5xl text-accent">{{ '✕' if ended else '✓' }}</p>
+    <h1 class="mt-3 font-display text-3xl sm:text-4xl">
+      {% if ended %}Order {{ order.get_status_display() | lower }}{% else %}Thank you{% if addr.get('name') %}, {{ addr.get('name').split(' ')[0] }}{% endif %}!{% endif %}
+    </h1>
+    <p class="mt-2 text-sm text-mute">
+      Order <span class="font-bold text-ink">#{{ order.number }}</span>
+      · placed {{ (order.placed_at or order.created_at).strftime('%d %b %Y, %I:%M %p') }}
+    </p>
+    <div class="mt-5 flex flex-wrap items-center justify-center gap-2">
+      <span class="op-chip" data-tone="{{ os_tone.get(order.status, 'gray') }}"><small>Order</small> {{ order.get_status_display() }}</span>
+      {% if cod_due %}
+      <span class="op-chip" data-tone="blue"><small>Payment</small> Pay on delivery</span>
+      {% else %}
+      <span class="op-chip" data-tone="{{ ps_tone.get(order.payment_status, 'gray') }}"><small>Payment</small> {{ order.get_payment_status_display() }}</span>
       {% endif %}
-      <div class="text-sm">
-        <p class="text-mute">Scan the QR with any UPI app, or pay to:</p>
-        <p class="mt-1 select-all font-mono text-base text-ink">{{ upi.upi_id }}</p>
-        {% if upi.payee_name %}<p class="text-xs text-mute">{{ upi.payee_name }}</p>{% endif %}
-        <a href="{{ upi.link }}" class="mt-3 inline-block bg-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent sm:hidden">Open UPI app</a>
-        <p class="mt-3 text-xs text-mute">Amount {{ order.grand_total | money }} · note: Order {{ order.number }}</p>
+      <span class="op-chip" data-tone="{{ fs_tone.get(order.fulfillment_status, 'gray') }}"><small>Delivery</small> {{ order.get_fulfillment_status_display() }}</span>
+    </div>
+  </div>
+
+  {# --- UPI payment banner (orange pending / green confirmed) --- #}
+  {% if upi_state %}
+  <div class="mt-8">
+    {% if upi_state.state == 'paid' %}
+    <div role="status" class="op-banner" data-k="ok">
+      <p class="t text-emerald-700">✓ Payment confirmed</p>
+      <p class="s text-emerald-700">The store has received your UPI payment{% if upi_state.utr %} · ref {{ upi_state.utr }}{% endif %}.</p>
+    </div>
+    {% else %}
+    <div role="status" data-upi-pending class="op-banner" data-k="wait">
+      <p class="t text-orange-600">⏳ Payment pending</p>
+      <p class="s text-orange-600">{% if upi_state.utr %}We got your reference ({{ upi_state.utr }}). The store is verifying it — this page updates automatically.{% else %}Pay by UPI and submit your UTR below so the store can confirm.{% endif %}</p>
+    </div>
+    {% if upi_state.utr %}
+    <script>
+      setTimeout(function () {
+        var a = document.activeElement;
+        if (a && a.tagName === "INPUT") return;
+        location.reload();
+      }, 30000);
+    </script>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# --- progress tracker --- #}
+  <div class="op-card mt-8">
+    {% if ended %}
+    <div class="op-banner" data-k="bad">
+      <p class="t" style="color:#dc2626">This order is {{ order.get_status_display() | lower }}.</p>
+      <p class="s" style="color:#dc2626">Questions? Reach out to {{ store.name }} and quote #{{ order.number }}.</p>
+    </div>
+    {% else %}
+    <ol class="op-steps" style="--op-now: {{ tone_hex.get(os_tone.get(order.status), '#ea580c') }}">
+      {% for label in steps %}
+      <li class="op-step" data-s="{{ 'done' if (loop.index0 < cur or order.status == 'delivered') else ('now' if loop.index0 == cur else 'todo') }}">{{ label }}</li>
+      {% endfor %}
+    </ol>
+    {% if order.tracking_number %}
+    <p class="mt-5 text-center text-sm">Tracking: <b>{{ order.tracking_number }}</b>{% if order.courier %} · {{ order.courier }}{% endif %}</p>
+    {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="op-grid mt-6">
+    {# ---------- left column: actions + items ---------- #}
+    <div class="op-col">
+      {% if upi %}
+      <div class="op-card text-left" style="border-width:2px">
+        <p class="text-sm font-bold text-ink">Pay {{ order.grand_total | money }} by UPI</p>
+        <div class="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+          {% if upi.qr_url or upi.qr_svg %}
+          <img src="{{ upi.qr_url or upi.qr_svg }}" alt="UPI QR code" width="176" height="176" class="h-44 w-44 border border-line bg-white p-1">
+          {% endif %}
+          <div class="text-sm">
+            <p class="text-mute">Scan the QR with any UPI app, or pay to:</p>
+            <p class="mt-1 select-all font-mono text-base text-ink">{{ upi.upi_id }}</p>
+            {% if upi.payee_name %}<p class="text-xs text-mute">{{ upi.payee_name }}</p>{% endif %}
+            <a href="{{ upi.link }}" class="mt-3 inline-block bg-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent sm:hidden">Open UPI app</a>
+            <p class="mt-3 text-xs text-mute">Amount {{ order.grand_total | money }} · note: Order {{ order.number }}</p>
+          </div>
+        </div>
+        <form method="post" action="{{ url('shopfront:order_upi_reference', kwargs={'number': order.number}) }}" class="mt-5 border-t border-line pt-4">
+          {{ csrf_input }}
+          <label class="block text-xs font-medium text-ink" for="utr">After paying, enter the UPI reference / UTR number</label>
+          <div class="mt-2 flex gap-2">
+            <input id="utr" name="utr" value="{{ upi.utr }}" required minlength="8" maxlength="30" autocomplete="off"
+                   placeholder="e.g. 412345678901" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+            <button class="bg-ink px-5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">{{ 'Update' if upi.utr else 'Submit' }}</button>
+          </div>
+          <p class="mt-2 text-xs text-mute">{% if upi.utr %}Reference received — we'll confirm your payment shortly.{% else %}Your order is confirmed once the store verifies the payment.{% endif %}</p>
+        </form>
+      </div>
+      {% endif %}
+
+      {% if wa_order_url %}
+      <div class="border border-[#25D366]/40 bg-[#25D366]/5 p-5 text-left">
+        <p class="text-sm font-medium text-ink">One last step — send your order to us on WhatsApp.</p>
+        <p class="mt-1 text-xs text-mute">Your order is saved. Tap the button and press Send in WhatsApp so we can confirm it and arrange payment.</p>
+        <a id="wa-send" href="{{ wa_order_url }}" class="mt-3 inline-block bg-[#25D366] px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-[#1ebe5b]">Send order on WhatsApp</a>
+      </div>
+      {% if wa_auto_open %}
+      <script>
+        (function () {
+          var key = "wa_sent_{{ order.number }}";
+          try { if (sessionStorage.getItem(key)) return; sessionStorage.setItem(key, "1"); } catch (e) {}
+          setTimeout(function () { window.location.href = document.getElementById("wa-send").href; }, 900);
+        })();
+      </script>
+      {% endif %}
+      {% endif %}
+
+      {% if order.can_retry_payment %}
+      <div class="border border-rose-200 bg-rose-50 p-5 text-left">
+        <p class="text-sm font-bold text-rose-700">Payment didn't complete.</p>
+        <p class="mt-1 text-xs text-rose-600">This order is still waiting on payment — try again below.</p>
+        <form method="post" action="{{ url('shopfront:order_pay_retry', kwargs={'number': order.number}) }}" class="mt-3">
+          {{ csrf_input }}
+          <button class="bg-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">
+            Retry payment
+          </button>
+        </form>
+      </div>
+      {% endif %}
+
+      <div class="op-card">
+        <p class="op-h">Items ({{ order.items.all() | length }})</p>
+        {% for i in order.items.all() %}
+        <div class="op-row">
+          <span><b>{{ i.quantity }} ×</b> {{ i.product_title }}{% if i.variant_name %} <span class="text-mute">· {{ i.variant_name }}</span>{% endif %}</span>
+          <span class="font-semibold">{{ i.line_total | money }}</span>
+        </div>
+        {% endfor %}
+        <div class="op-row" style="margin-top:.6rem"><span class="text-mute">Subtotal</span><span>{{ order.subtotal | money }}</span></div>
+        {% if order.discount_total and order.discount_total > 0 %}
+        <div class="op-row"><span class="font-bold text-emerald-700">Discount{% if order.coupon_code %} · {{ order.coupon_code }}{% endif %}</span><span class="font-bold text-emerald-700">− {{ order.discount_total | money }}</span></div>
+        {% endif %}
+        <div class="op-row"><span class="text-mute">Shipping</span><span>{{ order.shipping_total | money }}</span></div>
+        <div class="op-row"><span class="text-mute">Tax</span><span>{{ order.tax_total | money }}</span></div>
+        <div class="op-row op-total"><span>Total</span><span>{{ order.grand_total | money }}</span></div>
       </div>
     </div>
-    <form method="post" action="{{ url('shopfront:order_upi_reference', kwargs={'number': order.number}) }}" class="mt-5 border-t border-line pt-4">
-      {{ csrf_input }}
-      <label class="block text-xs font-medium text-ink" for="utr">After paying, enter the UPI reference / UTR number</label>
-      <div class="mt-2 flex gap-2">
-        <input id="utr" name="utr" value="{{ upi.utr }}" required minlength="8" maxlength="30" autocomplete="off"
-               placeholder="e.g. 412345678901" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
-        <button class="bg-ink px-5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">{{ 'Update' if upi.utr else 'Submit' }}</button>
+
+    {# ---------- right column: delivery, payment, timeline ---------- #}
+    <div class="op-col">
+      <div class="op-card">
+        <p class="op-h">Delivering to</p>
+        <p class="text-sm font-bold">{{ addr.get('name') }}</p>
+        <p class="mt-1 text-sm text-mute">{{ addr.get('line1') }}{% if addr.get('line2') %}, {{ addr.get('line2') }}{% endif %}</p>
+        <p class="text-sm text-mute">{{ addr.get('city') }}{% if addr.get('state') %}, {{ addr.get('state') }}{% endif %} {{ addr.get('postal_code') }} · {{ addr.get('country') }}</p>
+        {% if addr.get('phone') %}<p class="mt-1 text-sm text-mute">📞 {{ addr.get('phone') }}</p>{% endif %}
       </div>
-      <p class="mt-2 text-xs text-mute">{% if upi.utr %}Reference received — we'll confirm your payment shortly.{% else %}Your order is confirmed once the store verifies the payment.{% endif %}</p>
-    </form>
-  </div>
-  {% endif %}
 
-  {% if order.can_retry_payment %}
-  <div class="mt-8 border border-rose-200 bg-rose-50 p-5 text-left">
-    <p class="text-sm font-medium text-rose-700">Payment didn't complete.</p>
-    <p class="mt-1 text-xs text-rose-600">This order is still waiting on payment — try again below.</p>
-    <form method="post" action="{{ url('shopfront:order_pay_retry', kwargs={'number': order.number}) }}" class="mt-3">
-      {{ csrf_input }}
-      <button class="bg-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">
-        Retry payment
-      </button>
-    </form>
-  </div>
-  {% endif %}
+      <div class="op-card">
+        <p class="op-h">Payment</p>
+        <div class="op-row"><span class="text-mute">Method</span><b>{{ pay_method or '—' }}</b></div>
+        <div class="op-row"><span class="text-mute">Status</span>
+          {% if cod_due %}<span class="op-chip" data-tone="blue">Pay on delivery</span>
+          {% else %}<span class="op-chip" data-tone="{{ ps_tone.get(order.payment_status, 'gray') }}">{{ order.get_payment_status_display() }}</span>{% endif %}
+        </div>
+        <div class="op-row"><span class="text-mute">Amount</span><b>{{ order.grand_total | money }}</b></div>
+      </div>
 
-  <a href="{{ url('shopfront:shop') }}" class="mt-10 inline-block bg-ink px-10 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Continue shopping</a>
+      <div class="op-card">
+        <p class="op-h">Order timeline</p>
+        <ul class="op-tl">
+          {% for e in timeline %}
+          <li><b>{{ e.label }}</b><br><span class="text-mute">{{ e.at.strftime('%d %b, %I:%M %p') }}</span></li>
+          {% else %}
+          <li><b>Order placed</b><br><span class="text-mute">{{ (order.placed_at or order.created_at).strftime('%d %b, %I:%M %p') }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+
+      <a href="{{ url('shopfront:shop') }}" class="inline-block bg-ink px-10 py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Continue shopping</a>
+    </div>
+  </div>
 </div>
 {% endblock %}

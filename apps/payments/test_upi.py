@@ -171,3 +171,26 @@ class UpiOrderPageRenderTests(TestCase):
         self.assertContains(r, "Payment confirmed")
         self.assertContains(r, "text-emerald-700")
         self.assertNotContains(r, "Payment pending")
+
+
+class OrderPageV2Tests(UpiOrderPageRenderTests):
+    def test_two_column_page_has_chips_tracker_timeline(self):
+        r = self._get()
+        self.assertContains(r, "op-grid")
+        self.assertContains(r, 'data-tone="orange"')  # pending order + payment
+        self.assertContains(r, "Order timeline")
+        self.assertContains(r, "UPI (QR / direct)")  # payment method row
+        pay.capture_payment(payment=self.payment)
+        r = self._get()
+        self.assertContains(r, 'data-tone="green"')
+
+    def test_cod_pending_reads_pay_on_delivery(self):
+        self.payment.provider = "cod"
+        self.payment.save()
+        self.assertContains(self._get(), "Pay on delivery")
+
+    def test_cancelled_order_shows_red_banner_not_tracker(self):
+        Order.objects.filter(pk=self.order.pk).update(status="cancelled")
+        r = self._get()
+        self.assertContains(r, "This order is cancelled")
+        self.assertNotContains(r, 'class="op-steps"')
