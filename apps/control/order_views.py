@@ -7,7 +7,7 @@ status timeline, stock ledger and audit log stay consistent. GET never mutates.
 import csv
 
 from django.contrib import messages
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.http import Http404, HttpResponse, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
@@ -58,7 +58,14 @@ class OrderListView(StoreDataAccessMixin, ActiveProjectMixin, ListView):
     paginate_by = 25
 
     def get_queryset(self):
-        return _filtered_orders(self.active_project, self.request.GET)
+        from apps.payments.models import Payment
+
+        upi = Payment.objects.filter(order=OuterRef("pk"), provider="upi", status="pending")
+        # "UPI · verify" tag in the list: a direct-UPI payment waits on the owner.
+        return _filtered_orders(self.active_project, self.request.GET).annotate(
+            upi_pending=Exists(upi),
+            upi_utr_sent=Exists(upi.exclude(provider_payment_id="")),
+        )
 
     def get_template_names(self):
         if self.request.headers.get("HX-Request"):

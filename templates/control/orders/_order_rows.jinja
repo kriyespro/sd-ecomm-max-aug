@@ -31,7 +31,9 @@
   <td class="px-4 py-2 text-slate-500">{{ (o.placed_at or o.created_at).strftime("%b %d %H:%M") }}</td>
   <td class="px-4 py-2 text-slate-600">{{ o.email }}</td>
   <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ status_class.get(o.status, 'bg-slate-200 text-slate-600') }}">{{ o.get_status_display() }}</span></td>
-  <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ pay_class.get(o.payment_status, 'bg-slate-200 text-slate-600') }}">{{ o.get_payment_status_display() }}</span></td>
+  <td class="px-4 py-2"><span class="rounded px-2 py-0.5 text-xs {{ pay_class.get(o.payment_status, 'bg-slate-200 text-slate-600') }}">{{ o.get_payment_status_display() }}</span>
+    {% if o.upi_pending %}<span class="ml-1 rounded bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">UPI · {{ 'UTR sent, verify' if o.upi_utr_sent else 'awaiting payment' }}</span>{% endif %}
+  </td>
   <td class="px-4 py-2 text-slate-500">{{ o.get_fulfillment_status_display() }}</td>
   <td class="px-4 py-2 text-right font-medium">{{ o.currency }} {{ o.grand_total }}</td>
   {% if can_manage_orders %}

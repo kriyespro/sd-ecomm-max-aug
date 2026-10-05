@@ -650,6 +650,7 @@ class OrderView(View):
             and order.payments.exclude(provider__in=("cod", "manual", "upi")).exists()
         )
         upi = _upi_panel(project, order)
+        upi_state = _upi_state(order)
         request._tracking = ("Purchase", {
             "value": float(order.grand_total or 0),
             "currency": order.currency,
@@ -658,7 +659,7 @@ class OrderView(View):
             "content_type": "product",
             "order_id": order.number,
         }, order.number)
-        ctx = base_context(request, project, order=order, upi=upi)
+        ctx = base_context(request, project, order=order, upi=upi, upi_state=upi_state)
         # Offer the hand-off while the order has no payment attempt (WhatsApp
         # orders are saved payment-less); ?wa=1 means "just placed, open it".
         wa_profile = wa_order.ordering_profile(project)
@@ -698,6 +699,19 @@ def _upi_panel(project, order):
         "qr_svg": qr_svg,
         "utr": payment.provider_payment_id,
     }
+
+
+def _upi_state(order):
+    """Banner state for the order page: ``pending`` (orange) until the owner
+    captures the payment, then ``paid`` (green). ``None`` for non-UPI orders."""
+    payment = order.payments.filter(provider="upi").exclude(status__in=("failed", "cancelled")).order_by("-created_at").first()
+    if payment is None:
+        return None
+    if payment.status in ("paid", "partially_refunded", "refunded"):
+        return {"state": "paid", "utr": payment.provider_payment_id}
+    if payment.status == "pending":
+        return {"state": "pending", "utr": payment.provider_payment_id}
+    return None
 
 
 def _qr_data_uri(text):

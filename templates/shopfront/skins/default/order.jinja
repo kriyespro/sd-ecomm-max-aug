@@ -3,6 +3,29 @@
 
 {% block content %}
 <div class="mx-auto max-w-2xl px-5 py-16 text-center lg:px-8">
+  {% if upi_state %}
+  {% if upi_state.state == 'paid' %}
+  <div role="status" class="mb-8 border-2 border-emerald-500 bg-emerald-50 px-5 py-4 text-left">
+    <p class="text-base font-bold text-emerald-700">✓ Payment confirmed</p>
+    <p class="mt-0.5 text-xs font-semibold text-emerald-700">The store has received your UPI payment{% if upi_state.utr %} · ref {{ upi_state.utr }}{% endif %}.</p>
+  </div>
+  {% else %}
+  <div role="status" data-upi-pending class="mb-8 border-2 border-orange-400 bg-orange-50 px-5 py-4 text-left">
+    <p class="text-base font-bold text-orange-600">⏳ Payment pending</p>
+    <p class="mt-0.5 text-xs font-semibold text-orange-600">{% if upi_state.utr %}We got your reference ({{ upi_state.utr }}). The store is verifying it — this page updates automatically.{% else %}Pay by UPI and submit your UTR below so the store can confirm.{% endif %}</p>
+  </div>
+  {% if upi_state.utr %}
+  <script>
+    setTimeout(function () {
+      var a = document.activeElement;
+      if (a && a.tagName === "INPUT") return;
+      location.reload();
+    }, 30000);
+  </script>
+  {% endif %}
+  {% endif %}
+  {% endif %}
+
   <p class="font-display text-5xl text-accent">✓</p>
   <h1 class="mt-4 font-display text-3xl">Thank you</h1>
   <p class="mt-2 text-sm text-mute">Order <span class="font-medium text-ink">{{ order.number }}</span> · {{ order.get_status_display() }} · {{ order.get_payment_status_display() }}</p>
