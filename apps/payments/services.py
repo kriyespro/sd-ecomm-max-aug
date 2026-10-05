@@ -155,6 +155,9 @@ def verify_payment(*, payment, data, actor=None):
     failure record, no payment.failed event, nobody notified). The success
     path's own writes are still atomic via _settle()'s own decorator.
     """
+    if payment.provider == Provider.UPI:
+        # Never client-verifiable; a public callback must not even flip it to FAILED.
+        raise PaymentError("UPI payments are confirmed by the store.")
     provider, _ = get_provider(payment.project, payment.provider)
     ok = provider.verify(payment, data)
     _log(payment, kind=PaymentEvent.Kind.VERIFY, project=payment.project,
@@ -171,6 +174,28 @@ def verify_payment(*, payment, data, actor=None):
         )
         raise PaymentError("Payment verification failed.")
     return _settle(payment, actor=actor, event_kind=PaymentEvent.Kind.VERIFY)
+
+
+def submit_upi_reference(*, payment, utr):
+    """Shopper reports their UPI transaction reference. Stored for the owner to
+    match against their bank/UPI app; never settles anything by itself."""
+    from .providers.upi import UTR_RE
+
+    utr = (utr or "").strip()
+    if payment.provider != Provider.UPI or payment.status != PaymentStatus.PENDING:
+        raise PaymentError("This payment can't take a reference.")
+    if not UTR_RE.match(utr):
+        raise PaymentError("Enter the UPI reference / UTR number (8–30 letters or digits).")
+    clash = Payment.objects.filter(
+        project=payment.project, provider=Provider.UPI, provider_payment_id__iexact=utr,
+    ).exclude(pk=payment.pk).exists()
+    if clash:
+        raise PaymentError("That reference was already used on another order.")
+    payment.provider_payment_id = utr
+    payment.meta = {**(payment.meta or {}), "utr_submitted_at": timezone.now().isoformat()}
+    payment.save(update_fields=["provider_payment_id", "meta", "updated_at"])
+    _log(payment, kind=PaymentEvent.Kind.VERIFY, project=payment.project, note=f"UTR submitted: {utr}")
+    return payment
 
 
 @transaction.atomic
@@ -199,6 +224,10 @@ def record_offline_payment(*, order, provider_key=Provider.COD, actor=None, mark
     _log(payment, kind=PaymentEvent.Kind.INITIATE, project=order.project)
     if mark_collected:
         return _settle(payment, actor=actor, reference=reference)
+    if provider_key == Provider.UPI:
+        # Direct UPI: order stays pending until staff confirm the money arrived.
+        record_audit(actor=actor, project=order.project, action=AuditLog.Action.CREATE, target=payment)
+        return payment
     # COD: confirm the order without payment.
     if order.status == "pending":
         orders.transition_order(order=order, to_status="confirmed", actor=actor, note="COD order")

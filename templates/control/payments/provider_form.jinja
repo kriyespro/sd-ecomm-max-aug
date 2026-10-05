@@ -3,11 +3,11 @@
 {% block page_title %}Payment provider{% endblock %}
 
 {% block content %}
-<form method="post" class="mx-auto max-w-lg space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
+<form method="post" enctype="multipart/form-data" class="mx-auto max-w-lg space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
   {{ csrf_input }}
   {{ render_form(form) }}
   <p class="text-xs text-slate-400">
-    COD needs no credentials. Razorpay webhook URL:
+    COD needs no credentials. Direct UPI: add your UPI ID (and optionally your QR image) — customers pay you directly, then you confirm each payment from the order page. Razorpay webhook URL:
     <code>/payments/webhook/razorpay/</code> on your store domain.
   </p>
   <div class="flex gap-2 pt-2">

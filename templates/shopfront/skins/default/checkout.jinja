@@ -51,6 +51,9 @@
               Pay with Razorpay
             </span>
             <span class="text-xs text-mute">Card · UPI · Netbanking · Wallet</span>
+            {% elif p.key == 'upi' %}
+            <span class="font-semibold">Pay by UPI</span>
+            <span class="text-xs text-mute">Scan QR · GPay · PhonePe · Paytm</span>
             {% elif p.key == 'cod' %}Cash on delivery
             {% elif p.key == 'whatsapp' %}
             <span class="font-semibold" style="color:#128C7E">Order on WhatsApp</span>

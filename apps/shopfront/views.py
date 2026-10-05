@@ -524,7 +524,7 @@ class CheckoutView(View):
         # A gateway (Razorpay) needs the final amount — shipping included — before
         # its remote order is created, so create the order first with no payment,
         # price shipping onto it, then initiate the gateway payment.
-        gateway = method_key not in ("cod", "manual") and not use_whatsapp
+        gateway = method_key not in ("cod", "manual", "upi") and not use_whatsapp
 
         shipping_method = None
         if method_id:
@@ -647,8 +647,9 @@ class OrderView(View):
         order = get_object_or_404(Order.objects.prefetch_related("items"), project=project, number=number)
         order.can_retry_payment = (
             order.status == "pending" and order.payment_status != "paid"
-            and order.payments.exclude(provider__in=("cod", "manual")).exists()
+            and order.payments.exclude(provider__in=("cod", "manual", "upi")).exists()
         )
+        upi = _upi_panel(project, order)
         request._tracking = ("Purchase", {
             "value": float(order.grand_total or 0),
             "currency": order.currency,
@@ -657,7 +658,7 @@ class OrderView(View):
             "content_type": "product",
             "order_id": order.number,
         }, order.number)
-        ctx = base_context(request, project, order=order)
+        ctx = base_context(request, project, order=order, upi=upi)
         # Offer the hand-off while the order has no payment attempt (WhatsApp
         # orders are saved payment-less); ?wa=1 means "just placed, open it".
         wa_profile = wa_order.ordering_profile(project)
@@ -665,6 +666,76 @@ class OrderView(View):
             ctx["wa_order_url"] = wa_order.build_link(wa_profile, order, project.name)
             ctx["wa_auto_open"] = request.GET.get("wa") == "1"
         return render(request, "shopfront/order.jinja", ctx)
+
+
+def _upi_panel(project, order):
+    """Everything the order page needs to show "pay by UPI": the owner's UPI ID,
+    their uploaded QR (or one generated from the UPI link), a tap-to-pay link
+    and the payment awaiting a reference. ``None`` unless a UPI payment is
+    still pending on this order."""
+    if order.payment_status == "paid":
+        return None
+    payment = order.payments.filter(provider="upi", status="pending").order_by("-created_at").first()
+    if payment is None:
+        return None
+    from apps.payments import services as payments
+
+    try:
+        provider, config = payments.get_provider(project, "upi")
+    except payments.PaymentError:
+        return None
+    if not provider.upi_id:
+        return None
+    link = provider.intent_url(amount=order.grand_total, order_number=order.number, currency=order.currency)
+    qr_url = config.qr_image.url if config.qr_image else ""
+    qr_svg = "" if qr_url else _qr_data_uri(link)
+    return {
+        "payment": payment,
+        "upi_id": provider.upi_id,
+        "payee_name": provider.payee_name,
+        "link": link,
+        "qr_url": qr_url,
+        "qr_svg": qr_svg,
+        "utr": payment.provider_payment_id,
+    }
+
+
+def _qr_data_uri(text):
+    import base64
+    import io
+
+    try:
+        import qrcode
+        import qrcode.image.svg
+
+        buf = io.BytesIO()
+        qrcode.make(text, image_factory=qrcode.image.svg.SvgPathImage, box_size=10, border=2).save(buf)
+        return "data:image/svg+xml;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:  # noqa: BLE001 - QR is a convenience; UPI ID + link still work
+        return ""
+
+
+class OrderUpiReferenceView(View):
+    """Shopper submits the UTR after paying by UPI. Stored for the owner to
+    verify and capture — never settles the order itself."""
+
+    def post(self, request, number):
+        project = current_project(request)
+        if not _order_access_allowed(request, project, number):
+            raise Http404
+        order = get_object_or_404(Order, project=project, number=number)
+        payment = order.payments.filter(provider="upi", status="pending").order_by("-created_at").first()
+        if payment is None:
+            messages.error(request, "No UPI payment is waiting on this order.")
+            return redirect("shopfront:order", number=number)
+        from apps.payments import services as payments
+
+        try:
+            payments.submit_upi_reference(payment=payment, utr=request.POST.get("utr", ""))
+            messages.success(request, "Thanks — we'll confirm your payment shortly.")
+        except payments.PaymentError as exc:
+            messages.error(request, str(exc))
+        return redirect("shopfront:order", number=number)
 
 
 class OrderPayRetryView(View):
@@ -681,11 +752,11 @@ class OrderPayRetryView(View):
 
         gateway_keys = [
             p["key"] for p in _checkout_payment_providers(project)
-            if p["key"] not in ("cod", "manual")
+            if p["key"] not in ("cod", "manual", "upi")
         ]
         can_retry = (
             order.status == "pending" and order.payment_status != "paid"
-            and order.payments.exclude(provider__in=("cod", "manual")).exists()
+            and order.payments.exclude(provider__in=("cod", "manual", "upi")).exists()
         )
         if not can_retry or not gateway_keys:
             messages.error(request, "This order can no longer be paid online.")
