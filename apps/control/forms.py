@@ -272,11 +272,23 @@ class PaymentProviderForm(ProjectScopedForm):
         help_text="Shown once by Razorpay when you generate the key pair.",
     )
 
+    upi_id = forms.CharField(
+        required=False, label="UPI ID",
+        widget=forms.TextInput(attrs={"autocomplete": "off", "spellcheck": "false", "placeholder": "yourshop@okhdfcbank"}),
+        help_text="Direct UPI only: the UPI ID customers pay to.",
+    )
+    payee_name = forms.CharField(
+        required=False, label="Payee name", max_length=60,
+        help_text="Direct UPI only: name shown in the customer's UPI app (your shop name).",
+    )
+
     class Meta:
         model = PaymentProviderConfig
         fields = [
-            "provider", "display_name", "is_enabled", "is_test_mode", "priority",
+            "provider", "display_name", "is_enabled", "is_test_mode", "priority", "qr_image",
         ]
+        labels = {"qr_image": "UPI QR image"}
+        help_texts = {"qr_image": "Direct UPI only: upload your payment QR (PNG/JPG). Optional — a QR is generated from your UPI ID if left empty."}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -285,6 +297,8 @@ class PaymentProviderForm(ProjectScopedForm):
             self.fields["provider"].disabled = True
         creds = self.instance.credentials or {}
         self.fields["key_id"].initial = creds.get("key_id", "")
+        self.fields["upi_id"].initial = creds.get("upi_id", "")
+        self.fields["payee_name"].initial = (self.instance.config or {}).get("payee_name", "")
         # key_secret is never echoed back (render_value=False above already
         # blanks it on redisplay even if we set initial) — leaving this blank
         # is what "keep the current secret" means in save(), below.
@@ -312,11 +326,25 @@ class PaymentProviderForm(ProjectScopedForm):
                 "is_enabled",
                 "Add the Key ID and Key secret before enabling Razorpay.",
             )
+        upi_id = (cleaned.get("upi_id") or "").strip()
+        if upi_id:
+            from apps.payments.providers.upi import UPI_ID_RE
+
+            if not UPI_ID_RE.match(upi_id):
+                self.add_error("upi_id", "Enter a valid UPI ID, like name@bank.")
+        if cleaned.get("is_enabled") and provider == "upi" and not upi_id:
+            self.add_error("is_enabled", "Add your UPI ID before enabling direct UPI.")
+        qr = cleaned.get("qr_image")
+        if qr and hasattr(qr, "size") and qr.size > 2 * 1024 * 1024:
+            self.add_error("qr_image", "QR image must be under 2 MB.")
         return cleaned
 
     def save(self, commit=True):
         obj = super().save(commit=False)
         creds = dict(obj.credentials or {})
+        if obj.provider == "upi":
+            creds["upi_id"] = (self.cleaned_data.get("upi_id") or "").strip()
+            obj.config = {**(obj.config or {}), "payee_name": (self.cleaned_data.get("payee_name") or "").strip()}
         creds["key_id"] = (self.cleaned_data.get("key_id") or "").strip() or None
         if creds["key_id"] is None:
             creds.pop("key_id", None)

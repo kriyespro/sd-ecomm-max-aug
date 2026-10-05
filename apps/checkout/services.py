@@ -129,7 +129,7 @@ def complete_checkout(
     from apps.payments import services as payments
     from apps.payments.models import Provider
 
-    if payment_method in {Provider.COD, Provider.MANUAL}:
+    if payment_method in {Provider.COD, Provider.MANUAL, Provider.UPI}:
         payments.record_offline_payment(
             order=order, provider_key=payment_method, actor=actor,
             mark_collected=(payment_method == Provider.MANUAL),

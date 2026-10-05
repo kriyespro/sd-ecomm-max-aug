@@ -3,11 +3,13 @@
 from .cod import CODProvider
 from .manual import ManualProvider
 from .razorpay import RazorpayProvider
+from .upi import UPIProvider
 
 _PROVIDERS = {
     CODProvider.key: CODProvider,
     ManualProvider.key: ManualProvider,
     RazorpayProvider.key: RazorpayProvider,
+    UPIProvider.key: UPIProvider,
 }
 
 

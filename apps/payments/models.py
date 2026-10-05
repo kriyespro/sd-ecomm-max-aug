@@ -26,6 +26,7 @@ class Provider(models.TextChoices):
     STRIPE = "stripe", "Stripe"
     PAYU = "payu", "PayU"
     MANUAL = "manual", "Manual / offline"
+    UPI = "upi", "UPI (QR / direct)"
 
 
 class PaymentProviderConfig(TenantScopedModel):
@@ -38,6 +39,8 @@ class PaymentProviderConfig(TenantScopedModel):
     # shape; encrypt at rest in production (see project.md security notes).
     credentials = models.JSONField(default=dict, blank=True)
     config = models.JSONField(default=dict, blank=True)
+    # Direct-UPI only: the owner's own payment QR, shown to shoppers at checkout.
+    qr_image = models.ImageField(upload_to="stores/upi-qr/", blank=True)
 
     class Meta:
         ordering = ["priority", "provider"]

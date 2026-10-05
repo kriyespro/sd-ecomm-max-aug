@@ -53,6 +53,34 @@
   {% endif %}
   {% endif %}
 
+  {% if upi %}
+  <div class="mt-8 border border-accent/40 bg-accent/5 p-5 text-left">
+    <p class="text-sm font-semibold text-ink">Pay {{ order.grand_total | money }} by UPI</p>
+    <div class="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+      {% if upi.qr_url or upi.qr_svg %}
+      <img src="{{ upi.qr_url or upi.qr_svg }}" alt="UPI QR code" width="176" height="176" class="h-44 w-44 border border-line bg-white p-1">
+      {% endif %}
+      <div class="text-sm">
+        <p class="text-mute">Scan the QR with any UPI app, or pay to:</p>
+        <p class="mt-1 select-all font-mono text-base text-ink">{{ upi.upi_id }}</p>
+        {% if upi.payee_name %}<p class="text-xs text-mute">{{ upi.payee_name }}</p>{% endif %}
+        <a href="{{ upi.link }}" class="mt-3 inline-block bg-ink px-5 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent sm:hidden">Open UPI app</a>
+        <p class="mt-3 text-xs text-mute">Amount {{ order.grand_total | money }} · note: Order {{ order.number }}</p>
+      </div>
+    </div>
+    <form method="post" action="{{ url('shopfront:order_upi_reference', kwargs={'number': order.number}) }}" class="mt-5 border-t border-line pt-4">
+      {{ csrf_input }}
+      <label class="block text-xs font-medium text-ink" for="utr">After paying, enter the UPI reference / UTR number</label>
+      <div class="mt-2 flex gap-2">
+        <input id="utr" name="utr" value="{{ upi.utr }}" required minlength="8" maxlength="30" autocomplete="off"
+               placeholder="e.g. 412345678901" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+        <button class="bg-ink px-5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">{{ 'Update' if upi.utr else 'Submit' }}</button>
+      </div>
+      <p class="mt-2 text-xs text-mute">{% if upi.utr %}Reference received — we'll confirm your payment shortly.{% else %}Your order is confirmed once the store verifies the payment.{% endif %}</p>
+    </form>
+  </div>
+  {% endif %}
+
   {% if order.can_retry_payment %}
   <div class="mt-8 border border-rose-200 bg-rose-50 p-5 text-left">
     <p class="text-sm font-medium text-rose-700">Payment didn't complete.</p>
