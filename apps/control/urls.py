@@ -16,6 +16,7 @@ from . import inventory_views as invv
 from . import coach_views as coachv
 from . import crm_views as crmv
 from . import learning_views as learnv
+from . import testimonial_views as testv
 from . import marketing_views as mktv
 from . import order_views as ordv
 from . import payment_views as payv
@@ -438,6 +439,10 @@ urlpatterns = [
     path("learning/new/", learnv.LearningCreateView.as_view(), name="learning_create"),
     path("learning/<int:pk>/", learnv.LearningUpdateView.as_view(), name="learning_edit"),
     path("learning/<int:pk>/delete/", learnv.LearningDeleteView.as_view(), name="learning_delete"),
+    path("testimonials/", testv.TestimonialListView.as_view(), name="testimonials"),
+    path("testimonials/new/", testv.TestimonialCreateView.as_view(), name="testimonial_create"),
+    path("testimonials/<int:pk>/", testv.TestimonialUpdateView.as_view(), name="testimonial_edit"),
+    path("testimonials/<int:pk>/delete/", testv.TestimonialDeleteView.as_view(), name="testimonial_delete"),
 
     # Support — feature requests + tickets (owner / manager / DGC)
     path("support/", supv.SupportListView.as_view(), name="support"),

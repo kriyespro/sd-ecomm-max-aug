@@ -105,7 +105,14 @@ def ad_landing(request, slug):
         trial_days = BillingSettings.load().self_signup_trial_days
     except Exception:  # noqa: BLE001 — never 500 an ad landing page
         trial_days = 7
+    from .models import testimonials_for
+
     ctx = _landing_context()
+    # Real, consented quotes from the admin editor; the hard-coded
+    # ``page["testimonials"]`` (if any) stays as a fallback.
+    quotes = testimonials_for(slug)
+    if quotes:
+        page = {**page, "testimonials": quotes}
     ctx.update({
         "page": page,
         "slug": slug,

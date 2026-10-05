@@ -30,6 +30,7 @@ _SECTIONS = [
         ("showcase_list", "Live stores", "\U0001f31f"),
         ("platform_tracking", "Marketing pixels", "\U0001f4c8"),
         ("learning", "Learning videos", "\U0001f393"),
+        ("testimonials", "Testimonials", "\U0001f4ac"),
         ("coach", "Daily coach", "\U0001f3af"),
         ("support_queue", "Support tickets", "\U0001f4ac"),
         ("platform_backups", "Backup & restore", "\U0001f4be"),
@@ -104,7 +105,7 @@ _SECTIONS = [
 # Items only shown to platform admins (superuser / Platform Owner / Manager).
 _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
                         "partner_applications", "showcase_list", "platform_backups",
-                        "platform_tracking", "learning", "coach", "affiliate_overview", "support_queue",
+                        "platform_tracking", "learning", "testimonials", "coach", "affiliate_overview", "support_queue",
                         "crm_board"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
 _DGC_ONLY = {"my_commissions", "crm_my_day"}
