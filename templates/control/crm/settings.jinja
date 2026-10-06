@@ -54,6 +54,13 @@
   <button class="rounded-lg bg-pink-600 px-5 py-2 text-[13px] font-medium text-white hover:bg-pink-700">Save settings</button>
 </form>
 
+<form method="post" action="{{ url('control:crm_run_now') }}" class="mt-3 flex flex-wrap items-center gap-3 rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-pink-100">
+  {{ csrf_input }}
+  <div class="min-w-0 flex-1"><h3 class="text-sm font-semibold text-pink-900">▶ Run the automatic jobs now</h3>
+    <p class="text-[11px] text-slate-500">They already run on their own (trials every 6 h, store health twice a day, recycling daily, alerts hourly). Use this to see the effect immediately. It never creates a task twice.</p></div>
+  <button class="rounded-lg bg-white px-4 py-2 text-[13px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">Run now</button>
+</form>
+
 <section class="mt-3 rounded-2xl border border-dashed border-pink-200 bg-pink-50/40 px-4 py-3 text-[12px] text-slate-600">
   <h3 class="mb-1 text-sm font-semibold text-pink-900">🔌 Lead capture webhook</h3>
   {% if capture_on %}
