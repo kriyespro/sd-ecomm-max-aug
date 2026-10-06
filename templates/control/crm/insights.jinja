@@ -13,7 +13,7 @@
     <div class="mt-1 flex items-baseline gap-4">
       <div><div class="text-2xl font-semibold text-pink-700">≈ {{ forecast.stores }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">new paying stores</div></div>
       {% if is_admin %}<div><div class="text-2xl font-semibold text-emerald-600">₹{{ forecast.mrr }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">new monthly revenue</div></div>
-      {% else %}<div><div class="text-2xl font-semibold text-emerald-600">₹{{ forecast.commission }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">your commission / month</div></div>{% endif %}
+      {% else %}<div><div class="text-2xl font-semibold text-emerald-600">{{ forecast.value|inr }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">your value (commission + your charge)</div></div>{% endif %}
     </div>
     <table class="mt-2 w-full text-[12px]">
       {% for r in forecast.rows %}<tr class="border-t border-pink-50"><td class="py-1 text-slate-600">{{ r.label }}</td><td class="text-right text-slate-500">{{ r.n }} × {{ r.pct }}%</td><td class="text-right font-medium text-slate-700">{{ r.expected }}</td></tr>{% endfor %}

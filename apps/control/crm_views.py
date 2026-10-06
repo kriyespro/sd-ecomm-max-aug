@@ -1008,6 +1008,29 @@ class MyProfileView(PlatformStaffRequiredMixin, View):
         return redirect(_post_next(request, reverse("control:crm_my_day")))
 
 
+class MyServiceChargeView(PlatformStaffRequiredMixin, View):
+    """A DGC sets (or clears) their own service charge per client — added on top of
+    the commission in every 'what is a client worth to me' number."""
+
+    MAX = Decimal("1000000")
+
+    def post(self, request):
+        raw = (request.POST.get("service_charge") or "").replace(",", "").replace("₹", "").strip() or "0"
+        try:
+            amount = Decimal(raw)
+            if amount < 0 or amount > self.MAX or not amount.is_finite():
+                raise ValueError
+        except (ValueError, ArithmeticError):
+            messages.error(request, "Enter your service charge as an amount in ₹ (0 to clear it).")
+        else:
+            prof, _ = CrmProfile.objects.get_or_create(user=request.user)
+            prof.service_charge = amount.quantize(Decimal("1"))
+            prof.save(update_fields=["service_charge", "updated_at"])
+            messages.success(request, f"Your service charge is now {svc.inr(prof.service_charge)} per client." if amount
+                             else "Your own service charge was cleared.")
+        return redirect(_post_next(request, reverse("control:crm_my_day")) + "#possible")
+
+
 class CrmSettingsForm(forms.ModelForm):
     STAGES = [("new", "New"), ("contacted", "Contacted"), ("interested", "Interested"),
               ("demo_booked", "Demo booked"), ("demo_done", "Demo done"), ("negotiating", "Negotiating")]
@@ -1029,6 +1052,9 @@ class CrmSettingsForm(forms.ModelForm):
         if not 1 <= v <= 100:
             raise forms.ValidationError("Use a percentage from 1 to 100.")
         return v
+
+    def clean_value_commission_pct(self):
+        return self._pct("value_commission_pct")
 
     def clean_conv_call_to_demo(self):
         return self._pct("conv_call_to_demo")

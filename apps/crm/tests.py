@@ -2230,7 +2230,7 @@ class SettingsAndProfileTests(CrmBase):
 
     def test_settings_save_including_stage_probabilities(self):
         self.login(self.admin)
-        data = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "auto_assign": "on", "capacity_per_dgc": "25", "trial_rescue_days": "2",
+        data = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "value_commission_pct": "20", "auto_assign": "on", "capacity_per_dgc": "25", "trial_rescue_days": "2",
                 "health_no_products_days": "5", "health_no_orders_days": "10", "recycle_days": "20",
                 "quiet_after_hour": "11", "avg_plan_price": "3499", "digest_emails": "a@x.com, b@y.com",
                 "p_new": "5", "p_contacted": "10", "p_interested": "25", "p_demo_booked": "35",
@@ -2245,7 +2245,7 @@ class SettingsAndProfileTests(CrmBase):
 
     def test_settings_validation(self):
         self.login(self.admin)
-        base = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
+        base = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "value_commission_pct": "20", "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
                 "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999",
                 "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
         for bad in ({"quiet_after_hour": "30"}, {"digest_emails": "not-an-email"}, {"p_new": "150"}):
@@ -2829,10 +2829,11 @@ class MomentumTests(CrmBase):
         self.assertEqual(e["earned"], real.amount.quantize(Decimal("1")))
         self.assertEqual(e["hot"], 3)
         cfg = CrmSettings.load()
-        rate = svc._monthly_commission_pct() / Decimal(100)
+        per_client = svc.client_value(self.a)["total"]
         want = ((2 * Decimal(cfg.probability("negotiating")) + Decimal(cfg.probability("demo_done"))) / 100
-                * cfg.avg_plan_price * rate).quantize(Decimal("1"))
+                * per_client).quantize(Decimal("1"))
         self.assertEqual(e["expected"], want)
+        self.assertEqual(e["per_win"], per_client)
         self.assertEqual(svc.earnings_preview(self.b)["earned"], 0)
 
     def test_my_day_shows_momentum_chips_only_with_data(self):
@@ -3596,24 +3597,27 @@ class DgcInsightsTests(CrmBase):
         self.login(self.admin)
         self.assertIn("calls logged within", self._html())
 
-    def test_forecast_shows_the_dgcs_own_commission_not_company_revenue(self):
+    def test_forecast_shows_the_dgcs_own_value_not_company_revenue(self):
         html = self._html()
-        self.assertIn("your commission / month", html)
+        self.assertIn("your value (commission + your charge)", html)
         self.assertNotIn("new monthly revenue", html)
         self.login(self.admin)
         admin_html = self._html()
         self.assertIn("new monthly revenue", admin_html)
-        self.assertNotIn("your commission / month", admin_html)
+        self.assertNotIn("your value (commission", admin_html)
 
-    def test_forecast_only_counts_my_leads_and_commission_follows_the_rate(self):
+    def test_forecast_only_counts_my_leads_and_value_follows_the_per_client_amount(self):
         mine = svc.forecast(user=self.a)
         team = svc.forecast()
         cfg = CrmSettings.load()
         want = (Decimal(3) * Decimal(cfg.probability("negotiating")) + Decimal(1) * Decimal(cfg.probability("interested"))) / 100
         self.assertEqual(mine["stores"], want.quantize(Decimal("0.1")))
         self.assertGreater(team["stores"], mine["stores"])
-        rate = svc._monthly_commission_pct() / Decimal(100)
-        self.assertEqual(mine["commission"], (want * cfg.avg_plan_price * rate).quantize(Decimal("1")))
+        self.assertEqual(mine["value"], (want * svc.client_value(self.a)["total"]).quantize(Decimal("1")))
+        self.assertIsNone(team["value"])                                    # the team view has no single DGC's value
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("2000"))
+        self.assertEqual(svc.forecast(user=self.a)["value"], (want * svc.client_value(self.a)["total"]).quantize(Decimal("1")))
+        self.assertGreater(svc.forecast(user=self.a)["value"], mine["value"])
 
     def test_every_scoped_service_ignores_other_dgcs_and_unassigned_leads(self):
         today = biz_today()
@@ -3670,14 +3674,13 @@ class DgcInsightsTests(CrmBase):
         self.assertIn("No leads created in this period.", r.content.decode())
 
 
-class PossibilityMathTests(CrmBase):
-    """The coaching numbers: pure arithmetic on the funnel, the plan and the user's own leads."""
+class ClientValueTests(CrmBase):
+    """One paid client = commission % of the YEARLY plan + the DGC's own service charge."""
 
     def setUp(self):
         super().setUp()
         from apps.billing.models import Plan
-        self.plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
-        self.pct = svc._monthly_commission_pct()
+        self.plan = Plan.objects.filter(is_active=True, is_public=True, price_yearly__gt=0).order_by("price_yearly").first()
 
     def test_inr_uses_indian_grouping_and_rounds(self):
         self.assertEqual([svc.inr(x) for x in (0, 999, 1000, 123456, 1234567, 99999.5, -5000)],
@@ -3686,22 +3689,61 @@ class PossibilityMathTests(CrmBase):
     def test_nice_drops_a_pointless_decimal(self):
         self.assertEqual([svc._nice(x) for x in (1, Decimal("1.0"), Decimal("2.4"), Decimal("0.05"), Decimal("31.2"))], ["1", "1", "2.4", "0.1", "31.2"])
 
-    def test_min_ticket_is_the_cheapest_public_paid_plan_and_its_commission(self):
-        m = svc.min_ticket()
-        self.assertEqual(m["ticket"], self.plan.price_monthly)
-        self.assertEqual(m["per_month"], (self.plan.price_monthly * self.pct / 100).quantize(Decimal("1"), rounding="ROUND_HALF_UP"))
-        self.assertEqual(m["per_year"], m["per_month"] * 12)
-        self.assertTrue(m["per_month_label"].startswith("₹"))
+    def test_default_is_20_percent_of_the_cheapest_yearly_plan(self):
+        cv = svc.client_value(self.a)
+        self.assertEqual(cv["yearly"], self.plan.price_yearly)
+        self.assertEqual(cv["pct"], Decimal(20))
+        self.assertEqual(cv["commission"], (self.plan.price_yearly * 20 / 100).quantize(Decimal("1"), rounding="ROUND_HALF_UP"))
+        self.assertEqual((cv["own"], cv["total"], cv["has_own"]), (0, cv["commission"], False))
+        self.assertEqual(cv["yearly_label"], svc.inr(self.plan.price_yearly))
 
-    def test_min_ticket_override_wins_and_blank_falls_back(self):
+    def test_cheapest_is_judged_by_the_yearly_amount_not_the_monthly(self):
+        from apps.billing.models import Plan
+        Plan.objects.filter(pk=self.plan.pk).update(price_yearly=Decimal("99999"))            # now the dearest yearly
+        other = Plan.objects.filter(is_active=True, is_public=True, price_yearly__gt=0).order_by("price_yearly").first()
+        self.assertNotEqual(other.pk, self.plan.pk)
+        self.assertEqual(svc.client_value(self.a)["yearly"], other.price_yearly)
+
+    def test_own_service_charge_is_added_on_top_per_dgc(self):
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("3000"))
+        cv, other = svc.client_value(self.a), svc.client_value(self.b)
+        self.assertEqual((cv["own"], cv["has_own"]), (3000, True))
+        self.assertEqual(cv["total"], cv["commission"] + 3000)
+        self.assertEqual(cv["total_label"], svc.inr(cv["commission"] + 3000))
+        self.assertEqual((other["own"], other["total"]), (0, other["commission"]))             # someone else's charge never leaks
+        self.assertEqual(svc.client_value()["own"], 0)                                          # no user -> just the commission
+
+    def test_commission_percentage_and_yearly_override_are_editable(self):
         cfg = CrmSettings.load()
-        cfg.min_ticket_override = Decimal("1000")
+        cfg.value_commission_pct, cfg.min_ticket_override = 25, Decimal("20000")
         cfg.save()
-        m = svc.min_ticket()
-        self.assertEqual((m["ticket"], m["per_month"]), (Decimal("1000"), (Decimal("1000") * self.pct / 100).quantize(Decimal("1"), rounding="ROUND_HALF_UP")))
+        cv = svc.client_value(self.a)
+        self.assertEqual((cv["yearly"], cv["pct"], cv["commission"]), (Decimal("20000"), Decimal(25), Decimal("5000")))
         cfg.min_ticket_override = None
         cfg.save()
-        self.assertEqual(svc.min_ticket()["ticket"], self.plan.price_monthly)
+        self.assertEqual(svc.client_value(self.a)["yearly"], self.plan.price_yearly)
+
+    def test_no_plans_at_all_falls_back_to_a_sensible_figure(self):
+        from apps.billing.models import Plan
+        Plan.objects.update(is_public=False)
+        cv = svc.client_value(self.a)
+        self.assertEqual(cv["yearly"], Decimal("14999"))
+        self.assertEqual(cv["commission"], Decimal("3000"))
+
+    def test_rounding_is_to_the_whole_rupee(self):
+        cfg = CrmSettings.load()
+        cfg.min_ticket_override = Decimal("24999")
+        cfg.save()
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("1500.60"))
+        cv = svc.client_value(self.a)
+        self.assertEqual((cv["commission"], cv["own"], cv["total"]), (Decimal("5000"), Decimal("1501"), Decimal("6501")))
+
+
+class PossibilityMathTests(CrmBase):
+    """The coaching numbers: pure arithmetic on the funnel, the plan and the user's own leads."""
+
+    def _per(self, user=None):
+        return svc.client_value(user or self.a)["total"]
 
     def test_default_funnel_is_100_10_6_3(self):
         p = svc.possibility(self.a)
@@ -3709,17 +3751,28 @@ class PossibilityMathTests(CrmBase):
                          [("Calls", "100"), ("Meet / demo", "10"), ("Trials", "6"), ("Paid clients", "3")])
         self.assertEqual((p["overall_pct"], p["c"]), ("3", (10, 60, 50)))
 
-    def test_todays_plan_follows_the_dgcs_own_call_target(self):
+    def test_todays_plan_follows_the_dgcs_own_call_target_and_per_client_value(self):
         p = svc.possibility(self.a)                                                       # default 40 calls
         self.assertEqual((p["plan"]["calls"], p["plan"]["meets"], p["plan"]["trials"], p["plan"]["paid"]), (40, "4", "2.4", "1.2"))
+        self.assertEqual(p["plan"]["value_label"], svc.inr(Decimal("1.2") * self._per()))
         from apps.crm.models import DailyTarget
         DailyTarget.objects.create(user=self.a, metric="calls", value=100)
         q = svc.possibility(self.a)
         self.assertEqual((q["plan"]["calls"], q["plan"]["meets"], q["plan"]["trials"], q["plan"]["paid"]), (100, "10", "6", "3"))
+        self.assertEqual(q["plan"]["value_label"], svc.inr(Decimal(3) * self._per()))
         self.assertEqual(svc.possibility(self.b)["plan"]["calls"], 40)                    # someone else's target is separate
-        per = svc.min_ticket()["per_month"]
-        self.assertEqual(q["plan"]["monthly_label"], svc.inr(Decimal(3) * per))
-        self.assertEqual(q["plan"]["yearly_label"], svc.inr(Decimal(3) * per * 12))
+
+    def test_own_service_charge_flows_into_every_total(self):
+        base = svc.possibility(self.a)
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("3000"))
+        p = svc.possibility(self.a)
+        per = self._per()
+        self.assertEqual(p["cv"]["total"], base["cv"]["total"] + 3000)
+        self.assertEqual(p["plan"]["value_label"], svc.inr(Decimal("1.2") * per))
+        self.assertEqual(p["month"]["value_label"], svc.inr(Decimal("31.2") * per))
+        self.assertEqual(p["progress"]["value_so_far_label"], svc.inr(Decimal(0) * per))
+        self.assertNotEqual(p["plan"]["value_label"], base["plan"]["value_label"])
+        self.assertEqual(svc.possibility(self.b)["cv"]["own"], 0)
 
     def test_funnel_percentages_are_editable(self):
         cfg = CrmSettings.load()
@@ -3747,13 +3800,11 @@ class PossibilityMathTests(CrmBase):
         pr = svc.possibility(self.a)["progress"]
         self.assertEqual((pr["pct"], pr["left"]), (100, 0))
 
-    def test_month_projection_is_calls_x_days_x_conversion_and_grows_weekly(self):
-        p = svc.possibility(self.a)
-        m = p["month"]
+    def test_month_projection_is_calls_x_days_x_conversion_times_per_client_value(self):
+        m = svc.possibility(self.a)["month"]
         self.assertEqual((m["days"], m["clients"]), (26, "31.2"))                           # 40 x 26 x 3%
         self.assertEqual([w["clients_label"] for w in m["weeks"]], ["7.8", "15.6", "23.4", "31.2"])
-        per = svc.min_ticket()["per_month"]
-        self.assertEqual(m["monthly_label"], svc.inr(Decimal("31.2") * per))
+        self.assertEqual(m["value_label"], svc.inr(Decimal("31.2") * self._per()))
         self.assertEqual(m["weeks"][-1]["pct"], 100)
         self.assertTrue(all(8 <= w["pct"] <= 100 for w in m["weeks"]))
         cfg = CrmSettings.load()
@@ -3770,14 +3821,13 @@ class PossibilityMathTests(CrmBase):
         Lead.objects.create(name="won", assigned_to=self.a, status="won")
         Lead.objects.create(name="lost", assigned_to=self.a, status="lost")
         L = svc.possibility(self.a)["leads"]
-        self.assertEqual(L["total"], 17)
-        self.assertEqual(L["untouched"], 17)
+        self.assertEqual((L["total"], L["untouched"]), (17, 17))
         by = {r["stage"]: r for r in L["stages"]}
         self.assertEqual((by["new"]["n"], by["contacted"]["n"], by["negotiating"]["n"]), (10, 5, 2))
         self.assertEqual(by["new"]["expected_label"], "0.3")                                # 10 x 3%
         want = Decimal(10) * 3 / 100 + Decimal(5) * 8 / 100 + Decimal(2) * 65 / 100
         self.assertEqual(L["expected"], svc._nice(want))
-        self.assertEqual(L["value_label"], svc.inr(want * svc.min_ticket()["per_month"]))
+        self.assertEqual(L["value_label"], svc.inr(want * self._per()))
         self.assertEqual(max(r["bar"] for r in L["stages"]), 100)
         self.assertEqual(by["interested"]["bar"], 0)                                        # empty stage: no bar
 
@@ -3812,8 +3862,10 @@ class PossibilityCardTests(CrmBase):
         html = self._html()
         self.assertIn("What's possible today", html)
         head = " ".join(html.split("What's possible today")[1].split("</summary>")[0].split())
-        for needle in ("40 calls", "<b>4</b> meetings/demos", "<b>2.4</b> trials", "1.2 paid client", "every month"):
+        cv = svc.client_value(self.a)
+        for needle in ("40 calls", "<b>4</b> meetings/demos", "<b>2.4</b> trials", "1.2 paid client", cv["total_label"] + " per client"):
             self.assertIn(needle, head)
+        self.assertNotIn("every month", head)                                  # no more monthly-recurring claim
 
     def test_open_at_the_start_of_the_day_and_folded_once_working(self):
         self.assertRegex(self._html(), r'<details id="possible" open')
@@ -3822,22 +3874,36 @@ class PossibilityCardTests(CrmBase):
         self.assertIn('<details id="possible"', html)
         self.assertNotRegex(html, r'<details id="possible" open')
 
-    def test_all_five_charts_and_the_habit_are_there(self):
+    def test_all_charts_the_client_value_card_and_the_habit_are_there(self):
         html = self._html()
-        for chart in ("Every 100 calls", "Your plan for today", "Where you are now", "Leads in your panel", "Do this every working day",
-                      "The habit that wins", "① Call", "② Meet / demo", "③ Help them understand the product", "④ Follow up"):
+        for chart in ("What one paid client is worth to you", "Every 100 calls", "Your plan for today", "Where you are now",
+                      "Leads in your panel", "Do this every working day", "The habit that wins",
+                      "① Call", "② Meet / demo", "③ Help them understand the product", "④ Follow up"):
             self.assertIn(chart, html, chart)
         funnel = html.split("Every 100 calls")[1].split("Your plan for today")[0]
         for n in (">100<", ">10<", ">6<", ">3<"):
             self.assertIn(n, funnel)
         self.assertIn("3%", funnel)
 
-    def test_minimum_ticket_and_commission_are_stated_plainly(self):
-        m = svc.min_ticket()
-        html = " ".join(self._html().split())
-        self.assertIn(f"at least <b class=\"text-emerald-700\">{m['per_month_label']} a month</b> to you", html)
-        self.assertIn(m["ticket_label"], html)
-        self.assertIn(m["per_year_label"], html)
+    def test_the_per_client_breakdown_is_shown_step_by_step(self):
+        cv = svc.client_value(self.a)
+        card = " ".join(self._html().split("What one paid client is worth to you")[1].split("Every 100 calls")[0].split())
+        self.assertIn(f"{cv['pct_label']}%</b> of the {cv['yearly_label']} yearly plan = <b>{cv['commission_label']}", card)
+        self.assertIn(f"{cv['total_label']} per client", card)
+        self.assertIn("Add your own service charge", card)                      # nudge while it is still 0
+        self.assertIn('name="service_charge"', card)
+        self.assertIn(reverse("control:crm_my_service_charge"), card)
+
+    def test_with_an_own_charge_the_card_shows_it_and_drops_the_nudge(self):
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("3000"))
+        cv = svc.client_value(self.a)
+        html = self._html()
+        card = " ".join(html.split("What one paid client is worth to you")[1].split("Every 100 calls")[0].split())
+        self.assertNotIn("Add your own service charge", card)
+        self.assertIn('value="3000"', card)
+        self.assertIn(f"Your own charge of <b>{cv['own_label']}</b>", card)
+        self.assertIn(cv["total_label"], html.split("The habit that wins")[1])
+        self.assertIn(f"+ your {cv['own_label']} service charge", " ".join(html.split("The habit that wins")[1].split()))
 
     def test_the_card_reacts_to_calls_and_leads_in_the_panel(self):
         for _ in range(3):
@@ -3861,55 +3927,123 @@ class PossibilityCardTests(CrmBase):
     def test_new_lead_banner_and_next_up_say_what_a_lead_is_worth(self):
         lead = Lead.objects.create(name="Hot One", phone="9600000001", assigned_to=self.a)
         Lead.objects.filter(pk=lead.pk).update(assigned_at=timezone.now())
-        per = svc.min_ticket()["per_month_label"]
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("1000"))
+        total = svc.client_value(self.a)["total_label"]
         html = self._html()
         self.assertIn("is worth at least", html)
-        self.assertIn(per, html.split("new lead")[1].split("Each one")[1][:200])
-        self.assertIn(f"worth ≥ {per}/month", html)
+        self.assertIn(total, html.split("new lead")[1].split("Each one")[1][:220])
+        self.assertIn(f"worth ≥ {total}", html)
+        self.assertNotIn("/month", html.split("Next up")[1].split("Follow-ups due")[0])
 
-    def test_each_dgc_sees_their_own_numbers(self):
+    def test_each_dgc_sees_their_own_numbers_and_their_own_charge(self):
         for _ in range(4):
             Lead.objects.create(name="Mine", assigned_to=self.a)
-        mine = self._html().split("Leads in your panel")[1].split("Do this every")[0]
-        self.assertIn("4 open", mine)
+        CrmProfile.objects.create(user=self.a, service_charge=Decimal("2500"))
+        mine = self._html()
+        self.assertIn("4 open", mine.split("Leads in your panel")[1].split("Do this every")[0])
+        self.assertIn('value="2500"', mine)
         self.login(self.b)
-        theirs = self._html().split("Leads in your panel")[1].split("Do this every")[0]
-        self.assertIn("0 open", theirs)
-        self.assertIn("No open leads yet", theirs)
+        theirs = self._html()
+        self.assertIn("0 open", theirs.split("Leads in your panel")[1].split("Do this every")[0])
+        self.assertNotIn('value="2500"', theirs)
+        self.assertIn("Add your own service charge", theirs)
 
     def test_admin_does_not_get_the_dgc_card_on_the_board(self):
         self.login(self.admin)
         self.assertNotIn("What's possible today", self.client.get(reverse("control:crm_board")).content.decode())
 
-    def test_settings_screen_shows_and_saves_the_funnel(self):
+    def test_settings_screen_shows_and_saves_the_funnel_and_commission(self):
         self.login(self.admin)
         html = self.client.get(reverse("control:crm_settings")).content.decode()
         self.assertIn("Sales funnel shown to DGCs", html)
+        self.assertIn("yearly", html)
         data = {"conv_call_to_demo": "20", "conv_demo_to_trial": "50", "conv_trial_to_paid": "50", "working_days_month": "24",
-                "min_ticket_override": "1999", "auto_assign": "on", "capacity_per_dgc": "0", "trial_rescue_days": "3",
-                "health_no_products_days": "7", "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12",
-                "avg_plan_price": "2999", "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30",
-                "p_demo_done": "45", "p_negotiating": "65"}
+                "value_commission_pct": "25", "min_ticket_override": "19999", "auto_assign": "on", "capacity_per_dgc": "0",
+                "trial_rescue_days": "3", "health_no_products_days": "7", "health_no_orders_days": "14", "recycle_days": "30",
+                "quiet_after_hour": "12", "avg_plan_price": "2999", "p_new": "3", "p_contacted": "8", "p_interested": "20",
+                "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
         self.assertEqual(self.client.post(reverse("control:crm_settings"), data).status_code, 302)
         cfg = CrmSettings.load()
-        self.assertEqual((cfg.conv_call_to_demo, cfg.working_days_month, cfg.min_ticket_override), (20, 24, Decimal("1999.00")))
+        self.assertEqual((cfg.conv_call_to_demo, cfg.working_days_month, cfg.value_commission_pct, cfg.min_ticket_override),
+                         (20, 24, 25, Decimal("19999.00")))
         self.login(self.a)
-        self.assertIn("5%", self._html())                                                  # the DGC card follows the new funnel
+        html = self._html()
+        self.assertIn("5%", html)                                                           # the DGC card follows the new funnel
+        self.assertIn("25%</b> of the ₹19,999 yearly plan", " ".join(html.split()))
 
-    def test_funnel_settings_validation(self):
+    def test_settings_validation(self):
         self.login(self.admin)
         base = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26",
-                "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7", "health_no_orders_days": "14",
-                "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999", "p_new": "3", "p_contacted": "8",
-                "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
+                "value_commission_pct": "20", "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
+                "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999",
+                "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
         for bad in ({"conv_call_to_demo": "0"}, {"conv_demo_to_trial": "101"}, {"conv_trial_to_paid": "-5"},
+                    {"value_commission_pct": "0"}, {"value_commission_pct": "101"},
                     {"working_days_month": "40"}, {"working_days_month": "0"}, {"min_ticket_override": "-1"}):
-            r = self.client.post(reverse("control:crm_settings"), {**base, **bad})
-            self.assertEqual(r.status_code, 200, bad)
-        self.assertEqual(CrmSettings.load().conv_call_to_demo, 10)
+            self.assertEqual(self.client.post(reverse("control:crm_settings"), {**base, **bad}).status_code, 200, bad)
+        self.assertEqual(CrmSettings.load().value_commission_pct, 20)
         self.assertEqual(self.client.post(reverse("control:crm_settings"), {**base, "min_ticket_override": ""}).status_code, 302)
         self.assertIsNone(CrmSettings.load().min_ticket_override)
 
-    def test_dgc_cannot_change_the_funnel(self):
-        self.assertEqual(self.client.post(reverse("control:crm_settings"), {"conv_call_to_demo": "99"}).status_code, 403)
-        self.assertEqual(CrmSettings.load().conv_call_to_demo, 10)
+    def test_dgc_cannot_change_the_funnel_or_commission(self):
+        self.assertEqual(self.client.post(reverse("control:crm_settings"), {"value_commission_pct": "99"}).status_code, 403)
+        self.assertEqual(CrmSettings.load().value_commission_pct, 20)
+
+
+class OwnServiceChargeTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("control:crm_my_service_charge")
+        self.login(self.a)
+
+    def test_a_dgc_sets_their_own_charge_and_lands_back_on_the_card(self):
+        r = self.client.post(self.url, {"service_charge": "3000"})
+        self.assertEqual(r.status_code, 302)
+        self.assertTrue(r["Location"].endswith(reverse("control:crm_my_day") + "#possible"))
+        self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, Decimal("3000"))
+        self.assertEqual(svc.client_value(self.a)["own"], 3000)
+
+    def test_it_is_personal_and_does_not_touch_other_preferences(self):
+        CrmProfile.objects.create(user=self.a, accepts_leads=False, cities="Pune")
+        self.client.post(self.url, {"service_charge": "1200"})
+        p = CrmProfile.objects.get(user=self.a)
+        self.assertEqual((p.accepts_leads, p.cities, p.service_charge), (False, "Pune", Decimal("1200")))
+        self.assertFalse(CrmProfile.objects.filter(user=self.b).exists())
+
+    def test_accepts_rupee_signs_commas_and_blank_clears_it(self):
+        self.client.post(self.url, {"service_charge": "₹ 12,500"})
+        self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, Decimal("12500"))
+        self.client.post(self.url, {"service_charge": ""})
+        self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, 0)
+        self.client.post(self.url, {"service_charge": "0"})
+        self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, 0)
+
+    def test_rejects_junk_negative_nan_and_absurd_amounts(self):
+        self.client.post(self.url, {"service_charge": "2000"})
+        for bad in ("abc", "-5", "NaN", "Infinity", "1e9", "99999999", "12.5.5"):
+            self.client.post(self.url, {"service_charge": bad})
+            self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, Decimal("2000"), bad)
+
+    def test_decimals_round_to_whole_rupees_on_save(self):
+        self.client.post(self.url, {"service_charge": "1999.60"})
+        self.assertEqual(CrmProfile.objects.get(user=self.a).service_charge, Decimal("2000"))
+
+    def test_next_redirect_is_guarded_and_csrf_enforced(self):
+        from django.test import Client
+        r = self.client.post(self.url, {"service_charge": "1", "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        self.assertEqual(c.post(self.url, {"service_charge": "5"}).status_code, 403)
+
+    def test_store_owners_cannot_use_it(self):
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.post(self.url, {"service_charge": "5"}).status_code, 403)
+        self.assertFalse(CrmProfile.objects.filter(user=self.owner).exists())
+
+    def test_the_form_on_my_day_posts_what_the_view_expects(self):
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        form = html.split('action="%s"' % self.url)[1].split("</form>")[0]
+        self.assertIn('name="csrfmiddlewaretoken"', form)
+        self.assertIn('name="service_charge"', form)
+        self.assertIn("Save", form)
