@@ -1404,7 +1404,7 @@ class BoardCompactTests(CrmBase):
         self.assertNotIn("p-4 shadow-sm", strip.split("<table")[0])   # no tall tiles
 
     def test_table_rows_are_dense(self):
-        table = self.html.split("<table")[1]
+        table = self.html.split("<table")[1].split("</table>")[0]
         self.assertNotIn("py-3", table)
         self.assertIn("py-2", table)
         self.assertIn("text-[13px]", table)
@@ -1423,3 +1423,163 @@ class BoardCompactTests(CrmBase):
         for q in ("?range=yesterday", "?range=7d", "?range=month&active=0", "?active=1"):
             self.assertEqual(self.client.get(reverse("control:crm_board") + q).status_code, 200)
         self.assertIn("Show everyone", self.html)
+
+
+class MobileEasyTests(CrmBase):
+    """Status everywhere, call -> return -> one tap, quick add, bulk status."""
+
+    def setUp(self):
+        super().setUp()
+        self.lead = Lead.objects.create(name="Zed", phone="9213529044", assigned_to=self.a,
+                                        status=LeadStatus.CONTACTED)
+        self.login(self.a)
+
+    def _get(self, name, **kw):
+        return self.client.get(reverse(f"control:{name}", kwargs=kw)).content.decode()
+
+    # ---- one status dropdown, every screen
+    def test_status_dropdown_on_list_my_day_and_lead_page(self):
+        lead_url = reverse("control:crm_lead_move", kwargs={"pk": self.lead.pk})
+        pages = {
+            "list": self.client.get(reverse("control:crm_leads") + "?view=list").content.decode(),
+            "my_day": self._get("crm_my_day"),
+            "lead": self._get("crm_lead", pk=self.lead.pk),
+        }
+        for name, html in pages.items():
+            self.assertIn(f'data-lead="{self.lead.pk}"', html, name)
+            self.assertIn(lead_url, html, name)
+            self.assertIn('value="contacted" selected', html, name)
+            self.assertNotIn('value="won"', html.split(f'data-lead="{self.lead.pk}"')[1].split("</select>")[0], name)
+
+    def test_dropdown_options_match_lead_status_enum(self):
+        import re
+        html = self._get("crm_lead", pk=self.lead.pk)
+        sel = html.split(f'data-lead="{self.lead.pk}"')[1].split("</select>")[0]
+        offered = set(re.findall(r'<option value="([a-z_]+)"', sel))
+        self.assertEqual(offered, {v for v in LeadStatus.values if v != "won"})
+
+    def test_won_lead_shows_locked_badge_not_a_dropdown(self):
+        Lead.objects.filter(pk=self.lead.pk).update(status=LeadStatus.WON)
+        html = self._get("crm_lead", pk=self.lead.pk)
+        self.assertNotIn(f'data-lead="{self.lead.pk}"', html)
+        self.assertIn("Won", html)
+
+    def test_dropdown_saves_through_move_endpoint(self):
+        r = self.client.post(reverse("control:crm_lead_move", kwargs={"pk": self.lead.pk}), {"status": "interested"})
+        self.assertEqual(r.status_code, 204)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, LeadStatus.INTERESTED)
+
+    def test_shared_status_script_lives_once_in_the_shell(self):
+        for html in (self._get("crm_my_day"), self.client.get(reverse("control:crm_leads") + "?view=list").content.decode(),
+                     self._get("crm_lead", pk=self.lead.pk)):
+            self.assertEqual(html.count("select[data-lead]"), 1)
+            self.assertIn("window.__crmToast", html)
+
+    # ---- call -> return -> one tap
+    def test_call_links_are_tagged_everywhere(self):
+        tagged = f'data-call-lead="{self.lead.pk}"'
+        self.assertIn(tagged, self._get("crm_my_day"))
+        self.assertIn(tagged, self._get("crm_lead", pk=self.lead.pk))
+        self.assertIn(tagged, self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+        self.assertIn(tagged, self.client.get(reverse("control:crm_lead_board")).content.decode())
+
+    def test_call_return_sheet_present_with_log_url_and_all_outcomes(self):
+        html = self._get("crm_my_day")
+        sheet = html.split('x-data="callSheet()"')[1].split("</script>")[0]
+        self.assertIn(reverse("control:crm_log"), sheet)
+        for outcome in ("connected", "no_answer", "not_reachable", "call_back", "not_interested"):
+            self.assertIn(f"log('{outcome}')", sheet)
+        self.assertIn("How did the call with", sheet)
+        self.assertIn("env(safe-area-inset-bottom)", sheet)     # iPhone home-bar safe
+
+    def test_sheet_post_shape_is_accepted_by_the_log_endpoint(self):
+        r = self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "no_answer", "lead": self.lead.pk},
+                             HTTP_HX_REQUEST="true")
+        self.assertEqual(r.status_code, 204)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=1))
+
+    # ---- quick add
+    def test_quick_add_with_phone_only_uses_number_as_name(self):
+        r = self.client.post(reverse("control:crm_lead_create"),
+                             {"phone": "9000011111", "name": "", "next": reverse("control:crm_my_day")})
+        self.assertRedirects(r, reverse("control:crm_my_day"), fetch_redirect_response=False)
+        lead = Lead.objects.get(phone="9000011111")
+        self.assertEqual((lead.name, lead.assigned_to, lead.created_by), ("9000011111", self.a, self.a))
+
+    def test_quick_add_duplicate_phone_is_refused_without_leaking_owner(self):
+        Lead.objects.create(name="Other", phone="9000022222", assigned_to=self.b)
+        r = self.client.post(reverse("control:crm_lead_create"),
+                             {"phone": "9000022222", "next": reverse("control:crm_my_day")}, follow=True)
+        self.assertEqual(Lead.objects.filter(phone="9000022222").count(), 1)
+        body = r.content.decode()
+        self.assertIn("already in the CRM", body)
+        self.assertNotIn("bina", body.split("already in the CRM")[1][:200])
+
+    def test_quick_add_needs_name_or_phone(self):
+        before = Lead.objects.count()
+        self.client.post(reverse("control:crm_lead_create"), {"name": "", "phone": ""})
+        self.assertEqual(Lead.objects.count(), before)
+
+    def test_my_day_has_quick_add_and_dismissible_tip(self):
+        html = self._get("crm_my_day")
+        self.assertIn("Quick add a lead", html)
+        self.assertIn('name="phone"', html.split("Quick add a lead")[1])
+        self.assertIn("How it works", html)
+        self.assertIn("crmTipSeen1", html)
+
+    # ---- bulk status
+    def test_bulk_set_status_scoped_and_logged(self):
+        mine2 = Lead.objects.create(name="M2", assigned_to=self.a)
+        theirs = Lead.objects.create(name="T", assigned_to=self.b)
+        won = Lead.objects.create(name="W", assigned_to=self.a, status=LeadStatus.WON)
+        url = reverse("control:crm_lead_bulk_status")
+        self.client.post(url, {"ids": [self.lead.pk, mine2.pk, theirs.pk, won.pk], "status": "demo_booked"})
+        for l in (self.lead, mine2, theirs, won):
+            l.refresh_from_db()
+        self.assertEqual((self.lead.status, mine2.status), (LeadStatus.DEMO_BOOKED, LeadStatus.DEMO_BOOKED))
+        self.assertEqual(theirs.status, LeadStatus.NEW)          # someone else's: untouched
+        self.assertEqual(won.status, LeadStatus.WON)             # won stays locked
+        self.assertEqual(Activity.objects.filter(kind=ActivityKind.STAGE).count(), 2)
+
+    def test_bulk_status_refuses_won_unknown_empty_and_oversize(self):
+        url = reverse("control:crm_lead_bulk_status")
+        for data in ({"ids": [self.lead.pk], "status": "won"}, {"ids": [self.lead.pk], "status": "zzz"},
+                     {"status": "lost"}, {"ids": list(range(1, svc.BULK_ARCHIVE_MAX + 2)), "status": "lost"}):
+            self.client.post(url, data)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, LeadStatus.CONTACTED)
+
+    def test_bulk_status_owner_blocked_csrf_and_redirect_guard(self):
+        from django.test import Client
+        url = reverse("control:crm_lead_bulk_status")
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.a)
+        self.assertEqual(c.post(url, {"ids": [self.lead.pk], "status": "lost"}).status_code, 403)
+        r = self.client.post(url, {"ids": [self.lead.pk], "status": "lost", "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.post(url, {"ids": [self.lead.pk], "status": "lost"}).status_code, 403)
+
+    def test_list_bulk_bar_offers_set_status(self):
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn(reverse("control:crm_lead_bulk_status"), html)
+        self.assertIn("set status", html)
+        archived = self.client.get(reverse("control:crm_leads") + "?archived=1").content.decode()
+        self.assertNotIn("set status", archived)
+
+    # ---- phone-friendly list + lead page
+    def test_list_is_simpler_on_phones(self):
+        Lead.objects.filter(pk=self.lead.pk).update(next_follow_up=timezone.localdate())
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn('class="hidden px-3 py-2 sm:table-cell">Follow-up', html)   # column hides on phones
+        row = html.split('href="/admin/crm/leads/%d/"' % self.lead.pk)[1].split("</tr>")[0]
+        self.assertIn("sm:hidden", row)                                           # follow-up shown under the name
+        self.assertIn("9213529044", row)
+        self.assertIn("py-2 text-sm text-white", row)                             # big call button on phones
+
+    def test_lead_page_stepper_is_desktop_only(self):
+        html = self._get("crm_lead", pk=self.lead.pk)
+        self.assertIn("hidden gap-1 overflow-x-auto", html)
+        self.assertIn("sm:flex", html)

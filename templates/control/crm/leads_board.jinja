@@ -70,7 +70,7 @@
           </div>
           {% if l.phone %}
           <div class="mt-1.5 flex gap-1">
-            <a href="tel:{{ l.phone }}" class="rounded-md bg-pink-600 px-2 py-0.5 text-[11px] text-white hover:bg-pink-700">📞 Call</a>
+            <a href="tel:{{ l.phone }}" data-call-lead="{{ l.pk }}" data-call-name="{{ l.name }}" class="rounded-md bg-pink-600 px-2.5 py-1 text-[11px] text-white hover:bg-pink-700">📞 Call</a>
             <a href="https://wa.me/{{ l.wa_number }}" target="_blank" rel="noopener" class="rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] ring-1 ring-emerald-200 hover:bg-emerald-100">💬</a>
           </div>{% endif %}
         </article>

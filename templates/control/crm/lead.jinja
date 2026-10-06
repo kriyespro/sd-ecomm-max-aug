@@ -1,10 +1,11 @@
 {% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
-{% from "control/crm/_crm.jinja" import log_form, contact_buttons, empty %}
+{% from "control/crm/_crm.jinja" import log_form, contact_buttons, empty, status_select %}
 {% block page_title %}{{ lead.name }}{% endblock %}
 {% block crm_title %}{{ lead.name }}{% endblock %}
 {% block crm_sub %}{{ lead.business or "—" }}{% if lead.city %} · {{ lead.city }}{% endif %}{% if lead.assigned_to %} · owner {{ lead.assigned_to.get_full_name() or lead.assigned_to.email }}{% endif %}{% endblock %}
 {% block crm_actions %}
+<span class="inline-flex items-center gap-1 text-[11px] text-pink-800">Status {{ status_select(lead, true) }}</span>
 <form method="post" action="{{ url('control:crm_lead_archive') }}" class="inline">{{ csrf_input }}
   <input type="hidden" name="ids" value="{{ lead.pk }}"><input type="hidden" name="next" value="{{ url('control:crm_leads') }}{{ '?archived=1' if lead.is_archived else '' }}">
   {% if lead.is_archived %}<button name="action" value="restore" class="rounded-full bg-emerald-600 px-3 py-1 text-xs font-medium text-white hover:bg-emerald-700">↩ Restore</button>
@@ -16,7 +17,7 @@
 {% if lead.is_archived %}<div class="rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700 ring-1 ring-slate-200">🗄 This lead is archived — hidden from your list, board and queue. Use Restore to bring it back.</div>{% endif %}
 {# Pipeline stepper: tap a stage to move the lead #}
 {% set _stages = [("new","New"),("contacted","Contacted"),("interested","Interested"),("demo_booked","Demo booked"),("demo_done","Demo done"),("negotiating","Negotiating")] %}
-<form method="post" action="{{ url('control:crm_lead_status', kwargs={'pk': lead.pk}) }}" class="flex gap-1 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm ring-1 ring-pink-100">
+<form method="post" action="{{ url('control:crm_lead_status', kwargs={'pk': lead.pk}) }}" class="hidden gap-1 overflow-x-auto rounded-2xl bg-white p-2 shadow-sm ring-1 ring-pink-100 sm:flex">
   {{ csrf_input }}
   {% for v, l in _stages %}
   <button name="status" value="{{ v }}" class="shrink-0 rounded-xl px-3 py-2 text-xs font-medium {{ 'bg-pink-600 text-white' if lead.status == v else 'text-pink-800 hover:bg-pink-50' }}">{{ l }}</button>

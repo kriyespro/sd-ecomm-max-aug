@@ -1,6 +1,6 @@
 {% extends "control/crm/base_crm.jinja" %}
 {% from "control/_forms.jinja" import render_form %}
-{% from "control/crm/_crm.jinja" import empty %}
+{% from "control/crm/_crm.jinja" import empty, status_select %}
 {% set _n = page_obj.paginator.count if page_obj else leads|length %}
 {% block page_title %}Leads{% endblock %}
 {% block crm_title %}Leads{% endblock %}
@@ -56,33 +56,23 @@
           @change="$el.closest('table').querySelectorAll('input[name=ids]').forEach(c => c.checked = $el.checked); n = $el.checked ? $el.closest('table').querySelectorAll('input[name=ids]').length : 0"></th>
         <th class="px-3 py-2">Lead</th><th class="px-3 py-2">Status</th>
         {% if is_admin %}<th class="hidden px-3 py-2 sm:table-cell">Owner</th>{% endif %}
-        <th class="px-3 py-2">Follow-up</th><th class="px-3 py-2"></th></tr></thead>
+        <th class="hidden px-3 py-2 sm:table-cell">Follow-up</th><th class="px-3 py-2"></th></tr></thead>
       <tbody class="divide-y divide-pink-50">
         {% for l in leads %}
         <tr class="hover:bg-pink-50/40">
           <td class="px-3 py-1.5"><input type="checkbox" name="ids" value="{{ l.pk }}" class="rounded border-pink-300 text-pink-600"></td>
           <td class="px-3 py-1.5">
             <a class="font-medium text-slate-800 hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
-            <span class="text-xs text-slate-400">{% if l.business %}· {{ l.business }}{% endif %}{% if l.city %} · {{ l.city }}{% endif %}{% if l.phone %} · {{ l.phone }}{% endif %}</span>
+            <span class="hidden text-xs text-slate-400 sm:inline">{% if l.business %}· {{ l.business }}{% endif %}{% if l.city %} · {{ l.city }}{% endif %}{% if l.phone %} · {{ l.phone }}{% endif %}</span>
+            <div class="text-[11px] text-slate-400 sm:hidden">{{ l.business or "" }}{% if l.business and l.city %} · {% endif %}{{ l.city or "" }}{% if l.phone %}{% if l.business or l.city %} · {% endif %}{{ l.phone }}{% endif %}
+              {% if l.next_follow_up %}<span class="{{ 'font-medium text-rose-600' if l.next_follow_up <= today else 'text-amber-700' }}">⏰ {{ l.next_follow_up.strftime("%d %b") }}</span>{% endif %}</div>
           </td>
-          <td class="px-3 py-1.5">
-            {% if l.status == 'won' %}
-            <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" title="Won deals are locked">🎉 Won</span>
-            {% else %}
-            <span class="inline-flex items-center gap-1">
-              <select data-lead="{{ l.pk }}" data-prev="{{ l.status }}" data-url="{{ url('control:crm_lead_move', kwargs={'pk': l.pk}) }}" aria-label="Change status of {{ l.name }}"
-                      class="h-6 cursor-pointer rounded-full border-0 py-0 pl-2 pr-6 text-[11px] font-medium focus:ring-1 focus:ring-pink-400 {{ 'bg-slate-100 text-slate-600' if l.status == 'lost' else 'bg-pink-50 text-pink-800' }}">
-                {% for v, lab in editable_statuses %}<option value="{{ v }}" {{ 'selected' if l.status == v }}>{{ lab }}</option>{% endfor %}
-              </select>
-              <span data-flash class="text-[11px] text-emerald-600 opacity-0 transition-opacity">✓</span>
-            </span>
-            {% endif %}
-          </td>
+          <td class="px-3 py-1.5">{{ status_select(l) }}</td>
           {% if is_admin %}<td class="hidden px-3 py-1.5 text-slate-500 sm:table-cell">{{ (l.assigned_to.get_full_name() or l.assigned_to.email) if l.assigned_to else "—" }}</td>{% endif %}
-          <td class="whitespace-nowrap px-3 py-1.5 {{ 'font-medium text-rose-600' if l.next_follow_up and l.next_follow_up <= today else 'text-slate-500' }}">{{ l.next_follow_up or "—" }}</td>
-          <td class="whitespace-nowrap px-3 py-1.5 text-right">
-            {% if l.phone %}<a href="tel:{{ l.phone }}" title="Call" class="inline-block rounded-full bg-pink-600 px-2 py-0.5 text-xs text-white hover:bg-pink-700">📞</a>
-            <a href="https://wa.me/{{ l.wa_number }}" target="_blank" rel="noopener" title="WhatsApp" class="inline-block rounded-full bg-emerald-50 px-2 py-0.5 text-xs ring-1 ring-emerald-200 hover:bg-emerald-100">💬</a>{% endif %}</td>
+          <td class="hidden whitespace-nowrap px-3 py-1.5 sm:table-cell {{ 'font-medium text-rose-600' if l.next_follow_up and l.next_follow_up <= today else 'text-slate-500' }}">{{ l.next_follow_up or "—" }}</td>
+          <td class="whitespace-nowrap px-2 py-1.5 text-right sm:px-3">
+            {% if l.phone %}<a href="tel:{{ l.phone }}" data-call-lead="{{ l.pk }}" data-call-name="{{ l.name }}" title="Call" class="inline-block rounded-full bg-pink-600 px-3.5 py-2 text-sm text-white hover:bg-pink-700 sm:px-2 sm:py-0.5 sm:text-xs">📞</a>
+            <a href="https://wa.me/{{ l.wa_number }}" target="_blank" rel="noopener" title="WhatsApp" class="inline-block rounded-full bg-emerald-50 px-3.5 py-2 text-sm ring-1 ring-emerald-200 hover:bg-emerald-100 sm:px-2 sm:py-0.5 sm:text-xs">💬</a>{% endif %}</td>
         </tr>
         {% else %}
         <tr><td colspan="7" class="p-3">{{ empty("🗄" if archived_view else "📭", "Nothing archived." if archived_view else "No leads here yet.", "Archived leads show up here and can be restored." if archived_view else "Add one with the button above" ~ (" or import a CSV below." if is_admin else ", or ask the super admin to assign some to you.")) }}</td></tr>
@@ -102,6 +92,12 @@
       {% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
     <button class="rounded-full bg-pink-500 px-4 py-1 font-semibold text-white hover:bg-pink-400">Assign</button>
     {% endif %}
+    {% if not archived_view %}
+    <span class="text-pink-300">· set status</span>
+    <select name="status" class="rounded-full border-0 bg-white py-1 pl-3 pr-8 text-[13px] text-slate-800 focus:ring-2 focus:ring-pink-300">
+      {% for v, lab in editable_statuses %}<option value="{{ v }}">{{ lab }}</option>{% endfor %}</select>
+    <button formaction="{{ url('control:crm_lead_bulk_status') }}" class="rounded-full bg-pink-500 px-4 py-1 font-semibold text-white hover:bg-pink-400">Set</button>
+    {% endif %}
     {% if archived_view %}
     <button formaction="{{ url('control:crm_lead_archive') }}" name="action" value="restore" class="rounded-full bg-emerald-500 px-4 py-1 font-semibold text-white hover:bg-emerald-400">↩ Restore</button>
     {% else %}
@@ -119,36 +115,5 @@
 </form>
 {% if page_obj and page_obj.has_other_pages() %}<div class="flex gap-3 text-sm text-pink-700">{% if page_obj.has_previous() %}<a href="?{{ qs }}page={{ page_obj.previous_page_number() }}">← Prev</a>{% endif %}{% if page_obj.has_next() %}<a href="?{{ qs }}page={{ page_obj.next_page_number() }}">Next →</a>{% endif %}</div>{% endif %}
 
-<div x-data="{ err: '' }" x-init="window.__crmListErr = m => { err = m; setTimeout(() => err = '', 3500) }">
-  <div x-show="err" x-cloak x-transition class="fixed bottom-4 left-1/2 z-30 -translate-x-1/2 rounded-full bg-rose-600 px-4 py-2 text-sm text-white shadow-lg" x-text="err"></div>
-</div>
-<script>
-document.addEventListener('change', async (ev) => {
-  const sel = ev.target.closest && ev.target.closest('select[data-lead]');
-  if (!sel) return;
-  const prev = sel.dataset.prev, next = sel.value;
-  if (prev === next) return;
-  const tok = sel.form && sel.form.querySelector('[name=csrfmiddlewaretoken]');
-  const fd = new FormData();
-  fd.append('status', next);
-  fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
-  sel.disabled = true;
-  try {
-    const r = await fetch(sel.dataset.url, { method: 'POST', body: fd, credentials: 'same-origin' });
-    if (!r.ok) {
-      let msg = 'Could not change the status.';
-      try { msg = (await r.json()).error || msg; } catch (e) {}
-      throw new Error(msg);
-    }
-    sel.dataset.prev = next;
-    sel.classList.toggle('bg-slate-100', next === 'lost'); sel.classList.toggle('text-slate-600', next === 'lost');
-    sel.classList.toggle('bg-pink-50', next !== 'lost'); sel.classList.toggle('text-pink-800', next !== 'lost');
-    const f = sel.parentElement.querySelector('[data-flash]');
-    if (f) { f.style.opacity = 1; setTimeout(() => f.style.opacity = 0, 1400); }
-  } catch (e) {
-    sel.value = prev;
-    if (window.__crmListErr) window.__crmListErr(e.message || 'Could not change the status.');
-  } finally { sel.disabled = false; }
-});
-</script>
+
 {% endblock %}
