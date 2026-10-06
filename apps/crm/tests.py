@@ -742,7 +742,7 @@ class LeadPageLayoutTests(CrmBase):
         self.assertIn("xl:grid-cols-3", html)
         self.assertIn("rounded-lg px-2.5 py-1.5 text-xs", html)   # compact outcome buttons
         self.assertNotIn("py-3 text-sm font-medium transition", html.split("Log this contact")[1])
-        self.assertNotIn("<details", html)  # edit form is always open now
+        self.assertNotIn("Edit details</summary>", html)  # the edit form is always open, never collapsed
         r = self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected", "lead": lead.pk})
         self.assertEqual(r.status_code, 302)
 
@@ -2580,3 +2580,354 @@ class AutomationWiringTests(AutomationBase):
         auto.trial_rescue()
         self.login(self.a)
         self.assertIn("Ravi Jewels", self.client.get(reverse("control:crm_my_day")).content.decode())
+
+
+from apps.crm.models import MessageTemplate, SourceSpend, TemplateKind  # noqa: E402
+from apps.billing.models import ManagerCommission  # noqa: E402
+
+
+class TemplateTests(CrmBase):
+    def test_defaults_are_seeded_by_the_migration(self):
+        self.assertEqual(MessageTemplate.objects.filter(kind="whatsapp").count(), 4)
+        self.assertEqual(MessageTemplate.objects.filter(kind="script").count(), 3)
+        self.assertTrue(MessageTemplate.objects.filter(kind="script", stage="negotiating").exists())
+
+    def test_placeholders_are_filled_and_nothing_is_evaluated(self):
+        lead = Lead(name="Ravi Kumar", business="Ravi Jewels", city="Pune")
+        out = svc.render_template_text("Hi {first_name} / {name} / {business} / {city} / {dgc} / {0.__class__} {unknown}", lead, self.a)
+        self.assertEqual(out, "Hi Ravi / Ravi Kumar / Ravi Jewels / Pune / anil / {0.__class__} {unknown}")
+
+    def test_number_only_name_and_blank_fields_degrade_gracefully(self):
+        out = svc.render_template_text("Hi {first_name}, {business} in {city}", Lead(name="9876543210"), self.a)
+        self.assertEqual(out, "Hi there, your shop in your city")
+
+    def test_whatsapp_links_encode_the_message_and_use_the_indian_number(self):
+        MessageTemplate.objects.all().delete()
+        MessageTemplate.objects.create(kind="whatsapp", title="Hi", body="Hello {first_name}! & more", order=1)
+        links = svc.whatsapp_links(Lead(name="Ravi", phone="98765 43210"), self.a)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0]["url"], "https://wa.me/919876543210?text=Hello%20Ravi%21%20%26%20more")
+        self.assertEqual(links[0]["text"], "Hello Ravi! & more")
+
+    def test_no_phone_no_links_and_inactive_hidden_and_order_respected(self):
+        self.assertEqual(svc.whatsapp_links(Lead(name="x"), self.a), [])
+        MessageTemplate.objects.all().delete()
+        MessageTemplate.objects.create(kind="whatsapp", title="B", body="b", order=2)
+        MessageTemplate.objects.create(kind="whatsapp", title="A", body="a", order=1)
+        MessageTemplate.objects.create(kind="whatsapp", title="Off", body="o", order=0, is_active=False)
+        self.assertEqual([w["title"] for w in svc.whatsapp_links(Lead(name="x", phone="9000000000"), self.a)], ["A", "B"])
+
+    def test_scripts_match_the_lead_stage_plus_any_stage_ones(self):
+        MessageTemplate.objects.all().delete()
+        MessageTemplate.objects.create(kind="script", stage="new", title="For new", body="n {name}")
+        MessageTemplate.objects.create(kind="script", stage="negotiating", title="For nego", body="x")
+        MessageTemplate.objects.create(kind="script", stage="", title="Always", body="a")
+        got = [s["title"] for s in svc.scripts_for(Lead(name="Z", status="new"), self.a)]
+        self.assertEqual(sorted(got), ["Always", "For new"])
+        self.assertEqual(svc.scripts_for(Lead(name="Z", status="new"), self.a)[0]["text"][:1] in ("n", "a"), True)
+
+    def test_lead_page_and_my_day_show_whatsapp_and_scripts(self):
+        lead = Lead.objects.create(name="Ravi Kumar", phone="9876543210", business="Ravi Jewels", assigned_to=self.a)
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_lead", kwargs={"pk": lead.pk})).content.decode()
+        self.assertIn("Send a WhatsApp message", html)
+        self.assertIn("https://wa.me/919876543210?text=", html)
+        self.assertIn("Opening call", html)                      # script for stage 'new'
+        self.assertIn("Hello, am I speaking with Ravi Kumar?", html)
+        self.assertNotIn("Handling objections", html)            # other stage
+        day = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("Send a WhatsApp message", day)
+        self.assertIn("wa.me/919876543210", day)
+
+    def test_no_phone_no_whatsapp_block(self):
+        lead = Lead.objects.create(name="NoPhone", assigned_to=self.a)
+        self.login(self.a)
+        self.assertNotIn("Send a WhatsApp message", self.client.get(reverse("control:crm_lead", kwargs={"pk": lead.pk})).content.decode())
+
+    def test_admin_crud_and_dgc_blocked(self):
+        for url in (reverse("control:crm_templates"), reverse("control:crm_template_new")):
+            self.login(self.a)
+            self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.admin)
+        self.assertEqual(self.client.get(reverse("control:crm_templates")).status_code, 200)
+        r = self.client.post(reverse("control:crm_template_new"),
+                             {"kind": "whatsapp", "stage": "negotiating", "title": "Thanks", "body": "Thanks {first_name}!", "order": "5", "is_active": "on"})
+        self.assertEqual(r.status_code, 302)
+        t = MessageTemplate.objects.get(title="Thanks")
+        self.assertEqual(t.stage, "")                              # stage is for scripts only
+        self.client.post(reverse("control:crm_template_edit", kwargs={"pk": t.pk}),
+                         {"kind": "whatsapp", "title": "Thanks!", "body": "Edited", "order": "6"})
+        t.refresh_from_db()
+        self.assertEqual((t.title, t.body, t.is_active), ("Thanks!", "Edited", False))
+        self.login(self.a)
+        self.assertEqual(self.client.post(reverse("control:crm_template_delete", kwargs={"pk": t.pk})).status_code, 403)
+        self.login(self.admin)
+        self.client.post(reverse("control:crm_template_delete", kwargs={"pk": t.pk}))
+        self.assertFalse(MessageTemplate.objects.filter(pk=t.pk).exists())
+
+    def test_invalid_template_rerenders_with_errors(self):
+        self.login(self.admin)
+        r = self.client.post(reverse("control:crm_template_new"), {"kind": "whatsapp", "title": "", "body": ""})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(MessageTemplate.objects.filter(title="").exists())
+
+    def test_board_links_to_templates_for_admin(self):
+        self.login(self.admin)
+        self.assertIn(reverse("control:crm_templates"), self.client.get(reverse("control:crm_board")).content.decode())
+
+
+class DemoSchedulingTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.lead = Lead.objects.create(name="Zed", phone="9213529044", assigned_to=self.a, status=LeadStatus.INTERESTED)
+        self.login(self.a)
+        self.url = reverse("control:crm_lead_demo", kwargs={"pk": self.lead.pk})
+
+    def test_booking_stores_india_time_and_moves_the_stage_with_history(self):
+        r = self.client.post(self.url, {"when": "2026-10-07T16:30"})
+        self.assertEqual(r.status_code, 302)
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.demo_at, dt.datetime(2026, 10, 7, 11, 0, tzinfo=dt.timezone.utc))   # 16:30 IST
+        self.assertEqual(self.lead.status, LeadStatus.DEMO_BOOKED)
+        self.assertTrue(Activity.objects.filter(lead=self.lead, kind=ActivityKind.STAGE, note__contains="demo scheduled").exists())
+
+    def test_rescheduling_keeps_stage_and_clearing_removes_time(self):
+        self.client.post(self.url, {"when": "2026-10-07T16:30"})
+        n = Activity.objects.filter(kind=ActivityKind.STAGE).count()
+        self.client.post(self.url, {"when": "2026-10-08T10:00"})
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.demo_at.astimezone(svc._biz_tz()).hour, 10)
+        self.assertEqual(Activity.objects.filter(kind=ActivityKind.STAGE).count(), n)     # no second stage move
+        self.client.post(self.url, {"when": ""})
+        self.lead.refresh_from_db()
+        self.assertIsNone(self.lead.demo_at)
+        self.assertEqual(self.lead.status, LeadStatus.DEMO_BOOKED)
+
+    def test_booking_never_moves_a_lead_that_is_further_along(self):
+        Lead.objects.filter(pk=self.lead.pk).update(status=LeadStatus.NEGOTIATING)
+        self.client.post(self.url, {"when": "2026-10-07T16:30"})
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.status, LeadStatus.NEGOTIATING)
+
+    def test_invalid_time_is_refused_and_foreign_lead_404s(self):
+        self.client.post(self.url, {"when": "not a date"})
+        self.lead.refresh_from_db()
+        self.assertIsNone(self.lead.demo_at)
+        other = Lead.objects.create(name="O", assigned_to=self.b)
+        self.assertEqual(self.client.post(reverse("control:crm_lead_demo", kwargs={"pk": other.pk}), {"when": "2026-10-07T10:00"}).status_code, 404)
+
+    def test_demos_for_splits_today_overdue_and_respects_the_india_day(self):
+        tz = svc._biz_tz()
+        now = timezone.now().astimezone(tz)
+        sod = dt.datetime.combine(now.date(), dt.time.min, tzinfo=tz)
+        today_l = Lead.objects.create(name="Today", assigned_to=self.a, status="demo_booked", demo_at=sod + dt.timedelta(hours=15))
+        edge = Lead.objects.create(name="Edge", assigned_to=self.a, status="demo_booked", demo_at=sod + dt.timedelta(minutes=5))
+        late = Lead.objects.create(name="Late", assigned_to=self.a, status="demo_booked", demo_at=sod - dt.timedelta(minutes=5))
+        tomorrow = Lead.objects.create(name="Tomorrow", assigned_to=self.a, status="demo_booked", demo_at=sod + dt.timedelta(days=1, hours=1))
+        done = Lead.objects.create(name="Done", assigned_to=self.a, status="demo_done", demo_at=sod + dt.timedelta(hours=9))
+        theirs = Lead.objects.create(name="Theirs", assigned_to=self.b, status="demo_booked", demo_at=sod + dt.timedelta(hours=9))
+        arch = Lead.objects.create(name="Arch", assigned_to=self.a, status="demo_booked", demo_at=sod + dt.timedelta(hours=9), is_archived=True)
+        today, overdue = svc.demos_for(self.a)
+        self.assertEqual([l.name for l in today], ["Edge", "Today"])        # time order
+        self.assertEqual([l.name for l in overdue], ["Late"])
+
+    def test_my_day_lists_todays_demos_and_overdue_ones(self):
+        tz = svc._biz_tz()
+        sod = dt.datetime.combine(timezone.now().astimezone(tz).date(), dt.time.min, tzinfo=tz)
+        Lead.objects.create(name="Alpha Demo", business="Alpha Co", assigned_to=self.a, status="demo_booked", demo_at=sod + dt.timedelta(hours=16, minutes=30))
+        Lead.objects.create(name="Beta Missed", assigned_to=self.a, status="demo_booked", demo_at=sod - dt.timedelta(days=2))
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("Alpha Demo", html)
+        self.assertIn("04:30 pm", html)
+        self.assertIn("1 today", html)
+        self.assertIn("Beta Missed", html)
+        self.assertIn("mark demo given or reschedule", html)
+
+    def test_lead_page_shows_demo_form_and_current_booking(self):
+        html = self.client.get(reverse("control:crm_lead", kwargs={"pk": self.lead.pk})).content.decode()
+        self.assertIn("Book a demo", html)
+        self.client.post(self.url, {"when": "2026-10-07T16:30"})
+        html = self.client.get(reverse("control:crm_lead", kwargs={"pk": self.lead.pk})).content.decode()
+        self.assertIn('value="2026-10-07T16:30"', html)
+        self.assertIn("Wed 07 Oct, 04:30 PM", html)
+        self.assertIn("Reschedule", html)
+
+    def test_board_card_shows_demo_badge_in_india_date(self):
+        Lead.objects.filter(pk=self.lead.pk).update(status="demo_booked", demo_at=dt.datetime(2026, 10, 7, 20, 0, tzinfo=dt.timezone.utc))  # 01:30 IST on the 8th
+        html = self.client.get(reverse("control:crm_lead_board")).content.decode()
+        self.assertIn("🖥 08 Oct", html)
+
+
+class MomentumTests(CrmBase):
+    def _calls(self, user, day, n, outcome="connected", hour=11):
+        tz = svc._biz_tz()
+        when = dt.datetime.combine(day, dt.time(hour, 0), tzinfo=tz)
+        Activity.objects.bulk_create([Activity(actor=user, kind="call", outcome=outcome, occurred_at=when + dt.timedelta(minutes=i)) for i in range(n)])
+
+    def _today(self):
+        return timezone.now().astimezone(svc._biz_tz()).date()
+
+    def test_streak_counts_consecutive_active_days_and_today_is_forgiving(self):
+        today = self._today()
+        for back in (1, 2, 3):
+            self._calls(self.a, today - dt.timedelta(days=back), 12)
+        self.assertEqual(svc.call_streak(self.a)["days"], 3)               # today not done yet: streak intact
+        self._calls(self.a, today, 11)
+        self.assertEqual(svc.call_streak(self.a)["days"], 4)               # today now counts
+
+    def test_a_quiet_day_breaks_the_streak(self):
+        today = self._today()
+        self._calls(self.a, today - dt.timedelta(days=1), 12)
+        self._calls(self.a, today - dt.timedelta(days=2), 3)               # below the bar
+        self._calls(self.a, today - dt.timedelta(days=3), 12)
+        self.assertEqual(svc.call_streak(self.a)["days"], 1)
+
+    def test_streak_bar_follows_a_low_target(self):
+        from apps.crm.models import DailyTarget
+        DailyTarget.objects.create(user=self.a, metric="calls", value=5)
+        today = self._today()
+        self._calls(self.a, today - dt.timedelta(days=1), 5)
+        r = svc.call_streak(self.a)
+        self.assertEqual((r["days"], r["bar"]), (1, 5))
+
+    def test_streak_only_counts_the_users_own_calls(self):
+        today = self._today()
+        self._calls(self.b, today - dt.timedelta(days=1), 30)
+        self.assertEqual(svc.call_streak(self.a)["days"], 0)
+
+    def test_best_window_needs_enough_data_then_picks_the_best_two_hours(self):
+        today = self._today()
+        self._calls(self.a, today - dt.timedelta(days=1), 10, "no_answer", hour=9)
+        self.assertIsNone(svc.best_call_window(self.a))                    # < 30 calls: say nothing
+        self._calls(self.a, today - dt.timedelta(days=2), 20, "connected", hour=11)   # 100% in 10-12
+        self._calls(self.a, today - dt.timedelta(days=3), 10, "connected", hour=15)
+        self._calls(self.a, today - dt.timedelta(days=3), 10, "no_answer", hour=15)  # 50% in 14-16
+        w = svc.best_call_window(self.a)
+        self.assertEqual((w["label"], w["pct"]), ("10 am–12 pm", 100))
+
+    def test_best_window_ignores_tiny_buckets(self):
+        today = self._today()
+        self._calls(self.a, today - dt.timedelta(days=1), 30, "no_answer", hour=14)
+        self._calls(self.a, today - dt.timedelta(days=2), 3, "connected", hour=8)    # only 3 calls: not trusted
+        self.assertIsNone(svc.best_call_window(self.a))
+
+    def test_earnings_preview_uses_real_commission_and_weighted_pipeline(self):
+        p = Project.objects.create(name="Paid Store", status="active")
+        sub = billing.ensure_subscription(Project.objects.get(pk=p.pk))
+        sub.manager = self.a
+        sub.save(update_fields=["manager"])
+        billing.mark_invoice_paid(billing.issue_invoice(sub))
+        real = ManagerCommission.objects.get(manager=self.a)
+        Lead.objects.create(name="n1", assigned_to=self.a, status=LeadStatus.NEGOTIATING)
+        Lead.objects.create(name="n2", assigned_to=self.a, status=LeadStatus.NEGOTIATING)
+        Lead.objects.create(name="d1", assigned_to=self.a, status=LeadStatus.DEMO_DONE)
+        Lead.objects.create(name="x", assigned_to=self.a, status=LeadStatus.NEW, is_archived=True)   # ignored
+        Lead.objects.create(name="o", assigned_to=self.b, status=LeadStatus.NEGOTIATING)             # someone else's
+        e = svc.earnings_preview(self.a)
+        self.assertEqual(e["earned"], real.amount.quantize(Decimal("1")))
+        self.assertEqual(e["hot"], 3)
+        cfg = CrmSettings.load()
+        rate = svc._monthly_commission_pct() / Decimal(100)
+        want = ((2 * Decimal(cfg.probability("negotiating")) + Decimal(cfg.probability("demo_done"))) / 100
+                * cfg.avg_plan_price * rate).quantize(Decimal("1"))
+        self.assertEqual(e["expected"], want)
+        self.assertEqual(svc.earnings_preview(self.b)["earned"], 0)
+
+    def test_my_day_shows_momentum_chips_only_with_data(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        for needle in ("-day streak", "commission this month", "Pipeline could add", "You connect best"):
+            self.assertNotIn(needle, html)
+        today = self._today()
+        for back in (1, 2):
+            self._calls(self.a, today - dt.timedelta(days=back), 40, "connected", hour=11)
+        Lead.objects.create(name="hot", assigned_to=self.a, status=LeadStatus.NEGOTIATING)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("2-day streak", html)
+        self.assertIn("Pipeline could add", html)
+        self.assertIn("1 hot", html)
+        self.assertIn("You connect best 10 am–12 pm", html)
+
+
+class OnboardingTests(CrmBase):
+    def test_steps_tick_from_real_activity(self):
+        steps = lambda: {s["label"]: s["done"] for s in svc.onboarding_steps(self.a)}  # noqa: E731
+        self.assertFalse(any(steps().values()))
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        self.assertTrue(steps()["Log your first call"])
+        self.assertFalse(steps()["Reach 10 calls"])
+        for _ in range(9):
+            svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        self.assertTrue(steps()["Reach 10 calls"])
+        svc.log_activity(actor=self.a, kind="demo", outcome="done")
+        self.assertTrue(steps()["Give your first demo"])
+        TrainingLog.objects.create(trainee=self.a, trainer=self.b, status=TrainingStatus.CONFIRMED, initiated_by=self.a)
+        self.assertTrue(steps()["Get trained by another DGC"])
+        Lead.objects.create(name="W", assigned_to=self.a, status=LeadStatus.WON)
+        self.assertTrue(all(steps().values()))
+
+    def test_pending_training_or_someone_elses_wins_do_not_count(self):
+        TrainingLog.objects.create(trainee=self.a, trainer=self.b, status=TrainingStatus.PENDING, initiated_by=self.a)
+        Lead.objects.create(name="W", assigned_to=self.b, status=LeadStatus.WON)
+        done = {s["label"]: s["done"] for s in svc.onboarding_steps(self.a)}
+        self.assertFalse(done["Get trained by another DGC"] or done["Win your first store"])
+
+    def test_card_shows_progress_until_everything_is_done(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("Getting started", html)
+        self.assertIn("0 of 5 done", html)
+        for _ in range(10):
+            svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        svc.log_activity(actor=self.a, kind="demo", outcome="done")
+        TrainingLog.objects.create(trainee=self.a, trainer=self.b, status=TrainingStatus.CONFIRMED, initiated_by=self.a)
+        Lead.objects.create(name="W", assigned_to=self.a, status=LeadStatus.WON)
+        self.assertNotIn("Getting started", self.client.get(reverse("control:crm_my_day")).content.decode())
+
+
+class OfflineTimestampTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.lead = Lead.objects.create(name="L", assigned_to=self.a)
+        self.login(self.a)
+        self.url = reverse("control:crm_log")
+
+    def _post(self, at):
+        return self.client.post(self.url, {"kind": "call", "outcome": "connected", "lead": self.lead.pk, "at": at},
+                                HTTP_HX_REQUEST="true")
+
+    def test_recent_timestamp_is_honoured_for_activity_and_first_touch(self):
+        when = timezone.now() - dt.timedelta(hours=5)
+        self.assertEqual(self._post(when.isoformat().replace("+00:00", "Z")).status_code, 204)
+        act = Activity.objects.get(lead=self.lead)
+        self.assertAlmostEqual(act.occurred_at.timestamp(), when.timestamp(), delta=2)
+        self.lead.refresh_from_db()
+        self.assertAlmostEqual(self.lead.first_touch_at.timestamp(), when.timestamp(), delta=2)
+
+    def test_too_old_future_or_garbage_timestamps_fall_back_to_now(self):
+        before = timezone.now()
+        for bad in ((timezone.now() - dt.timedelta(days=4)).isoformat(), (timezone.now() + dt.timedelta(hours=2)).isoformat(), "garbage", ""):
+            self._post(bad)
+        for a in Activity.objects.all():
+            self.assertGreaterEqual(a.occurred_at, before - dt.timedelta(seconds=1))
+        self.assertEqual(Activity.objects.count(), 4)
+
+    def test_naive_timestamp_is_treated_as_utc(self):
+        when = (timezone.now() - dt.timedelta(hours=1)).replace(tzinfo=None)
+        self._post(when.isoformat())
+        self.assertAlmostEqual(Activity.objects.get().occurred_at.timestamp(),
+                               when.replace(tzinfo=dt.timezone.utc).timestamp(), delta=2)
+
+    def test_offline_script_is_in_the_shell_with_the_queue_wiring(self):
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        for needle in ("crmLogQueue", "flushQueue", "No signal", "Synced "):
+            self.assertIn(needle, html)
+
+
+class SourceSpendTests(CrmBase):
+    def test_month_is_normalised_and_unique_per_source(self):
+        s = SourceSpend.objects.create(source="Facebook", month=dt.date(2026, 10, 17), amount=Decimal("5000"))
+        self.assertEqual(s.month, dt.date(2026, 10, 1))
+        from django.db import IntegrityError, transaction
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SourceSpend.objects.create(source="Facebook", month=dt.date(2026, 10, 2), amount=Decimal("1"))

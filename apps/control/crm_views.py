@@ -45,6 +45,8 @@ from apps.crm.models import (
     DailyTarget,
     Lead,
     LeadStatus,
+    MessageTemplate,
+    TemplateKind,
     StoreAssignment,
     StoreWorkRequest,
     TargetMetric,
@@ -112,9 +114,15 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
             status__in=[s_ for s_ in LeadStatus.values if s_ not in ("won", "lost")]).order_by("assigned_at")[:5])
         for f in fresh:
             f.waiting_mins = max(0, int((timezone.now() - f.assigned_at).total_seconds() // 60))
+        demos_today, demos_overdue = svc.demos_for(u)
+        steps = svc.onboarding_steps(u)
         queue = svc.call_queue(u, skip=skip)
         nxt = queue.first()
         ctx.update(
+            demos_today=demos_today, demos_overdue=demos_overdue,
+            earnings=svc.earnings_preview(u), streak=svc.call_streak(u), best_window=svc.best_call_window(u),
+            onboarding=steps, onboarding_done=sum(1 for st in steps if st["done"]),
+            wa_links=svc.whatsapp_links(queue.first(), u) if queue.first() else [],
             nxt=nxt, queue_left=queue.count(), skip_ids=skip, fresh=fresh,
             crm_profile=CrmProfile.objects.filter(user=u).first(),
             nxt_activity=nxt.activities.select_related("actor")[:3] if nxt else [],
@@ -247,6 +255,11 @@ class LeadDetailView(PlatformStaffRequiredMixin, TemplateView):
     def get_context_data(self, pk, **kw):
         ctx = super().get_context_data(**kw)
         lead = get_object_or_404(_lead_qs(self.request.user), pk=pk)
+        demo_local = lead.demo_at.astimezone(svc._biz_tz()) if lead.demo_at else None
+        ctx.update(wa_links=svc.whatsapp_links(lead, self.request.user),
+                   scripts=svc.scripts_for(lead, self.request.user),
+                   demo_value=demo_local.strftime("%Y-%m-%dT%H:%M") if demo_local else "",
+                   demo_label=demo_local.strftime("%a %d %b, %I:%M %p") if demo_local else "")
         ctx.update(lead=lead, form=LeadForm(instance=lead),
                    activities=lead.activities.select_related("actor")[:50],
                    tasks=lead.tasks.filter(status=TaskStatus.OPEN),
@@ -468,6 +481,26 @@ class LeadArchiveView(PlatformStaffRequiredMixin, View):
         return redirect(_post_next(request, reverse("control:crm_leads")))
 
 
+class LeadDemoView(PlatformStaffRequiredMixin, View):
+    """Book (or clear) the demo time for a lead. Times are India time."""
+
+    def post(self, request, pk):
+        lead = get_object_or_404(_lead_qs(request.user), pk=pk)
+        raw = request.POST.get("when", "").strip()
+        if not raw:
+            svc.book_demo(lead, None, actor=request.user)
+            messages.success(request, "Demo time cleared.")
+        else:
+            try:
+                when = dt.datetime.fromisoformat(raw).replace(tzinfo=svc._biz_tz())
+            except ValueError:
+                messages.error(request, "That date/time isn't valid.")
+                return redirect("control:crm_lead", pk=pk)
+            svc.book_demo(lead, when, actor=request.user)
+            messages.success(request, f"Demo booked for {when.strftime('%a %d %b, %I:%M %p')}.")
+        return redirect("control:crm_lead", pk=pk)
+
+
 class LeadWonView(PlatformStaffRequiredMixin, View):
     """Mark won → hand to the existing store-create screen."""
 
@@ -579,9 +612,21 @@ class LogActivityView(PlatformStaffRequiredMixin, View):
             except ValueError:
                 pass
         count = p.get("count", "1")
+        when = None
+        if p.get("at"):   # sent by the offline queue: the moment the call actually ended
+            try:
+                parsed = dt.datetime.fromisoformat(p["at"].replace("Z", "+00:00"))
+                if timezone.is_naive(parsed):
+                    parsed = timezone.make_aware(parsed, dt.timezone.utc)
+                now = timezone.now()
+                if now - dt.timedelta(days=3) <= parsed <= now + dt.timedelta(minutes=5):
+                    when = parsed
+            except ValueError:
+                pass
         svc.log_activity(actor=request.user, kind=kind, outcome=outcome, lead=lead,
                          project=project, note=p.get("note", ""),
-                         count=int(count) if count.isdigit() else 1, follow_up=follow)
+                         count=int(count) if count.isdigit() else 1, follow_up=follow,
+                         occurred_at=when)
         if request.headers.get("HX-Request"):
             from django.http import HttpResponse
             return HttpResponse(status=204, headers={"HX-Refresh": "true"})
@@ -1029,6 +1074,59 @@ class CrmRunNowView(PlatformAdminRequiredMixin, View):
                      f"{', quiet alert sent' if res['quiet_alert'] else ''}"
                      f"{', weekly digest sent' if res['weekly_digest'] else ''}.")
         return redirect("control:crm_settings")
+
+
+class TemplateForm(forms.ModelForm):
+    class Meta:
+        model = MessageTemplate
+        fields = ["kind", "stage", "title", "body", "order", "is_active"]
+        widgets = {"body": forms.Textarea(attrs={"rows": 5}),
+                   "title": forms.TextInput(attrs={"placeholder": "e.g. Intro"})}
+
+    def clean(self):
+        data = super().clean()
+        if data.get("kind") == TemplateKind.WHATSAPP:
+            data["stage"] = ""          # stage only applies to call scripts
+        return data
+
+
+class TemplateListView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/templates.jinja"
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        ctx["whatsapp"] = MessageTemplate.objects.filter(kind=TemplateKind.WHATSAPP)
+        ctx["scripts"] = MessageTemplate.objects.filter(kind=TemplateKind.SCRIPT)
+        return ctx
+
+
+class TemplateEditView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/template_form.jinja"
+
+    def _obj(self, pk):
+        return get_object_or_404(MessageTemplate, pk=pk) if pk else None
+
+    def get_context_data(self, pk=None, **kw):
+        ctx = super().get_context_data(**kw)
+        obj = self._obj(pk)
+        ctx.update(form=kw.get("form") or TemplateForm(instance=obj), obj=obj)
+        return ctx
+
+    def post(self, request, pk=None):
+        obj = self._obj(pk)
+        form = TemplateForm(request.POST, instance=obj)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Template saved.")
+            return redirect("control:crm_templates")
+        return self.render_to_response(self.get_context_data(pk=pk, form=form))
+
+
+class TemplateDeleteView(PlatformAdminRequiredMixin, View):
+    def post(self, request, pk):
+        get_object_or_404(MessageTemplate, pk=pk).delete()
+        messages.success(request, "Template deleted.")
+        return redirect("control:crm_templates")
 
 
 # ───────────────────────────── targets ─────────────────────────────

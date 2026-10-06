@@ -42,11 +42,38 @@
   </div>
 </div>
 
+{# ── momentum: streak, earnings, best time ───────────────────────────── #}
+{% if streak.days or earnings.earned or earnings.expected or best_window %}
+<div class="flex flex-wrap gap-1.5 text-[12px]">
+  {% if streak.days %}<span class="rounded-full bg-orange-50 px-2.5 py-1 font-medium text-orange-700 ring-1 ring-orange-200" title="Days in a row with {{ streak.bar }}+ calls">🔥 {{ streak.days }}-day streak</span>{% endif %}
+  {% if earnings.earned %}<span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-200">💰 ₹{{ earnings.earned }} commission this month</span>{% endif %}
+  {% if earnings.expected %}<span class="rounded-full bg-pink-50 px-2.5 py-1 text-pink-800 ring-1 ring-pink-200" title="Probability-weighted from your open leads; each win ≈ ₹{{ earnings.per_win }}/month">📈 Pipeline could add ≈ ₹{{ earnings.expected }}{% if earnings.hot %} · {{ earnings.hot }} hot{% endif %}</span>{% endif %}
+  {% if best_window %}<span class="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700 ring-1 ring-sky-200" title="From your last 60 days of calls ({{ best_window.calls }} in this window)">⏰ You connect best {{ best_window.label }} · {{ best_window.pct }}% spoke</span>{% endif %}
+</div>
+{% endif %}
+
 {# ── things waiting on me: slim chips ──────────────────────────────────── #}
 {% if pending_confirm or waiting_to_train %}
 <div class="flex flex-wrap gap-1.5 text-[12px]">
   {% if pending_confirm %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-3 py-1 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">✅ {{ pending_confirm }} training{{ '' if pending_confirm == 1 else 's' }} to confirm</a>{% endif %}
   {% if waiting_to_train %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-violet-50 px-3 py-1 text-violet-800 ring-1 ring-violet-200 hover:bg-violet-100">🧑‍🏫 {{ waiting_to_train }} waiting for you to train</a>{% endif %}
+</div>
+{% endif %}
+
+{# ── demos ────────────────────────────────────────────────────────────── #}
+{% if demos_today or demos_overdue %}
+<div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-violet-200">
+  <h3 class="mb-1 text-[13px] font-semibold text-violet-900">🖥 Demos <span class="ml-1 rounded-full bg-violet-100 px-1.5 text-[11px] text-violet-800">{{ demos_today|length }} today</span></h3>
+  {% for l in demos_today %}
+  <div class="flex items-center justify-between gap-2 border-t border-violet-50 py-1.5 text-[13px]">
+    <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="min-w-0 truncate hover:text-pink-700"><b class="text-violet-700">{{ l.demo_local.strftime("%I:%M %p")|lower }}</b> · {{ l.name }} <span class="text-[11px] text-slate-400">{{ l.business }}</span></a>
+    {% if l.phone %}<a href="tel:{{ l.phone }}" data-call-lead="{{ l.pk }}" data-call-name="{{ l.name }}" class="shrink-0 rounded-lg bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-pink-700">📞</a>{% endif %}
+  </div>
+  {% endfor %}
+  {% for l in demos_overdue %}
+  <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex items-center justify-between gap-2 border-t border-rose-50 py-1.5 text-[13px] hover:bg-rose-50/50">
+    <span class="min-w-0 truncate">{{ l.name }} <span class="text-[11px] text-rose-600">· was {{ l.demo_local.strftime("%d %b") }} — mark demo given or reschedule</span></span><span class="text-xs text-pink-700">Open →</span></a>
+  {% endfor %}
 </div>
 {% endif %}
 
@@ -70,6 +97,12 @@
     </div>
     {{ contact_buttons(nxt, true) }}
   </div>
+  {% if wa_links %}
+  <details class="mt-2 rounded-lg bg-emerald-50/50 px-2.5 py-1.5 ring-1 ring-emerald-100">
+    <summary class="cursor-pointer text-[12px] font-medium text-emerald-800">💬 Send a WhatsApp message…</summary>
+    <div class="mt-1.5 flex flex-wrap gap-1.5">{% for w in wa_links %}<a href="{{ w.url }}" target="_blank" rel="noopener" title="{{ w.text }}" class="rounded-full bg-white px-2.5 py-1.5 text-[12px] text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">{{ w.title }}</a>{% endfor %}</div>
+  </details>
+  {% endif %}
   {% if nxt.notes %}<p class="mt-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">{{ nxt.notes }}</p>{% endif %}
   {% if nxt_activity %}<p class="mt-1.5 text-[11px] text-slate-400">Last: {% for a in nxt_activity %}{{ a.get_kind_display() }}{% if a.outcome %} ({{ a.get_outcome_display() }}){% endif %} · {{ a.occurred_at.strftime("%d %b") }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
   <div class="mt-3 border-t border-pink-50 pt-3">
@@ -141,6 +174,19 @@
     <button class="h-9 rounded-lg bg-pink-600 px-4 text-[13px] font-medium text-white hover:bg-pink-700">Add</button>
   </form>
 </details>
+
+{# ── getting started (derived from what you've actually done) ────────── #}
+{% if onboarding_done < onboarding|length %}
+<details class="rounded-2xl bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-pink-100">
+  <summary class="cursor-pointer text-[13px] font-semibold text-pink-900">🚀 Getting started <span class="font-normal text-slate-400">· {{ onboarding_done }} of {{ onboarding|length }} done</span></summary>
+  <ul class="mt-2 space-y-1.5">
+    {% for st in onboarding %}
+    <li class="flex items-start gap-2 text-[13px] {{ 'text-slate-400 line-through' if st.done else 'text-slate-700' }}">
+      <span class="mt-0.5">{{ '✅' if st.done else '⬜' }}</span><span>{{ st.label }}{% if not st.done %}<span class="block text-[11px] text-slate-400 no-underline">{{ st.hint }}</span>{% endif %}</span></li>
+    {% endfor %}
+  </ul>
+</details>
+{% endif %}
 
 {# ── my lead preferences ─────────────────────────────────────────────── #}
 <details class="rounded-2xl bg-white px-3.5 py-2.5 shadow-sm ring-1 ring-pink-100">

@@ -103,16 +103,17 @@ _CALL_STATUS = {
 
 @transaction.atomic
 def log_activity(*, actor, kind, outcome="", lead=None, project=None, note="", count=1,
-                 follow_up=None):
+                 follow_up=None, occurred_at=None):
     act = Activity.objects.create(
         actor=actor, kind=kind, outcome=outcome, lead=lead, project=project,
         note=note[:300], count=max(1, int(count or 1)),
+        occurred_at=occurred_at or timezone.now(),
     )
     if lead is not None:
         fields = []
         if lead.first_touch_at is None and kind in (
                 ActivityKind.CALL, ActivityKind.WHATSAPP, ActivityKind.DEMO, ActivityKind.FOLLOW_UP):
-            lead.first_touch_at = timezone.now()
+            lead.first_touch_at = occurred_at or timezone.now()
             fields.append("first_touch_at")
         if kind == ActivityKind.DEMO and lead.status in (
                 LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.INTERESTED, LeadStatus.DEMO_BOOKED):
@@ -576,6 +577,7 @@ def board_columns(user, *, owner=None, q="", full=None, admin=False):
             c.idle_days = (now - ref).days
             c.stage_days = (now - (c.stage_changed_at or c.created_at)).days
             c.overdue_flag = bool(c.next_follow_up and c.next_follow_up <= today)
+            c.demo_local = c.demo_at.astimezone(_biz_tz()) if c.demo_at else None
         columns.append({
             "status": st.value, "label": st.label, "cards": cards,
             "count": counts.get(st.value, 0), "stale": stale_counts.get(st.value, 0),
@@ -782,3 +784,188 @@ def lead_from_signup(project, *, name, phone, city="", ref_user=None):
         name=name, phone=phone, business=project.name, city=city,
         source=f"Signup · {label}"[:60], notes=f"Self-signup, trial started. Store: {project.name}",
         acquisition=dict(src), assign_to=ref_user, converted_project=project)
+
+
+# ── DGC tools: templates, demos, earnings, streak, best time, onboarding ───
+
+import re as _re
+from urllib.parse import quote as _quote
+
+BUSINESS_TZ = "Asia/Kolkata"
+
+
+def _biz_tz():
+    from zoneinfo import ZoneInfo
+    return ZoneInfo(BUSINESS_TZ)
+
+
+_PLACEHOLDER = _re.compile(r"\{(name|first_name|business|city|dgc)\}")
+
+
+def render_template_text(body, lead, dgc):
+    """Fill {name} {first_name} {business} {city} {dgc}. Plain substitution —
+    unknown braces stay as typed and nothing in a template is ever evaluated."""
+    name = (lead.name or "").strip()
+    first = name.split(" ")[0] if name and not name.isdigit() else "there"
+    vals = {
+        "name": name or "there", "first_name": first,
+        "business": lead.business or "your shop", "city": lead.city or "your city",
+        "dgc": (getattr(dgc, "first_name", "") or getattr(dgc, "email", "") or "your ShopInADay team").strip(),
+    }
+    return _PLACEHOLDER.sub(lambda m: vals[m.group(1)], body or "")
+
+
+def whatsapp_links(lead, dgc):
+    """[(title, wa.me url, text)] for every active WhatsApp template."""
+    from .models import MessageTemplate, TemplateKind
+    if not lead.phone:
+        return []
+    out = []
+    for t in MessageTemplate.objects.filter(kind=TemplateKind.WHATSAPP, is_active=True):
+        text = render_template_text(t.body, lead, dgc)
+        out.append({"title": t.title, "text": text, "url": f"https://wa.me/{lead.wa_number}?text={_quote(text)}"})
+    return out
+
+
+def scripts_for(lead, dgc):
+    """Call scripts for this lead's stage (plus the ones for every stage)."""
+    from .models import MessageTemplate, TemplateKind
+    qs = MessageTemplate.objects.filter(kind=TemplateKind.SCRIPT, is_active=True).filter(
+        Q(stage="") | Q(stage=lead.status))
+    return [{"title": t.title, "text": render_template_text(t.body, lead, dgc)} for t in qs]
+
+
+# -- demos ------------------------------------------------------------------
+
+def book_demo(lead, when, *, actor):
+    """Set (or clear, with ``when=None``) the demo time. Booking moves a lead
+    that hasn't reached 'demo booked' yet there, and writes it into history."""
+    if when is None:
+        lead.demo_at = None
+        lead.save(update_fields=["demo_at", "updated_at"])
+        return lead
+    lead.demo_at = when
+    lead.save(update_fields=["demo_at", "updated_at"])
+    if lead.status in (LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.INTERESTED):
+        move_lead(lead, LeadStatus.DEMO_BOOKED, actor=actor, reason="demo scheduled")
+    return lead
+
+
+def demos_for(user):
+    """(today's demos in time order, overdue demos still marked 'booked')."""
+    tz = _biz_tz()
+    now = timezone.now().astimezone(tz)
+    start = dt.datetime.combine(now.date(), dt.time.min, tzinfo=tz)
+    base = Lead.objects.filter(assigned_to=user, is_archived=False, status=LeadStatus.DEMO_BOOKED,
+                               demo_at__isnull=False)
+    today = list(base.filter(demo_at__gte=start, demo_at__lt=start + dt.timedelta(days=1)).order_by("demo_at"))
+    overdue = list(base.filter(demo_at__lt=start).order_by("demo_at"))
+    for l in today + overdue:
+        l.demo_local = l.demo_at.astimezone(tz)
+    return today, overdue
+
+
+# -- earnings / streak / best time ------------------------------------------
+
+def _monthly_commission_pct():
+    from decimal import Decimal as D
+
+    from apps.billing.models import Plan
+    plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
+    try:
+        return D(plan.commission_pct_for("monthly")) if plan else D("20")
+    except Exception:  # noqa: BLE001
+        return D("20")
+
+
+def earnings_preview(user):
+    """What this DGC has earned this month, and what their pipeline could add
+    (probability-weighted, using the configured average plan price)."""
+    from decimal import Decimal as D
+
+    from apps.billing.models import ManagerCommission
+    cfg = CrmSettings.load()
+    rate = _monthly_commission_pct() / D(100)
+    today = timezone.localdate()
+    rows = ManagerCommission.objects.filter(manager=user, created_at__year=today.year,
+                                            created_at__month=today.month).values("status").annotate(t=Sum("amount"))
+    by = {r["status"]: (r["t"] or D("0")) for r in rows}
+    earned = sum(by.values(), D("0"))
+    stages = {r["status"]: r["n"] for r in Lead.objects.filter(
+        assigned_to=user, is_archived=False, status__in=OPEN_LEAD_STATUSES).values("status").annotate(n=Count("id"))}
+    expected = sum((D(stages.get(st, 0)) * D(cfg.probability(st)) / D(100) * cfg.avg_plan_price * rate
+                    for st in stages), D("0"))
+    hot = stages.get(LeadStatus.NEGOTIATING, 0) + stages.get(LeadStatus.DEMO_DONE, 0)
+    return {"earned": earned.quantize(D("1")), "expected": expected.quantize(D("1")), "hot": hot,
+            "per_win": (cfg.avg_plan_price * rate).quantize(D("1"))}
+
+
+def _calls_by_local_day(user, days=60):
+    from django.db.models.functions import TruncDate
+    since = timezone.now() - dt.timedelta(days=days)
+    rows = (Activity.objects.filter(actor=user, kind=ActivityKind.CALL, occurred_at__gte=since)
+            .annotate(d=TruncDate("occurred_at", tzinfo=_biz_tz())).values("d").annotate(n=Count("id")))
+    return {r["d"]: r["n"] for r in rows}
+
+
+def call_streak(user, *, today=None):
+    """Consecutive days (up to today) with at least min(10, daily target) calls.
+    Today doesn't break the streak until the day is over."""
+    target = targets_for(user).get(TargetMetric.CALLS, 40) or 40
+    bar = min(10, target)
+    per_day = _calls_by_local_day(user)
+    day = today or timezone.now().astimezone(_biz_tz()).date()
+    streak = 0
+    if per_day.get(day, 0) >= bar:
+        streak, day = 1, day - dt.timedelta(days=1)
+    else:
+        day -= dt.timedelta(days=1)                       # today still open: look back from yesterday
+    while per_day.get(day, 0) >= bar:
+        streak += 1
+        day -= dt.timedelta(days=1)
+    return {"days": streak, "bar": bar, "today": per_day.get(today or timezone.now().astimezone(_biz_tz()).date(), 0)}
+
+
+def best_call_window(user, *, days=60, min_calls=30, min_bucket=8):
+    """The 2-hour window where this DGC's calls connect most often, or None
+    until there's enough data to say anything honest."""
+    tz = _biz_tz()
+    since = timezone.now() - dt.timedelta(days=days)
+    calls = list(Activity.objects.filter(actor=user, kind=ActivityKind.CALL, occurred_at__gte=since)
+                 .values_list("occurred_at", "outcome"))
+    if len(calls) < min_calls:
+        return None
+    buckets = {}
+    for when, outcome in calls:
+        h = when.astimezone(tz).hour // 2 * 2
+        n, ok = buckets.get(h, (0, 0))
+        buckets[h] = (n + 1, ok + (1 if outcome == ActivityOutcome.CONNECTED else 0))
+    ranked = [(ok / n, h, n) for h, (n, ok) in buckets.items() if n >= min_bucket and ok]
+    if not ranked:
+        return None
+    rate, h, n = max(ranked)
+
+    def fmt(x):
+        x %= 24
+        return f"{(x % 12) or 12} {'am' if x < 12 else 'pm'}"
+    return {"label": f"{fmt(h)}–{fmt(h + 2)}", "pct": round(rate * 100), "calls": n}
+
+
+# -- onboarding (derived from real activity; nothing to tick by hand) --------
+
+def onboarding_steps(user):
+    n_calls = Activity.objects.filter(actor=user, kind=ActivityKind.CALL).count()
+    steps = [
+        ("Log your first call", n_calls >= 1, "Open My day and tap 📞 Call on your first lead."),
+        ("Reach 10 calls", n_calls >= 10, f"{min(n_calls, 10)}/10 so far — each tap-to-log counts."),
+        ("Give your first demo",
+         Activity.objects.filter(actor=user, kind=ActivityKind.DEMO).exists(),
+         "Book one from a lead, then tap 🖥 Demo given."),
+        ("Get trained by another DGC",
+         TrainingLog.objects.filter(trainee=user, status=TrainingStatus.CONFIRMED).exists(),
+         "Training → ＋ New entry → 'I was trained by…'."),
+        ("Win your first store",
+         Lead.objects.filter(assigned_to=user, status=LeadStatus.WON).exists(),
+         "Use 'Deal won' on a lead — that creates the store."),
+    ]
+    return [{"label": a, "done": b, "hint": c} for a, b, c in steps]

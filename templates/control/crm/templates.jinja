@@ -1,0 +1,24 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% block page_title %}Message templates{% endblock %}
+{% block crm_title %}Templates & scripts{% endblock %}
+{% block crm_sub %}· one-tap WhatsApp messages and call scripts for your DGCs{% endblock %}
+{% block crm_actions %}<a href="{{ url('control:crm_board') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← Team board</a>
+<a href="{{ url('control:crm_template_new') }}" class="rounded-full bg-pink-600 px-3.5 py-1 text-[13px] font-medium text-white hover:bg-pink-700">＋ New</a>{% endblock %}
+
+{% block crm_body %}
+<p class="text-[12px] text-slate-500">Placeholders: <code class="rounded bg-pink-50 px-1">{name}</code> <code class="rounded bg-pink-50 px-1">{first_name}</code> <code class="rounded bg-pink-50 px-1">{business}</code> <code class="rounded bg-pink-50 px-1">{city}</code> <code class="rounded bg-pink-50 px-1">{dgc}</code> — filled in per lead. WhatsApp templates open WhatsApp with the text ready; scripts show on the lead page for their stage.</p>
+{% macro table(rows, title, icon) %}
+<div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+  <h3 class="mb-1 text-[13px] font-semibold text-pink-900">{{ icon }} {{ title }}</h3>
+  {% for t in rows %}
+  <div class="flex items-start justify-between gap-3 border-t border-pink-50 py-2 text-[13px] {{ '' if t.is_active else 'opacity-50' }}">
+    <div class="min-w-0"><b>{{ t.title }}</b>{% if t.stage %} <span class="rounded-full bg-pink-50 px-1.5 text-[10px] text-pink-800">{{ t.get_stage_display() }}</span>{% endif %}{% if not t.is_active %} <span class="text-[10px] text-slate-400">(off)</span>{% endif %}
+      <p class="mt-0.5 whitespace-pre-line text-[12px] text-slate-500">{{ t.body|truncate(160) }}</p></div>
+    <div class="flex shrink-0 gap-2 text-[12px]"><a href="{{ url('control:crm_template_edit', kwargs={'pk': t.pk}) }}" class="text-pink-700 hover:underline">Edit</a></div>
+  </div>
+  {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">None yet.</p>{% endfor %}
+</div>
+{% endmacro %}
+{{ table(whatsapp, "WhatsApp messages", "💬") }}
+{{ table(scripts, "Call scripts", "📖") }}
+{% endblock %}

@@ -453,3 +453,51 @@ class CrmProfile(TimeStampedModel):
 
     def __str__(self):
         return f"CRM profile · {self.user}"
+
+
+class TemplateKind(models.TextChoices):
+    WHATSAPP = "whatsapp", "WhatsApp message"
+    SCRIPT = "script", "Call script"
+
+
+class MessageTemplate(TimeStampedModel):
+    """Admin-managed snippets DGCs use with one tap.
+
+    * whatsapp: opens WhatsApp with the text pre-filled for that lead.
+    * script: a "what to say" card shown on the lead page for its stage.
+    Placeholders: {name} {first_name} {business} {city} {dgc}.
+    """
+
+    kind = models.CharField(max_length=10, choices=TemplateKind.choices, default=TemplateKind.WHATSAPP)
+    stage = models.CharField(max_length=14, blank=True, choices=LeadStatus.choices,
+                             help_text="Scripts only: show for leads at this stage. Blank = every stage.")
+    title = models.CharField(max_length=80)
+    body = models.TextField(max_length=2000)
+    order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["kind", "order", "id"]
+
+    def __str__(self):
+        return f"{self.get_kind_display()} · {self.title}"
+
+
+class SourceSpend(TimeStampedModel):
+    """Ad spend per lead source per month — lets the insights page show cost per
+    lead / per won store."""
+
+    source = models.CharField(max_length=60, db_index=True)
+    month = models.DateField(help_text="Any date in the month.")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    class Meta:
+        ordering = ["-month", "source"]
+        constraints = [models.UniqueConstraint(fields=["source", "month"], name="crm_spend_source_month")]
+
+    def save(self, *args, **kwargs):
+        self.month = self.month.replace(day=1)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.source} {self.month:%b %Y}: ₹{self.amount}"

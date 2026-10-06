@@ -31,12 +31,39 @@
   <div class="space-y-3 rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-pink-100">
     <h3 class="text-sm font-semibold text-pink-900">Log this contact</h3>
     {{ contact_buttons(lead, true) }}
+    {% if wa_links %}
+    <details class="rounded-lg bg-emerald-50/50 px-2.5 py-1.5 ring-1 ring-emerald-100">
+      <summary class="cursor-pointer text-[12px] font-medium text-emerald-800">💬 Send a WhatsApp message…</summary>
+      <div class="mt-1.5 flex flex-wrap gap-1.5">
+        {% for w in wa_links %}<a href="{{ w.url }}" target="_blank" rel="noopener" title="{{ w.text }}" class="rounded-full bg-white px-2.5 py-1 text-[12px] text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100">{{ w.title }}</a>{% endfor %}
+      </div>
+      <p class="mt-1 text-[10px] text-slate-400">Opens WhatsApp with the message ready — you just press send.</p>
+    </details>
+    {% endif %}
     {{ log_form(lead, url('control:crm_lead', kwargs={'pk': lead.pk}), csrf_input) }}
     {% if lead.is_open %}
     <form method="post" action="{{ url('control:crm_lead_won', kwargs={'pk': lead.pk}) }}" class="border-t border-pink-50 pt-3">{{ csrf_input }}
       <button class="w-full rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">🎉 Deal won — create the store</button></form>
     {% endif %}
     {% if lead.next_follow_up %}<div class="rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800 ring-1 ring-amber-200">⏰ Follow-up {{ lead.next_follow_up }}</div>{% endif %}
+    {% if lead.is_open %}
+    <form method="post" action="{{ url('control:crm_lead_demo', kwargs={'pk': lead.pk}) }}" class="border-t border-pink-50 pt-3">
+      {{ csrf_input }}
+      <p class="mb-1 text-[11px] font-semibold uppercase tracking-wide text-pink-700">🖥 Book a demo{% if demo_label %} <span class="font-normal normal-case text-violet-700">· {{ demo_label }}</span>{% endif %}</p>
+      <div class="flex gap-1.5">
+        <input type="datetime-local" name="when" value="{{ demo_value }}" class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-xs">
+        <button class="rounded-lg bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700">{{ 'Reschedule' if demo_value else 'Book' }}</button>
+        {% if demo_value %}<button name="when" value="" class="rounded-lg px-2 text-xs text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50" title="Clear the demo time">✕</button>{% endif %}
+      </div>
+      <p class="mt-1 text-[10px] text-slate-400">India time. Moves the lead to “Demo booked” and shows on your My day.</p>
+    </form>
+    {% endif %}
+    {% for sc in scripts %}
+    <details class="rounded-lg bg-slate-50 px-2.5 py-1.5 ring-1 ring-slate-100">
+      <summary class="cursor-pointer text-[12px] font-medium text-slate-700">📖 {{ sc.title }}</summary>
+      <p class="mt-1 whitespace-pre-line text-[12px] text-slate-600">{{ sc.text }}</p>
+    </details>
+    {% endfor %}
   </div>
 
   {# 2 — history #}

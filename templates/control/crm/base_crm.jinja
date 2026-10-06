@@ -136,6 +136,46 @@
   });
   window.addEventListener('pageshow', function () { setTimeout(maybeAsk, 400); });
 
+  // ---- 2b) offline queue: calls logged with no signal are sent later ---------
+  var QKEY = 'crmLogQueue', QMAX = 50, QTTL = 3 * 24 * 3600 * 1000;
+  function qread() { try { return JSON.parse(localStorage.getItem(QKEY) || '[]'); } catch (e) { return []; } }
+  function qwrite(v) { try { localStorage.setItem(QKEY, JSON.stringify(v.slice(-QMAX))); } catch (e) {} }
+  function queueLog(item) { var q = qread(); q.push(item); qwrite(q); }
+  var flushing = false;
+  async function flushQueue() {
+    if (flushing) return;
+    var q = qread();
+    if (!q.length) return;
+    var logUrl = (document.querySelector('[data-log-url]') || {}).dataset;
+    if (!logUrl || !logUrl.logUrl) return;
+    flushing = true;
+    var sent = 0, keep = [], stop = false;
+    for (var i = 0; i < q.length; i++) {
+      var it = q[i];
+      if (stop) { keep.push(it); continue; }
+      if (Date.now() - Date.parse(it.at) > QTTL) continue;          // too old: drop
+      var tok = document.querySelector('input[name=csrfmiddlewaretoken]');
+      var fd = new FormData();
+      fd.append('kind', 'call'); fd.append('outcome', it.outcome); fd.append('lead', it.lead);
+      fd.append('at', it.at); fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
+      try {
+        var r = await fetch(logUrl.logUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'HX-Request': 'true' } });
+        if (r.ok) { sent++; }
+        else if (r.status === 403 || r.status >= 500) { keep.push(it); stop = true; }   // signed out / server down: try later
+        /* 400/404: the lead is gone — drop it */
+      } catch (e) { keep.push(it); stop = true; }                                      // still offline
+    }
+    qwrite(keep);
+    flushing = false;
+    if (sent) {
+      if (window.__crmToast) window.__crmToast('Synced ' + sent + ' call' + (sent > 1 ? 's' : '') + ' logged offline ✓', true);
+      if (/\/crm\/(my-day\/|leads\/\d+\/)/.test(location.pathname)) setTimeout(function () { location.reload(); }, 900);
+    }
+  }
+  window.addEventListener('online', function () { setTimeout(flushQueue, 500); });
+  window.addEventListener('pageshow', function () { setTimeout(flushQueue, 1500); });
+  document.addEventListener('DOMContentLoaded', function () { setTimeout(flushQueue, 2000); });
+
   // ---- 3) the sheet's logic ------------------------------------------------
   document.addEventListener('alpine:init', function () {
     Alpine.data('callSheet', function () {
@@ -153,12 +193,17 @@
           fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
           try {
             var r = await fetch(this.$root.dataset.logUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'HX-Request': 'true' } });
-            if (!r.ok) throw new Error('bad');
+            if (!r.ok) { var he = new Error('http'); he.http = true; throw he; }
             clear(); this.show = false;
             if (window.__crmToast) window.__crmToast('Call logged ✓', true);
             if (/\/crm\/(my-day\/|leads\/\d+\/)/.test(location.pathname)) setTimeout(function () { location.reload(); }, 600);
           } catch (e) {
-            if (window.__crmToast) window.__crmToast('Could not log that — try again.');
+            var offline = !e.http || (typeof navigator !== 'undefined' && navigator.onLine === false);
+            if (offline) {
+              queueLog({ outcome: outcome, lead: this.p.id, at: new Date().toISOString() });
+              clear(); this.show = false;
+              if (window.__crmToast) window.__crmToast('No signal — saved. It will send when you are back online ✓', true);
+            } else if (window.__crmToast) { window.__crmToast('Could not log that — try again.'); }
           } finally { this.busy = false; }
         },
       };
