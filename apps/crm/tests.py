@@ -1384,3 +1384,42 @@ class MyDayCompactTests(CrmBase):
         html = c.get(self.url).content.decode()
         form = html.split('action="%s"' % reverse("control:crm_log"))[1].split("</form>")[0]
         self.assertIn('name="csrfmiddlewaretoken"', form)
+
+
+class BoardCompactTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        svc.log_activity(actor=self.a, kind="demo", outcome="done")
+        self.login(self.admin)
+        self.html = self.client.get(reverse("control:crm_board")).content.decode()
+
+    def test_one_slim_stat_strip_with_all_six_numbers(self):
+        self.assertIn("divide-x", self.html)
+        for label in ("Calls", "Demos", "Trained", "Collection", "Products", "Won today"):
+            self.assertIn(f">{label}<", self.html)
+        self.assertIn("1 spoke · 100%", self.html)
+        strip = self.html.split("divide-x")[1].split("</table>")[0]
+        self.assertNotIn("text-2xl", strip)          # numbers are text-lg now
+        self.assertNotIn("p-4 shadow-sm", strip.split("<table")[0])   # no tall tiles
+
+    def test_table_rows_are_dense(self):
+        table = self.html.split("<table")[1]
+        self.assertNotIn("py-3", table)
+        self.assertIn("py-2", table)
+        self.assertIn("text-[13px]", table)
+
+    def test_needs_you_is_a_single_slim_row_only_when_needed(self):
+        self.assertNotIn("Needs you", self.html)
+        StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.a)
+        TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        row = html.split("Needs you")[1].split("</div>")[0]
+        self.assertIn("Assign 1 store-work request", row)
+        self.assertIn("Assign a trainer to 1 request", row)
+        self.assertNotIn("<h3", html.split("Needs you")[0][-300:])    # no separate heading card
+
+    def test_all_ranges_and_idle_toggle_still_work(self):
+        for q in ("?range=yesterday", "?range=7d", "?range=month&active=0", "?active=1"):
+            self.assertEqual(self.client.get(reverse("control:crm_board") + q).status_code, 200)
+        self.assertIn("Show everyone", self.html)
