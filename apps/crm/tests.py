@@ -1317,7 +1317,7 @@ class MyDayCompactTests(CrmBase):
         form = html.split("Next up")[1]
         self.assertLess(form.index('name="follow_in"'), form.index('type="submit" name="outcome"'))
         self.assertLess(form.index('name="note"'), form.index('type="submit" name="outcome"'))
-        self.assertIn("Tap the result", form)
+        self.assertIn("How did it go?", form)
         self.assertEqual(form.count('type="submit" name="outcome"'), 5)   # 5 call results
         self.assertIn('name="kind" value="demo"', form)                    # + demo
 
@@ -2637,8 +2637,9 @@ class TemplateTests(CrmBase):
         self.assertIn("Hello, am I speaking with Ravi Kumar?", html)
         self.assertNotIn("Handling objections", html)            # other stage
         day = self.client.get(reverse("control:crm_my_day")).content.decode()
-        self.assertIn("Send a WhatsApp message", day)
-        self.assertIn("wa.me/919876543210", day)
+        self.assertIn("WhatsApp ▾", day)                          # one dropdown, not two buttons
+        self.assertIn("Open chat", day)
+        self.assertIn("https://wa.me/919876543210?text=", day)    # template links live inside it
 
     def test_no_phone_no_whatsapp_block(self):
         lead = Lead.objects.create(name="NoPhone", assigned_to=self.a)
@@ -3436,3 +3437,107 @@ class IndiaDisplayTests(FrozenIndiaNight):
             if "timezone.localdate(" in text or "localdate(" in text:
                 offenders.append(path)
         self.assertEqual(offenders, [])
+
+
+class SimpleNextUpCardTests(CrmBase):
+    """The Next-up card asks one question at a time: call, then 'how did it go?'."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+
+    def _card(self, **kw):
+        kw.setdefault("name", "Ravi Kumar")
+        kw.setdefault("phone", "9898023293")
+        Lead.objects.create(assigned_to=self.a, **kw)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        return html.split("Next up")[1].split("Follow-ups due")[0]
+
+    def test_one_call_button_and_one_whatsapp_dropdown(self):
+        card = self._card()
+        self.assertEqual(card.count('href="tel:9898023293"'), 1)
+        self.assertEqual(card.count("WhatsApp ▾"), 1)
+        self.assertEqual(card.count("💬 WhatsApp"), 1)                  # no separate second WhatsApp button
+        self.assertNotIn("Send a WhatsApp message", card)
+        self.assertNotIn("Call +91", card)                               # the number is not crammed into the button
+        self.assertIn("📞 Call</a>", card)
+
+    def test_whatsapp_dropdown_has_open_chat_then_each_template(self):
+        card = self._card(business="Ravi Jewels")
+        menu = card.split("WhatsApp ▾")[1].split("</details>")[0]
+        self.assertIn('href="https://wa.me/919898023293"', menu)
+        self.assertLess(menu.index("Open chat"), menu.index("Intro"))
+        for title in ("Intro", "Demo link", "Pricing", "Follow-up"):
+            self.assertIn(title, menu)
+        self.assertIn("Hi Ravi,", menu)                                  # tooltip text is personalised
+
+    def test_followup_and_note_are_folded_away_above_the_results(self):
+        card = self._card()
+        self.assertIn("Follow-up: <b", card)
+        self.assertIn("automatic", card)
+        fold = card.split("<details class=\"group")[1].split("</details>")[0]
+        self.assertIn('name="follow_in"', fold)
+        self.assertIn('name="note"', fold)
+        self.assertNotIn(" open", card.split("<details class=\"group")[1].split(">")[0])   # closed by default
+        self.assertLess(card.index('name="follow_in"'), card.index("How did it go?"))
+        self.assertLess(card.index("How did it go?"), card.index('type="submit" name="outcome"'))
+
+    def test_exactly_six_ways_to_finish_and_nothing_else_submits(self):
+        card = self._card()
+        self.assertEqual(card.count('type="submit" name="outcome"'), 5)
+        self.assertEqual(card.count('name="kind" value="demo"'), 1)
+        self.assertNotIn("Tap the result", card)
+        self.assertNotIn("it saves right away", card)
+
+    def test_header_is_clean_for_a_lead_with_no_business_or_city(self):
+        card = self._card()
+        head = card.split("Ravi Kumar")[1].split("📞 Call")[0]
+        self.assertNotIn("—", head)                                       # no placeholder dash
+        self.assertIn("9898023293", head)                                 # phone shown as the fallback line
+
+    def test_business_and_city_show_when_present(self):
+        card = self._card(business="Ravi Jewels", city="Surat")
+        self.assertIn("Ravi Jewels · Surat", " ".join(card.split()))
+
+    def test_a_url_used_as_the_name_wraps_instead_of_breaking_the_layout(self):
+        card = self._card(name="https://rashmiwala.com/", business="")
+        self.assertIn("https://rashmiwala.com/", card)
+        self.assertIn("break-words", card)
+
+    def test_long_notes_are_trimmed_to_one_short_line(self):
+        long = "Location 2034 New, Puna Kumbhariya Rd, Sardar Vegetable Market, Umarwada, Surat, Gujarat 395010 " * 3
+        card = self._card(notes=long)
+        shown = card.split("📝")[1].split("</p>")[0]
+        self.assertLess(len(shown), 140)
+        self.assertTrue(shown.rstrip().endswith("..."))
+
+    def test_last_contact_is_one_short_line(self):
+        lead = Lead.objects.create(name="Ravi Kumar", phone="9898023293", assigned_to=self.a, status=LeadStatus.CONTACTED)
+        svc.log_activity(actor=self.a, kind="call", outcome="call_back", lead=lead, occurred_at=timezone.now() - dt.timedelta(days=2))
+        Lead.objects.filter(pk=lead.pk).update(next_follow_up=biz_today())
+        card = self.client.get(reverse("control:crm_my_day")).content.decode().split("Next up")[1].split("Follow-ups due")[0]
+        self.assertEqual(card.count("Last:"), 1)
+        self.assertIn("Call (Asked to call back)", card)
+
+    def test_no_phone_explains_what_to_do_instead_of_empty_buttons(self):
+        card = self._card(phone="")
+        self.assertNotIn("tel:", card)
+        self.assertNotIn("WhatsApp ▾", card)
+        self.assertIn("No phone number", card)
+        self.assertIn("How did it go?", card)                             # can still log / skip
+
+    def test_status_open_and_skip_are_still_there(self):
+        card = self._card()
+        self.assertIn("data-lead=", card)                                  # status dropdown
+        self.assertIn("Open full lead", card)
+        self.assertIn("Skip for now", card)
+
+    def test_logging_from_the_card_still_works_with_default_and_custom_followup(self):
+        lead = Lead.objects.create(name="Z", phone="9000000011", assigned_to=self.a)
+        self.client.post(reverse("control:crm_log"), {"lead": lead.pk, "kind": "call", "outcome": "no_answer", "follow_in": ""})
+        lead.refresh_from_db()
+        self.assertEqual(lead.next_follow_up, biz_today() + dt.timedelta(days=1))          # automatic
+        self.client.post(reverse("control:crm_log"), {"lead": lead.pk, "kind": "call", "outcome": "connected", "follow_in": "7", "note": "ask owner"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.next_follow_up, biz_today() + dt.timedelta(days=7))
+        self.assertEqual(Activity.objects.filter(lead=lead).latest("pk").note, "ask owner")
