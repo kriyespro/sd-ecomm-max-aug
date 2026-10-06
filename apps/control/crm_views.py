@@ -34,6 +34,7 @@ from apps.accounts.permissions import (
 from apps.core.mixins import PlatformAdminRequiredMixin, PlatformStaffRequiredMixin
 from apps.core.services import record_audit
 from apps.crm import services as svc
+from apps.crm.tz import biz_today, to_biz
 from apps.crm.models import (
     Activity,
     ActivityKind,
@@ -108,7 +109,7 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
         key = self.request.GET.get("range", "today")
         start, end, label = svc.resolve_range(key)
         rows, totals = svc.person_numbers(start, end, users=[u])
-        today = timezone.localdate()
+        today = biz_today()
         skip = [int(i) for i in self.request.GET.get("skip", "").split(",")[:50] if i.isdigit()]
         fresh_cut = timezone.now() - dt.timedelta(hours=svc.FRESH_HOURS)
         fresh = list(Lead.objects.filter(
@@ -197,7 +198,7 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         elif g.get("assignee", "").isdigit() and _admin(self.request.user):
             qs = qs.filter(assigned_to_id=int(g["assignee"]))
         if g.get("due"):
-            qs = qs.filter(next_follow_up__lte=timezone.localdate())
+            qs = qs.filter(next_follow_up__lte=biz_today())
         if g.get("q"):
             q = g["q"].strip()
             qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(business__icontains=q))
@@ -211,7 +212,7 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
                    # Inline status edit: everything except "won" (that has its own store flow)
                    editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
                    people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
-                   today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "",
+                   today=biz_today(), qs=(g.urlencode() + "&") if g else "",
                    archived_view=bool(self.request.GET.get("archived")),
                    dgcs=svc.dgc_users() if _admin(self.request.user) else [],
                    unassigned_count=Lead.objects.filter(
@@ -393,7 +394,7 @@ class PersonView(PlatformAdminRequiredMixin, TemplateView):
         key = self.request.GET.get("range", "today")
         start, end, label = svc.resolve_range(key)
         rows, _ = svc.person_numbers(start, end, users=[person])
-        today = timezone.localdate()
+        today = biz_today()
         mine = Lead.objects.filter(assigned_to=person, is_archived=False)
         stage = {r["status"]: r["n"] for r in mine.values("status").annotate(n=Count("id"))}
         open_n = sum(stage.get(s.value, 0) for s in svc.BOARD_STAGES)
@@ -607,7 +608,7 @@ class LogActivityView(PlatformStaffRequiredMixin, View):
             project = get_object_or_404(self._projects(request.user), pk=int(p["project"]))
         follow = None
         if p.get("follow_in", "").isdigit() and 0 < int(p["follow_in"]) <= 90:
-            follow = timezone.localdate() + dt.timedelta(days=int(p["follow_in"]))
+            follow = biz_today() + dt.timedelta(days=int(p["follow_in"]))
         elif p.get("follow_up"):
             try:
                 follow = dt.date.fromisoformat(p["follow_up"])
@@ -773,9 +774,9 @@ def _person(pk, *, exclude=None):
 
 def _date_or_today(raw):
     try:
-        return dt.date.fromisoformat(raw) if raw else timezone.localdate()
+        return dt.date.fromisoformat(raw) if raw else biz_today()
     except ValueError:
-        return timezone.localdate()
+        return biz_today()
 
 
 class TrainingListView(PlatformStaffRequiredMixin, TemplateView):
@@ -795,7 +796,7 @@ class TrainingListView(PlatformStaffRequiredMixin, TemplateView):
             t.can_cancel = t.status in (TrainingStatus.REQUESTED, TrainingStatus.ASSIGNED) and (
                 admin or t.initiated_by_id == u.pk)
         ctx.update(logs=logs, is_admin=admin, people=svc.crm_people().exclude(pk=u.pk),
-                   today=timezone.localdate(),
+                   today=biz_today(),
                    waiting_for_me=sum(1 for t in logs if t.status == TrainingStatus.ASSIGNED
                                       and t.trainer_id == u.pk),
                    to_confirm=sum(1 for t in logs if t.can_confirm and not admin))
@@ -1137,7 +1138,7 @@ _INSIGHT_RANGES = [("7d", "7 days"), ("30d", "30 days"), ("month", "This month")
 
 
 def _insight_range(key):
-    today = timezone.localdate()
+    today = biz_today()
     if key == "7d":
         return today - dt.timedelta(days=6), today, "Last 7 days"
     if key == "month":
@@ -1179,7 +1180,7 @@ class InsightsView(PlatformAdminRequiredMixin, TemplateView):
             forecast=svc.forecast(), speed=svc.speed_to_lead(start, end), flags=svc.logging_flags(start, end),
             known_sources=sorted(set(Lead.objects.exclude(source="").values_list("source", flat=True)
                                      ) | set(SourceSpend.objects.values_list("source", flat=True))),
-            spends=SourceSpend.objects.all()[:8], this_month=timezone.localdate().replace(day=1).isoformat()[:7])
+            spends=SourceSpend.objects.all()[:8], this_month=biz_today().replace(day=1).isoformat()[:7])
         return ctx
 
 
@@ -1209,7 +1210,7 @@ def _statement_month(request):
         y, m = [int(x) for x in raw.split("-")[:2]]
         return svc.month_bounds(y, m)
     except (ValueError, TypeError):
-        today = timezone.localdate()
+        today = biz_today()
         prev = today.replace(day=1) - dt.timedelta(days=1)          # default: last full month
         return svc.month_bounds(prev.year, prev.month)
 
@@ -1257,11 +1258,11 @@ class StatementDetailView(PlatformAdminRequiredMixin, TemplateView):
         won = list(Lead.objects.filter(assigned_to=person, status=LeadStatus.WON, stage_changed_at__gte=lo,
                                        stage_changed_at__lt=hi))
         if request.GET.get("format") == "csv":
-            rows = [["Commission", c.created_at.date(), c.subscription.project.name, c.invoice.number, c.base_amount,
+            rows = [["Commission", to_biz(c.created_at).date(), c.subscription.project.name, c.invoice.number, c.base_amount,
                      c.rate_pct, c.amount, c.status] for c in commissions]
             rows += [["Collection", c.collected_on, c.project.name if c.project else "", c.reference, "", "", c.amount,
                       c.get_mode_display()] for c in collections]
-            rows += [["Store won", l.stage_changed_at.date() if l.stage_changed_at else "", l.business or l.name, "", "", "", "", ""]
+            rows += [["Store won", to_biz(l.stage_changed_at).date() if l.stage_changed_at else "", l.business or l.name, "", "", "", "", ""]
                      for l in won]
             return _csv_response(f"crm-statement-{person.pk}-{first:%Y-%m}.csv",
                                  ["Type", "Date", "Store", "Reference", "Base ₹", "Rate %", "Amount ₹", "Status / mode"], rows)

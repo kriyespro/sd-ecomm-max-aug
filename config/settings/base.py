@@ -396,6 +396,10 @@ LEGAL_CONTACT_EMAIL = env("DJANGO_LEGAL_CONTACT_EMAIL", "")
 # Shared secret for the public CRM lead-capture webhook (/crm/capture/). Blank = webhook off.
 CRM_CAPTURE_TOKEN = env("CRM_CAPTURE_TOKEN", "")
 
+# The CRM works in this timezone ("today", follow-up dates, daily/weekly jobs) even though
+# Django itself stays on UTC. See apps/crm/tz.py.
+CRM_TIME_ZONE = env("CRM_TIME_ZONE", "Asia/Kolkata")
+
 # Product image optimisation (apps.media.optimize + apps.catalog.tasks).
 # Uploads are re-encoded to WebP in the background, squeezed under the target
 # size, with responsive renditions generated alongside.

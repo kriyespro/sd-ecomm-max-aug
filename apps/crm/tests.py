@@ -31,6 +31,7 @@ from apps.crm.models import (
     WorkKind,
     WorkRequestStatus,
 )
+from apps.crm.tz import biz_today, biz_now, day_bounds as biz_day_bounds, to_biz
 from apps.projects.models import Project
 from apps.projects.services import projects_for_user
 
@@ -77,7 +78,7 @@ class ReportingTests(CrmBase):
         svc.log_activity(actor=self.a, kind=ActivityKind.CALL, outcome=ActivityOutcome.NO_ANSWER)
         svc.log_activity(actor=self.a, kind=ActivityKind.DEMO, outcome="done", lead=lead)
         svc.log_activity(actor=self.b, kind=ActivityKind.PRODUCT_ENTRY, count=25)
-        rows, totals = svc.person_numbers(timezone.localdate())
+        rows, totals = svc.person_numbers(biz_today())
         by = {r["user"].pk: r for r in rows}
         self.assertEqual(by[self.a.pk]["calls"], 4)
         self.assertEqual(by[self.a.pk]["connected"], 3)
@@ -100,7 +101,7 @@ class ReportingTests(CrmBase):
         self.assertEqual(lead.status, LeadStatus.LOST)
 
     def test_only_verified_money_counts(self):
-        today = timezone.localdate()
+        today = biz_today()
         Collection.objects.create(collected_by=self.a, amount=Decimal("1000"), mode=CollectionMode.UPI,
                                   reference="u1", status=CollectionStatus.VERIFIED)
         Collection.objects.create(collected_by=self.a, amount=Decimal("500"), mode=CollectionMode.CASH,
@@ -111,9 +112,9 @@ class ReportingTests(CrmBase):
 
     def test_training_counts_only_when_confirmed(self):
         t = TrainingLog.objects.create(trainee=self.b, trainer=self.a)
-        self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 0)
+        self.assertEqual(svc.person_numbers(biz_today())[1]["trained"], 0)
         svc.respond_training(t, actor=self.a, ok=True)
-        rows, totals = svc.person_numbers(timezone.localdate())
+        rows, totals = svc.person_numbers(biz_today())
         self.assertEqual(totals["trained"], 1)
         by = {r["user"].pk: r for r in rows}
         self.assertEqual(by[self.a.pk]["trained_others"], 1)
@@ -209,7 +210,7 @@ class ScreenTests(CrmBase):
         self.login(self.a)
         r = self.client.post(reverse("control:crm_collection_create"),
                              {"amount": "2999", "mode": "upi", "reference": "UTR123",
-                              "collected_on": timezone.localdate().isoformat()})
+                              "collected_on": biz_today().isoformat()})
         self.assertEqual(r.status_code, 302)
         c = Collection.objects.get()
         self.assertEqual(c.status, CollectionStatus.UNVERIFIED)
@@ -228,7 +229,7 @@ class ScreenTests(CrmBase):
     def test_training_trainer_confirms(self):
         self.login(self.b)
         self.client.post(reverse("control:crm_training_create"),
-                         {"trainer": self.a.pk, "topic": "Onboarding", "trained_on": timezone.localdate().isoformat()})
+                         {"trainer": self.a.pk, "topic": "Onboarding", "trained_on": biz_today().isoformat()})
         t = TrainingLog.objects.get()
         self.assertEqual((t.trainee, t.trainer, t.status), (self.b, self.a, TrainingStatus.PENDING))
         # trainee cannot self-confirm
@@ -352,7 +353,7 @@ class CsrfRenderTests(CrmBase):
 class QueueTests(CrmBase):
     def setUp(self):
         super().setUp()
-        self.today = timezone.localdate()
+        self.today = biz_today()
 
     def _q(self, **kw):
         return list(svc.call_queue(self.a, **kw))
@@ -410,7 +411,7 @@ class NewUxTests(CrmBase):
         self.client.post(reverse("control:crm_log"),
                          {"kind": "call", "outcome": "connected", "lead": l.pk, "follow_in": "3"})
         l.refresh_from_db()
-        self.assertEqual(l.next_follow_up, timezone.localdate() + dt.timedelta(days=3))
+        self.assertEqual(l.next_follow_up, biz_today() + dt.timedelta(days=3))
 
     def test_my_day_shows_next_lead_and_skip(self):
         a = Lead.objects.create(name="Alpha Lead", assigned_to=self.a, phone="9876543210")
@@ -525,7 +526,7 @@ class CompactFormTests(CrmBase):
 class KanbanTests(CrmBase):
     def setUp(self):
         super().setUp()
-        self.today = timezone.localdate()
+        self.today = biz_today()
 
     def _lead(self, name="L", who=None, **kw):
         return Lead.objects.create(name=name, assigned_to=who or self.a, **kw)
@@ -720,7 +721,7 @@ class KanbanTests(CrmBase):
     def test_stage_moves_do_not_count_as_calls(self):
         lead = self._lead("m")
         svc.move_lead(lead, "contacted", actor=self.a)
-        rows, totals = svc.person_numbers(timezone.localdate())
+        rows, totals = svc.person_numbers(biz_today())
         self.assertEqual(totals["calls"], 0)
 
     def test_quick_log_from_board_menu_endpoint(self):
@@ -887,7 +888,7 @@ class InlineStatusListTests(CrmBase):
 class ArchiveLeadsTests(CrmBase):
     def setUp(self):
         super().setUp()
-        self.today = timezone.localdate()
+        self.today = biz_today()
         self.url = reverse("control:crm_lead_archive")
 
     def _lead(self, name, who=None, **kw):
@@ -1088,7 +1089,7 @@ class TrainingFlowTests(CrmBase):
         t = TrainingLog.objects.get()
         self.assertEqual((t.trainee, t.trainer, t.status), (self.b, None, TrainingStatus.REQUESTED))
         # counts nowhere yet
-        self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 0)
+        self.assertEqual(svc.person_numbers(biz_today())[1]["trained"], 0)
         # only the super admin assigns; a DGC cannot, not even self-claim
         self.login(self.a)
         aurl = reverse("control:crm_training_assign", kwargs={"pk": t.pk})
@@ -1112,7 +1113,7 @@ class TrainingFlowTests(CrmBase):
         # the student confirms; the trainer cannot confirm their own claim
         self.assertEqual(self._resp(t, self.a).status_code, 403)
         self.assertEqual(self._resp(t, self.b).status_code, 302)
-        rows, totals = svc.person_numbers(timezone.localdate())
+        rows, totals = svc.person_numbers(biz_today())
         by = {r["user"].pk: r for r in rows}
         self.assertEqual((totals["trained"], by[self.b.pk]["trained"], by[self.a.pk]["trained_others"]), (1, 1, 1))
 
@@ -1199,7 +1200,7 @@ class TrainingFlowTests(CrmBase):
     def test_board_counts_name_only_student_and_shows_request_chip(self):
         TrainingLog.objects.create(trainer=self.a, student_name="Walk In", status=TrainingStatus.CONFIRMED, initiated_by=self.a)
         TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
-        self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 1)
+        self.assertEqual(svc.person_numbers(biz_today())[1]["trained"], 1)
         self.assertEqual(svc.board_extras()["training_requests"], 1)
         self.login(self.admin)
         self.assertContains(self.client.get(reverse("control:crm_board")), "Assign a trainer")
@@ -1268,12 +1269,12 @@ class LeadLogStepsTests(CrmBase):
         r = self.client.post(url, {**base, "kind": "call", "outcome": "no_answer", "follow_in": "", "note": "voicemail"})
         self.assertEqual(r.status_code, 302)
         self.lead.refresh_from_db()
-        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=1))  # "Automatic"
+        self.assertEqual(self.lead.next_follow_up, biz_today() + dt.timedelta(days=1))  # "Automatic"
         act = Activity.objects.get(lead=self.lead)
         self.assertEqual((act.kind, act.outcome, act.note), ("call", "no_answer", "voicemail"))
         self.client.post(url, {**base, "kind": "call", "outcome": "connected", "follow_in": "7"})
         self.lead.refresh_from_db()
-        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=7))
+        self.assertEqual(self.lead.next_follow_up, biz_today() + dt.timedelta(days=7))
         self.client.post(url, {**base, "kind": "demo", "outcome": "done", "follow_in": ""})
         self.assertTrue(Activity.objects.filter(lead=self.lead, kind="demo").exists())
         self.client.post(url, {**base, "kind": "whatsapp", "outcome": "done", "follow_in": ""})
@@ -1336,13 +1337,13 @@ class MyDayCompactTests(CrmBase):
             "note": "try evening", "next": self.url})
         self.assertRedirects(r, self.url, fetch_redirect_response=False)
         lead.refresh_from_db()
-        self.assertEqual(lead.next_follow_up, timezone.localdate() + dt.timedelta(days=3))
+        self.assertEqual(lead.next_follow_up, biz_today() + dt.timedelta(days=3))
         self.assertEqual(Activity.objects.get(lead=lead).note, "try evening")
 
     def test_lists_cap_at_six_with_see_all_links(self):
         for i in range(8):
             Lead.objects.create(name=f"Due{i}", assigned_to=self.a, status=LeadStatus.CONTACTED,
-                                next_follow_up=timezone.localdate() - dt.timedelta(days=1))
+                                next_follow_up=biz_today() - dt.timedelta(days=1))
         for i in range(8):
             Task.objects.create(title=f"Task{i}", assignee=self.a)
         html = self._html()
@@ -1500,7 +1501,7 @@ class MobileEasyTests(CrmBase):
                              HTTP_HX_REQUEST="true")
         self.assertEqual(r.status_code, 204)
         self.lead.refresh_from_db()
-        self.assertEqual(self.lead.next_follow_up, timezone.localdate() + dt.timedelta(days=1))
+        self.assertEqual(self.lead.next_follow_up, biz_today() + dt.timedelta(days=1))
 
     # ---- quick add
     def test_quick_add_with_phone_only_uses_number_as_name(self):
@@ -1573,7 +1574,7 @@ class MobileEasyTests(CrmBase):
 
     # ---- phone-friendly list + lead page
     def test_list_is_simpler_on_phones(self):
-        Lead.objects.filter(pk=self.lead.pk).update(next_follow_up=timezone.localdate())
+        Lead.objects.filter(pk=self.lead.pk).update(next_follow_up=biz_today())
         html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
         self.assertIn('class="hidden px-3 py-2 sm:table-cell">Follow-up', html)   # column hides on phones
         row = html.split('href="/admin/crm/leads/%d/"' % self.lead.pk)[1].split("</tr>")[0]
@@ -1688,7 +1689,7 @@ class PipelineAndPeopleTests(CrmBase):
 
     def test_last_active_column_and_label(self):
         svc.log_activity(actor=self.a, kind="call", outcome="connected")
-        rows, _ = svc.person_numbers(timezone.localdate())
+        rows, _ = svc.person_numbers(biz_today())
         by = {r["user"].pk: r for r in rows}
         self.assertEqual(by[self.a.pk]["last_active_label"], "just now")
         self.assertEqual(by[self.b.pk]["last_active_label"], "never")
@@ -1706,7 +1707,7 @@ class PipelineAndPeopleTests(CrmBase):
 
     def test_person_page_content_and_links(self):
         Lead.objects.create(name="L1", assigned_to=self.a, status=LeadStatus.INTERESTED,
-                            next_follow_up=timezone.localdate() - dt.timedelta(days=1))
+                            next_follow_up=biz_today() - dt.timedelta(days=1))
         svc.log_activity(actor=self.a, kind="call", outcome="connected")
         html = self.client.get(reverse("control:crm_person", kwargs={"pk": self.a.pk})).content.decode()
         self.assertIn("anil", html)
@@ -2073,7 +2074,7 @@ class QueuePriorityTests(CrmBase):
 
     def test_fresh_untouched_inbound_jumps_ahead_of_due_followups(self):
         old_due = Lead.objects.create(name="due", assigned_to=self.a, status=LeadStatus.CONTACTED,
-                                      next_follow_up=timezone.localdate() - dt.timedelta(days=3))
+                                      next_follow_up=biz_today() - dt.timedelta(days=3))
         new = Lead.objects.create(name="fresh", assigned_to=self.a)
         Lead.objects.filter(pk=new.pk).update(assigned_at=timezone.now())
         self.assertEqual(self._q()[0], "fresh")
@@ -2084,19 +2085,19 @@ class QueuePriorityTests(CrmBase):
         old = Lead.objects.create(name="old", assigned_to=self.a)
         Lead.objects.filter(pk=old.pk).update(assigned_at=timezone.now() - dt.timedelta(hours=svc.FRESH_HOURS + 1))
         hot = Lead.objects.create(name="hot", assigned_to=self.a, status=LeadStatus.NEGOTIATING,
-                                  next_follow_up=timezone.localdate())
+                                  next_follow_up=biz_today())
         self.assertEqual(self._q()[0], "hot")
 
     def test_hotter_stages_before_colder_when_nothing_else_differs(self):
         names = {}
         for st in ("new", "contacted", "interested", "demo_booked", "demo_done", "negotiating"):
             names[st] = Lead.objects.create(name=st, assigned_to=self.a, status=st,
-                                            next_follow_up=timezone.localdate()).name
+                                            next_follow_up=biz_today()).name
         order = self._q()
         self.assertEqual(order, ["negotiating", "demo_done", "demo_booked", "interested", "contacted", "new"])
 
     def test_due_followup_still_beats_a_worked_today_lead(self):
-        due = Lead.objects.create(name="due", assigned_to=self.a, next_follow_up=timezone.localdate())
+        due = Lead.objects.create(name="due", assigned_to=self.a, next_follow_up=biz_today())
         done = Lead.objects.create(name="done", assigned_to=self.a)
         svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=done)
         self.assertEqual(self._q(), ["due"])
@@ -2347,7 +2348,7 @@ class TrialRescueTests(AutomationBase):
         self.assertIn("in 2 days", t.title)
         self.assertIn("9811122233", t.detail)
         self.assertTrue(t.auto_key.startswith("trial:"))
-        self.assertEqual(t.due_on, timezone.localdate())
+        self.assertEqual(t.due_on, biz_today())
 
     def test_idempotent_across_runs_even_if_task_is_done(self):
         self.mkstore(trial_in=dt.timedelta(days=1), manager=self.a)
@@ -2462,7 +2463,7 @@ class RecycleTests(AutomationBase):
         touched = self._old("Touched")
         svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=touched)
         hot = self._old("Hot", status=LeadStatus.INTERESTED)
-        planned = self._old("Planned", next_follow_up=timezone.localdate() + dt.timedelta(days=3))
+        planned = self._old("Planned", next_follow_up=biz_today() + dt.timedelta(days=3))
         young = self._old("Young", days=5)
         arch = self._old("Arch", is_archived=True)
         self.assertEqual(auto.recycle_leads(), 0)
@@ -2936,7 +2937,7 @@ class SourceSpendTests(CrmBase):
 class SourceRoiTests(CrmBase):
     def setUp(self):
         super().setUp()
-        self.today = timezone.localdate()
+        self.today = biz_today()
 
     def _lead(self, source, status="new", touched=False, **kw):
         l = Lead.objects.create(name="L", source=source, status=status, assigned_to=self.a, **kw)
@@ -3060,7 +3061,7 @@ class SpeedToLeadTests(CrmBase):
         for mins in (2, 3, 4, 20, 90):
             l = Lead.objects.create(name="x", assigned_to=self.a)
             Lead.objects.filter(pk=l.pk).update(assigned_at=now - dt.timedelta(hours=1), first_touch_at=now - dt.timedelta(hours=1) + dt.timedelta(minutes=mins))
-        today = timezone.localdate()
+        today = biz_today()
         s = svc.speed_to_lead(today - dt.timedelta(days=1), today)
         self.assertEqual((s["n"], s["median"], s["within_5"], s["within_30"]), (5, 4, 60, 80))
 
@@ -3072,7 +3073,7 @@ class SpeedToLeadTests(CrmBase):
         Lead.objects.filter(pk=b.pk).update(assigned_at=now - dt.timedelta(minutes=10))
         c = Lead.objects.create(name="Ancient", assigned_to=self.a)
         Lead.objects.filter(pk=c.pk).update(assigned_at=now - dt.timedelta(days=9))
-        today = timezone.localdate()
+        today = biz_today()
         s = svc.speed_to_lead(today, today)
         self.assertEqual((s["n"], s["median"], s["within_5"]), (0, None, None))
         self.assertEqual([l.name for l in s["waiting"]], ["Waiting"])     # >1h and <3 days only
@@ -3085,7 +3086,7 @@ class LoggingFlagTests(CrmBase):
                                                occurred_at=start + dt.timedelta(seconds=i * gap_s)) for i in range(n)])
 
     def _range(self):
-        t = timezone.localdate()
+        t = biz_today()
         return t - dt.timedelta(days=1), t
 
     def test_burst_is_flagged_but_a_normal_pace_is_not(self):
@@ -3160,7 +3161,7 @@ class StatementTests(CrmBase):
         return sub
 
     def _month(self):
-        t = timezone.localdate()
+        t = biz_today()
         return f"{t:%Y-%m}", svc.month_bounds(t.year, t.month)
 
     def test_month_bounds(self):
@@ -3225,3 +3226,213 @@ class StatementTests(CrmBase):
             self.assertIn(needle, html)
         self.assertEqual(self.client.get(reverse("control:crm_statement", kwargs={"pk": self.owner.pk})).status_code, 404)
         self.assertEqual(self.client.get(reverse("control:crm_statement", kwargs={"pk": self.admin.pk})).status_code, 404)
+
+
+from unittest import mock  # noqa: E402
+
+# 01:00 on Thursday 8 Oct in India — which is still 7 Oct (19:30) in UTC.
+FIXED = dt.datetime(2026, 10, 7, 19, 30, tzinfo=dt.timezone.utc)
+UTC = dt.timezone.utc
+
+
+class FrozenIndiaNight(CrmBase):
+    """Run with the clock at 01:00 IST / 19:30 UTC: the window where the old
+    UTC-date logic put DGCs a day behind."""
+
+    def setUp(self):
+        super().setUp()
+        p = mock.patch("django.utils.timezone.now", return_value=FIXED)
+        p.start()
+        self.addCleanup(p.stop)
+        self.today = dt.date(2026, 10, 8)
+
+    def _act(self, user, when, kind="call", outcome="connected", **kw):
+        return Activity.objects.create(actor=user, kind=kind, outcome=outcome, occurred_at=when, **kw)
+
+
+class IndiaClockTests(FrozenIndiaNight):
+    def test_the_clock_says_8_oct_in_india_while_utc_still_says_7(self):
+        self.assertEqual(biz_today(), self.today)
+        self.assertEqual(timezone.localdate(), dt.date(2026, 10, 7))                  # the old (wrong) basis
+        self.assertEqual(to_biz(FIXED).strftime("%d %b %H:%M"), "08 Oct 01:00")
+
+    def test_day_bounds_are_india_midnights(self):
+        lo, hi = biz_day_bounds(self.today)
+        self.assertEqual(lo.astimezone(UTC), dt.datetime(2026, 10, 7, 18, 30, tzinfo=UTC))
+        self.assertEqual(hi.astimezone(UTC), dt.datetime(2026, 10, 8, 18, 30, tzinfo=UTC))
+        lo2, hi2 = biz_day_bounds(dt.date(2026, 10, 6), self.today)                    # inclusive range
+        self.assertEqual((hi2 - lo2).days, 3)
+        self.assertEqual(svc.day_bounds(self.today), (lo, hi))                           # services use the same boundaries
+
+    def test_to_biz_edge_cases(self):
+        self.assertIsNone(to_biz(None))
+        self.assertEqual(to_biz(dt.datetime(2026, 10, 7, 19, 30)).hour, 1)             # naive = UTC
+        self.assertEqual(to_biz(FIXED).utcoffset(), dt.timedelta(hours=5, minutes=30))
+
+    @override_settings(CRM_TIME_ZONE="UTC")
+    def test_the_zone_is_configurable(self):
+        self.assertEqual(biz_today(), dt.date(2026, 10, 7))
+
+    def test_resolve_range_and_numbers_use_the_india_day(self):
+        self.assertEqual(svc.resolve_range("today")[:2], (self.today, self.today))
+        self.assertEqual(svc.resolve_range("yesterday")[:2], (dt.date(2026, 10, 7), dt.date(2026, 10, 7)))
+        self._act(self.a, FIXED)                                                        # 01:00 IST on the 8th -> today
+        self._act(self.a, dt.datetime(2026, 10, 7, 18, 0, tzinfo=UTC))                  # 23:30 IST on the 7th -> yesterday
+        today_rows, _ = svc.person_numbers(*svc.resolve_range("today")[:2])
+        yest_rows, _ = svc.person_numbers(*svc.resolve_range("yesterday")[:2])
+        self.assertEqual({r["user"].pk: r["calls"] for r in today_rows}[self.a.pk], 1)
+        self.assertEqual({r["user"].pk: r["calls"] for r in yest_rows}[self.a.pk], 1)
+
+    def test_board_and_my_day_pages_count_the_night_call_as_today(self):
+        self._act(self.a, FIXED)
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        self.assertIn(">Calls<", html)
+        row = html.split(">anil<")[1].split("</tr>")[0]
+        self.assertIn(">1<", row.replace(" ", "").replace("\n", ""))
+        self.login(self.a)
+        day = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertRegex(day.split("Calls today")[1][:300], r">\s*1\s*<span")
+
+
+class IndiaDefaultsAndFollowUpTests(FrozenIndiaNight):
+    def test_model_defaults_use_the_india_date(self):
+        self.assertEqual(Collection(collected_by=self.a, amount=Decimal("1"), mode="cash").collected_on, self.today)
+        self.assertEqual(TrainingLog(trainee=self.a, trainer=self.b).trained_on, self.today)
+
+    def test_invoice_collection_is_dated_by_the_india_day_it_was_paid(self):
+        p = Project.objects.create(name="Paid", status="active")
+        sub = billing.ensure_subscription(Project.objects.get(pk=p.pk))
+        sub.manager = self.a
+        sub.save(update_fields=["manager"])
+        billing.mark_invoice_paid(billing.issue_invoice(sub))
+        col = Collection.objects.get(collected_by=self.a, mode="subscription")
+        self.assertEqual(col.collected_on, self.today)
+
+    def test_auto_follow_up_is_the_next_india_day(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=lead)
+        lead.refresh_from_db()
+        self.assertEqual(lead.next_follow_up, dt.date(2026, 10, 9))                      # not the 8th (UTC "tomorrow")
+
+    def test_follow_up_chip_counts_from_the_india_date(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        self.login(self.a)
+        self.client.post(reverse("control:crm_log"), {"kind": "call", "outcome": "connected", "lead": lead.pk, "follow_in": "3"})
+        lead.refresh_from_db()
+        self.assertEqual(lead.next_follow_up, dt.date(2026, 10, 11))
+
+    def test_a_followup_dated_today_in_india_is_due_in_the_queue_and_my_day(self):
+        lead = Lead.objects.create(name="Due Today", assigned_to=self.a, status=LeadStatus.CONTACTED, next_follow_up=self.today)
+        self.assertEqual([l.name for l in svc.call_queue(self.a)], ["Due Today"])
+        self.login(self.a)
+        day = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("Follow-ups due", day)
+        self.assertIn("Due Today", day.split("Follow-ups due")[1])
+
+    def test_worked_yesterday_evening_does_not_hide_a_lead_this_morning(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        Activity.objects.create(actor=self.a, kind="call", outcome="no_answer", lead=lead,
+                                occurred_at=dt.datetime(2026, 10, 7, 18, 0, tzinfo=UTC))   # 23:30 IST yesterday
+        self.assertEqual([l.name for l in svc.call_queue(self.a)], ["L"])
+        Activity.objects.create(actor=self.a, kind="call", outcome="no_answer", lead=lead, occurred_at=FIXED)
+        self.assertEqual(svc.call_queue(self.a).count(), 0)                                  # worked just now (today)
+
+    def test_overdue_uses_the_india_date(self):
+        Lead.objects.create(name="Yday", assigned_to=self.a, status=LeadStatus.CONTACTED, next_follow_up=dt.date(2026, 10, 7))
+        Lead.objects.create(name="Today", assigned_to=self.a, status=LeadStatus.CONTACTED, next_follow_up=self.today)
+        self.assertEqual(svc.board_extras()["overdue_follow_ups"], 1)                        # only the 7th is overdue
+
+    def test_won_today_counts_by_india_day(self):
+        a = Lead.objects.create(name="A", assigned_to=self.a, status=LeadStatus.WON)
+        b = Lead.objects.create(name="B", assigned_to=self.a, status=LeadStatus.WON)
+        Lead.objects.filter(pk=a.pk).update(stage_changed_at=FIXED)                                  # 01:00 IST today
+        Lead.objects.filter(pk=b.pk).update(stage_changed_at=dt.datetime(2026, 10, 7, 18, 0, tzinfo=UTC))   # 23:30 IST yesterday
+        self.assertEqual(svc.board_extras()["won_today"], 1)
+
+    def test_demos_today_follow_the_india_day(self):
+        Lead.objects.create(name="Early", assigned_to=self.a, status="demo_booked", demo_at=dt.datetime(2026, 10, 7, 19, 0, tzinfo=UTC))   # 00:30 IST today
+        Lead.objects.create(name="LateLastNight", assigned_to=self.a, status="demo_booked", demo_at=dt.datetime(2026, 10, 7, 18, 0, tzinfo=UTC))
+        today, overdue = svc.demos_for(self.a)
+        self.assertEqual(([l.name for l in today], [l.name for l in overdue]), (["Early"], ["LateLastNight"]))
+
+    def test_streak_counts_the_india_date(self):
+        tz = svc._biz_tz()
+        for back in (1, 2, 3):
+            day = self.today - dt.timedelta(days=back)
+            Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="connected",
+                                                   occurred_at=dt.datetime.combine(day, dt.time(11, i), tzinfo=tz)) for i in range(12)])
+        self.assertEqual(svc.call_streak(self.a)["days"], 3)
+
+
+class IndiaMonthBoundaryTests(CrmBase):
+    """00:30 IST on 1 Oct is still 30 Sep in UTC."""
+
+    def setUp(self):
+        super().setUp()
+        p = mock.patch("django.utils.timezone.now", return_value=dt.datetime(2026, 9, 30, 19, 0, tzinfo=UTC))
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_default_statement_month_is_last_full_india_month(self):
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_statements")).content.decode()
+        self.assertIn("September 2026", html)                                        # it is already October in India
+        self.assertNotIn("August 2026", html)
+
+    def test_insight_range_month_starts_on_the_india_first(self):
+        from apps.control.crm_views import _insight_range
+        start, end, _ = _insight_range("month")
+        self.assertEqual((start, end), (dt.date(2026, 10, 1), dt.date(2026, 10, 1)))
+
+    def test_commission_created_after_india_midnight_counts_for_the_new_month(self):
+        p = Project.objects.create(name="Paid", status="active")
+        sub = billing.ensure_subscription(Project.objects.get(pk=p.pk))
+        sub.manager = self.a
+        sub.save(update_fields=["manager"])
+        billing.mark_invoice_paid(billing.issue_invoice(sub))
+        com = ManagerCommission.objects.get(manager=self.a)
+        ManagerCommission.objects.filter(pk=com.pk).update(created_at=dt.datetime(2026, 9, 30, 18, 45, tzinfo=UTC))  # 00:15 IST 1 Oct
+        self.assertEqual(svc.earnings_preview(self.a)["earned"], com.amount.quantize(Decimal("1")))
+        ManagerCommission.objects.filter(pk=com.pk).update(created_at=dt.datetime(2026, 9, 30, 18, 15, tzinfo=UTC))  # 23:45 IST 30 Sep
+        self.assertEqual(svc.earnings_preview(self.a)["earned"], 0)
+
+
+class IndiaDisplayTests(FrozenIndiaNight):
+    def test_history_and_recent_activity_show_india_time(self):
+        lead = Lead.objects.create(name="L", assigned_to=self.a)
+        Activity.objects.create(actor=self.a, kind="call", outcome="connected", lead=lead, occurred_at=FIXED)
+        self.login(self.a)
+        page = self.client.get(reverse("control:crm_lead", kwargs={"pk": lead.pk})).content.decode()
+        self.assertIn("08 Oct 01:00", page)
+        self.assertNotIn("07 Oct 19:30", page)
+        self.login(self.admin)
+        person = self.client.get(reverse("control:crm_person", kwargs={"pk": self.a.pk})).content.decode()
+        self.assertIn("08 Oct 01:00", person)
+
+    def test_ist_filter_is_registered_in_the_template_engine(self):
+        from config.jinja2 import environment
+        self.assertIn("ist", environment().filters)
+
+    def test_no_datetime_is_printed_in_utc_anywhere_in_the_crm_templates(self):
+        import glob
+        import re
+        bad = []
+        for path in glob.glob("templates/control/crm/*.jinja"):
+            for n, line in enumerate(open(path), 1):
+                for m in re.finditer(r"([\w.]+(?:\|\w+)?)\.strftime\(", line):
+                    expr = m.group(1)
+                    if re.search(r"(occurred_at|created_at|stage_changed_at|\.when|assigned_at|first_touch_at)$", expr):
+                        bad.append(f"{path}:{n}: {expr}")
+        self.assertEqual(bad, [])
+
+    def test_no_crm_code_uses_the_utc_localdate_anymore(self):
+        import glob
+        offenders = []
+        for path in glob.glob("apps/crm/*.py") + ["apps/control/crm_views.py"]:
+            if path.endswith(("tests.py", "tz.py")):
+                continue
+            text = open(path).read()
+            if "timezone.localdate(" in text or "localdate(" in text:
+                offenders.append(path)
+        self.assertEqual(offenders, [])

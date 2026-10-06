@@ -46,7 +46,7 @@
       <span class="min-w-0">{{ a.get_kind_display() }}{% if a.outcome %} <span class="text-slate-500">· {{ a.get_outcome_display() }}</span>{% endif %}
         {% if a.lead %}<a href="{{ url('control:crm_lead', kwargs={'pk': a.lead_id}) }}" class="text-pink-700 hover:underline">{{ a.lead.name }}</a>{% endif %}
         {% if a.note %}<span class="block truncate text-[11px] text-slate-500">{{ a.note }}</span>{% endif %}</span>
-      <span class="shrink-0 text-[11px] text-slate-400">{{ a.occurred_at.strftime("%d %b %H:%M") }}</span></div>
+      <span class="shrink-0 text-[11px] text-slate-400">{{ (a.occurred_at|ist).strftime("%d %b %H:%M") }}</span></div>
     {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">No activity yet.</p>{% endfor %}
   </div>
 

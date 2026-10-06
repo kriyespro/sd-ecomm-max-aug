@@ -11,6 +11,8 @@ from django.utils import timezone
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 
+from . import tz as _tz
+from .tz import biz_today
 from .models import (
     Activity,
     ActivityKind,
@@ -62,17 +64,11 @@ def person_label(user):
 
 # ── date helpers ───────────────────────────────────────────────────────────
 
-def day_bounds(start, end=None):
-    """Aware [start 00:00, end+1 00:00) datetimes for date range inclusive."""
-    end = end or start
-    tz = timezone.get_current_timezone()
-    lo = timezone.make_aware(dt.datetime.combine(start, dt.time.min), tz)
-    hi = timezone.make_aware(dt.datetime.combine(end + dt.timedelta(days=1), dt.time.min), tz)
-    return lo, hi
+day_bounds = _tz.day_bounds   # business-time day boundaries (see apps/crm/tz.py)
 
 
 def resolve_range(key):
-    today = timezone.localdate()
+    today = biz_today()
     if key == "yesterday":
         d = today - dt.timedelta(days=1)
         return d, d, "Yesterday"
@@ -126,7 +122,7 @@ def log_activity(*, actor, kind, outcome="", lead=None, project=None, note="", c
         elif outcome == ActivityOutcome.NOT_INTERESTED and lead.is_open:
             lead.status = LeadStatus.LOST
             fields.append("status")
-        today = timezone.localdate()
+        today = biz_today()
         if follow_up:
             lead.next_follow_up = follow_up
             fields.append("next_follow_up")
@@ -174,7 +170,7 @@ def record_invoice_collection(invoice):
         collected_by_id=credited, amount=invoice.amount, mode=CollectionMode.SUBSCRIPTION,
         reference=getattr(invoice, "number", "") or "", project=sub.project, invoice=invoice,
         status=CollectionStatus.VERIFIED, verified_at=timezone.now(),
-        collected_on=timezone.localdate(invoice.paid_at or timezone.now()),
+        collected_on=biz_today(invoice.paid_at or timezone.now()),
     )
 
 
@@ -221,7 +217,7 @@ def log_trained_by(*, trainee, trainer, topic="", trained_on=None):
         raise TrainingError("Pick the DGC who trained you.")
     return TrainingLog.objects.create(
         trainee=trainee, trainer=trainer, topic=topic[:160], initiated_by=trainee,
-        trained_on=trained_on or timezone.localdate(), status=TrainingStatus.PENDING)
+        trained_on=trained_on or biz_today(), status=TrainingStatus.PENDING)
 
 
 def add_trained_student(*, trainer, student=None, name="", phone="", topic="", trained_on=None):
@@ -235,7 +231,7 @@ def add_trained_student(*, trainer, student=None, name="", phone="", topic="", t
     return TrainingLog.objects.create(
         trainer=trainer, trainee=student, student_name="" if student else name,
         student_phone="" if student else phone, topic=topic[:160], initiated_by=trainer,
-        trained_on=trained_on or timezone.localdate(), status=TrainingStatus.PENDING)
+        trained_on=trained_on or biz_today(), status=TrainingStatus.PENDING)
 
 
 def request_training(*, requester, for_user=None, name="", phone="", topic=""):
@@ -274,7 +270,7 @@ def mark_trained(log, *, actor):
     is_admin = actor.is_superuser or getattr(getattr(actor, "profile", None), "is_platform_admin", False)
     if not (is_admin or log.trainer_id == actor.pk):
         raise TrainingError("Only the assigned trainer can mark this trained.")
-    log.trained_on = timezone.localdate()
+    log.trained_on = biz_today()
     log.initiated_by = actor
     if is_admin:
         log.status, log.confirmed_at = TrainingStatus.CONFIRMED, timezone.now()
@@ -369,7 +365,7 @@ def call_queue(user, *, skip=()):
     today with no follow-up date drops out until tomorrow."""
     from django.db.models import Exists, F, OuterRef
 
-    today = timezone.localdate()
+    today = biz_today()
     lo, _ = day_bounds(today)
     worked = Activity.objects.filter(actor=user, lead=OuterRef("pk"), occurred_at__gte=lo)
     from django.db.models import Case, IntegerField, Value, When
@@ -480,9 +476,10 @@ def time_ago(when):
 
 
 def board_extras():
-    today = timezone.localdate()
+    today = biz_today()
     return {
-        "won_today": Lead.objects.filter(status=LeadStatus.WON, updated_at__date=today).count(),
+        "won_today": Lead.objects.filter(status=LeadStatus.WON, stage_changed_at__gte=day_bounds(today)[0],
+                                         stage_changed_at__lt=day_bounds(today)[1]).count(),
         "overdue_follow_ups": Lead.objects.filter(
             is_archived=False, next_follow_up__lt=today, status__in=[s for s in LeadStatus.values
                                                   if s not in (LeadStatus.WON, LeadStatus.LOST)]).count(),
@@ -539,7 +536,7 @@ def board_columns(user, *, owner=None, q="", full=None, admin=False):
     """
     from django.db.models import Case, Exists, F, IntegerField, OuterRef, Subquery, When
 
-    today = timezone.localdate()
+    today = biz_today()
     now = timezone.now()
     cutoff = now - dt.timedelta(days=STALE_DAYS)
 
@@ -791,12 +788,7 @@ def lead_from_signup(project, *, name, phone, city="", ref_user=None):
 import re as _re
 from urllib.parse import quote as _quote
 
-BUSINESS_TZ = "Asia/Kolkata"
-
-
-def _biz_tz():
-    from zoneinfo import ZoneInfo
-    return ZoneInfo(BUSINESS_TZ)
+_biz_tz = _tz.biz_tz   # kept for callers/tests that used the old private name
 
 
 _PLACEHOLDER = _re.compile(r"\{(name|first_name|business|city|dgc)\}")
@@ -878,6 +870,11 @@ def _monthly_commission_pct():
         return D("20")
 
 
+def svc_month_end(d):
+    """Last calendar day of ``d``'s month."""
+    return (d.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
+
+
 def earnings_preview(user):
     """What this DGC has earned this month, and what their pipeline could add
     (probability-weighted, using the configured average plan price)."""
@@ -886,9 +883,10 @@ def earnings_preview(user):
     from apps.billing.models import ManagerCommission
     cfg = CrmSettings.load()
     rate = _monthly_commission_pct() / D(100)
-    today = timezone.localdate()
-    rows = ManagerCommission.objects.filter(manager=user, created_at__year=today.year,
-                                            created_at__month=today.month).values("status").annotate(t=Sum("amount"))
+    today = biz_today()
+    m_lo, m_hi = day_bounds(today.replace(day=1), svc_month_end(today))
+    rows = ManagerCommission.objects.filter(manager=user, created_at__gte=m_lo,
+                                            created_at__lt=m_hi).values("status").annotate(t=Sum("amount"))
     by = {r["status"]: (r["t"] or D("0")) for r in rows}
     earned = sum(by.values(), D("0"))
     stages = {r["status"]: r["n"] for r in Lead.objects.filter(
@@ -914,7 +912,7 @@ def call_streak(user, *, today=None):
     target = targets_for(user).get(TargetMetric.CALLS, 40) or 40
     bar = min(10, target)
     per_day = _calls_by_local_day(user)
-    day = today or timezone.now().astimezone(_biz_tz()).date()
+    day = today or biz_today()
     streak = 0
     if per_day.get(day, 0) >= bar:
         streak, day = 1, day - dt.timedelta(days=1)
@@ -923,7 +921,7 @@ def call_streak(user, *, today=None):
     while per_day.get(day, 0) >= bar:
         streak += 1
         day -= dt.timedelta(days=1)
-    return {"days": streak, "bar": bar, "today": per_day.get(today or timezone.now().astimezone(_biz_tz()).date(), 0)}
+    return {"days": streak, "bar": bar, "today": per_day.get(today or biz_today(), 0)}
 
 
 def best_call_window(user, *, days=60, min_calls=30, min_bucket=8):

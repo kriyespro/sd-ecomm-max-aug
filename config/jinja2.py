@@ -174,6 +174,9 @@ def environment(**options):
     env.filters["money"] = _money
     env.filters["rgb_channels"] = _rgb_channels
     env.filters["media_src"] = media_src
+    from apps.crm.tz import to_biz
+
+    env.filters["ist"] = to_biz      # aware datetime -> the CRM's business timezone
     return env
 
 

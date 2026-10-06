@@ -20,7 +20,7 @@
   </div>
   <div class="rounded-2xl bg-white shadow-sm p-4 ring-1 ring-pink-100">
     <h3 class="mb-2 text-sm font-semibold text-slate-700">Your requests</h3>
-    {% for r in requests %}<div class="py-1 text-sm">{{ r.get_kind_display() }} — {{ r.get_status_display() }} <span class="text-xs text-slate-400">{{ r.created_at.strftime("%d %b") }}</span></div>{% else %}<p class="text-sm text-slate-400">None yet.</p>{% endfor %}
+    {% for r in requests %}<div class="py-1 text-sm">{{ r.get_kind_display() }} — {{ r.get_status_display() }} <span class="text-xs text-slate-400">{{ (r.created_at|ist).strftime("%d %b") }}</span></div>{% else %}<p class="text-sm text-slate-400">None yet.</p>{% endfor %}
   </div>
 </div>
 {% endblock %}
