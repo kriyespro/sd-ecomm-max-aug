@@ -2230,7 +2230,7 @@ class SettingsAndProfileTests(CrmBase):
 
     def test_settings_save_including_stage_probabilities(self):
         self.login(self.admin)
-        data = {"auto_assign": "on", "capacity_per_dgc": "25", "trial_rescue_days": "2",
+        data = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "auto_assign": "on", "capacity_per_dgc": "25", "trial_rescue_days": "2",
                 "health_no_products_days": "5", "health_no_orders_days": "10", "recycle_days": "20",
                 "quiet_after_hour": "11", "avg_plan_price": "3499", "digest_emails": "a@x.com, b@y.com",
                 "p_new": "5", "p_contacted": "10", "p_interested": "25", "p_demo_booked": "35",
@@ -2245,7 +2245,7 @@ class SettingsAndProfileTests(CrmBase):
 
     def test_settings_validation(self):
         self.login(self.admin)
-        base = {"capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
+        base = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26", "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
                 "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999",
                 "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
         for bad in ({"quiet_after_hour": "30"}, {"digest_emails": "not-an-email"}, {"p_new": "150"}):
@@ -3668,3 +3668,248 @@ class DgcInsightsTests(CrmBase):
         r = self.client.get(self.url)
         self.assertEqual(r.status_code, 200)
         self.assertIn("No leads created in this period.", r.content.decode())
+
+
+class PossibilityMathTests(CrmBase):
+    """The coaching numbers: pure arithmetic on the funnel, the plan and the user's own leads."""
+
+    def setUp(self):
+        super().setUp()
+        from apps.billing.models import Plan
+        self.plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
+        self.pct = svc._monthly_commission_pct()
+
+    def test_inr_uses_indian_grouping_and_rounds(self):
+        self.assertEqual([svc.inr(x) for x in (0, 999, 1000, 123456, 1234567, 99999.5, -5000)],
+                         ["₹0", "₹999", "₹1,000", "₹1,23,456", "₹12,34,567", "₹1,00,000", "-₹5,000"])
+
+    def test_nice_drops_a_pointless_decimal(self):
+        self.assertEqual([svc._nice(x) for x in (1, Decimal("1.0"), Decimal("2.4"), Decimal("0.05"), Decimal("31.2"))], ["1", "1", "2.4", "0.1", "31.2"])
+
+    def test_min_ticket_is_the_cheapest_public_paid_plan_and_its_commission(self):
+        m = svc.min_ticket()
+        self.assertEqual(m["ticket"], self.plan.price_monthly)
+        self.assertEqual(m["per_month"], (self.plan.price_monthly * self.pct / 100).quantize(Decimal("1"), rounding="ROUND_HALF_UP"))
+        self.assertEqual(m["per_year"], m["per_month"] * 12)
+        self.assertTrue(m["per_month_label"].startswith("₹"))
+
+    def test_min_ticket_override_wins_and_blank_falls_back(self):
+        cfg = CrmSettings.load()
+        cfg.min_ticket_override = Decimal("1000")
+        cfg.save()
+        m = svc.min_ticket()
+        self.assertEqual((m["ticket"], m["per_month"]), (Decimal("1000"), (Decimal("1000") * self.pct / 100).quantize(Decimal("1"), rounding="ROUND_HALF_UP")))
+        cfg.min_ticket_override = None
+        cfg.save()
+        self.assertEqual(svc.min_ticket()["ticket"], self.plan.price_monthly)
+
+    def test_default_funnel_is_100_10_6_3(self):
+        p = svc.possibility(self.a)
+        self.assertEqual([(r["label"], r["n"]) for r in p["per100"]],
+                         [("Calls", "100"), ("Meet / demo", "10"), ("Trials", "6"), ("Paid clients", "3")])
+        self.assertEqual((p["overall_pct"], p["c"]), ("3", (10, 60, 50)))
+
+    def test_todays_plan_follows_the_dgcs_own_call_target(self):
+        p = svc.possibility(self.a)                                                       # default 40 calls
+        self.assertEqual((p["plan"]["calls"], p["plan"]["meets"], p["plan"]["trials"], p["plan"]["paid"]), (40, "4", "2.4", "1.2"))
+        from apps.crm.models import DailyTarget
+        DailyTarget.objects.create(user=self.a, metric="calls", value=100)
+        q = svc.possibility(self.a)
+        self.assertEqual((q["plan"]["calls"], q["plan"]["meets"], q["plan"]["trials"], q["plan"]["paid"]), (100, "10", "6", "3"))
+        self.assertEqual(svc.possibility(self.b)["plan"]["calls"], 40)                    # someone else's target is separate
+        per = svc.min_ticket()["per_month"]
+        self.assertEqual(q["plan"]["monthly_label"], svc.inr(Decimal(3) * per))
+        self.assertEqual(q["plan"]["yearly_label"], svc.inr(Decimal(3) * per * 12))
+
+    def test_funnel_percentages_are_editable(self):
+        cfg = CrmSettings.load()
+        cfg.conv_call_to_demo, cfg.conv_demo_to_trial, cfg.conv_trial_to_paid = 20, 50, 50     # 5% overall
+        cfg.save()
+        p = svc.possibility(self.a)
+        self.assertEqual(p["overall_pct"], "5")
+        self.assertEqual([r["n"] for r in p["per100"]], ["100", "20", "10", "5"])
+        self.assertEqual(p["plan"]["paid"], "2")                                          # 40 calls -> 8 -> 4 -> 2
+
+    def test_progress_counts_only_my_calls_today_in_india_time(self):
+        for _ in range(8):
+            svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        svc.log_activity(actor=self.a, kind="whatsapp", outcome="done")                  # not a call
+        for _ in range(5):
+            svc.log_activity(actor=self.b, kind="call", outcome="no_answer")             # someone else's
+        Activity.objects.create(actor=self.a, kind="call", outcome="no_answer", occurred_at=timezone.now() - dt.timedelta(days=2))
+        pr = svc.possibility(self.a)["progress"]
+        self.assertEqual((pr["done"], pr["target"], pr["left"], pr["pct"]), (8, 40, 32, 20))
+        self.assertEqual(pr["paid_so_far"], "0.2")                                       # 8 calls x 3%  (0.24 -> 0.2)
+        self.assertEqual(pr["left_paid"], "1")                                            # 32 x 3% = 0.96
+
+    def test_progress_pct_is_capped_at_100_after_the_plan(self):
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="no_answer", occurred_at=timezone.now()) for _ in range(55)])
+        pr = svc.possibility(self.a)["progress"]
+        self.assertEqual((pr["pct"], pr["left"]), (100, 0))
+
+    def test_month_projection_is_calls_x_days_x_conversion_and_grows_weekly(self):
+        p = svc.possibility(self.a)
+        m = p["month"]
+        self.assertEqual((m["days"], m["clients"]), (26, "31.2"))                           # 40 x 26 x 3%
+        self.assertEqual([w["clients_label"] for w in m["weeks"]], ["7.8", "15.6", "23.4", "31.2"])
+        per = svc.min_ticket()["per_month"]
+        self.assertEqual(m["monthly_label"], svc.inr(Decimal("31.2") * per))
+        self.assertEqual(m["weeks"][-1]["pct"], 100)
+        self.assertTrue(all(8 <= w["pct"] <= 100 for w in m["weeks"]))
+        cfg = CrmSettings.load()
+        cfg.working_days_month = 20
+        cfg.save()
+        self.assertEqual(svc.possibility(self.a)["month"]["clients"], "24")
+
+    def test_leads_panel_counts_only_my_open_leads_weighted_by_stage(self):
+        for st, n in (("new", 10), ("contacted", 5), ("negotiating", 2)):
+            for _ in range(n):
+                Lead.objects.create(name="x", assigned_to=self.a, status=st)
+        Lead.objects.create(name="other", assigned_to=self.b, status="negotiating")
+        Lead.objects.create(name="arch", assigned_to=self.a, status="negotiating", is_archived=True)
+        Lead.objects.create(name="won", assigned_to=self.a, status="won")
+        Lead.objects.create(name="lost", assigned_to=self.a, status="lost")
+        L = svc.possibility(self.a)["leads"]
+        self.assertEqual(L["total"], 17)
+        self.assertEqual(L["untouched"], 17)
+        by = {r["stage"]: r for r in L["stages"]}
+        self.assertEqual((by["new"]["n"], by["contacted"]["n"], by["negotiating"]["n"]), (10, 5, 2))
+        self.assertEqual(by["new"]["expected_label"], "0.3")                                # 10 x 3%
+        want = Decimal(10) * 3 / 100 + Decimal(5) * 8 / 100 + Decimal(2) * 65 / 100
+        self.assertEqual(L["expected"], svc._nice(want))
+        self.assertEqual(L["value_label"], svc.inr(want * svc.min_ticket()["per_month"]))
+        self.assertEqual(max(r["bar"] for r in L["stages"]), 100)
+        self.assertEqual(by["interested"]["bar"], 0)                                        # empty stage: no bar
+
+    def test_no_leads_no_calls_is_all_zeros_not_an_error(self):
+        p = svc.possibility(self.b)
+        self.assertEqual((p["leads"]["total"], p["leads"]["expected"], p["progress"]["done"]), (0, "0", 0))
+        self.assertEqual(p["leads"]["value_label"], "₹0")
+
+    def test_zero_or_missing_target_falls_back_to_the_default(self):
+        from apps.crm.models import DailyTarget
+        DailyTarget.objects.create(user=None, metric="calls", value=0)
+        self.assertEqual(svc.possibility(self.a)["plan"]["calls"], 40)
+
+    def test_a_zero_conversion_setting_gives_zeros_without_dividing_by_zero(self):
+        cfg = CrmSettings.load()
+        cfg.conv_call_to_demo = 0
+        cfg.save()
+        p = svc.possibility(self.a)
+        self.assertEqual((p["plan"]["paid"], p["month"]["clients"], p["overall_pct"]), ("0", "0", "0"))
+
+
+class PossibilityCardTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+        self.url = reverse("control:crm_my_day")
+
+    def _html(self):
+        return self.client.get(self.url).content.decode()
+
+    def test_headline_tells_the_whole_story_in_one_sentence(self):
+        html = self._html()
+        self.assertIn("What's possible today", html)
+        head = " ".join(html.split("What's possible today")[1].split("</summary>")[0].split())
+        for needle in ("40 calls", "<b>4</b> meetings/demos", "<b>2.4</b> trials", "1.2 paid client", "every month"):
+            self.assertIn(needle, head)
+
+    def test_open_at_the_start_of_the_day_and_folded_once_working(self):
+        self.assertRegex(self._html(), r'<details id="possible" open')
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        html = self._html()
+        self.assertIn('<details id="possible"', html)
+        self.assertNotRegex(html, r'<details id="possible" open')
+
+    def test_all_five_charts_and_the_habit_are_there(self):
+        html = self._html()
+        for chart in ("Every 100 calls", "Your plan for today", "Where you are now", "Leads in your panel", "Do this every working day",
+                      "The habit that wins", "① Call", "② Meet / demo", "③ Help them understand the product", "④ Follow up"):
+            self.assertIn(chart, html, chart)
+        funnel = html.split("Every 100 calls")[1].split("Your plan for today")[0]
+        for n in (">100<", ">10<", ">6<", ">3<"):
+            self.assertIn(n, funnel)
+        self.assertIn("3%", funnel)
+
+    def test_minimum_ticket_and_commission_are_stated_plainly(self):
+        m = svc.min_ticket()
+        html = " ".join(self._html().split())
+        self.assertIn(f"at least <b class=\"text-emerald-700\">{m['per_month_label']} a month</b> to you", html)
+        self.assertIn(m["ticket_label"], html)
+        self.assertIn(m["per_year_label"], html)
+
+    def test_the_card_reacts_to_calls_and_leads_in_the_panel(self):
+        for _ in range(3):
+            Lead.objects.create(name="Fresh", assigned_to=self.a)
+        for _ in range(10):
+            svc.log_activity(actor=self.a, kind="call", outcome="no_answer")
+        html = self._html()
+        self.assertIn("10 / 40", html)
+        self.assertIn("30 more", html)
+        panel = html.split("Leads in your panel")[1].split("Do this every working day")[0]
+        self.assertIn("3 open", panel)
+        self.assertIn("3 not called yet", panel)
+
+    def test_empty_panel_says_what_will_appear(self):
+        self.assertIn("No open leads yet", self._html())
+
+    def test_plan_complete_message(self):
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="no_answer", occurred_at=timezone.now()) for _ in range(40)])
+        self.assertIn("Plan complete", self._html())
+
+    def test_new_lead_banner_and_next_up_say_what_a_lead_is_worth(self):
+        lead = Lead.objects.create(name="Hot One", phone="9600000001", assigned_to=self.a)
+        Lead.objects.filter(pk=lead.pk).update(assigned_at=timezone.now())
+        per = svc.min_ticket()["per_month_label"]
+        html = self._html()
+        self.assertIn("is worth at least", html)
+        self.assertIn(per, html.split("new lead")[1].split("Each one")[1][:200])
+        self.assertIn(f"worth ≥ {per}/month", html)
+
+    def test_each_dgc_sees_their_own_numbers(self):
+        for _ in range(4):
+            Lead.objects.create(name="Mine", assigned_to=self.a)
+        mine = self._html().split("Leads in your panel")[1].split("Do this every")[0]
+        self.assertIn("4 open", mine)
+        self.login(self.b)
+        theirs = self._html().split("Leads in your panel")[1].split("Do this every")[0]
+        self.assertIn("0 open", theirs)
+        self.assertIn("No open leads yet", theirs)
+
+    def test_admin_does_not_get_the_dgc_card_on_the_board(self):
+        self.login(self.admin)
+        self.assertNotIn("What's possible today", self.client.get(reverse("control:crm_board")).content.decode())
+
+    def test_settings_screen_shows_and_saves_the_funnel(self):
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_settings")).content.decode()
+        self.assertIn("Sales funnel shown to DGCs", html)
+        data = {"conv_call_to_demo": "20", "conv_demo_to_trial": "50", "conv_trial_to_paid": "50", "working_days_month": "24",
+                "min_ticket_override": "1999", "auto_assign": "on", "capacity_per_dgc": "0", "trial_rescue_days": "3",
+                "health_no_products_days": "7", "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12",
+                "avg_plan_price": "2999", "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30",
+                "p_demo_done": "45", "p_negotiating": "65"}
+        self.assertEqual(self.client.post(reverse("control:crm_settings"), data).status_code, 302)
+        cfg = CrmSettings.load()
+        self.assertEqual((cfg.conv_call_to_demo, cfg.working_days_month, cfg.min_ticket_override), (20, 24, Decimal("1999.00")))
+        self.login(self.a)
+        self.assertIn("5%", self._html())                                                  # the DGC card follows the new funnel
+
+    def test_funnel_settings_validation(self):
+        self.login(self.admin)
+        base = {"conv_call_to_demo": "10", "conv_demo_to_trial": "60", "conv_trial_to_paid": "50", "working_days_month": "26",
+                "capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7", "health_no_orders_days": "14",
+                "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999", "p_new": "3", "p_contacted": "8",
+                "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
+        for bad in ({"conv_call_to_demo": "0"}, {"conv_demo_to_trial": "101"}, {"conv_trial_to_paid": "-5"},
+                    {"working_days_month": "40"}, {"working_days_month": "0"}, {"min_ticket_override": "-1"}):
+            r = self.client.post(reverse("control:crm_settings"), {**base, **bad})
+            self.assertEqual(r.status_code, 200, bad)
+        self.assertEqual(CrmSettings.load().conv_call_to_demo, 10)
+        self.assertEqual(self.client.post(reverse("control:crm_settings"), {**base, "min_ticket_override": ""}).status_code, 302)
+        self.assertIsNone(CrmSettings.load().min_ticket_override)
+
+    def test_dgc_cannot_change_the_funnel(self):
+        self.assertEqual(self.client.post(reverse("control:crm_settings"), {"conv_call_to_demo": "99"}).status_code, 403)
+        self.assertEqual(CrmSettings.load().conv_call_to_demo, 10)

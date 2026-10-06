@@ -176,6 +176,9 @@ def environment(**options):
     env.filters["media_src"] = media_src
     from apps.crm.tz import to_biz
 
+    from apps.crm.services import inr
+
+    env.filters["inr"] = inr
     env.filters["ist"] = to_biz      # aware datetime -> the CRM's business timezone
     return env
 

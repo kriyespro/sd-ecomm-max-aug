@@ -1160,3 +1160,116 @@ def statement_rows(first, last):
                     "com_paid": c.get("paid", Decimal("0")),
                     "com_total": sum(c.values(), Decimal("0"))})
     return out
+
+
+# ── "what's possible" — the coaching numbers every DGC sees ─────────────────
+
+from decimal import ROUND_HALF_UP as _HALF_UP
+
+
+def inr(value):
+    """₹ with Indian digit grouping: 123456 -> ₹1,23,456."""
+    n = int(Decimal(value).quantize(Decimal(1), rounding=_HALF_UP))
+    sign, digits = ("-" if n < 0 else ""), str(abs(n))
+    if len(digits) > 3:
+        head, tail = digits[:-3], digits[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        digits = ",".join(parts + [tail])
+    return f"{sign}₹{digits}"
+
+
+def _nice(d):
+    """1.0 -> '1', 2.4 -> '2.4' (one decimal at most)."""
+    d = Decimal(d).quantize(Decimal("0.1"), rounding=_HALF_UP)
+    return str(int(d)) if d == d.to_integral() else str(d)
+
+
+def min_ticket():
+    """The smallest monthly plan a client can pick (admin override, else the
+    cheapest public paid plan) and what one such client pays the DGC each month."""
+    from apps.billing.models import Plan
+    cfg = CrmSettings.load()
+    ticket = cfg.min_ticket_override
+    if not ticket:
+        plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
+        ticket = plan.price_monthly if plan else Decimal("1499")
+    pct = _monthly_commission_pct()
+    per_month = (ticket * pct / Decimal(100)).quantize(Decimal("1"), rounding=_HALF_UP)
+    return {"ticket": Decimal(ticket), "pct": pct, "per_month": per_month, "per_year": per_month * 12,
+            "ticket_label": inr(ticket), "per_month_label": inr(per_month), "per_year_label": inr(per_month * 12)}
+
+
+def possibility(user):
+    """Everything the My-day 'what's possible' card needs, from the DGC's own
+    plan (daily call target), their own open leads, and the funnel in settings.
+    All simple multiplication — no promises, just what the funnel says."""
+    cfg = CrmSettings.load()
+    c1, c2, c3 = (Decimal(cfg.conv_call_to_demo), Decimal(cfg.conv_demo_to_trial), Decimal(cfg.conv_trial_to_paid))
+    overall = c1 * c2 * c3 / Decimal(10000)                       # % of calls that end as a paid client
+    per_call = overall / Decimal(100)                              # paid clients per call
+    mt = min_ticket()
+    per_client = Decimal(mt["per_month"])
+
+    def step(calls):
+        meets = calls * c1 / 100
+        trials = meets * c2 / 100
+        paid = trials * c3 / 100
+        return meets, trials, paid
+
+    per100 = [("Calls", Decimal(100)), ("Meet / demo", step(Decimal(100))[0]),
+              ("Trials", step(Decimal(100))[1]), ("Paid clients", step(Decimal(100))[2])]
+
+    target = Decimal(targets_for(user).get(TargetMetric.CALLS) or DEFAULT_TARGETS[TargetMetric.CALLS] or 40)
+    meets, trials, paid = step(target)
+    lo, hi = day_bounds(biz_today())
+    done = Activity.objects.filter(actor=user, kind=ActivityKind.CALL, occurred_at__gte=lo, occurred_at__lt=hi).count()
+    days = Decimal(cfg.working_days_month or 26)
+    weeks = []
+    for w in (1, 2, 3, 4):
+        clients = target * days * Decimal(w) / 4 * per_call
+        weeks.append({"week": w, "clients": clients, "clients_label": _nice(clients),
+                      "monthly": clients * per_client, "monthly_label": inr(clients * per_client)})
+    top = weeks[-1]["monthly"] or Decimal(1)
+    for w in weeks:
+        w["pct"] = max(8, int(w["monthly"] * 100 / top))
+
+    stages = []
+    counts = {r["status"]: r["n"] for r in Lead.objects.filter(
+        assigned_to=user, is_archived=False, status__in=OPEN_LEAD_STATUSES).values("status").annotate(n=Count("id"))}
+    total_open = sum(counts.values())
+    exp_paid = Decimal(0)
+    for st in STAGE_ORDER[:-1]:
+        n = counts.get(st, 0)
+        e = Decimal(n) * Decimal(cfg.probability(st)) / 100
+        exp_paid += e
+        stages.append({"stage": st, "label": LeadStatus(st).label, "n": n, "pct": cfg.probability(st),
+                       "expected": e, "expected_label": _nice(e), "value_label": inr(e * per_client)})
+    peak = max([r["n"] for r in stages] + [1])
+    for r in stages:
+        r["bar"] = max(4, int(r["n"] * 100 / peak)) if r["n"] else 0
+
+    rows = [("Calls", target), ("Meet / demo", meets), ("Trials", trials), ("Paid clients", paid)]
+    plan_rows = [{"label": l, "n": n, "n_label": _nice(n), "pct": max(7, int(n * 100 / target))}
+                 for l, n in rows]
+    return {
+        "min": mt, "overall_pct": _nice(overall), "c": (int(c1), int(c2), int(c3)),
+        "per100": [{"label": l, "n": _nice(n), "pct": max(7, int(n))} for l, n in per100],
+        "plan": {"calls": int(target), "rows": plan_rows, "meets": _nice(meets), "trials": _nice(trials),
+                 "paid": _nice(paid), "paid_n": paid, "monthly_label": inr(paid * per_client),
+                 "yearly_label": inr(paid * per_client * 12)},
+        "progress": {"done": done, "target": int(target), "pct": min(100, int(done * 100 / target)),
+                     "left": max(0, int(target) - done), "paid_so_far": _nice(Decimal(done) * per_call),
+                     "left_paid": _nice(Decimal(max(0, int(target) - done)) * per_call),
+                     "value_so_far_label": inr(Decimal(done) * per_call * per_client)},
+        "month": {"days": int(days), "weeks": weeks, "clients": weeks[-1]["clients_label"],
+                  "monthly_label": weeks[-1]["monthly_label"]},
+        "leads": {"stages": stages, "total": total_open, "expected": _nice(exp_paid),
+                  "value_label": inr(exp_paid * per_client),
+                  "untouched": Lead.objects.filter(assigned_to=user, is_archived=False, first_touch_at__isnull=True,
+                                                   status__in=OPEN_LEAD_STATUSES).count()},
+    }
