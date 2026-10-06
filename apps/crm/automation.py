@@ -7,9 +7,7 @@ Each job is also failure-isolated per row — one bad store must never sink the 
 
 import datetime as dt
 import logging
-from zoneinfo import ZoneInfo
 
-from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.mail import send_mail
 from django.db.models import Count, Exists, OuterRef, Q
@@ -18,6 +16,7 @@ from django.utils import timezone
 from apps.billing.models import Subscription, SubscriptionStatus
 
 from . import services as svc
+from .tz import biz_now, biz_today, to_biz
 from .models import (
     Activity,
     CrmSettings,
@@ -32,11 +31,7 @@ log = logging.getLogger(__name__)
 User = get_user_model()
 
 
-def business_now(now=None):
-    """Wall-clock "now" in the business's timezone (Django itself stays on UTC,
-    but "after 12:00" / "Monday morning" mean India time to the team)."""
-    tz = ZoneInfo(getattr(settings, "CELERY_TIMEZONE", None) or "Asia/Kolkata")
-    return (now or timezone.now()).astimezone(tz)
+business_now = biz_now   # same clock as everywhere else in the CRM (apps/crm/tz.py)
 
 
 # ── who owns a store's success ────────────────────────────────────────────
@@ -65,7 +60,7 @@ def create_auto_task(*, key, title, detail, assignee, project=None, due_on=None)
     if Task.objects.filter(auto_key=key).exists():
         return None
     return Task.objects.create(title=title[:200], detail=detail[:1000], assignee=assignee, project=project,
-                               due_on=due_on or timezone.localdate(), auto_key=key)
+                               due_on=due_on or biz_today(), auto_key=key)
 
 
 # ── 1) trial ending -> rescue call ────────────────────────────────────────
@@ -89,11 +84,11 @@ def trial_rescue():
             phone = _owner_phone(sub.project)
             when = "today" if days == 0 else f"in {days} day{'s' if days != 1 else ''}"
             if create_auto_task(
-                    key=f"trial:{sub.pk}:{sub.trial_end.date()}",
+                    key=f"trial:{sub.pk}:{to_biz(sub.trial_end).date()}",
                     title=f"Trial ends {when}: {sub.project.name} — call to convert",
                     detail=f"Their free trial ends {when}. Ask how it's going, fix anything blocking them, "
                            f"and help them pick a plan.{(' Phone: ' + phone) if phone else ''}",
-                    assignee=dgc, project=sub.project, due_on=timezone.localdate()):
+                    assignee=dgc, project=sub.project, due_on=biz_today()):
                 made += 1
         except Exception:  # noqa: BLE001
             log.exception("crm: trial rescue failed for subscription %s", sub.pk)
@@ -156,7 +151,7 @@ def recycle_leads():
         return 0
     cutoff = timezone.now() - dt.timedelta(days=cfg.recycle_days)
     recent = Activity.objects.filter(lead=OuterRef("pk"), occurred_at__gte=cutoff)
-    today = timezone.localdate()
+    today = biz_today()
     qs = (Lead.objects.filter(assigned_to__isnull=False, is_archived=False,
                               status__in=[LeadStatus.NEW, LeadStatus.CONTACTED], created_at__lt=cutoff)
           .annotate(has_recent=Exists(recent))

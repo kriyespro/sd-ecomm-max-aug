@@ -104,7 +104,7 @@
   </details>
   {% endif %}
   {% if nxt.notes %}<p class="mt-2 rounded-lg bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600">{{ nxt.notes }}</p>{% endif %}
-  {% if nxt_activity %}<p class="mt-1.5 text-[11px] text-slate-400">Last: {% for a in nxt_activity %}{{ a.get_kind_display() }}{% if a.outcome %} ({{ a.get_outcome_display() }}){% endif %} · {{ a.occurred_at.strftime("%d %b") }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
+  {% if nxt_activity %}<p class="mt-1.5 text-[11px] text-slate-400">Last: {% for a in nxt_activity %}{{ a.get_kind_display() }}{% if a.outcome %} ({{ a.get_outcome_display() }}){% endif %} · {{ (a.occurred_at|ist).strftime("%d %b") }}{% if not loop.last %}; {% endif %}{% endfor %}</p>{% endif %}
   <div class="mt-3 border-t border-pink-50 pt-3">
     {{ outcome_buttons(nxt, url('control:crm_my_day'), csrf_input, true) }}
   </div>

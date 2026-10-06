@@ -43,7 +43,7 @@
     {% for f in flags %}
     <div class="mt-1.5 border-t border-amber-50 pt-1.5 text-[12px]">
       <a href="{{ url('control:crm_person', kwargs={'pk': f.user.pk}) }}" class="font-medium text-slate-800 hover:text-pink-700">{{ f.user.get_full_name() or f.user.email }}</a>
-      <span class="text-slate-600">— {{ f.detail }}{% if f.when %} (around {{ f.when.strftime("%d %b %H:%M") }}){% endif %}</span>
+      <span class="text-slate-600">— {{ f.detail }}{% if f.when %} (around {{ (f.when|ist).strftime("%d %b %H:%M") }}){% endif %}</span>
     </div>
     {% else %}<p class="mt-2 text-sm text-slate-400">Nothing unusual in how calls were logged. 👌</p>{% endfor %}
     <p class="mt-2 text-[10px] text-slate-400">Calls are logged by hand, so these are only prompts for a friendly chat — not proof of anything.</p>

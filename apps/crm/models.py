@@ -11,6 +11,8 @@ from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
+from .tz import biz_today
+
 User = settings.AUTH_USER_MODEL
 
 
@@ -202,7 +204,7 @@ class Collection(TimeStampedModel):
     invoice = models.OneToOneField("billing.Invoice", null=True, blank=True,
                                    on_delete=models.SET_NULL, related_name="crm_collection")
     note = models.CharField(max_length=300, blank=True)
-    collected_on = models.DateField(default=timezone.localdate, db_index=True)
+    collected_on = models.DateField(default=biz_today, db_index=True)
 
     status = models.CharField(max_length=10, choices=CollectionStatus.choices,
                               default=CollectionStatus.UNVERIFIED, db_index=True)
@@ -252,7 +254,7 @@ class TrainingLog(TimeStampedModel):
     student_name = models.CharField(max_length=120, blank=True)
     student_phone = models.CharField(max_length=20, blank=True)
     topic = models.CharField(max_length=160, blank=True)
-    trained_on = models.DateField(default=timezone.localdate, db_index=True)
+    trained_on = models.DateField(default=biz_today, db_index=True)
     status = models.CharField(max_length=10, choices=TrainingStatus.choices,
                               default=TrainingStatus.PENDING, db_index=True)
     confirmed_at = models.DateTimeField(null=True, blank=True)
