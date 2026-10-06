@@ -417,6 +417,14 @@ class CrmSettings(TimeStampedModel):
     quiet_after_hour = models.PositiveSmallIntegerField(default=12, help_text="Local hour (0-23) the quiet check runs after.")
     weekly_digest = models.BooleanField(default=True, help_text="Email a team summary every Monday.")
     digest_emails = models.TextField(blank=True, help_text="Comma-separated. Blank = every platform admin's email.")
+    # -- the sales funnel every DGC is coached on (editable). Defaults follow
+    #    "100 calls -> 10 meetings/demos -> 6 trials -> 3 paid clients" = 3%.
+    conv_call_to_demo = models.PositiveSmallIntegerField(default=10, help_text="Of every 100 calls, how many become a meeting / demo (%).")
+    conv_demo_to_trial = models.PositiveSmallIntegerField(default=60, help_text="Of the meetings / demos, how many start a free trial (%).")
+    conv_trial_to_paid = models.PositiveSmallIntegerField(default=50, help_text="Of the trials, how many become paying clients with proper follow-up (%).")
+    min_ticket_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
+                                              help_text="Minimum monthly plan price used in DGC earnings estimates. Blank = the cheapest public plan.")
+    working_days_month = models.PositiveSmallIntegerField(default=26, help_text="Working days per month used in the monthly projection.")
     # bookkeeping so the hourly jobs send each alert/digest once
     last_quiet_on = models.DateField(null=True, blank=True, editable=False)
     last_digest_on = models.DateField(null=True, blank=True, editable=False)

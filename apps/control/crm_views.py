@@ -124,6 +124,7 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
         ctx.update(
             demos_today=demos_today, demos_overdue=demos_overdue,
             earnings=svc.earnings_preview(u), streak=svc.call_streak(u), best_window=svc.best_call_window(u),
+            possible=svc.possibility(u),
             onboarding=steps, onboarding_done=sum(1 for st in steps if st["done"]),
             wa_links=svc.whatsapp_links(queue.first(), u) if queue.first() else [],
             nxt=nxt, queue_left=queue.count(), skip_ids=skip, fresh=fresh,
@@ -1022,6 +1023,33 @@ class CrmSettingsForm(forms.ModelForm):
             self.fields[f"p_{key}"] = forms.IntegerField(
                 min_value=0, max_value=100, label=f"{label} %", initial=self.instance.probability(key))
         self.fields["quiet_after_hour"].widget.attrs.update(min=0, max=23)
+
+    def _pct(self, name):
+        v = self.cleaned_data[name]
+        if not 1 <= v <= 100:
+            raise forms.ValidationError("Use a percentage from 1 to 100.")
+        return v
+
+    def clean_conv_call_to_demo(self):
+        return self._pct("conv_call_to_demo")
+
+    def clean_conv_demo_to_trial(self):
+        return self._pct("conv_demo_to_trial")
+
+    def clean_conv_trial_to_paid(self):
+        return self._pct("conv_trial_to_paid")
+
+    def clean_working_days_month(self):
+        v = self.cleaned_data["working_days_month"]
+        if not 1 <= v <= 31:
+            raise forms.ValidationError("Use 1 to 31 days.")
+        return v
+
+    def clean_min_ticket_override(self):
+        v = self.cleaned_data["min_ticket_override"]
+        if v is not None and v < 0:
+            raise forms.ValidationError("Cannot be negative.")
+        return v or None
 
     def clean_quiet_after_hour(self):
         h = self.cleaned_data["quiet_after_hour"]
