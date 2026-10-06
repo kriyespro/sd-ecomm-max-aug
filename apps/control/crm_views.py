@@ -1167,20 +1167,28 @@ def _csv_response(filename, header, rows):
     return resp
 
 
-class InsightsView(PlatformAdminRequiredMixin, TemplateView):
+class InsightsView(PlatformStaffRequiredMixin, TemplateView):
+    """Admins see the whole team (plus ad spend and logging checks); a DGC sees
+    only their own leads — never other people's numbers."""
+
     template_name = "control/crm/insights.jinja"
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
+        admin = _admin(self.request.user)
+        me = None if admin else self.request.user
         key = self.request.GET.get("range", "30d")
         start, end, label = _insight_range(key)
         ctx.update(
-            range_key=key, range_label=label, ranges=_INSIGHT_RANGES, start=start, end=end,
-            sources=svc.source_roi(start, end), funnel=svc.funnel(), stuck=svc.stuck_leads(),
-            forecast=svc.forecast(), speed=svc.speed_to_lead(start, end), flags=svc.logging_flags(start, end),
-            known_sources=sorted(set(Lead.objects.exclude(source="").values_list("source", flat=True)
-                                     ) | set(SourceSpend.objects.values_list("source", flat=True))),
-            spends=SourceSpend.objects.all()[:8], this_month=biz_today().replace(day=1).isoformat()[:7])
+            is_admin=admin, range_key=key, range_label=label, ranges=_INSIGHT_RANGES, start=start, end=end,
+            sources=svc.source_roi(start, end, user=me), funnel=svc.funnel(user=me),
+            stuck=svc.stuck_leads(user=me), forecast=svc.forecast(user=me),
+            speed=svc.speed_to_lead(start, end, user=me),
+            flags=svc.logging_flags(start, end) if admin else [],
+            known_sources=(sorted(set(Lead.objects.exclude(source="").values_list("source", flat=True)
+                                      ) | set(SourceSpend.objects.values_list("source", flat=True))) if admin else []),
+            spends=SourceSpend.objects.all()[:8] if admin else [],
+            this_month=biz_today().replace(day=1).isoformat()[:7])
         return ctx
 
 

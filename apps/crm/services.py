@@ -981,12 +981,18 @@ def _month_floor(d):
     return d.replace(day=1)
 
 
-def source_roi(start, end):
+def _scoped(qs, user):
+    """Limit a Lead queryset to one DGC's own leads (None = the whole team)."""
+    return qs if user is None else qs.filter(assigned_to=user)
+
+
+def source_roi(start, end, user=None):
     """Per lead source for leads created in [start, end]: funnel counts, win rate,
-    and (if ad spend was entered) cost per lead / per won store."""
+    and (if ad spend was entered) cost per lead / per won store. With ``user`` it
+    covers only that DGC's leads and carries no spend (spend is a team figure)."""
     lo, hi = day_bounds(start, end)
     rows = {}
-    leads = Lead.objects.filter(created_at__gte=lo, created_at__lt=hi)
+    leads = _scoped(Lead.objects.filter(created_at__gte=lo, created_at__lt=hi), user)
     for r in leads.values("source").annotate(
             n=Count("id"),
             touched=Count("id", filter=Q(first_touch_at__isnull=False)),
@@ -996,7 +1002,8 @@ def source_roi(start, end):
         rows[label] = {"source": label, "leads": r["n"], "touched": r["touched"], "demos": r["demos"], "won": r["won"],
                        "spend": Decimal("0")}
     from .models import SourceSpend
-    spends = SourceSpend.objects.filter(month__gte=_month_floor(start), month__lte=end)
+    spends = SourceSpend.objects.none() if user is not None else \
+        SourceSpend.objects.filter(month__gte=_month_floor(start), month__lte=end)
     for sp in spends:
         row = rows.setdefault(sp.source, {"source": sp.source, "leads": 0, "touched": 0, "demos": 0, "won": 0,
                                           "spend": Decimal("0")})
@@ -1010,12 +1017,12 @@ def source_roi(start, end):
     return sorted(out, key=lambda r: (-r["leads"], r["source"]))
 
 
-def funnel():
+def funnel(user=None):
     """Open + won leads (lost excluded) as a cumulative funnel: how many got at
     least as far as each stage, the step conversion, and average days spent in
-    the stage they're sitting in now."""
+    the stage they're sitting in now. ``user`` = just that DGC's leads."""
     now = timezone.now()
-    qs = Lead.objects.filter(is_archived=False).exclude(status=LeadStatus.LOST)
+    qs = _scoped(Lead.objects.filter(is_archived=False).exclude(status=LeadStatus.LOST), user)
     by = {st: [] for st in STAGE_ORDER}
     for st, changed, created in qs.values_list("status", "stage_changed_at", "created_at"):
         if st in by:
@@ -1033,10 +1040,10 @@ def funnel():
     return rows
 
 
-def stuck_leads(days=7, limit=10):
+def stuck_leads(days=7, limit=10, user=None):
     """Open leads that have sat in the same stage for ``days``+ days (longest first)."""
     cut = timezone.now() - dt.timedelta(days=days)
-    qs = (Lead.objects.filter(is_archived=False, status__in=[s for s in OPEN_LEAD_STATUSES if s != LeadStatus.NEW])
+    qs = (_scoped(Lead.objects.filter(is_archived=False, status__in=[s for s in OPEN_LEAD_STATUSES if s != LeadStatus.NEW]), user)
           .filter(Q(stage_changed_at__lt=cut) | Q(stage_changed_at__isnull=True, created_at__lt=cut))
           .select_related("assigned_to").order_by("stage_changed_at", "created_at")[:limit])
     now = timezone.now()
@@ -1046,35 +1053,38 @@ def stuck_leads(days=7, limit=10):
     return out
 
 
-def forecast():
+def forecast(user=None):
     """Expected new paying stores / MRR from the open pipeline, using the
-    configured stage probabilities and average plan price."""
+    configured stage probabilities and average plan price. For one DGC it also
+    gives the commission that would earn them per month."""
     cfg = CrmSettings.load()
     rows, stores = [], Decimal("0")
-    counts = {r["status"]: r["n"] for r in Lead.objects.filter(
-        is_archived=False, status__in=OPEN_LEAD_STATUSES).values("status").annotate(n=Count("id"))}
+    counts = {r["status"]: r["n"] for r in _scoped(Lead.objects.filter(
+        is_archived=False, status__in=OPEN_LEAD_STATUSES), user).values("status").annotate(n=Count("id"))}
     for st in STAGE_ORDER[:-1]:
         n = counts.get(st, 0)
         p = cfg.probability(st)
         exp = Decimal(n) * Decimal(p) / Decimal(100)
         stores += exp
         rows.append({"label": LeadStatus(st).label, "n": n, "pct": p, "expected": exp.quantize(Decimal("0.1"))})
+    mrr = stores * cfg.avg_plan_price
     return {"rows": rows, "stores": stores.quantize(Decimal("0.1")),
-            "mrr": (stores * cfg.avg_plan_price).quantize(Decimal("1")), "price": cfg.avg_plan_price}
+            "mrr": mrr.quantize(Decimal("1")), "price": cfg.avg_plan_price,
+            "commission": (mrr * _monthly_commission_pct() / Decimal(100)).quantize(Decimal("1"))}
 
 
-def speed_to_lead(start, end):
+def speed_to_lead(start, end, user=None):
     """How fast assigned leads get their first touch (minutes), plus the leads
     that have been waiting more than an hour right now."""
     lo, hi = day_bounds(start, end)
     mins = []
-    for a, f in Lead.objects.filter(assigned_at__gte=lo, assigned_at__lt=hi, first_touch_at__isnull=False
-                                    ).values_list("assigned_at", "first_touch_at"):
+    for a, f in _scoped(Lead.objects.filter(assigned_at__gte=lo, assigned_at__lt=hi, first_touch_at__isnull=False),
+                        user).values_list("assigned_at", "first_touch_at"):
         mins.append(max(0.0, (f - a).total_seconds() / 60))
-    waiting = list(Lead.objects.filter(
+    waiting = list(_scoped(Lead.objects.filter(
         assigned_to__isnull=False, first_touch_at__isnull=True, is_archived=False,
         status__in=OPEN_LEAD_STATUSES, assigned_at__lt=timezone.now() - dt.timedelta(hours=1),
-        assigned_at__gte=timezone.now() - dt.timedelta(days=3)).select_related("assigned_to").order_by("assigned_at")[:10])
+        assigned_at__gte=timezone.now() - dt.timedelta(days=3)), user).select_related("assigned_to").order_by("assigned_at")[:10])
     now = timezone.now()
     for l in waiting:
         l.waiting_hours = int((now - l.assigned_at).total_seconds() // 3600)

@@ -3123,10 +3123,10 @@ class LoggingFlagTests(CrmBase):
 
 
 class InsightsPageTests(CrmBase):
-    def test_admin_only_and_renders_every_section(self):
+    def test_renders_every_section_for_the_admin_and_blocks_non_team(self):
         url = reverse("control:crm_insights")
-        self.login(self.a)
-        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.get(url).status_code, 403)          # a store owner is not on the platform team
         self.login(self.admin)
         Lead.objects.create(name="Hot", source="Signup · facebook", status="negotiating", assigned_to=self.a)
         html = self.client.get(url).content.decode()
@@ -3137,11 +3137,13 @@ class InsightsPageTests(CrmBase):
             self.assertEqual(self.client.get(url + f"?range={key}").status_code, 200)
         self.assertEqual(self.client.get(url + "?range=junk").status_code, 200)
 
-    def test_insights_tab_only_for_admins(self):
-        self.login(self.admin)
-        self.assertIn('href="%s"' % reverse("control:crm_insights"), self.client.get(reverse("control:crm_board")).content.decode())
-        self.login(self.a)
-        self.assertNotIn('href="%s"' % reverse("control:crm_insights"), self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+    def test_insights_tab_is_visible_to_dgcs_and_admins(self):
+        tab = 'href="%s"' % reverse("control:crm_insights")
+        for who in (self.admin, self.a):
+            self.login(who)
+            self.assertIn(tab, self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+        self.login(self.owner, store=True)
+        self.assertEqual(self.client.get(reverse("control:crm_leads") + "?view=list").status_code, 403)
 
     def test_flags_are_shown_with_a_gentle_disclaimer(self):
         start = timezone.now() - dt.timedelta(hours=2)
@@ -3541,3 +3543,128 @@ class SimpleNextUpCardTests(CrmBase):
         lead.refresh_from_db()
         self.assertEqual(lead.next_follow_up, biz_today() + dt.timedelta(days=7))
         self.assertEqual(Activity.objects.filter(lead=lead).latest("pk").note, "ask owner")
+
+
+class DgcInsightsTests(CrmBase):
+    """A DGC gets Insights for their OWN leads only; the team-wide parts stay admin-only."""
+
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("control:crm_insights")
+        # my data
+        for _ in range(3):
+            Lead.objects.create(name="MineLead", source="Signup · mine", assigned_to=self.a, status=LeadStatus.NEGOTIATING)
+        Lead.objects.create(name="MineStuck", source="Signup · mine", assigned_to=self.a, status=LeadStatus.INTERESTED)
+        Lead.objects.filter(name="MineStuck").update(stage_changed_at=timezone.now() - dt.timedelta(days=12))
+        # someone else's data + an unassigned lead, with marker strings that must never leak
+        for _ in range(4):
+            Lead.objects.create(name="BinaSecretLead", source="Cold call · bina-only", assigned_to=self.b, status=LeadStatus.NEGOTIATING)
+        Lead.objects.create(name="PoolSecretLead", source="Pool source", status=LeadStatus.NEW)
+        stuck = Lead.objects.create(name="BinaStuckLead", source="Cold call · bina-only", assigned_to=self.b, status=LeadStatus.DEMO_DONE)
+        Lead.objects.filter(pk=stuck.pk).update(stage_changed_at=timezone.now() - dt.timedelta(days=30))
+        SourceSpend.objects.create(source="Signup · mine", month=biz_today(), amount=Decimal("9999"))
+        self.login(self.a)
+
+    def _html(self, q=""):
+        return self.client.get(self.url + q).content.decode()
+
+    def test_dgc_can_open_every_range(self):
+        for q in ("", "?range=7d", "?range=30d", "?range=month", "?range=90d", "?range=junk"):
+            self.assertEqual(self.client.get(self.url + q).status_code, 200, q)
+        self.assertIn("your leads only", self._html())
+
+    def test_no_other_dgcs_data_appears_anywhere_on_the_page(self):
+        html = self._html()
+        for leak in ("BinaSecretLead", "BinaStuckLead", "PoolSecretLead", "bina-only", "Pool source", "bina", "9999"):
+            self.assertNotIn(leak, html, leak)
+        for mine in ("MineStuck", "Signup · mine"):
+            self.assertIn(mine, html)
+
+    def test_team_only_sections_are_absent(self):
+        html = self._html()
+        for admin_only in ("Worth a look", "＋ Ad spend", "Spend ₹", "₹ / lead", "₹ / won", "Statements"):
+            self.assertNotIn(admin_only, html, admin_only)
+        for url in (reverse("control:crm_spend"), reverse("control:crm_settings"), reverse("control:crm_statements")):
+            self.assertNotIn(url, html, url)
+
+    def test_flags_are_not_even_computed_for_a_dgc(self):
+        start = timezone.now() - dt.timedelta(hours=2)
+        Activity.objects.bulk_create([Activity(actor=self.b, kind="call", outcome="connected", occurred_at=start + dt.timedelta(seconds=i * 5)) for i in range(30)])
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="connected", occurred_at=start + dt.timedelta(seconds=i * 5)) for i in range(30)])
+        html = self._html()
+        self.assertNotIn("calls logged within", html)                  # not Bina's, and not even their own
+        self.login(self.admin)
+        self.assertIn("calls logged within", self._html())
+
+    def test_forecast_shows_the_dgcs_own_commission_not_company_revenue(self):
+        html = self._html()
+        self.assertIn("your commission / month", html)
+        self.assertNotIn("new monthly revenue", html)
+        self.login(self.admin)
+        admin_html = self._html()
+        self.assertIn("new monthly revenue", admin_html)
+        self.assertNotIn("your commission / month", admin_html)
+
+    def test_forecast_only_counts_my_leads_and_commission_follows_the_rate(self):
+        mine = svc.forecast(user=self.a)
+        team = svc.forecast()
+        cfg = CrmSettings.load()
+        want = (Decimal(3) * Decimal(cfg.probability("negotiating")) + Decimal(1) * Decimal(cfg.probability("interested"))) / 100
+        self.assertEqual(mine["stores"], want.quantize(Decimal("0.1")))
+        self.assertGreater(team["stores"], mine["stores"])
+        rate = svc._monthly_commission_pct() / Decimal(100)
+        self.assertEqual(mine["commission"], (want * cfg.avg_plan_price * rate).quantize(Decimal("1")))
+
+    def test_every_scoped_service_ignores_other_dgcs_and_unassigned_leads(self):
+        today = biz_today()
+        start = today - dt.timedelta(days=29)
+        mine = {r["source"]: r for r in svc.source_roi(start, today, user=self.a)}
+        self.assertEqual(set(mine), {"Signup · mine"})
+        self.assertEqual(mine["Signup · mine"]["leads"], 4)
+        self.assertEqual(mine["Signup · mine"]["spend"], 0)                 # spend is a team figure: never shown to a DGC
+        self.assertIsNone(mine["Signup · mine"]["cost_per_lead"])
+        team = {r["source"] for r in svc.source_roi(start, today)}
+        self.assertTrue({"Cold call · bina-only", "Pool source"} <= team)
+        f = {r["stage"]: r for r in svc.funnel(user=self.a)}
+        self.assertEqual((f["interested"]["here"], f["negotiating"]["here"], f["demo_done"]["here"], f["new"]["here"]), (1, 3, 0, 0))
+        self.assertEqual([l.name for l in svc.stuck_leads(user=self.a)], ["MineStuck"])
+        self.assertEqual({l.name for l in svc.stuck_leads()}, {"MineStuck", "BinaStuckLead"})
+
+    def test_speed_to_lead_is_only_my_own(self):
+        now = timezone.now()
+        for who, mins in ((self.a, 3), (self.b, 90)):
+            l = Lead.objects.create(name=f"s{who.pk}", assigned_to=who)
+            Lead.objects.filter(pk=l.pk).update(assigned_at=now - dt.timedelta(hours=2), first_touch_at=now - dt.timedelta(hours=2) + dt.timedelta(minutes=mins))
+        waiting = Lead.objects.create(name="MyWaiting", assigned_to=self.a)
+        Lead.objects.filter(pk=waiting.pk).update(assigned_at=now - dt.timedelta(hours=5))
+        other = Lead.objects.create(name="BinaWaiting", assigned_to=self.b)
+        Lead.objects.filter(pk=other.pk).update(assigned_at=now - dt.timedelta(hours=5))
+        today = biz_today()
+        mine = svc.speed_to_lead(today - dt.timedelta(days=1), today, user=self.a)
+        self.assertEqual((mine["n"], mine["median"]), (1, 3))
+        self.assertEqual([l.name for l in mine["waiting"]], ["MyWaiting"])
+        team = svc.speed_to_lead(today - dt.timedelta(days=1), today)
+        self.assertEqual(team["n"], 2)
+        html = self._html()
+        self.assertIn("MyWaiting", html)
+        self.assertIn("Waiting for your first call", html)
+        self.assertNotIn("BinaWaiting", html)
+
+    def test_dgc_cannot_use_the_admin_endpoints_behind_insights(self):
+        self.assertEqual(self.client.post(reverse("control:crm_spend"), {"source": "x", "month": "2026-10", "amount": "5"}).status_code, 403)
+        self.assertEqual(self.client.get(reverse("control:crm_statements")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("control:crm_settings")).status_code, 403)
+        self.assertFalse(SourceSpend.objects.exclude(source="Signup · mine").exists())
+
+    def test_admin_page_is_unchanged_and_sees_the_whole_team(self):
+        self.login(self.admin)
+        html = self._html()
+        for needle in ("Worth a look", "＋ Ad spend", "Spend ₹", "Statements", "bina-only", "Pool source", "Signup · mine", "BinaStuckLead"):
+            self.assertIn(needle, html, needle)
+
+    def test_a_dgc_with_no_leads_gets_a_friendly_empty_page_not_an_error(self):
+        self.login(self.b)
+        Lead.objects.filter(assigned_to=self.b).delete()
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("No leads created in this period.", r.content.decode())
