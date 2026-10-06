@@ -22,29 +22,102 @@
   {{ stat("Won today", extras.won_today) }}
 </div>
 
-{% set _todo = extras.overdue_follow_ups or extras.unverified or extras.pending_training or extras.open_requests or extras.training_requests %}
-{% if _todo %}
-<div class="flex flex-wrap items-center gap-1.5 rounded-xl bg-white px-3 py-2 shadow-sm ring-1 ring-pink-100 text-[12px]">
-  <span class="mr-1 text-[11px] font-semibold uppercase tracking-wide text-pink-700">Needs you</span>
-  {% if extras.open_requests %}<a href="{{ url('control:crm_work') }}" class="rounded-full bg-pink-600 px-2.5 py-1 font-medium text-white hover:bg-pink-700">🛠 Assign {{ extras.open_requests }} store-work request{{ 's' if extras.open_requests != 1 }}</a>{% endif %}
-  {% if extras.training_requests %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-pink-600 px-2.5 py-1 font-medium text-white hover:bg-pink-700">🙋 Assign a trainer to {{ extras.training_requests }} request{{ 's' if extras.training_requests != 1 }}</a>{% endif %}
-  {% if extras.unverified %}<a href="{{ url('control:crm_collections') }}?status=unverified" class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">💰 Verify {{ extras.unverified }} collection{{ 's' if extras.unverified != 1 }}</a>{% endif %}
-  {% if extras.pending_training %}<a href="{{ url('control:crm_training') }}" class="rounded-full bg-amber-50 px-2.5 py-1 text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">🎓 {{ extras.pending_training }} training awaiting confirmation</a>{% endif %}
-  {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?view=list&due=1" class="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ extras.overdue_follow_ups }} overdue follow-up{{ 's' if extras.overdue_follow_ups != 1 }}</a>{% endif %}
+{# ── pipeline: one row, each stage links to its leads ─────────────────── #}
+<div class="flex flex-wrap items-center gap-1 rounded-xl bg-white px-2.5 py-1.5 text-[12px] shadow-sm ring-1 ring-pink-100">
+  <span class="mr-1 text-[10px] font-semibold uppercase tracking-wide text-pink-400">Pipeline</span>
+  {% for v, lab, n in pipeline.stages %}
+  <a href="{{ url('control:crm_leads') }}?view=list&status={{ v }}" class="rounded-full px-2 py-0.5 text-slate-600 hover:bg-pink-50">{{ lab }} <b class="{{ 'text-pink-700' if n else 'text-slate-300' }}">{{ n }}</b></a>{% if not loop.last %}<span class="text-pink-200">›</span>{% endif %}
+  {% endfor %}
+  <span class="mx-1 text-pink-100">|</span>
+  <a href="{{ url('control:crm_leads') }}?view=list&status=won" class="rounded-full px-2 py-0.5 text-emerald-700 hover:bg-emerald-50">🎉 Won <b>{{ pipeline.won }}</b></a>
+  {% if pipeline.unassigned %}<a href="{{ url('control:crm_leads') }}?view=list&assignee=none" class="rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100">⚠ {{ pipeline.unassigned }} unassigned — share out</a>{% endif %}
+  {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?view=list&due=1" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ extras.overdue_follow_ups }} overdue</a>{% endif %}
+</div>
+
+{# ── inbox: everything waiting on you, actionable right here ──────────── #}
+{% macro panel_head(icon, title, section, href) %}
+<div class="mb-1 flex items-center justify-between">
+  <h3 class="text-[13px] font-semibold text-pink-900">{{ icon }} {{ title }} <span class="ml-1 rounded-full bg-pink-100 px-1.5 text-[11px] text-pink-800">{{ section.total }}</span></h3>
+  {% if section.more %}<a href="{{ href }}" class="text-[11px] text-pink-700 hover:underline">+{{ section.more }} more →</a>{% endif %}
+</div>
+{% endmacro %}
+{% set _here = request.get_full_path() %}
+{% set _any = inbox.collections.total or inbox.work.total or inbox.training_requests.total or inbox.trainings.total %}
+{% if _any %}
+<div class="grid gap-3 lg:grid-cols-2">
+  {% if inbox.collections.total %}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-amber-200">
+    {{ panel_head("💰", "Verify collections", inbox.collections, url('control:crm_collections') ~ '?status=unverified') }}
+    {% for c in inbox.collections.rows %}
+    <form method="post" action="{{ url('control:crm_collection_verify', kwargs={'pk': c.pk}) }}" class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-amber-50 py-1.5 text-[12px]">
+      {{ csrf_input }}<input type="hidden" name="next" value="{{ _here }}">
+      <span class="min-w-0"><b>{{ c.collected_by.get_full_name() or c.collected_by.email }}</b> · ₹{{ c.amount }} · {{ c.get_mode_display() }}
+        <span class="font-mono text-[11px] text-slate-500">{{ c.reference }}</span>{% if c.proof %} <a href="{{ c.proof.url }}" target="_blank" rel="noopener" class="text-pink-700 underline">proof</a>{% endif %}
+        {% if c.project %}<span class="text-slate-400">· {{ c.project.name }}</span>{% endif %}</span>
+      <span class="flex shrink-0 gap-1"><button name="action" value="verify" class="rounded-md bg-emerald-600 px-2.5 py-1 font-medium text-white hover:bg-emerald-700">✓ Verify</button>
+        <button name="action" value="reject" class="rounded-md bg-white px-2 py-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50">✕</button></span>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if inbox.work.total %}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-200">
+    {{ panel_head("🛠", "Assign store work", inbox.work, url('control:crm_work')) }}
+    {% for r in inbox.work.rows %}
+    <form method="post" action="{{ url('control:crm_work_assign', kwargs={'pk': r.pk}) }}" class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-pink-50 py-1.5 text-[12px]">
+      {{ csrf_input }}<input type="hidden" name="next" value="{{ _here }}">
+      <span class="min-w-0"><b>{{ r.project.name }}</b> · {{ r.get_kind_display() }}{% if r.requested_by %} <span class="text-slate-400">· from {{ r.requested_by.get_full_name() or r.requested_by.email }}</span>{% endif %}
+        {% if r.note %}<span class="block truncate text-[11px] text-slate-500">{{ r.note }}</span>{% endif %}</span>
+      <span class="flex shrink-0 gap-1"><select name="assignee" class="h-8 rounded-md border border-slate-200 py-0 pl-2 pr-7 text-[12px]">{% for p in dgcs %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
+        <button class="h-8 rounded-md bg-pink-600 px-3 font-medium text-white hover:bg-pink-700">Assign</button></span>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if inbox.training_requests.total %}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-200">
+    {{ panel_head("🙋", "Assign a trainer", inbox.training_requests, url('control:crm_training')) }}
+    {% for t in inbox.training_requests.rows %}
+    <form method="post" action="{{ url('control:crm_training_assign', kwargs={'pk': t.pk}) }}" class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-pink-50 py-1.5 text-[12px]">
+      {{ csrf_input }}<input type="hidden" name="next" value="{{ _here }}">
+      <span class="min-w-0"><b>{{ t.student_label }}</b> wants training{% if t.topic %} <span class="text-slate-500">· {{ t.topic }}</span>{% endif %}{% if not t.trainee_id %} <span class="rounded bg-slate-100 px-1 text-[10px] text-slate-500">no login</span>{% endif %}</span>
+      <span class="flex shrink-0 gap-1"><select name="trainer" class="h-8 rounded-md border border-slate-200 py-0 pl-2 pr-7 text-[12px]">{% for p in people %}{% if p.pk != t.trainee_id %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endif %}{% endfor %}</select>
+        <button class="h-8 rounded-md bg-pink-600 px-3 font-medium text-white hover:bg-pink-700">Assign</button></span>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if inbox.trainings.total %}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-amber-200">
+    {{ panel_head("🎓", "Confirm trainings", inbox.trainings, url('control:crm_training')) }}
+    {% for t in inbox.trainings.rows %}
+    <form method="post" action="{{ url('control:crm_training_respond', kwargs={'pk': t.pk}) }}" class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-amber-50 py-1.5 text-[12px]">
+      {{ csrf_input }}<input type="hidden" name="next" value="{{ _here }}">
+      <span class="min-w-0"><b>{{ t.student_label }}</b> trained by <b>{{ (t.trainer.get_full_name() or t.trainer.email) if t.trainer else '—' }}</b>{% if t.topic %} <span class="text-slate-500">· {{ t.topic }}</span>{% endif %}{% if not t.trainee_id %} <span class="rounded bg-slate-100 px-1 text-[10px] text-slate-500">no login</span>{% endif %}</span>
+      <span class="flex shrink-0 gap-1"><button name="action" value="confirm" class="rounded-md bg-emerald-600 px-2.5 py-1 font-medium text-white hover:bg-emerald-700">✓ Confirm</button>
+        <button name="action" value="reject" class="rounded-md bg-white px-2 py-1 text-rose-600 ring-1 ring-rose-200 hover:bg-rose-50">✕</button></span>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
 </div>
 {% endif %}
 
 <div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
   <table class="w-full text-left text-[13px]">
     <thead class="bg-pink-50/70 text-[11px] uppercase tracking-wide text-pink-500">
-      <tr><th class="px-3 py-2">Person</th><th class="px-3 py-2">Calls</th><th class="px-3 py-2">Spoke</th>
+      <tr><th class="px-3 py-2">Person</th><th class="hidden px-3 py-2 sm:table-cell">Active</th><th class="px-3 py-2">Calls</th><th class="px-3 py-2">Spoke</th>
         <th class="px-3 py-2">Demos</th><th class="px-3 py-2">Trained</th><th class="px-3 py-2">Trained others</th>
         <th class="px-3 py-2">Products</th><th class="px-3 py-2">Collection</th></tr>
     </thead>
     <tbody class="divide-y divide-pink-50">
       {% for r in rows %}
       <tr class="hover:bg-pink-50/40">
-        <td class="px-3 py-2 font-medium text-slate-800">{{ r.name }}</td>
+        <td class="px-3 py-2 font-medium"><a href="{{ url('control:crm_person', kwargs={'pk': r.user.pk}) }}" class="text-slate-800 hover:text-pink-700">{{ r.name }}</a></td>
+        <td class="hidden whitespace-nowrap px-3 py-2 text-[12px] sm:table-cell {{ 'text-slate-400' if not r.last_active else ('text-emerald-600' if r.last_active_label in ('just now',) or 'm ago' in r.last_active_label else 'text-slate-500') }}">{{ r.last_active_label }}</td>
         <td class="px-3 py-2">{{ r.calls }}{% if range_key == 'today' %}{{ bar(r.calls, r.targets.calls) }}{% endif %}</td>
         <td class="px-3 py-2 text-slate-500">{{ r.connected }}</td>
         <td class="px-3 py-2">{{ r.demos }}{% if range_key == 'today' %}{{ bar(r.demos, r.targets.demos) }}{% endif %}</td>
@@ -54,7 +127,7 @@
         <td class="px-3 py-2">₹{{ r.collection }}{% if r.collection_pending %} <span class="text-xs text-amber-600">(+₹{{ r.collection_pending }})</span>{% endif %}</td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="p-4">{{ empty("👥", "No activity in this period.", "Nobody has logged calls, demos or money yet. Use Show everyone to see the whole team.") }}</td></tr>
+      <tr><td colspan="9" class="p-4">{{ empty("👥", "No activity in this period.", "Nobody has logged calls, demos or money yet. Use Show everyone to see the whole team.") }}</td></tr>
       {% endfor %}
     </tbody>
   </table>

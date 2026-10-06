@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, Max, Q, Sum
 from django.utils import timezone
 
 from apps.core.models import AuditLog
@@ -410,6 +410,8 @@ def person_numbers(start, end=None, *, users=None):
     trained_others = {r["trainer"]: r["n"] for r in tr.values("trainer").annotate(n=Count("id"))}
 
     people = users if users is not None else crm_people()
+    last_seen = {r["actor"]: r["m"] for r in Activity.objects.filter(actor__in=people)
+                 .values("actor").annotate(m=Max("occurred_at"))}
     rows = []
     for u in people:
         d = a.get(u.pk, {})
@@ -417,6 +419,7 @@ def person_numbers(start, end=None, *, users=None):
         m = money.get(u.pk, {})
         r = {
             "user": u, "name": person_label(u),
+            "last_active": last_seen.get(u.pk), "last_active_label": time_ago(last_seen.get(u.pk)),
             "calls": g(ActivityKind.CALL), "connected": conn.get(u.pk, 0),
             "demos": g(ActivityKind.DEMO),
             "whatsapp": g(ActivityKind.WHATSAPP),
@@ -436,6 +439,21 @@ def person_numbers(start, end=None, *, users=None):
         totals["trained"] = tr.count()
     totals["connect_pct"] = round(100 * totals["connected"] / totals["calls"]) if totals["calls"] else 0
     return rows, totals
+
+
+def time_ago(when):
+    """'just now' / '12m ago' / '3h ago' / 'yesterday' / '5d ago' / 'never'."""
+    if when is None:
+        return "never"
+    secs = int((timezone.now() - when).total_seconds())
+    if secs < 90:
+        return "just now"
+    if secs < 3600:
+        return f"{secs // 60}m ago"
+    if secs < 86400:
+        return f"{secs // 3600}h ago"
+    days = secs // 86400
+    return "yesterday" if days == 1 else f"{days}d ago"
 
 
 def board_extras():
@@ -543,3 +561,74 @@ def board_columns(user, *, owner=None, q="", full=None, admin=False):
         })
     return {"columns": columns, "won": counts.get(LeadStatus.WON.value, 0),
             "lost": counts.get(LeadStatus.LOST.value, 0), "today": today}
+
+
+# ── super-admin power tools ────────────────────────────────────────────────
+
+def pipeline_counts():
+    """Team-wide open pipeline for the board's one-row funnel."""
+    qs = Lead.objects.filter(is_archived=False)
+    counts = {r["status"]: r["n"] for r in qs.values("status").annotate(n=Count("id"))}
+    return {
+        "stages": [(st.value, st.label, counts.get(st.value, 0)) for st in BOARD_STAGES],
+        "won": counts.get(LeadStatus.WON.value, 0),
+        "lost": counts.get(LeadStatus.LOST.value, 0),
+        "unassigned": qs.filter(assigned_to__isnull=True, status__in=OPEN_LEAD_STATUSES).count(),
+    }
+
+
+def distribute_leads(leads, assignees, *, actor):
+    """Spread ``leads`` over ``assignees`` so everyone ends up with a similar
+    number of open leads: each lead goes to whoever currently holds the fewest
+    (ties by id). Returns {user_id: how many they received}."""
+    assignees = list(assignees)
+    leads = list(leads)
+    if not assignees or not leads:
+        return {}
+    load = {u.pk: 0 for u in assignees}
+    # The leads being handed out don't count as anyone's existing workload —
+    # otherwise re-spreading leads someone already holds would starve them.
+    held = (Lead.objects.filter(assigned_to__in=assignees, is_archived=False,
+                                status__in=OPEN_LEAD_STATUSES)
+            .exclude(pk__in=[l.pk for l in leads])
+            .values("assigned_to").annotate(n=Count("id")))
+    for r in held:
+        load[r["assigned_to"]] = r["n"]
+    got = {u.pk: 0 for u in assignees}
+    now = timezone.now()
+    for lead in leads:
+        target = min(assignees, key=lambda u: (load[u.pk], u.pk))
+        lead.assigned_to_id, lead.assigned_by_id, lead.updated_at = target.pk, actor.pk, now
+        load[target.pk] += 1
+        got[target.pk] += 1
+    Lead.objects.bulk_update(leads, ["assigned_to", "assigned_by", "updated_at"])
+    record_audit(actor=actor, action=AuditLog.Action.UPDATE,
+                 changes={"crm_leads_distributed": len(leads), "to": sorted(got)})
+    return got
+
+
+def transfer_leads(from_user, to_users, *, actor):
+    """Hand every open, un-archived lead of ``from_user`` to ``to_users`` (spread
+    evenly). For when a DGC leaves or goes quiet."""
+    to_users = [u for u in to_users if u.pk != from_user.pk]
+    leads = Lead.objects.filter(assigned_to=from_user, is_archived=False, status__in=OPEN_LEAD_STATUSES)
+    return distribute_leads(leads, to_users, actor=actor)
+
+
+def admin_inbox(limit=5):
+    """Everything waiting on a platform admin, with enough detail to act on it
+    from the board. Each section: {"rows": [...first ``limit``], "total": n}."""
+    def section(qs):
+        total = qs.count()
+        return {"rows": list(qs[:limit]), "total": total, "more": max(0, total - limit)}
+
+    return {
+        "collections": section(Collection.objects.filter(status=CollectionStatus.UNVERIFIED)
+                               .select_related("collected_by", "project").order_by("created_at")),
+        "work": section(StoreWorkRequest.objects.filter(status=WorkRequestStatus.OPEN)
+                        .select_related("project", "requested_by").order_by("created_at")),
+        "training_requests": section(TrainingLog.objects.filter(status=TrainingStatus.REQUESTED)
+                                     .select_related("trainee", "initiated_by").order_by("created_at")),
+        "trainings": section(TrainingLog.objects.filter(status=TrainingStatus.PENDING)
+                             .select_related("trainee", "trainer", "initiated_by").order_by("created_at")),
+    }

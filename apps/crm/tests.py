@@ -1201,7 +1201,7 @@ class TrainingFlowTests(CrmBase):
         self.assertEqual(svc.person_numbers(timezone.localdate())[1]["trained"], 1)
         self.assertEqual(svc.board_extras()["training_requests"], 1)
         self.login(self.admin)
-        self.assertContains(self.client.get(reverse("control:crm_board")), "Assign a trainer to 1 request")
+        self.assertContains(self.client.get(reverse("control:crm_board")), "Assign a trainer")
 
     def test_my_day_shows_confirm_and_waiting_cards(self):
         TrainingLog.objects.create(trainee=self.b, trainer=self.a, status=TrainingStatus.PENDING, initiated_by=self.a)
@@ -1409,15 +1409,16 @@ class BoardCompactTests(CrmBase):
         self.assertIn("py-2", table)
         self.assertIn("text-[13px]", table)
 
-    def test_needs_you_is_a_single_slim_row_only_when_needed(self):
-        self.assertNotIn("Needs you", self.html)
+    def test_inbox_only_appears_when_something_waits_and_stays_compact(self):
+        self.assertNotIn("Assign store work", self.html)
+        self.assertNotIn("Verify collections", self.html)
         StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.a)
         TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b)
         html = self.client.get(reverse("control:crm_board")).content.decode()
-        row = html.split("Needs you")[1].split("</div>")[0]
-        self.assertIn("Assign 1 store-work request", row)
-        self.assertIn("Assign a trainer to 1 request", row)
-        self.assertNotIn("<h3", html.split("Needs you")[0][-300:])    # no separate heading card
+        self.assertIn("Assign store work", html)
+        self.assertIn("Assign a trainer", html)
+        panel = html.split("Assign store work")[1].split("</form>")[0]
+        self.assertIn("h-8", panel)                       # compact controls, not tall inputs
 
     def test_all_ranges_and_idle_toggle_still_work(self):
         for q in ("?range=yesterday", "?range=7d", "?range=month&active=0", "?active=1"):
@@ -1583,3 +1584,303 @@ class MobileEasyTests(CrmBase):
         html = self._get("crm_lead", pk=self.lead.pk)
         self.assertIn("hidden gap-1 overflow-x-auto", html)
         self.assertIn("sm:flex", html)
+
+
+class AdminInboxTests(CrmBase):
+    """The super admin clears approvals from the board itself — no page hopping."""
+
+    def setUp(self):
+        super().setUp()
+        self.board = reverse("control:crm_board")
+        self.login(self.admin)
+
+    def _html(self):
+        return self.client.get(self.board).content.decode()
+
+    def test_empty_inbox_shows_nothing(self):
+        html = self._html()
+        for t in ("Verify collections", "Assign store work", "Assign a trainer", "Confirm trainings"):
+            self.assertNotIn(t, html)
+
+    def test_verify_collection_from_board_returns_to_board(self):
+        c = Collection.objects.create(collected_by=self.a, amount=Decimal("2999"), mode=CollectionMode.UPI, reference="UTR9")
+        html = self._html()
+        self.assertIn("Verify collections", html)
+        self.assertIn("UTR9", html)
+        self.assertIn(reverse("control:crm_collection_verify", kwargs={"pk": c.pk}), html)
+        r = self.client.post(reverse("control:crm_collection_verify", kwargs={"pk": c.pk}),
+                             {"action": "verify", "next": self.board})
+        self.assertRedirects(r, self.board, fetch_redirect_response=False)
+        c.refresh_from_db()
+        self.assertEqual(c.status, CollectionStatus.VERIFIED)
+        self.assertNotIn("Verify collections", self._html())          # cleared from the inbox
+
+    def test_reject_collection_from_board(self):
+        c = Collection.objects.create(collected_by=self.a, amount=Decimal("10"), mode=CollectionMode.CASH, reference="R")
+        self.client.post(reverse("control:crm_collection_verify", kwargs={"pk": c.pk}), {"action": "reject", "next": self.board})
+        c.refresh_from_db()
+        self.assertEqual(c.status, CollectionStatus.REJECTED)
+
+    def test_assign_store_work_from_board(self):
+        wr = StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.a, note="40 products")
+        html = self._html()
+        self.assertIn("40 products", html)
+        r = self.client.post(reverse("control:crm_work_assign", kwargs={"pk": wr.pk}), {"assignee": self.b.pk, "next": self.board})
+        self.assertRedirects(r, self.board, fetch_redirect_response=False)
+        wr.refresh_from_db()
+        self.assertEqual((wr.status, wr.assigned_to), (WorkRequestStatus.ASSIGNED, self.b))
+
+    def test_assign_trainer_and_confirm_training_from_board(self):
+        req = TrainingLog.objects.create(trainee=self.b, status=TrainingStatus.REQUESTED, initiated_by=self.b, topic="Demo")
+        pend = TrainingLog.objects.create(trainer=self.a, student_name="Walk In", status=TrainingStatus.PENDING, initiated_by=self.a)
+        html = self._html()
+        self.assertIn("Assign a trainer", html)
+        self.assertIn("Confirm trainings", html)
+        self.assertIn("no login", html)
+        r = self.client.post(reverse("control:crm_training_assign", kwargs={"pk": req.pk}), {"trainer": self.a.pk, "next": self.board})
+        self.assertRedirects(r, self.board, fetch_redirect_response=False)
+        r = self.client.post(reverse("control:crm_training_respond", kwargs={"pk": pend.pk}), {"action": "confirm", "next": self.board})
+        self.assertRedirects(r, self.board, fetch_redirect_response=False)
+        req.refresh_from_db(); pend.refresh_from_db()
+        self.assertEqual((req.status, req.trainer), (TrainingStatus.ASSIGNED, self.a))
+        self.assertEqual(pend.status, TrainingStatus.CONFIRMED)
+
+    def test_inbox_caps_rows_and_shows_true_total(self):
+        for i in range(8):
+            Collection.objects.create(collected_by=self.a, amount=Decimal("1"), mode=CollectionMode.CASH, reference=f"REF{i}")
+        html = self._html()
+        panel = html.split("Verify collections")[1].split("Assign store work")[0] if "Assign store work" in html else html.split("Verify collections")[1]
+        self.assertEqual(sum(f"REF{i}" in panel for i in range(8)), 5)
+        self.assertIn("+3 more", html)
+
+    def test_next_redirect_is_guarded(self):
+        wr = StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.a)
+        r = self.client.post(reverse("control:crm_work_assign", kwargs={"pk": wr.pk}), {"assignee": self.b.pk, "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+
+    def test_dgc_never_sees_the_inbox_or_can_use_it(self):
+        Collection.objects.create(collected_by=self.a, amount=Decimal("5"), mode=CollectionMode.CASH, reference="X")
+        self.login(self.b)
+        self.assertEqual(self.client.get(self.board).status_code, 403)
+        self.assertEqual(self.client.post(reverse("control:crm_work_assign", kwargs={"pk": 1}), {"assignee": self.b.pk}).status_code, 403)
+
+
+class PipelineAndPeopleTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.login(self.admin)
+
+    def test_pipeline_strip_counts_and_links(self):
+        Lead.objects.create(name="a", assigned_to=self.a, status=LeadStatus.NEW)
+        Lead.objects.create(name="b", assigned_to=self.a, status=LeadStatus.INTERESTED)
+        Lead.objects.create(name="c", assigned_to=self.b, status=LeadStatus.WON)
+        Lead.objects.create(name="d", status=LeadStatus.NEW)                       # unassigned
+        Lead.objects.create(name="e", assigned_to=self.a, is_archived=True)        # archived: not counted
+        p = svc.pipeline_counts()
+        self.assertEqual({k: n for k, _, n in p["stages"]}, {"new": 2, "contacted": 0, "interested": 1,
+                                                              "demo_booked": 0, "demo_done": 0, "negotiating": 0})
+        self.assertEqual((p["won"], p["unassigned"]), (1, 1))
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        self.assertIn("view=list&status=interested", html)
+        self.assertIn("1 unassigned", html)
+        self.assertIn("view=list&assignee=none", html)
+
+    def test_last_active_column_and_label(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        rows, _ = svc.person_numbers(timezone.localdate())
+        by = {r["user"].pk: r for r in rows}
+        self.assertEqual(by[self.a.pk]["last_active_label"], "just now")
+        self.assertEqual(by[self.b.pk]["last_active_label"], "never")
+        html = self.client.get(reverse("control:crm_board") + "?active=0").content.decode()
+        self.assertIn("just now", html)
+        self.assertIn("never", html)
+
+    def test_time_ago_buckets(self):
+        n = timezone.now()
+        for delta, want in ((dt.timedelta(seconds=30), "just now"), (dt.timedelta(minutes=12), "12m ago"),
+                            (dt.timedelta(hours=3, minutes=5), "3h ago"), (dt.timedelta(days=1, hours=2), "yesterday"),
+                            (dt.timedelta(days=5), "5d ago")):
+            self.assertEqual(svc.time_ago(n - delta), want)
+        self.assertEqual(svc.time_ago(None), "never")
+
+    def test_person_page_content_and_links(self):
+        Lead.objects.create(name="L1", assigned_to=self.a, status=LeadStatus.INTERESTED,
+                            next_follow_up=timezone.localdate() - dt.timedelta(days=1))
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        html = self.client.get(reverse("control:crm_person", kwargs={"pk": self.a.pk})).content.decode()
+        self.assertIn("anil", html)
+        self.assertIn("last active", html)
+        self.assertIn("Recent activity", html)
+        self.assertIn(f"assignee={self.a.pk}&status=interested", html)
+        self.assertIn("1 overdue", html)
+        self.assertIn("Transfer their open leads", html)
+        self.assertIn(reverse("control:crm_task_create"), html)
+        for q in ("?range=yesterday", "?range=7d", "?range=month"):
+            self.assertEqual(self.client.get(reverse("control:crm_person", kwargs={"pk": self.a.pk}) + q).status_code, 200)
+
+    def test_board_names_link_to_person_page(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        self.assertIn(reverse("control:crm_person", kwargs={"pk": self.a.pk}), html)
+
+    def test_person_page_is_admin_only_and_404s_for_non_team(self):
+        url = reverse("control:crm_person", kwargs={"pk": self.a.pk})
+        self.login(self.b)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.admin)
+        self.assertEqual(self.client.get(reverse("control:crm_person", kwargs={"pk": self.owner.pk})).status_code, 404)
+
+    def test_task_from_person_page_returns_there(self):
+        url = reverse("control:crm_person", kwargs={"pk": self.a.pk})
+        r = self.client.post(reverse("control:crm_task_create"), {"title": "Call 20", "assignee": self.a.pk, "next": url})
+        self.assertRedirects(r, url, fetch_redirect_response=False)
+        self.assertEqual(Task.objects.get().assignee, self.a)
+
+
+class DistributeTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.c = _dgc("chetan")
+        self.login(self.admin)
+
+    def _mk(self, n, **kw):
+        return Lead.objects.bulk_create([Lead(name=f"n{i}", **kw) for i in range(n)])
+
+    def test_even_split_balances_against_existing_load(self):
+        self._mk(6, assigned_to=self.a)                       # anil already holds 6 open leads
+        new = [Lead.objects.create(name=f"x{i}") for i in range(6)]
+        got = svc.distribute_leads(new, [self.a, self.b, self.c], actor=self.admin)
+        self.assertEqual(sum(got.values()), 6)
+        self.assertEqual(got[self.a.pk], 0)                   # the busiest gets none
+        self.assertEqual((got[self.b.pk], got[self.c.pk]), (3, 3))
+        self.assertTrue(all(Lead.objects.get(pk=l.pk).assigned_by == self.admin for l in new))
+
+    def test_even_split_from_scratch_is_within_one(self):
+        new = [Lead.objects.create(name=f"x{i}") for i in range(10)]
+        got = svc.distribute_leads(new, [self.a, self.b, self.c], actor=self.admin)
+        self.assertEqual(sorted(got.values()), [3, 3, 4])
+
+    def test_archived_and_closed_leads_do_not_count_as_load(self):
+        self._mk(5, assigned_to=self.a, is_archived=True)
+        self._mk(5, assigned_to=self.a, status=LeadStatus.LOST)
+        new = [Lead.objects.create(name="x")]
+        got = svc.distribute_leads(new, [self.a, self.b], actor=self.admin)
+        self.assertEqual(got[self.a.pk], 1)                   # tie at 0 -> lowest id (anil)
+
+    def test_no_assignees_or_leads_is_a_noop(self):
+        self.assertEqual(svc.distribute_leads([], [self.a], actor=self.admin), {})
+        self.assertEqual(svc.distribute_leads([Lead.objects.create(name="x")], [], actor=self.admin), {})
+
+    def test_panel_shares_all_unassigned_among_chosen_dgcs(self):
+        self._mk(5)
+        self._mk(2, assigned_to=self.a, status=LeadStatus.WON)   # untouched
+        html = self.client.get(reverse("control:crm_leads") + "?view=list").content.decode()
+        self.assertIn("5 unassigned", html)
+        self.assertIn("Share 5 evenly", html)
+        r = self.client.post(reverse("control:crm_lead_distribute"),
+                             {"assignees": [self.a.pk, self.b.pk], "next": reverse("control:crm_leads") + "?view=list"}, follow=True)
+        self.assertFalse(Lead.objects.filter(assigned_to__isnull=True).exists())
+        self.assertEqual(Lead.objects.filter(assigned_to=self.c).count(), 0)         # not chosen
+        self.assertEqual(sorted([Lead.objects.filter(assigned_to=u, status=LeadStatus.NEW).count() for u in (self.a, self.b)]), [2, 3])
+        self.assertIn("Shared 5 lead(s) evenly", r.content.decode())
+
+    def test_panel_hidden_when_nothing_unassigned(self):
+        self._mk(2, assigned_to=self.a)
+        self.assertNotIn("unassigned", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode().split("<table")[0])
+
+    def test_spread_ticked_leads_over_all_dgcs(self):
+        leads = [Lead.objects.create(name=f"t{i}", assigned_to=self.a) for i in range(6)]
+        self.client.post(reverse("control:crm_lead_distribute"), {"ids": [l.pk for l in leads]})
+        counts = sorted(Lead.objects.filter(pk__in=[l.pk for l in leads], assigned_to=u).count() for u in (self.a, self.b, self.c))
+        self.assertEqual(counts, [2, 2, 2])
+
+    def test_distribute_ignores_archived_and_caps_ids(self):
+        arch = Lead.objects.create(name="old", is_archived=True)
+        self.client.post(reverse("control:crm_lead_distribute"), {"ids": [arch.pk]})
+        arch.refresh_from_db()
+        self.assertIsNone(arch.assigned_to)
+        self.client.post(reverse("control:crm_lead_distribute"), {"ids": list(range(1, svc.BULK_ARCHIVE_MAX + 2))})
+        self.assertFalse(Lead.objects.filter(assigned_to__isnull=False).exists())
+
+    def test_distribute_with_unknown_assignees_refuses(self):
+        self._mk(2)
+        self.client.post(reverse("control:crm_lead_distribute"), {"assignees": [999999]})
+        self.assertEqual(Lead.objects.filter(assigned_to__isnull=True).count(), 2)
+
+    def test_distribute_is_admin_only_and_csrf_guarded(self):
+        from django.test import Client
+        self._mk(2)
+        url = reverse("control:crm_lead_distribute")
+        self.login(self.a)
+        self.assertEqual(self.client.post(url, {}).status_code, 403)
+        c = Client(enforce_csrf_checks=True)
+        c.force_login(self.admin)
+        self.assertEqual(c.post(url, {}).status_code, 403)
+        self.assertEqual(Lead.objects.filter(assigned_to__isnull=True).count(), 2)
+
+    def test_bulk_bar_shows_spread_for_admin_only(self):
+        Lead.objects.create(name="x", assigned_to=self.a)
+        self.assertIn("Spread evenly", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+        self.login(self.a)
+        self.assertNotIn("Spread evenly", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+
+    def test_import_can_split_evenly_among_all_dgcs(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        rows = "name,phone\n" + "\n".join(f"P{i},90000000{i:02d}" for i in range(9)) + "\n"
+        r = self.client.post(reverse("control:crm_lead_import"),
+                             {"file": SimpleUploadedFile("l.csv", rows.encode(), content_type="text/csv"), "spread": "1"}, follow=True)
+        counts = [Lead.objects.filter(assigned_to=u).count() for u in (self.a, self.b, self.c)]
+        self.assertEqual(counts, [3, 3, 3])
+        self.assertIn("Split evenly across 3 DGC(s)", r.content.decode())
+
+    def test_import_spread_is_ignored_for_dgcs(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_import"),
+                         {"file": SimpleUploadedFile("l.csv", b"name,phone\nQ,9111100000\n", content_type="text/csv"), "spread": "1"})
+        self.assertEqual(Lead.objects.get(name="Q").assigned_to, self.a)
+
+    def test_import_box_offers_split_only_to_admin(self):
+        self.assertIn("Split evenly among all DGCs", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+        self.login(self.a)
+        self.assertNotIn("Split evenly among all DGCs", self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+
+
+class TransferLeadsTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.c = _dgc("chetan")
+        self.login(self.admin)
+        self.url = reverse("control:crm_person_transfer", kwargs={"pk": self.a.pk})
+        self.mine = [Lead.objects.create(name=f"m{i}", assigned_to=self.a) for i in range(6)]
+        self.keep_won = Lead.objects.create(name="won", assigned_to=self.a, status=LeadStatus.WON)
+        self.keep_arch = Lead.objects.create(name="arch", assigned_to=self.a, is_archived=True)
+
+    def test_transfer_to_one_person_moves_only_open_leads(self):
+        self.client.post(self.url, {"to": self.b.pk})
+        self.assertEqual(Lead.objects.filter(assigned_to=self.b).count(), 6)
+        for l in (self.keep_won, self.keep_arch):
+            l.refresh_from_db()
+            self.assertEqual(l.assigned_to, self.a)                 # history/closed stays put
+
+    def test_spread_goes_to_others_not_back_to_source(self):
+        self.client.post(self.url, {"to": "spread"})
+        self.assertEqual(Lead.objects.filter(assigned_to=self.a, status=LeadStatus.NEW, is_archived=False).count(), 0)
+        self.assertEqual((Lead.objects.filter(assigned_to=self.b).count(), Lead.objects.filter(assigned_to=self.c).count()), (3, 3))
+
+    def test_refuses_self_unknown_and_missing_target(self):
+        for to in (str(self.a.pk), "", "999999", "nonsense"):
+            self.client.post(self.url, {"to": to})
+        self.assertEqual(Lead.objects.filter(assigned_to=self.a, is_archived=False, status=LeadStatus.NEW).count(), 6)
+
+    def test_transfer_is_admin_only_and_person_must_be_team(self):
+        self.login(self.b)
+        self.assertEqual(self.client.post(self.url, {"to": self.c.pk}).status_code, 403)
+        self.login(self.admin)
+        self.assertEqual(self.client.post(reverse("control:crm_person_transfer", kwargs={"pk": self.owner.pk}), {"to": "spread"}).status_code, 404)
+
+    def test_transfer_writes_audit_and_reports_count(self):
+        from apps.core.models import AuditLog
+        r = self.client.post(self.url, {"to": self.b.pk}, follow=True)
+        self.assertIn("Moved 6 open lead(s)", r.content.decode())
+        self.assertTrue(AuditLog.objects.filter(actor=self.admin, changes__crm_leads_distributed=6).exists())
