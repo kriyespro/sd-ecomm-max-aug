@@ -1016,6 +1016,21 @@ class CrmSettingsView(PlatformAdminRequiredMixin, TemplateView):
         return self.render_to_response(self.get_context_data(form=form))
 
 
+class CrmRunNowView(PlatformAdminRequiredMixin, View):
+    """Run every automatic job once, right now, and say what each did."""
+
+    def post(self, request):
+        from apps.crm import automation
+
+        res = automation.run_all()
+        messages.success(
+            request, f"Done — {res['trial_rescue']} trial task(s), {res['store_health']} store-health task(s), "
+                     f"{res['recycled']} lead(s) returned to the pool"
+                     f"{', quiet alert sent' if res['quiet_alert'] else ''}"
+                     f"{', weekly digest sent' if res['weekly_digest'] else ''}.")
+        return redirect("control:crm_settings")
+
+
 # ───────────────────────────── targets ─────────────────────────────
 
 class TargetsView(PlatformAdminRequiredMixin, TemplateView):

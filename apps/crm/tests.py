@@ -2290,3 +2290,293 @@ class SettingsAndProfileTests(CrmBase):
     def test_board_links_to_settings_for_admin(self):
         self.login(self.admin)
         self.assertIn(reverse("control:crm_settings"), self.client.get(reverse("control:crm_board")).content.decode())
+
+
+from apps.crm import automation as auto  # noqa: E402
+from apps.catalog.models import Product  # noqa: E402
+from apps.orders.models import Order  # noqa: E402
+from apps.billing.models import SubscriptionStatus  # noqa: E402
+
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+
+
+class AutomationBase(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.cfg = CrmSettings.load()
+        mail.outbox.clear()
+
+    def mkstore(self, name="Ravi Jewels", *, days_old=0, trial_in=None, status=SubscriptionStatus.TRIALING,
+              manager=None, referred_by=None):
+        p = Project.objects.create(name=name, status="active")
+        if days_old:
+            Project.objects.filter(pk=p.pk).update(created_at=timezone.now() - dt.timedelta(days=days_old))
+        sub = billing.ensure_subscription(Project.objects.get(pk=p.pk))
+        sub.status, sub.manager, sub.referred_by = status, manager, referred_by
+        if trial_in is not None:
+            sub.trial_end = timezone.now() + trial_in
+        sub.save()
+        return Project.objects.get(pk=p.pk)
+
+
+class ResponsibleDgcTests(AutomationBase):
+    def test_priority_lead_owner_then_manager_then_referrer(self):
+        p = self.mkstore(manager=self.b, referred_by=self.owner)
+        self.assertEqual(auto.responsible_dgc(p), self.b)                       # manager
+        Lead.objects.create(name="L", converted_project=p, assigned_to=self.a)
+        self.assertEqual(auto.responsible_dgc(p), self.a)                       # the lead's owner beats the manager
+        p2 = self.mkstore("Other", referred_by=self.a)
+        self.assertEqual(auto.responsible_dgc(p2), self.a)                      # referrer last
+        self.assertIsNone(auto.responsible_dgc(self.mkstore("Orphan")))
+
+    def test_inactive_dgc_is_skipped(self):
+        p = self.mkstore(manager=self.b, referred_by=self.a)
+        User.objects.filter(pk=self.b.pk).update(is_active=False)
+        self.assertEqual(auto.responsible_dgc(Project.objects.get(pk=p.pk)), self.a)
+
+
+class TrialRescueTests(AutomationBase):
+    def test_creates_one_task_for_the_responsible_dgc_with_context(self):
+        p = self.mkstore("Ravi Jewels", trial_in=dt.timedelta(days=2, hours=1), manager=self.a)
+        Membership.objects.create(project=p, user=self.owner, role=StoreRole.OWNER)
+        Profile.objects.filter(user=self.owner).update(phone="9811122233")
+        self.assertEqual(auto.trial_rescue(), 1)
+        t = Task.objects.get()
+        self.assertEqual((t.assignee, t.project), (self.a, p))
+        self.assertIn("Ravi Jewels", t.title)
+        self.assertIn("in 2 days", t.title)
+        self.assertIn("9811122233", t.detail)
+        self.assertTrue(t.auto_key.startswith("trial:"))
+        self.assertEqual(t.due_on, timezone.localdate())
+
+    def test_idempotent_across_runs_even_if_task_is_done(self):
+        self.mkstore(trial_in=dt.timedelta(days=1), manager=self.a)
+        auto.trial_rescue()
+        svc.mark_task_done(Task.objects.get())
+        self.assertEqual(auto.trial_rescue(), 0)
+        self.assertEqual(Task.objects.count(), 1)
+
+    def test_only_trials_inside_the_window_that_are_not_comped(self):
+        self.mkstore("Far", trial_in=dt.timedelta(days=10), manager=self.a)
+        self.mkstore("Active", trial_in=dt.timedelta(days=1), manager=self.a, status=SubscriptionStatus.ACTIVE)
+        comp = self.mkstore("Comp", trial_in=dt.timedelta(days=1), manager=self.a)
+        Subscription = type(comp.subscription)
+        Subscription.objects.filter(project=comp).update(is_comp=True)
+        past = self.mkstore("Past", trial_in=-dt.timedelta(days=1), manager=self.a)
+        self.assertEqual(auto.trial_rescue(), 0)
+        self.assertFalse(Task.objects.exists())
+
+    def test_no_responsible_dgc_means_no_task(self):
+        self.mkstore(trial_in=dt.timedelta(days=1))
+        self.assertEqual(auto.trial_rescue(), 0)
+
+    def test_disabled_when_days_is_zero_and_window_is_configurable(self):
+        self.mkstore(trial_in=dt.timedelta(days=5), manager=self.a)
+        self.cfg.trial_rescue_days = 0
+        self.cfg.save()
+        self.assertEqual(auto.trial_rescue(), 0)
+        self.cfg.trial_rescue_days = 7
+        self.cfg.save()
+        self.assertEqual(auto.trial_rescue(), 1)
+
+    def test_signup_lead_owner_is_the_one_who_gets_the_rescue_task(self):
+        p = self.mkstore(trial_in=dt.timedelta(days=1))
+        svc.lead_from_signup(p, name="R", phone="9777700000", ref_user=self.b)
+        auto.trial_rescue()
+        self.assertEqual(Task.objects.get().assignee, self.b)
+
+    def test_one_bad_row_does_not_sink_the_batch(self):
+        from unittest import mock
+        self.mkstore("First", trial_in=dt.timedelta(days=1), manager=self.a)
+        self.mkstore("Second", trial_in=dt.timedelta(days=1), manager=self.b)
+        real = auto.responsible_dgc
+        calls = {"n": 0}
+
+        def flaky(project):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("boom")
+            return real(project)
+        with mock.patch.object(auto, "responsible_dgc", flaky):
+            self.assertEqual(auto.trial_rescue(), 1)
+
+
+class StoreHealthTests(AutomationBase):
+    def _product(self, p):
+        return Product.objects.create(project=p, title="P", price=Decimal("100"))
+
+    def test_store_with_no_products_after_threshold_gets_a_task(self):
+        p = self.mkstore("Empty Co", days_old=8, manager=self.a)
+        self.assertEqual(auto.store_health(), 1)
+        t = Task.objects.get()
+        self.assertEqual((t.assignee, t.project, t.auto_key), (self.a, p, f"noprod:{p.pk}"))
+        self.assertIn("no products", t.title)
+        self.assertEqual(auto.store_health(), 0)                                  # idempotent
+
+    def test_young_store_or_one_with_products_is_left_alone(self):
+        self.mkstore("Young", days_old=2, manager=self.a)
+        stocked = self.mkstore("Stocked", days_old=9, manager=self.a)
+        self._product(stocked)
+        self.assertEqual(auto.store_health(), 0)
+
+    def test_no_orders_nudge_is_monthly_and_only_for_stocked_stores(self):
+        p = self.mkstore("Quiet Shop", days_old=20, manager=self.a)
+        self._product(p)
+        self.assertEqual(auto.store_health(), 1)
+        t = Task.objects.get()
+        self.assertTrue(t.auto_key.startswith(f"noorders:{p.pk}:"))
+        self.assertIn("no orders", t.title)
+        self.assertEqual(auto.store_health(), 0)                                  # same month: no repeat
+
+    def test_store_with_an_order_is_healthy(self):
+        p = self.mkstore("Selling", days_old=30, manager=self.a)
+        self._product(p)
+        Order.objects.create(project=p, number="O1", email="c@x.com")
+        self.assertEqual(auto.store_health(), 0)
+
+    def test_no_dgc_cancelled_or_disabled_means_no_task(self):
+        self.mkstore("Nobody", days_old=30)
+        self.mkstore("Dead", days_old=30, manager=self.a, status=SubscriptionStatus.CANCELLED)
+        self.assertEqual(auto.store_health(), 0)
+        self.mkstore("Empty", days_old=30, manager=self.a)
+        self.cfg.health_no_products_days = 0
+        self.cfg.save()
+        self.assertEqual(auto.store_health(), 0)
+
+
+class RecycleTests(AutomationBase):
+    def _old(self, name, days=40, **kw):
+        l = Lead.objects.create(name=name, assigned_to=self.a, **kw)
+        Lead.objects.filter(pk=l.pk).update(created_at=timezone.now() - dt.timedelta(days=days))
+        return Lead.objects.get(pk=l.pk)
+
+    def test_cold_untouched_leads_return_to_the_pool_with_a_note(self):
+        l = self._old("Cold")
+        self.assertEqual(auto.recycle_leads(), 1)
+        l.refresh_from_db()
+        self.assertIsNone(l.assigned_to)
+        self.assertIn("returned to pool", l.notes)
+        self.assertEqual(auto.recycle_leads(), 0)
+
+    def test_recent_activity_hot_stage_future_followup_young_or_archived_stay(self):
+        touched = self._old("Touched")
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=touched)
+        hot = self._old("Hot", status=LeadStatus.INTERESTED)
+        planned = self._old("Planned", next_follow_up=timezone.localdate() + dt.timedelta(days=3))
+        young = self._old("Young", days=5)
+        arch = self._old("Arch", is_archived=True)
+        self.assertEqual(auto.recycle_leads(), 0)
+        for l in (touched, hot, planned, young, arch):
+            l.refresh_from_db()
+            self.assertEqual(l.assigned_to, self.a, l.name)
+
+    def test_threshold_and_off_switch(self):
+        self._old("Mid", days=20)
+        self.assertEqual(auto.recycle_leads(), 0)
+        self.cfg.recycle_days = 15
+        self.cfg.save()
+        self.assertEqual(auto.recycle_leads(), 1)
+        self._old("Again", days=99)
+        self.cfg.recycle_days = 0
+        self.cfg.save()
+        self.assertEqual(auto.recycle_leads(), 0)
+
+    def test_recycled_lead_appears_in_the_unassigned_pool_for_the_admin(self):
+        self._old("Cold")
+        auto.recycle_leads()
+        self.assertEqual(svc.pipeline_counts()["unassigned"], 1)
+
+
+class AdminAlertTests(AutomationBase):
+    wed_1pm = dt.datetime(2026, 10, 7, 13, 0, tzinfo=IST)          # a Wednesday
+    mon_9am = dt.datetime(2026, 10, 5, 9, 0, tzinfo=IST)           # a Monday
+
+    def test_quiet_alert_lists_only_dgcs_with_no_activity_today(self):
+        Activity.objects.create(actor=self.a, kind="call", occurred_at=self.wed_1pm - dt.timedelta(hours=3))
+        self.assertEqual(auto.quiet_alert(self.wed_1pm), 1)
+        self.assertEqual(len(mail.outbox), 1)
+        m = mail.outbox[0]
+        self.assertIn("bina", m.body)
+        self.assertNotIn("anil", m.body)
+        self.assertEqual(m.to, [self.admin.email])
+
+    def test_quiet_alert_is_once_a_day_and_respects_hour_sunday_and_switch(self):
+        self.assertEqual(auto.quiet_alert(self.wed_1pm.replace(hour=9)), 0)               # too early
+        self.assertEqual(auto.quiet_alert(self.wed_1pm.replace(day=11)), 0)               # a Sunday
+        self.assertEqual(auto.quiet_alert(self.wed_1pm), 2)
+        self.assertEqual(auto.quiet_alert(self.wed_1pm + dt.timedelta(hours=2)), 0)       # already sent today
+        self.assertEqual(auto.quiet_alert(self.wed_1pm + dt.timedelta(days=1)), 2)        # next day: again
+        self.cfg.refresh_from_db()
+        self.cfg.quiet_check = False
+        self.cfg.save()
+        self.assertEqual(auto.quiet_alert(self.wed_1pm + dt.timedelta(days=2)), 0)
+
+    def test_quiet_alert_uses_india_time_not_utc(self):
+        # 13:00 IST == 07:30 UTC: the hour gate must read IST (>= 12), not the UTC hour (7)
+        self.assertEqual(auto.quiet_alert(self.wed_1pm.astimezone(dt.timezone.utc)), 2)
+
+    def test_no_email_when_everyone_is_active_or_nobody_to_tell(self):
+        for u in (self.a, self.b):
+            Activity.objects.create(actor=u, kind="call", occurred_at=self.wed_1pm - dt.timedelta(hours=2))
+        self.assertEqual(auto.quiet_alert(self.wed_1pm), 0)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_digest_content_gate_and_once_per_week(self):
+        start = self.mon_9am - dt.timedelta(days=3)
+        for _ in range(4):
+            Activity.objects.create(actor=self.a, kind="call", outcome="connected", occurred_at=start)
+        Activity.objects.create(actor=self.a, kind="demo", occurred_at=start)
+        self.assertEqual(auto.weekly_digest(self.wed_1pm), 0)                              # not Monday
+        self.assertEqual(auto.weekly_digest(self.mon_9am.replace(hour=6)), 0)              # too early
+        self.assertEqual(auto.weekly_digest(self.mon_9am), 1)
+        body = mail.outbox[0].body
+        self.assertIn("anil: 4 calls, 1 demos", body)
+        self.assertIn("No activity all week: bina", body)
+        self.assertIn("Pipeline:", body)
+        self.assertEqual(auto.weekly_digest(self.mon_9am + dt.timedelta(hours=3)), 0)      # once that day
+        self.assertEqual(auto.weekly_digest(self.mon_9am + dt.timedelta(days=7)), 1)       # next Monday
+
+    def test_digest_recipients_and_switch(self):
+        self.cfg.digest_emails = "boss@x.com, ops@x.com"
+        self.cfg.save()
+        auto.weekly_digest(self.mon_9am)
+        self.assertEqual(sorted(mail.outbox[0].to), ["boss@x.com", "ops@x.com"])
+        mail.outbox.clear()
+        self.cfg.weekly_digest = False
+        self.cfg.last_digest_on = None
+        self.cfg.save()
+        self.assertEqual(auto.weekly_digest(self.mon_9am), 0)
+
+    def test_admin_emails_default_to_platform_admins(self):
+        self.assertEqual(auto.admin_emails(), [self.admin.email])
+
+
+class AutomationWiringTests(AutomationBase):
+    def test_beat_schedule_points_at_real_tasks(self):
+        from django.conf import settings as dj
+        from apps.crm import tasks
+        names = {v["task"] for k, v in dj.CELERY_BEAT_SCHEDULE.items() if k.startswith("crm-")}
+        self.assertEqual(names, {"apps.crm.tasks.trial_rescue_task", "apps.crm.tasks.store_health_task",
+                                 "apps.crm.tasks.recycle_leads_task", "apps.crm.tasks.admin_alerts_task"})
+        for fn in (tasks.trial_rescue_task, tasks.store_health_task, tasks.recycle_leads_task, tasks.admin_alerts_task):
+            fn()                                                                          # runs cleanly on an empty DB
+
+    def test_run_now_is_admin_only_runs_jobs_and_reports(self):
+        self.mkstore(trial_in=dt.timedelta(days=1), manager=self.a)
+        url = reverse("control:crm_run_now")
+        self.login(self.a)
+        self.assertEqual(self.client.post(url).status_code, 403)
+        self.assertFalse(Task.objects.exists())
+        self.login(self.admin)
+        r = self.client.post(url, follow=True)
+        self.assertEqual(Task.objects.count(), 1)
+        self.assertIn("1 trial task(s)", r.content.decode())
+        self.client.post(url)
+        self.assertEqual(Task.objects.count(), 1)                                         # safe to press twice
+        self.assertIn("Run the automatic jobs now", self.client.get(reverse("control:crm_settings")).content.decode())
+
+    def test_auto_tasks_show_up_on_the_dgcs_my_day(self):
+        self.mkstore("Ravi Jewels", trial_in=dt.timedelta(days=1), manager=self.a)
+        auto.trial_rescue()
+        self.login(self.a)
+        self.assertIn("Ravi Jewels", self.client.get(reverse("control:crm_my_day")).content.decode())

@@ -415,6 +415,9 @@ class CrmSettings(TimeStampedModel):
     quiet_after_hour = models.PositiveSmallIntegerField(default=12, help_text="Local hour (0-23) the quiet check runs after.")
     weekly_digest = models.BooleanField(default=True, help_text="Email a team summary every Monday.")
     digest_emails = models.TextField(blank=True, help_text="Comma-separated. Blank = every platform admin's email.")
+    # bookkeeping so the hourly jobs send each alert/digest once
+    last_quiet_on = models.DateField(null=True, blank=True, editable=False)
+    last_digest_on = models.DateField(null=True, blank=True, editable=False)
     # -- forecast
     avg_plan_price = models.DecimalField(max_digits=10, decimal_places=2, default=2999,
                                          help_text="Average monthly plan price used for the revenue forecast.")

@@ -305,6 +305,22 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.billing.tasks.send_trial_ending_reminders_task",
         "schedule": 3600.0 * 12,   # twice daily — plenty for a 3-day-out, once-only reminder
     },
+    "crm-trial-rescue": {
+        "task": "apps.crm.tasks.trial_rescue_task",
+        "schedule": 3600.0 * 6,    # idempotent: one task per trial, however often it runs
+    },
+    "crm-store-health": {
+        "task": "apps.crm.tasks.store_health_task",
+        "schedule": 3600.0 * 12,
+    },
+    "crm-recycle-leads": {
+        "task": "apps.crm.tasks.recycle_leads_task",
+        "schedule": 3600.0 * 24,
+    },
+    "crm-admin-alerts": {
+        "task": "apps.crm.tasks.admin_alerts_task",
+        "schedule": 3600.0,        # hourly; the quiet alert + Monday digest gate themselves
+    },
     "trash-purge": {
         "task": "apps.control.tasks.purge_trashed_task",
         "schedule": 3600.0 * 24,   # daily — empties Trash older than 30 days
