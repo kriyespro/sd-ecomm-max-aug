@@ -42,5 +42,128 @@
     </nav>
   </div>
   {% block crm_body %}{% endblock %}
+
+  {# ── shared plumbing: token for fetch calls, toast, call-return sheet ── #}
+  <div hidden>{{ csrf_input }}</div>
+
+  <div x-data="{ m: '', ok: false, tm: null }"
+       x-init="window.__crmToast = (t, good) => { m = t; ok = !!good; clearTimeout(tm); tm = setTimeout(() => m = '', 3500) }">
+    <div x-show="m" x-cloak x-transition class="fixed bottom-4 left-1/2 z-[60] max-w-[90vw] -translate-x-1/2 rounded-full px-4 py-2 text-sm text-white shadow-lg"
+         :class="ok ? 'bg-slate-800' : 'bg-rose-600'" x-text="m"></div>
+  </div>
+
+  {# After a phone call: when the DGC comes back to the page, ask how it went — one tap logs it #}
+  <div x-data="callSheet()" x-cloak @crm-call-return.window="open($event.detail)"
+       data-log-url="{{ url('control:crm_log') }}" data-lead-url="{{ url('control:crm_lead', kwargs={'pk': 0}) }}">
+    <div x-show="show" x-transition.opacity class="fixed inset-0 z-40 bg-slate-900/30" @click="dismiss()"></div>
+    <div x-show="show" x-transition role="dialog" aria-label="Log the call"
+         class="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white p-4 shadow-2xl ring-1 ring-pink-100 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:w-96 sm:rounded-2xl"
+         style="padding-bottom: max(1rem, env(safe-area-inset-bottom))">
+      <p class="text-sm font-semibold text-slate-800">How did the call with <span class="text-pink-700" x-text="p.name || 'the lead'"></span> go?</p>
+      <div class="mt-3 grid grid-cols-2 gap-2">
+        <button type="button" @click="log('connected')" :disabled="busy" class="rounded-xl bg-emerald-600 px-3 py-3 text-sm font-medium text-white hover:bg-emerald-700">✅ Spoke to them</button>
+        <button type="button" @click="log('no_answer')" :disabled="busy" class="rounded-xl bg-white px-3 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">📵 No answer</button>
+        <button type="button" @click="log('not_reachable')" :disabled="busy" class="rounded-xl bg-white px-3 py-3 text-sm font-medium text-slate-700 ring-1 ring-slate-300 hover:bg-slate-50">🚫 Unreachable</button>
+        <button type="button" @click="log('call_back')" :disabled="busy" class="rounded-xl bg-amber-100 px-3 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200 hover:bg-amber-200">🔁 Call back later</button>
+        <button type="button" @click="log('not_interested')" :disabled="busy" class="col-span-2 rounded-xl bg-rose-50 px-3 py-3 text-sm font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">👎 Not interested</button>
+      </div>
+      <div class="mt-3 flex items-center justify-between text-xs">
+        <button type="button" @click="dismiss()" class="text-slate-500 hover:underline">Not now</button>
+        <a :href="leadUrl()" class="text-pink-700 hover:underline">Open lead for more →</a>
+      </div>
+    </div>
+  </div>
 </div>
+
+<script>
+(function () {
+  // ---- 1) status dropdowns (list, My day, lead page): save on change --------
+  document.addEventListener('change', async function (ev) {
+    var sel = ev.target.closest && ev.target.closest('select[data-lead]');
+    if (!sel) return;
+    var prev = sel.dataset.prev, next = sel.value;
+    if (prev === next) return;
+    var tok = document.querySelector('input[name=csrfmiddlewaretoken]');
+    var fd = new FormData();
+    fd.append('status', next);
+    fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
+    sel.disabled = true;
+    try {
+      var r = await fetch(sel.dataset.url, { method: 'POST', body: fd, credentials: 'same-origin' });
+      if (!r.ok) {
+        var msg = 'Could not change the status.';
+        try { msg = (await r.json()).error || msg; } catch (e) {}
+        throw new Error(msg);
+      }
+      sel.dataset.prev = next;
+      var lost = next === 'lost';
+      sel.classList.toggle('bg-slate-100', lost); sel.classList.toggle('text-slate-600', lost);
+      sel.classList.toggle('bg-pink-50', !lost); sel.classList.toggle('text-pink-800', !lost);
+      var f = sel.parentElement && sel.parentElement.querySelector('[data-flash]');
+      if (f) { f.style.opacity = 1; setTimeout(function () { f.style.opacity = 0; }, 1400); }
+      if (window.__crmToast) window.__crmToast('Status saved ✓', true);
+    } catch (e) {
+      sel.value = prev;
+      if (window.__crmToast) window.__crmToast(e.message || 'Could not change the status.');
+    } finally { sel.disabled = false; }
+  });
+
+  // ---- 2) remember a started call; on return, offer one-tap logging --------
+  var KEY = 'crmPendingCall', TTL = 30 * 60 * 1000, MIN_AWAY = 4000;
+  function read() { try { return JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { return null; } }
+  function write(v) { try { localStorage.setItem(KEY, JSON.stringify(v)); } catch (e) {} }
+  function clear() { try { localStorage.removeItem(KEY); } catch (e) {} }
+
+  document.addEventListener('click', function (ev) {
+    var a = ev.target.closest && ev.target.closest('a[data-call-lead]');
+    if (!a) return;
+    write({ id: a.dataset.callLead, name: a.dataset.callName || '', t: Date.now(), left: 0 });
+  });
+
+  function maybeAsk() {
+    var p = read();
+    if (!p) return;
+    if (Date.now() - p.t > TTL) { clear(); return; }
+    if (p.left && Date.now() - p.left >= MIN_AWAY) {
+      window.dispatchEvent(new CustomEvent('crm-call-return', { detail: { id: p.id, name: p.name } }));
+    }
+  }
+  document.addEventListener('visibilitychange', function () {
+    var p = read();
+    if (document.visibilityState === 'hidden') {
+      if (p && !p.left) { p.left = Date.now(); write(p); }
+    } else { setTimeout(maybeAsk, 250); }
+  });
+  window.addEventListener('pageshow', function () { setTimeout(maybeAsk, 400); });
+
+  // ---- 3) the sheet's logic ------------------------------------------------
+  document.addEventListener('alpine:init', function () {
+    Alpine.data('callSheet', function () {
+      return {
+        show: false, busy: false, p: { id: null, name: '' },
+        open: function (d) { this.p = d; this.show = true; },
+        leadUrl: function () { return this.$root.dataset.leadUrl.replace('/0/', '/' + this.p.id + '/'); },
+        dismiss: function () { clear(); this.show = false; },
+        log: async function (outcome) {
+          if (this.busy) return;
+          this.busy = true;
+          var tok = document.querySelector('input[name=csrfmiddlewaretoken]');
+          var fd = new FormData();
+          fd.append('kind', 'call'); fd.append('outcome', outcome); fd.append('lead', this.p.id);
+          fd.append('csrfmiddlewaretoken', tok ? tok.value : '');
+          try {
+            var r = await fetch(this.$root.dataset.logUrl, { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'HX-Request': 'true' } });
+            if (!r.ok) throw new Error('bad');
+            clear(); this.show = false;
+            if (window.__crmToast) window.__crmToast('Call logged ✓', true);
+            if (/\/crm\/(my-day\/|leads\/\d+\/)/.test(location.pathname)) setTimeout(function () { location.reload(); }, 600);
+          } catch (e) {
+            if (window.__crmToast) window.__crmToast('Could not log that — try again.');
+          } finally { this.busy = false; }
+        },
+      };
+    });
+  });
+})();
+</script>
 {% endblock %}

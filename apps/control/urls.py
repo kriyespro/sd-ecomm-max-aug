@@ -403,6 +403,7 @@ urlpatterns = [
     path("crm/leads/import/sample/", crmv.LeadImportSampleView.as_view(), name="crm_lead_import_sample"),
     path("crm/leads/import/", crmv.LeadImportView.as_view(), name="crm_lead_import"),
     path("crm/leads/<int:pk>/", crmv.LeadDetailView.as_view(), name="crm_lead"),
+    path("crm/leads/bulk-status/", crmv.LeadBulkStatusView.as_view(), name="crm_lead_bulk_status"),
     path("crm/leads/archive/", crmv.LeadArchiveView.as_view(), name="crm_lead_archive"),
     path("crm/leads/board/", crmv.LeadBoardView.as_view(), name="crm_lead_board"),
     path("crm/leads/<int:pk>/move/", crmv.LeadMoveView.as_view(), name="crm_lead_move"),

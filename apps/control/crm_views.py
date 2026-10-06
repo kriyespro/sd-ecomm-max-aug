@@ -195,11 +195,23 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
 
 
 class LeadCreateView(PlatformStaffRequiredMixin, View):
+    """Add one lead. A phone number alone is enough (the number becomes the
+    name until someone edits it) — quick-add from My day / the board. A phone
+    already in the CRM is refused so two DGCs never chase the same person."""
+
     def post(self, request):
-        form = LeadForm(request.POST)
+        data = request.POST.copy()
+        phone = data.get("phone", "").strip()
+        if not data.get("name", "").strip() and phone:
+            data["name"] = phone
+        back = _post_next(request, reverse("control:crm_leads"))
+        form = LeadForm(data)
         if not form.is_valid():
-            messages.error(request, "Lead needs at least a name.")
-            return redirect("control:crm_leads")
+            messages.error(request, "Add a name or a phone number.")
+            return redirect(back)
+        if phone and Lead.objects.filter(phone=phone).exists():
+            messages.warning(request, "That number is already in the CRM — nothing added.")
+            return redirect(back)
         lead = form.save(commit=False)
         lead.created_by = request.user
         if not _admin(request.user) or not request.POST.get("assigned_to"):
@@ -208,7 +220,7 @@ class LeadCreateView(PlatformStaffRequiredMixin, View):
             lead.assigned_to = User.objects.filter(pk=request.POST["assigned_to"]).first()
         lead.assigned_by = request.user
         lead.save()
-        messages.success(request, "Lead added.")
+        messages.success(request, f"Added {lead.name}.")
         return redirect(_post_next(request, reverse("control:crm_lead", kwargs={"pk": lead.pk})))
 
 
@@ -298,6 +310,32 @@ class LeadAssignView(PlatformAdminRequiredMixin, View):
         else:
             n = svc.assign_leads(Lead.objects.filter(pk__in=ids), who, actor=request.user)
             messages.success(request, f"{n} lead(s) assigned to {svc.person_label(who)}.")
+        return redirect(_post_next(request, reverse("control:crm_leads")))
+
+
+class LeadBulkStatusView(PlatformStaffRequiredMixin, View):
+    """Set one stage on every ticked lead. Same rules as a single move (won is
+    refused, history written), scoped to the caller's own leads."""
+
+    def post(self, request):
+        ids = [int(i) for i in request.POST.getlist("ids") if i.isdigit()]
+        status = request.POST.get("status", "")
+        if not ids:
+            messages.error(request, "Tick at least one lead first.")
+        elif len(ids) > svc.BULK_ARCHIVE_MAX:
+            messages.error(request, f"Pick at most {svc.BULK_ARCHIVE_MAX} leads at a time.")
+        elif status not in LeadStatus.values or status == LeadStatus.WON:
+            messages.error(request, "Choose a stage to move them to (use “Deal won” for won).")
+        else:
+            moved = 0
+            for lead in _lead_qs(request.user).filter(pk__in=ids, is_archived=False):
+                try:
+                    if lead.status != status:
+                        svc.move_lead(lead, status, actor=request.user)
+                        moved += 1
+                except svc.MoveError:
+                    continue  # e.g. an already-won lead in the selection
+            messages.success(request, f"Moved {moved} lead(s) to {LeadStatus(status).label}.")
         return redirect(_post_next(request, reverse("control:crm_leads")))
 
 

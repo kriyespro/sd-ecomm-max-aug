@@ -66,7 +66,7 @@
 {% macro contact_buttons(lead, compact=false) %}
 <div class="flex flex-wrap gap-1.5">
   {% if lead.phone %}
-  <a href="tel:{{ lead.phone }}" class="inline-flex items-center gap-1.5 {{ 'rounded-lg px-3 py-1.5 text-xs' if compact else 'rounded-xl px-4 py-2.5 text-sm' }} bg-pink-600 font-semibold text-white shadow-sm hover:bg-pink-700">📞 Call {{ lead.phone }}</a>
+  <a href="tel:{{ lead.phone }}" data-call-lead="{{ lead.pk }}" data-call-name="{{ lead.name }}" class="inline-flex items-center gap-1.5 {{ 'rounded-lg px-3.5 py-2 text-xs sm:px-3 sm:py-1.5' if compact else 'rounded-xl px-4 py-2.5 text-sm' }} bg-pink-600 font-semibold text-white shadow-sm hover:bg-pink-700">📞 Call {{ lead.phone }}</a>
   <a href="https://wa.me/{{ lead.wa_number }}" target="_blank" rel="noopener" class="inline-flex items-center gap-1.5 {{ 'rounded-lg px-2.5 py-1.5 text-xs' if compact else 'rounded-xl px-3 py-2.5 text-sm' }} bg-emerald-50 font-medium text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">💬 WhatsApp</a>
   {% else %}<span class="text-sm text-slate-400">No phone number on this lead</span>{% endif %}
 </div>
@@ -139,4 +139,25 @@
       <span x-text="choice ? 'Save — ' + labels[choice] : 'Save'"></span></button>
   </div>
 </form>
+{% endmacro %}
+
+
+{# One status dropdown for every screen. Saves instantly through the shared
+   handler in base_crm (move endpoint: history entry, won guard, per-user
+   access). Won deals are a locked badge — they keep the create-store flow.
+   NOTE: keep the option list in step with LeadStatus (a test checks it). #}
+{% macro status_select(lead, big=false) %}
+{% if lead.status == 'won' %}
+<span class="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" title="Won deals are locked">🎉 Won</span>
+{% else %}
+<span class="inline-flex items-center gap-1">
+  <select data-lead="{{ lead.pk }}" data-prev="{{ lead.status }}" data-url="{{ url('control:crm_lead_move', kwargs={'pk': lead.pk}) }}" aria-label="Change status of {{ lead.name }}"
+          class="{{ 'h-9 text-[13px]' if big else 'h-9 text-[13px] sm:h-6 sm:text-[11px]' }} cursor-pointer rounded-full border-0 py-0 pl-3 pr-8 font-medium focus:ring-1 focus:ring-pink-400 sm:pl-2 sm:pr-6 {{ 'bg-slate-100 text-slate-600' if lead.status == 'lost' else 'bg-pink-50 text-pink-800' }}">
+    {% for v, lab in [("new", "New"), ("contacted", "Contacted"), ("interested", "Interested"), ("demo_booked", "Demo booked"), ("demo_done", "Demo done"), ("negotiating", "Negotiating"), ("lost", "Lost")] %}
+    <option value="{{ v }}" {{ 'selected' if lead.status == v }}>{{ lab }}</option>
+    {% endfor %}
+  </select>
+  <span data-flash class="text-[11px] text-emerald-600 opacity-0 transition-opacity">✓</span>
+</span>
+{% endif %}
 {% endmacro %}
