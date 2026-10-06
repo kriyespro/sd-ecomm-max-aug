@@ -64,6 +64,7 @@
           <div class="mt-1.5 flex flex-wrap items-center gap-1 text-[10px]">
             {% if l.overdue_flag %}<span class="rounded-full bg-rose-50 px-1.5 py-0.5 font-medium text-rose-700">⏰ due {{ l.next_follow_up.strftime("%d %b") }}</span>
             {% elif l.next_follow_up %}<span class="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-800">⏰ {{ l.next_follow_up.strftime("%d %b") }}</span>{% endif %}
+            {% if l.demo_local and l.status == 'demo_booked' %}<span class="rounded-full bg-violet-50 px-1.5 py-0.5 font-medium text-violet-700">🖥 {{ l.demo_local.strftime("%d %b") }}</span>{% endif %}
             {% if l.stale %}<span class="rounded-full bg-amber-100 px-1.5 py-0.5 font-medium text-amber-800" title="No contact for {{ l.idle_days }} days">⚠ {{ l.idle_days }}d quiet</span>{% endif %}
             <span class="text-slate-400">{{ l.stage_days }}d here</span>
             {% if is_admin and l.assigned_to %}<span class="ml-auto rounded-full bg-pink-100 px-1.5 py-0.5 font-semibold text-pink-800" title="{{ l.assigned_to.get_full_name() or l.assigned_to.email }}">{{ (l.assigned_to.first_name or l.assigned_to.email)[:2]|upper }}</span>{% endif %}
