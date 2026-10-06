@@ -32,6 +32,7 @@ from apps.accounts.permissions import (
     managed_projects,
 )
 from apps.core.mixins import PlatformAdminRequiredMixin, PlatformStaffRequiredMixin
+from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.crm import services as svc
 from apps.crm.tz import biz_today, to_biz
@@ -97,6 +98,36 @@ class CrmBoardView(PlatformAdminRequiredMixin, TemplateView):
                    people=svc.crm_people())
         ctx.update(range_key=key, range_label=label, ranges=_RANGES, rows=rows, active_only=active_only,
                    totals=totals, extras=svc.board_extras(), start=start, end=end)
+        return ctx
+
+
+class CrmHomeView(PlatformStaffRequiredMixin, View):
+    """/admin/crm/ — where the CRM opens. A platform admin gets the team board; a
+    DGC lands on their Welcome page (the coaching view comes first)."""
+
+    def get(self, request, *args, **kwargs):
+        if _admin(request.user):
+            return CrmBoardView.as_view()(request, *args, **kwargs)
+        return redirect("control:crm_welcome")
+
+
+class WelcomeView(PlatformStaffRequiredMixin, TemplateView):
+    """The DGC's welcome page: what their calls can become, at THEIR percentages
+    (set by an admin), on the DGC price. An admin can preview any DGC's page with
+    ?dgc=<id>."""
+
+    template_name = "control/crm/welcome.jinja"
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        me = self.request.user
+        preview = None
+        raw = self.request.GET.get("dgc", "")
+        if _admin(me) and raw.isdigit():
+            preview = get_object_or_404(svc.dgc_users(), pk=int(raw))
+        who = preview or me
+        ctx.update(possible=svc.possibility(who), person=who, preview=preview,
+                   first_name=who.first_name or (who.email.split("@")[0] if who.email else "there"))
         return ctx
 
 
@@ -408,8 +439,40 @@ class PersonView(PlatformAdminRequiredMixin, TemplateView):
             open_tasks=Task.objects.filter(assignee=person, status=TaskStatus.OPEN)[:6],
             others=svc.crm_people().exclude(pk=person.pk), targets=rows[0]["targets"],
             training_waiting=TrainingLog.objects.filter(trainer=person, status=TrainingStatus.ASSIGNED).count(),
+            profile=CrmProfile.objects.filter(user=person).first(), team=CrmSettings.load(),
+            eff=svc.funnel_for(person), cv=svc.client_value(person),
         )
         return ctx
+
+
+class PersonFunnelView(PlatformAdminRequiredMixin, View):
+    """A platform admin sets one DGC's conversion percentages and commission %.
+    A blank box means "use the team default". All-or-nothing: one bad value
+    changes nothing."""
+
+    FIELDS = ("conv_call_to_demo", "conv_demo_to_trial", "conv_trial_to_paid", "commission_pct")
+
+    def post(self, request, pk):
+        person = get_object_or_404(svc.crm_people(), pk=pk)
+        back = reverse("control:crm_person", kwargs={"pk": pk})
+        values = {}
+        for name in self.FIELDS:
+            raw = (request.POST.get(name) or "").strip().rstrip("%").strip()
+            if not raw:
+                values[name] = None
+                continue
+            if not raw.isdigit() or not 1 <= int(raw) <= 100:
+                messages.error(request, "Each percentage must be a whole number from 1 to 100 (or blank for the team default).")
+                return redirect(back)
+            values[name] = int(raw)
+        prof, _ = CrmProfile.objects.get_or_create(user=person)
+        for name, v in values.items():
+            setattr(prof, name, v)
+        prof.save()
+        record_audit(actor=request.user, action=AuditLog.Action.UPDATE, target=prof,
+                     changes={"crm_dgc_funnel": {k: v for k, v in values.items()}, "dgc": person.pk})
+        messages.success(request, f"Saved the percentages for {svc.person_label(person)}.")
+        return redirect(back)
 
 
 class LeadTransferView(PlatformAdminRequiredMixin, View):

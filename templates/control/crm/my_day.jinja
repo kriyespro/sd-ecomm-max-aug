@@ -54,7 +54,13 @@
 {% endif %}
 
 {# ── what's possible: simple coaching charts ──────────────────────────── #}
-{% include "control/crm/_possible.jinja" %}
+{% set pl = possible.plan %}
+<a href="{{ url('control:crm_welcome') }}" class="flex items-start justify-between gap-3 rounded-2xl bg-gradient-to-r from-pink-50 via-white to-emerald-50 px-3.5 py-2.5 shadow-sm ring-1 ring-pink-100 hover:ring-pink-200">
+  <p class="text-[13px] leading-snug text-slate-700"><span class="font-semibold text-pink-900">🎯 Today's plan</span> —
+    <b>{{ pl.calls }} calls</b> → ≈ <b>{{ pl.meets }}</b> meetings/demos → <b>{{ pl.trials }}</b> trials →
+    <b class="text-emerald-700">{{ pl.paid }} paid client{{ '' if pl.paid == '1' else 's' }}</b> ≈ <b class="text-emerald-700">{{ pl.value_label }}</b> to you</p>
+  <span class="mt-0.5 shrink-0 text-[11px] text-pink-700">see the full picture →</span>
+</a>
 
 {# ── things waiting on me: slim chips ──────────────────────────────────── #}
 {% if pending_confirm or waiting_to_train %}

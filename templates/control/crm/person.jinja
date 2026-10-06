@@ -62,6 +62,24 @@
       {% for t in open_tasks %}<p class="mt-1.5 truncate text-[11px] text-slate-500">• {{ t.title }}{% if t.due_on %} <span class="text-slate-400">({{ t.due_on.strftime("%d %b") }})</span>{% endif %}</p>{% endfor %}
     </form>
 
+    <form method="post" action="{{ url('control:crm_person_funnel', kwargs={'pk': person.pk}) }}" class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+      {{ csrf_input }}
+      <h3 class="mb-1 text-[13px] font-semibold text-pink-900">🎯 {{ person.first_name or 'Their' }} funnel &amp; commission</h3>
+      <p class="mb-2 text-[11px] text-slate-500">Drives the charts on their Welcome page. Leave a box empty to use the team default (shown in the box).</p>
+      <div class="grid grid-cols-2 gap-1.5 text-[12px]">
+        {% for name, label, team_v, mine in [("conv_call_to_demo", "Calls → meet/demo %", team.conv_call_to_demo, profile.conv_call_to_demo if profile else None),
+                                              ("conv_demo_to_trial", "Meet/demo → trial %", team.conv_demo_to_trial, profile.conv_demo_to_trial if profile else None),
+                                              ("conv_trial_to_paid", "Trial → paid %", team.conv_trial_to_paid, profile.conv_trial_to_paid if profile else None),
+                                              ("commission_pct", "Commission % of DGC price", team.value_commission_pct, profile.commission_pct if profile else None)] %}
+        <label class="block"><span class="text-slate-600">{{ label }}</span>
+          <input name="{{ name }}" inputmode="numeric" value="{{ mine if mine else '' }}" placeholder="{{ team_v }}" class="mt-0.5 block w-full rounded-md border border-slate-200 px-2 py-1.5 text-[13px]"></label>
+        {% endfor %}
+      </div>
+      <p class="mt-1.5 text-[11px] text-slate-500">Now: {{ eff.c1 }}% → {{ eff.c2 }}% → {{ eff.c3 }}% = <b>{{ eff.overall|round(1) }}%</b> · {{ cv.pct_label }}% of {{ cv.yearly_label }} = {{ cv.commission_label }}{% if cv.has_own %} + their {{ cv.own_label }} charge{% endif %} per client.</p>
+      <div class="mt-2 flex items-center gap-3"><button class="rounded-lg bg-pink-600 px-3.5 py-1.5 text-[13px] font-medium text-white hover:bg-pink-700">Save</button>
+        <a href="{{ url('control:crm_welcome') }}?dgc={{ person.pk }}" class="text-[12px] text-pink-700 underline">See their Welcome page</a></div>
+    </form>
+
     <form method="post" action="{{ url('control:crm_person_transfer', kwargs={'pk': person.pk}) }}"
           onsubmit="return confirm('Move all {{ open_total }} open leads away from {{ _name|e }}?')"
           class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">

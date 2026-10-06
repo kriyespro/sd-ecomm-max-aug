@@ -394,7 +394,8 @@ urlpatterns = [
     path("platform-tracking/", mktv.PlatformTrackingView.as_view(), name="platform_tracking"),
 
     # CRM + daily reporting (platform team)
-    path("crm/", crmv.CrmBoardView.as_view(), name="crm_board"),
+    path("crm/", crmv.CrmHomeView.as_view(), name="crm_board"),
+    path("crm/welcome/", crmv.WelcomeView.as_view(), name="crm_welcome"),
     path("crm/my-day/", crmv.MyDayView.as_view(), name="crm_my_day"),
     path("crm/log/", crmv.LogActivityView.as_view(), name="crm_log"),
     path("crm/leads/", crmv.LeadListView.as_view(), name="crm_leads"),
@@ -405,6 +406,7 @@ urlpatterns = [
     path("crm/leads/<int:pk>/", crmv.LeadDetailView.as_view(), name="crm_lead"),
     path("crm/leads/distribute/", crmv.LeadDistributeView.as_view(), name="crm_lead_distribute"),
     path("crm/people/<int:pk>/", crmv.PersonView.as_view(), name="crm_person"),
+    path("crm/people/<int:pk>/funnel/", crmv.PersonFunnelView.as_view(), name="crm_person_funnel"),
     path("crm/people/<int:pk>/transfer/", crmv.LeadTransferView.as_view(), name="crm_person_transfer"),
     path("crm/leads/bulk-status/", crmv.LeadBulkStatusView.as_view(), name="crm_lead_bulk_status"),
     path("crm/leads/archive/", crmv.LeadArchiveView.as_view(), name="crm_lead_archive"),

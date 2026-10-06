@@ -5,6 +5,7 @@
 {% set _un = request.resolver_match.url_name if request.resolver_match else "" %}
 {% set _adm = request.user.is_superuser or (request.user.profile and request.user.profile.is_platform_admin) %}
 {% set _tabs = [
+  ("Welcome", "crm_welcome", "crm_welcome", false, "🎯"),
   ("Board", "crm_board", "crm_board", true, "📊"),
   ("My day", "crm_my_day", "crm_my_day", false, "☀️"),
   ("Leads", "crm_leads", "crm_lead", false, "📞"),
@@ -33,7 +34,7 @@
     </div>
     <nav class="-mx-1 mt-2.5 flex gap-1 overflow-x-auto px-1 pb-0.5" aria-label="CRM sections">
       {% for label, name, prefix, admin_only, icon in _tabs %}
-      {% if _adm or not admin_only %}
+      {% if (name == 'crm_welcome' and not _adm) or (name != 'crm_welcome' and (_adm or not admin_only)) %}
       {% set on = _un.startswith(prefix) %}
       <a href="{{ url('control:' ~ name) }}"
          class="shrink-0 rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if on else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
