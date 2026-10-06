@@ -14,6 +14,14 @@ from apps.core.models import TimeStampedModel
 User = settings.AUTH_USER_MODEL
 
 
+def normalize_phone(raw):
+    """Digits only; for 10+ digits keep the last 10 so "+91 98765 43210",
+    "098765-43210" and "9876543210" are the same person. Shorter strings are
+    kept as digits (they can't be matched reliably but are still stored)."""
+    digits = "".join(c for c in (raw or "") if c.isdigit())
+    return digits[-10:] if len(digits) >= 10 else digits
+
+
 class LeadStatus(models.TextChoices):
     NEW = "new", "New"
     CONTACTED = "contacted", "Contacted"
@@ -54,7 +62,17 @@ class Lead(TimeStampedModel):
     archived_at = models.DateTimeField(null=True, blank=True)
     archived_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL,
                                     related_name="+")
-    # When the lead entered its current stage — drives "3d in stage" on the board.
+    # Normalised phone (see normalize_phone) — what duplicate checks compare.
+    phone_norm = models.CharField(max_length=20, blank=True, db_index=True, editable=False)
+    # Speed-to-lead: when it was handed to someone, and when they first reached out.
+    assigned_at = models.DateTimeField(null=True, blank=True)
+    first_touch_at = models.DateTimeField(null=True, blank=True)
+    auto_assigned = models.BooleanField(default=False)
+    # Where an inbound lead came from (utm_*, landing-page slug, ad ids…).
+    acquisition = models.JSONField(default=dict, blank=True)
+    # When a booked demo is due (set with "Demo booked").
+    demo_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    # When it entered its current stage — drives "3d in stage" on the board.
     stage_changed_at = models.DateTimeField(null=True, blank=True)
     converted_project = models.ForeignKey("projects.Project", null=True, blank=True,
                                           on_delete=models.SET_NULL, related_name="+")
@@ -65,10 +83,12 @@ class Lead(TimeStampedModel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._orig_status = self.__dict__.get("status")
+        self._orig_assignee = self.__dict__.get("assigned_to_id")
 
     def refresh_from_db(self, *args, **kwargs):
         super().refresh_from_db(*args, **kwargs)
         self._orig_status = self.__dict__.get("status")
+        self._orig_assignee = self.__dict__.get("assigned_to_id")
 
     def save(self, *args, **kwargs):
         if self.pk is None or self.status != self._orig_status:
@@ -76,8 +96,24 @@ class Lead(TimeStampedModel):
             uf = kwargs.get("update_fields")
             if uf is not None:
                 kwargs["update_fields"] = set(uf) | {"stage_changed_at"}
+        # keep the normalised phone and assignment time in step with the row
+        extra = set()
+        norm = normalize_phone(self.phone)
+        if norm != self.phone_norm:
+            self.phone_norm = norm
+            extra.add("phone_norm")
+        if self.assigned_to_id and self.assigned_to_id != self._orig_assignee and not self.assigned_at:
+            self.assigned_at = timezone.now()
+            extra.add("assigned_at")
+        elif self.assigned_to_id and self.assigned_to_id != self._orig_assignee and self._orig_assignee:
+            self.assigned_at = timezone.now()      # re-assigned to someone else: clock restarts
+            extra.add("assigned_at")
+        uf = kwargs.get("update_fields")
+        if uf is not None and extra:
+            kwargs["update_fields"] = set(uf) | extra
         super().save(*args, **kwargs)
         self._orig_status = self.status
+        self._orig_assignee = self.assigned_to_id
 
     def __str__(self):
         return f"{self.name} ({self.get_status_display()})"
@@ -259,6 +295,9 @@ class Task(TimeStampedModel):
     project = models.ForeignKey("projects.Project", null=True, blank=True,
                                 on_delete=models.SET_NULL, related_name="+")
     due_on = models.DateField(null=True, blank=True, db_index=True)
+    # Set on tasks the system creates (trial rescue, store health…) so a daily
+    # job never creates the same task twice.
+    auto_key = models.CharField(max_length=80, blank=True, db_index=True)
     status = models.CharField(max_length=10, choices=TaskStatus.choices,
                               default=TaskStatus.OPEN, db_index=True)
     done_at = models.DateTimeField(null=True, blank=True)
@@ -351,3 +390,63 @@ class StoreAssignment(TimeStampedModel):
 
     def __str__(self):
         return f"{self.assignee} → {self.project} ({self.scope})"
+
+
+DEFAULT_STAGE_PROBABILITY = {
+    "new": 3, "contacted": 8, "interested": 20,
+    "demo_booked": 30, "demo_done": 45, "negotiating": 65,
+}
+
+
+class CrmSettings(TimeStampedModel):
+    """Singleton (pk=1): the knobs a platform admin tunes for the whole CRM."""
+
+    # -- routing / speed-to-lead
+    auto_assign = models.BooleanField(default=True, help_text="Hand new inbound leads to a DGC instantly.")
+    capacity_per_dgc = models.PositiveIntegerField(default=0, help_text="Max open leads per DGC for auto-assign. 0 = no limit.")
+    alert_email = models.BooleanField(default=True, help_text="Email the DGC when a lead is assigned to them.")
+    # -- automatic follow-ups
+    trial_rescue_days = models.PositiveSmallIntegerField(default=3, help_text="Create a task this many days before a DGC's store trial ends. 0 = off.")
+    health_no_products_days = models.PositiveSmallIntegerField(default=7, help_text="Task if a DGC's store still has no products after this many days. 0 = off.")
+    health_no_orders_days = models.PositiveSmallIntegerField(default=14, help_text="Task if a live store has no orders after this many days. 0 = off.")
+    recycle_days = models.PositiveSmallIntegerField(default=30, help_text="Return untouched open leads to the pool after this many days. 0 = off.")
+    # -- admin alerts
+    quiet_check = models.BooleanField(default=True, help_text="Email admins when a DGC has done nothing by midday.")
+    quiet_after_hour = models.PositiveSmallIntegerField(default=12, help_text="Local hour (0-23) the quiet check runs after.")
+    weekly_digest = models.BooleanField(default=True, help_text="Email a team summary every Monday.")
+    digest_emails = models.TextField(blank=True, help_text="Comma-separated. Blank = every platform admin's email.")
+    # -- forecast
+    avg_plan_price = models.DecimalField(max_digits=10, decimal_places=2, default=2999,
+                                         help_text="Average monthly plan price used for the revenue forecast.")
+    stage_probabilities = models.JSONField(default=dict, blank=True,
+                                           help_text="Chance (%) a lead at each stage becomes a paying store.")
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def probability(self, stage):
+        merged = {**DEFAULT_STAGE_PROBABILITY, **(self.stage_probabilities or {})}
+        try:
+            return max(0, min(100, int(merged.get(stage, 0))))
+        except (TypeError, ValueError):
+            return 0
+
+    def __str__(self):
+        return "CRM settings"
+
+
+class CrmProfile(TimeStampedModel):
+    """Per-DGC CRM preferences. A missing row means "defaults" (accepts leads)."""
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="crm_profile")
+    accepts_leads = models.BooleanField(default=True, help_text="Off = skipped by auto-assign (e.g. on leave).")
+    cities = models.CharField(max_length=200, blank=True,
+                              help_text="Cities / areas this DGC covers, comma-separated. New leads from these go to them first.")
+
+    def city_list(self):
+        return [c.strip().lower() for c in self.cities.split(",") if c.strip()]
+
+    def __str__(self):
+        return f"CRM profile · {self.user}"

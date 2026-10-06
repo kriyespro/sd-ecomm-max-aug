@@ -1,0 +1,65 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% block page_title %}CRM settings{% endblock %}
+{% block crm_title %}CRM settings{% endblock %}
+{% block crm_sub %}· how leads are routed and what runs automatically{% endblock %}
+{% block crm_actions %}<a href="{{ url('control:crm_board') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← Team board</a>{% endblock %}
+
+{% block crm_body %}
+{% macro field(f, wide=false) %}
+<div class="{{ 'sm:col-span-2' if wide }}" data-field="{{ f.name }}">
+  {% if f.widget_type == 'checkbox' %}
+  <label class="flex items-start gap-2 text-[13px] text-slate-700">{{ f.as_widget(attrs={"class": "mt-0.5 h-4 w-4 rounded border-pink-300 text-pink-600"}) }}<span>{{ f.label }}{% if f.help_text %}<span class="block text-[11px] text-slate-400">{{ f.help_text }}</span>{% endif %}</span></label>
+  {% else %}
+  <label class="block text-[12px] font-medium text-pink-900">{{ f.label }}</label>
+  {{ f.as_widget(attrs={"class": "mt-0.5 block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px]"}) }}
+  {% if f.help_text %}<p class="mt-0.5 text-[11px] text-slate-400">{{ f.help_text }}</p>{% endif %}
+  {% endif %}
+  {% for e in f.errors %}<p class="text-[11px] text-rose-600">{{ e }}</p>{% endfor %}
+</div>
+{% endmacro %}
+
+<form method="post" class="space-y-3">
+  {{ csrf_input }}
+  {% if form.non_field_errors() %}<div class="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ form.non_field_errors()|join(' ') }}</div>{% endif %}
+
+  <section class="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-sm font-semibold text-pink-900">⚡ Speed-to-lead</h3>
+    <div class="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
+      {{ field(form.auto_assign) }}{{ field(form.alert_email) }}{{ field(form.capacity_per_dgc) }}
+    </div>
+    <p class="mt-2 text-[11px] text-slate-500">New leads (signups, the capture webhook) go to the DGC who covers the lead's city, otherwise the one with the fewest open leads. A DGC can pause themselves on My day.</p>
+  </section>
+
+  <section class="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-sm font-semibold text-pink-900">🤖 Automatic follow-ups</h3>
+    <div class="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
+      {{ field(form.trial_rescue_days) }}{{ field(form.health_no_products_days) }}{{ field(form.health_no_orders_days) }}{{ field(form.recycle_days) }}
+    </div>
+  </section>
+
+  <section class="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-sm font-semibold text-pink-900">📬 Admin alerts</h3>
+    <div class="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">
+      {{ field(form.quiet_check) }}{{ field(form.quiet_after_hour) }}{{ field(form.weekly_digest) }}{{ field(form.digest_emails, true) }}
+    </div>
+  </section>
+
+  <section class="rounded-2xl bg-white px-4 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-sm font-semibold text-pink-900">📈 Forecast</h3>
+    <div class="grid gap-x-4 gap-y-2.5 sm:grid-cols-2">{{ field(form.avg_plan_price) }}</div>
+    <p class="mb-1 mt-2 text-[12px] font-medium text-pink-900">Chance a lead at each stage becomes a paying store</p>
+    <div class="grid grid-cols-3 gap-2 sm:grid-cols-6">{% for n in stage_fields %}{{ field(form[n]) }}{% endfor %}</div>
+  </section>
+
+  <button class="rounded-lg bg-pink-600 px-5 py-2 text-[13px] font-medium text-white hover:bg-pink-700">Save settings</button>
+</form>
+
+<section class="mt-3 rounded-2xl border border-dashed border-pink-200 bg-pink-50/40 px-4 py-3 text-[12px] text-slate-600">
+  <h3 class="mb-1 text-sm font-semibold text-pink-900">🔌 Lead capture webhook</h3>
+  {% if capture_on %}
+  <p>On. POST <code class="rounded bg-white px-1">{{ capture_url }}</code> with <code class="rounded bg-white px-1">X-CRM-Token: &lt;your token&gt;</code> and JSON or form fields <code>name, phone, city, business, source, notes</code> (+ <code>utm_*</code>). New leads are routed instantly; a duplicate phone changes nothing. Point Meta/Google lead forms, Zapier or a website form at it.</p>
+  {% else %}
+  <p>Off. Set the <code class="rounded bg-white px-1">CRM_CAPTURE_TOKEN</code> environment variable on the server (any long random string) and restart to turn it on — then external forms can send leads straight into the CRM.</p>
+  {% endif %}
+</section>
+{% endblock %}

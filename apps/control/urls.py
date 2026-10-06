@@ -429,6 +429,8 @@ urlpatterns = [
     path("crm/work/<int:pk>/assign/", crmv.WorkAssignView.as_view(), name="crm_work_assign"),
     path("crm/work/<int:pk>/done/", crmv.WorkDoneView.as_view(), name="crm_work_done"),
     path("crm/work/assignment/<int:pk>/revoke/", crmv.WorkRevokeView.as_view(), name="crm_work_revoke"),
+    path("crm/me/", crmv.MyProfileView.as_view(), name="crm_my_profile"),
+    path("crm/settings/", crmv.CrmSettingsView.as_view(), name="crm_settings"),
     path("crm/targets/", crmv.TargetsView.as_view(), name="crm_targets"),
     path("help-request/", crmv.OwnerHelpView.as_view(), name="crm_owner_help"),
 

@@ -1,6 +1,7 @@
 """CRM / daily reporting."""
 
 import datetime as dt
+import json
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -1884,3 +1885,408 @@ class TransferLeadsTests(CrmBase):
         r = self.client.post(self.url, {"to": self.b.pk}, follow=True)
         self.assertIn("Moved 6 open lead(s)", r.content.decode())
         self.assertTrue(AuditLog.objects.filter(actor=self.admin, changes__crm_leads_distributed=6).exists())
+
+
+from django.core import mail  # noqa: E402
+
+from apps.crm.models import CrmProfile, CrmSettings, normalize_phone  # noqa: E402
+
+
+class PhoneNormaliseTests(CrmBase):
+    def test_normalize_variants(self):
+        for raw in ("9876543210", "+91 98765 43210", "098765-43210", "(+91)9876543210", "91 9876543210"):
+            self.assertEqual(normalize_phone(raw), "9876543210", raw)
+        self.assertEqual(normalize_phone("12345"), "12345")
+        self.assertEqual(normalize_phone(""), "")
+
+    def test_saved_lead_gets_phone_norm_and_updates_on_edit(self):
+        l = Lead.objects.create(name="x", phone="+91 98765 43210")
+        self.assertEqual(l.phone_norm, "9876543210")
+        l.phone = "98000 11111"
+        l.save()
+        l.refresh_from_db()
+        self.assertEqual(l.phone_norm, "9800011111")
+
+    def test_save_with_update_fields_still_stores_phone_norm(self):
+        l = Lead.objects.create(name="x")
+        l.phone = "9111122222"
+        l.save(update_fields=["phone"])
+        l.refresh_from_db()
+        self.assertEqual(l.phone_norm, "9111122222")
+
+    def test_duplicate_detection_ignores_formatting(self):
+        Lead.objects.create(name="x", phone="9876543210")
+        self.assertTrue(svc.phone_exists("+91 98765-43210"))
+        self.assertFalse(svc.phone_exists("9000000000"))
+        self.assertFalse(svc.phone_exists("123"))            # too short to trust
+
+    def test_quick_add_and_import_use_the_normalised_check(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        Lead.objects.create(name="x", phone="9876543210")
+        self.login(self.a)
+        self.client.post(reverse("control:crm_lead_create"), {"phone": "+91 98765 43210"})
+        self.client.post(reverse("control:crm_lead_import"), {"file": SimpleUploadedFile(
+            "l.csv", b"name,phone\nDup,098765-43210\nFresh,9000000001\n", content_type="text/csv")})
+        self.assertEqual(Lead.objects.count(), 2)
+        self.assertTrue(Lead.objects.filter(name="Fresh").exists())
+
+
+class RoutingTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.c = _dgc("chetan")
+        self.cfg = CrmSettings.load()
+        mail.outbox.clear()
+
+    def _in(self, **kw):
+        kw.setdefault("name", "Inbound")
+        kw.setdefault("phone", "9%09d" % (Lead.objects.count() + 1))
+        return svc.ingest_lead(**kw)
+
+    def test_ingest_creates_and_routes_to_least_loaded(self):
+        for i in range(3):
+            Lead.objects.create(name=f"a{i}", assigned_to=self.a)
+        Lead.objects.create(name="b", assigned_to=self.b)
+        lead, created = self._in()
+        self.assertTrue(created)
+        self.assertEqual(lead.assigned_to, self.c)            # holds nothing yet
+        self.assertTrue(lead.auto_assigned)
+        self.assertIsNotNone(lead.assigned_at)
+
+    def test_routing_balances_over_many_leads(self):
+        got = {self.a.pk: 0, self.b.pk: 0, self.c.pk: 0}
+        for _ in range(9):
+            lead, _c = self._in()
+            got[lead.assigned_to_id] += 1
+        self.assertEqual(sorted(got.values()), [3, 3, 3])
+
+    def test_city_match_beats_load(self):
+        CrmProfile.objects.create(user=self.a, cities="Pune, Nashik")
+        for i in range(5):
+            Lead.objects.create(name=f"a{i}", assigned_to=self.a)       # anil is busiest
+        lead, _ = self._in(city="Pune")
+        self.assertEqual(lead.assigned_to, self.a)                        # but he covers Pune
+        other, _ = self._in(city="Delhi")
+        self.assertNotEqual(other.assigned_to, self.a)
+
+    def test_city_match_is_substring_both_ways_case_insensitive(self):
+        CrmProfile.objects.create(user=self.b, cities="pimpri chinchwad, mumbai")
+        self.assertEqual(self._in(city="MUMBAI")[0].assigned_to, self.b)
+        self.assertEqual(self._in(city="Navi Mumbai")[0].assigned_to, self.b)
+
+    def test_paused_dgc_is_skipped(self):
+        CrmProfile.objects.create(user=self.a, accepts_leads=False)
+        CrmProfile.objects.create(user=self.b, accepts_leads=False)
+        self.assertEqual(self._in()[0].assigned_to, self.c)
+        CrmProfile.objects.create(user=self.c, accepts_leads=False)
+        lead, _ = self._in()
+        self.assertIsNone(lead.assigned_to)                               # nobody available -> stays in pool
+
+    def test_capacity_cap_and_overflow_to_pool(self):
+        self.cfg.capacity_per_dgc = 2
+        self.cfg.save()
+        for u in (self.a, self.b, self.c):
+            for i in range(2):
+                Lead.objects.create(name=f"{u.pk}-{i}", assigned_to=u)
+        lead, _ = self._in()
+        self.assertIsNone(lead.assigned_to)                               # everyone is full
+        Lead.objects.filter(assigned_to=self.b).update(is_archived=True)  # frees capacity
+        self.assertEqual(self._in()[0].assigned_to, self.b)
+
+    def test_auto_assign_switch_off_leaves_lead_unassigned(self):
+        self.cfg.auto_assign = False
+        self.cfg.save()
+        lead, created = self._in()
+        self.assertTrue(created)
+        self.assertIsNone(lead.assigned_to)
+
+    def test_duplicate_phone_changes_nothing_and_returns_existing(self):
+        first, c1 = self._in(phone="9876543210")
+        again, c2 = svc.ingest_lead(name="Other name", phone="+91 98765 43210")
+        self.assertEqual((c1, c2), (True, False))
+        self.assertEqual(again.pk, first.pk)
+        self.assertEqual(Lead.objects.count(), 1)
+
+    def test_referring_dgc_keeps_the_lead(self):
+        lead, _ = svc.ingest_lead(name="Ref", phone="9300000001", assign_to=self.b)
+        self.assertEqual(lead.assigned_to, self.b)
+        self.assertFalse(lead.auto_assigned)
+
+    def test_needs_name_or_phone(self):
+        with self.assertRaises(ValueError):
+            svc.ingest_lead(name="", phone="")
+        lead, _ = svc.ingest_lead(phone="9400000001")
+        self.assertEqual(lead.name, "9400000001")
+
+    def test_alert_email_sent_to_assignee_and_can_be_switched_off(self):
+        lead, _ = self._in(name="Hot Lead", city="Pune")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, [lead.assigned_to.email])
+        self.assertIn("Hot Lead", mail.outbox[0].subject)
+        self.assertIn("5 minutes", mail.outbox[0].body)
+        mail.outbox.clear()
+        self.cfg.alert_email = False
+        self.cfg.save()
+        self._in()
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_alert_failure_never_breaks_intake(self):
+        from unittest import mock
+        with mock.patch("django.core.mail.send_mail", side_effect=RuntimeError("smtp down")):
+            lead, created = self._in()
+        self.assertTrue(created)
+        self.assertIsNotNone(lead.assigned_to)
+
+    def test_assigned_at_tracks_assignment_changes(self):
+        lead = Lead.objects.create(name="x")
+        self.assertIsNone(lead.assigned_at)
+        lead.assigned_to = self.a
+        lead.save()
+        first = lead.assigned_at
+        self.assertIsNotNone(first)
+        lead.notes = "edit"
+        lead.save()
+        lead.refresh_from_db()
+        self.assertEqual(lead.assigned_at, first)                        # unrelated edit: clock untouched
+        lead.assigned_to = self.b
+        lead.save()
+        lead.refresh_from_db()
+        self.assertGreaterEqual(lead.assigned_at, first)                 # reassigned: restarts
+
+    def test_first_touch_recorded_once_by_real_outreach_only(self):
+        lead = Lead.objects.create(name="x", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="product_entry", lead=lead)
+        lead.refresh_from_db()
+        self.assertIsNone(lead.first_touch_at)
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=lead)
+        lead.refresh_from_db()
+        first = lead.first_touch_at
+        self.assertIsNotNone(first)
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=lead)
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_touch_at, first)
+
+
+class QueuePriorityTests(CrmBase):
+    def _q(self):
+        return [l.name for l in svc.call_queue(self.a)]
+
+    def test_fresh_untouched_inbound_jumps_ahead_of_due_followups(self):
+        old_due = Lead.objects.create(name="due", assigned_to=self.a, status=LeadStatus.CONTACTED,
+                                      next_follow_up=timezone.localdate() - dt.timedelta(days=3))
+        new = Lead.objects.create(name="fresh", assigned_to=self.a)
+        Lead.objects.filter(pk=new.pk).update(assigned_at=timezone.now())
+        self.assertEqual(self._q()[0], "fresh")
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=Lead.objects.get(pk=new.pk))
+        self.assertEqual(self._q(), ["due"])                              # touched -> no longer jumps
+
+    def test_stale_assignment_is_not_fresh(self):
+        old = Lead.objects.create(name="old", assigned_to=self.a)
+        Lead.objects.filter(pk=old.pk).update(assigned_at=timezone.now() - dt.timedelta(hours=svc.FRESH_HOURS + 1))
+        hot = Lead.objects.create(name="hot", assigned_to=self.a, status=LeadStatus.NEGOTIATING,
+                                  next_follow_up=timezone.localdate())
+        self.assertEqual(self._q()[0], "hot")
+
+    def test_hotter_stages_before_colder_when_nothing_else_differs(self):
+        names = {}
+        for st in ("new", "contacted", "interested", "demo_booked", "demo_done", "negotiating"):
+            names[st] = Lead.objects.create(name=st, assigned_to=self.a, status=st,
+                                            next_follow_up=timezone.localdate()).name
+        order = self._q()
+        self.assertEqual(order, ["negotiating", "demo_done", "demo_booked", "interested", "contacted", "new"])
+
+    def test_due_followup_still_beats_a_worked_today_lead(self):
+        due = Lead.objects.create(name="due", assigned_to=self.a, next_follow_up=timezone.localdate())
+        done = Lead.objects.create(name="done", assigned_to=self.a)
+        svc.log_activity(actor=self.a, kind="call", outcome="connected", lead=done)
+        self.assertEqual(self._q(), ["due"])
+
+
+class SignupHookTests(CrmBase):
+    def _project(self, **src):
+        p = Project.objects.create(name="Ravi Jewels", status="active", signup_source=src)
+        return Project.objects.get(pk=p.pk)
+
+    def test_signup_becomes_a_routed_lead_with_attribution(self):
+        p = self._project(utm_source="facebook", lp="jewellery", gclid="g1")
+        lead, created = svc.lead_from_signup(p, name="Ravi Kumar", phone="9811100000", city="Pune")
+        self.assertTrue(created)
+        self.assertEqual((lead.name, lead.business, lead.city), ("Ravi Kumar", "Ravi Jewels", "Pune"))
+        self.assertEqual(lead.source, "Signup · facebook")
+        self.assertEqual(lead.acquisition["lp"], "jewellery")
+        self.assertEqual(lead.converted_project, p)
+        self.assertIsNotNone(lead.assigned_to)
+        self.assertIn("Self-signup", lead.notes)
+
+    def test_referring_dgc_gets_their_own_signup(self):
+        p = self._project()
+        lead, _ = svc.lead_from_signup(p, name="R", phone="9822200000", ref_user=self.b)
+        self.assertEqual(lead.assigned_to, self.b)
+        self.assertEqual(lead.source, "Signup · organic")
+
+    def test_second_signup_with_same_phone_is_not_duplicated(self):
+        svc.lead_from_signup(self._project(), name="R", phone="9833300000")
+        svc.lead_from_signup(self._project(), name="R2", phone="+91 98333 00000")
+        self.assertEqual(Lead.objects.count(), 1)
+
+    def test_view_helper_never_breaks_signup_and_resolves_ref_code(self):
+        from unittest import mock
+        from apps.accounts.views import _crm_lead_from_signup
+        p = self._project()
+        prof = Profile.objects.get(user=self.b)
+        code = prof.ensure_affiliate_code()
+        _crm_lead_from_signup(p, name="R", phone="9844400000", city="", ref_code=code)
+        self.assertEqual(Lead.objects.get(phone="9844400000").assigned_to, self.b)
+        with mock.patch("apps.crm.services.lead_from_signup", side_effect=RuntimeError("boom")):
+            _crm_lead_from_signup(p, name="R", phone="9855500000", city="", ref_code="")   # must not raise
+        self.assertFalse(Lead.objects.filter(phone="9855500000").exists())
+
+    def test_unknown_ref_code_is_ignored(self):
+        from apps.accounts.views import _crm_lead_from_signup
+        _crm_lead_from_signup(self._project(), name="R", phone="9866600000", city="", ref_code="NOPE1234")
+        self.assertIsNotNone(Lead.objects.get(phone="9866600000").assigned_to)   # auto-routed instead
+
+
+@override_settings(CRM_CAPTURE_TOKEN="s3cret-token", ALLOWED_HOSTS=["*"])
+class CaptureWebhookTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        cache.clear()
+        self.url = reverse("crm_capture")
+
+    def _post(self, data, token="s3cret-token", **kw):
+        from django.test import Client
+        c = Client(enforce_csrf_checks=True)
+        headers = {"HTTP_X_CRM_TOKEN": token} if token else {}
+        return c.post(self.url, data=json.dumps(data), content_type="application/json", **headers, **kw)
+
+    def test_creates_and_routes_json_lead_without_csrf(self):
+        r = self._post({"name": "Meta Lead", "phone": "9877700000", "city": "Pune", "source": "Meta lead ad",
+                        "utm_campaign": "diwali", "junk": "ignored"})
+        self.assertEqual(r.status_code, 201)
+        body = r.json()
+        self.assertTrue(body["ok"] and body["created"])
+        lead = Lead.objects.get(pk=body["lead_id"])
+        self.assertEqual((lead.name, lead.source, lead.acquisition), ("Meta Lead", "Meta lead ad", {"utm_campaign": "diwali"}))
+        self.assertIsNotNone(lead.assigned_to)
+        self.assertEqual(body["assigned"], svc.person_label(lead.assigned_to))
+
+    def test_form_encoded_and_bearer_token(self):
+        from django.test import Client
+        r = Client().post(self.url, {"name": "Form Lead", "phone": "9888800000"}, HTTP_AUTHORIZATION="Bearer s3cret-token")
+        self.assertEqual(r.status_code, 201)
+        self.assertEqual(Lead.objects.get(phone="9888800000").source, "capture")
+
+    def test_duplicate_returns_200_and_created_false(self):
+        self._post({"name": "A", "phone": "9877711111"})
+        r = self._post({"name": "B", "phone": "+91 98777 11111"})
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.json()["created"])
+        self.assertEqual(Lead.objects.count(), 1)
+
+    def test_wrong_or_missing_token_is_forbidden_and_creates_nothing(self):
+        self.assertEqual(self._post({"name": "x", "phone": "9000000009"}, token="nope").status_code, 403)
+        self.assertEqual(self._post({"name": "x", "phone": "9000000009"}, token="").status_code, 403)
+        self.assertFalse(Lead.objects.exists())
+
+    @override_settings(CRM_CAPTURE_TOKEN="")
+    def test_feature_is_off_without_a_configured_token(self):
+        self.assertEqual(self._post({"name": "x", "phone": "9000000009"}, token="anything").status_code, 404)
+
+    def test_validation_errors(self):
+        self.assertEqual(self._post({"city": "Pune"}).status_code, 400)                         # no name/phone
+        from django.test import Client
+        r = Client().post(self.url, data="{not json", content_type="application/json", HTTP_X_CRM_TOKEN="s3cret-token")
+        self.assertEqual(r.status_code, 400)
+        r = Client().post(self.url, data="[1,2]", content_type="application/json", HTTP_X_CRM_TOKEN="s3cret-token")
+        self.assertEqual(r.status_code, 400)
+
+    def test_only_post_and_size_limit_and_field_truncation(self):
+        from django.test import Client
+        self.assertEqual(Client().get(self.url).status_code, 405)
+        r = self._post({"name": "n", "phone": "9", "notes": "x" * 20000})
+        self.assertEqual(r.status_code, 413)
+        r = self._post({"name": "N" * 500, "phone": "9123400000"})
+        self.assertEqual(len(Lead.objects.get(pk=r.json()["lead_id"]).name), 120)
+
+    def test_rate_limit(self):
+        for i in range(120):
+            cache.set("crm_capture:127.0.0.1", i, 60)
+        cache.set("crm_capture:127.0.0.1", 120, 60)
+        self.assertEqual(self._post({"name": "x", "phone": "9000000009"}).status_code, 429)
+
+
+class SettingsAndProfileTests(CrmBase):
+    def test_settings_screen_admin_only(self):
+        url = reverse("control:crm_settings")
+        self.login(self.a)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.post(url, {}).status_code, 403)
+        self.login(self.admin)
+        html = self.client.get(url).content.decode()
+        for needle in ("Speed-to-lead", "Automatic follow-ups", "Admin alerts", "Forecast", "Lead capture webhook"):
+            self.assertIn(needle, html)
+
+    def test_settings_save_including_stage_probabilities(self):
+        self.login(self.admin)
+        data = {"auto_assign": "on", "capacity_per_dgc": "25", "trial_rescue_days": "2",
+                "health_no_products_days": "5", "health_no_orders_days": "10", "recycle_days": "20",
+                "quiet_after_hour": "11", "avg_plan_price": "3499", "digest_emails": "a@x.com, b@y.com",
+                "p_new": "5", "p_contacted": "10", "p_interested": "25", "p_demo_booked": "35",
+                "p_demo_done": "50", "p_negotiating": "70"}
+        r = self.client.post(reverse("control:crm_settings"), data)
+        self.assertEqual(r.status_code, 302)
+        cfg = CrmSettings.load()
+        self.assertEqual((cfg.capacity_per_dgc, cfg.trial_rescue_days, cfg.quiet_after_hour), (25, 2, 11))
+        self.assertFalse(cfg.alert_email)                                  # unchecked box -> off
+        self.assertEqual(cfg.digest_emails, "a@x.com, b@y.com")
+        self.assertEqual((cfg.probability("new"), cfg.probability("negotiating")), (5, 70))
+
+    def test_settings_validation(self):
+        self.login(self.admin)
+        base = {"capacity_per_dgc": "0", "trial_rescue_days": "3", "health_no_products_days": "7",
+                "health_no_orders_days": "14", "recycle_days": "30", "quiet_after_hour": "12", "avg_plan_price": "2999",
+                "p_new": "3", "p_contacted": "8", "p_interested": "20", "p_demo_booked": "30", "p_demo_done": "45", "p_negotiating": "65"}
+        for bad in ({"quiet_after_hour": "30"}, {"digest_emails": "not-an-email"}, {"p_new": "150"}):
+            r = self.client.post(reverse("control:crm_settings"), {**base, **bad})
+            self.assertEqual(r.status_code, 200, bad)                      # re-rendered with errors
+        self.assertEqual(CrmSettings.load().quiet_after_hour, 12)
+
+    def test_probability_defaults_and_clamping(self):
+        cfg = CrmSettings.load()
+        self.assertEqual(cfg.probability("demo_done"), 45)
+        cfg.stage_probabilities = {"new": 999, "contacted": "bad"}
+        self.assertEqual((cfg.probability("new"), cfg.probability("contacted")), (100, 0))
+
+    def test_dgc_pauses_and_sets_cities_only_for_themselves(self):
+        self.login(self.a)
+        self.client.post(reverse("control:crm_my_profile"), {"cities": " Pune ,Mumbai,, "})        # unchecked -> paused
+        p = CrmProfile.objects.get(user=self.a)
+        self.assertEqual((p.accepts_leads, p.cities), (False, "Pune, Mumbai"))
+        self.assertFalse(CrmProfile.objects.filter(user=self.b).exists())
+        self.client.post(reverse("control:crm_my_profile"), {"accepts_leads": "1", "cities": "Pune"})
+        self.assertTrue(CrmProfile.objects.get(user=self.a).accepts_leads)
+
+    def test_my_day_shows_fresh_banner_and_settings_panel(self):
+        lead, _ = svc.ingest_lead(name="Hot One", phone="9600000001", city="Pune", source="Signup · facebook",
+                                  assign_to=self.a)
+        Lead.objects.filter(pk=lead.pk).update(assigned_at=timezone.now())
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_my_day")).content.decode()
+        self.assertIn("1 new lead for you", html)
+        self.assertIn("call within 5 minutes", html)
+        self.assertIn("Hot One", html)
+        self.assertIn("Signup · facebook", html)
+        self.assertIn("My lead settings", html)
+        self.assertIn("taking new leads", html)
+        svc.log_activity(actor=self.a, kind="call", outcome="no_answer", lead=Lead.objects.get(pk=lead.pk))
+        self.assertNotIn("new lead for you", self.client.get(reverse("control:crm_my_day")).content.decode())
+
+    def test_paused_label_shows_after_pausing(self):
+        CrmProfile.objects.create(user=self.a, accepts_leads=False)
+        self.login(self.a)
+        self.assertIn("· paused", self.client.get(reverse("control:crm_my_day")).content.decode())
+
+    def test_board_links_to_settings_for_admin(self):
+        self.login(self.admin)
+        self.assertIn(reverse("control:crm_settings"), self.client.get(reverse("control:crm_board")).content.decode())
