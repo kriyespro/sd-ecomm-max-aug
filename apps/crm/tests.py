@@ -2931,3 +2931,297 @@ class SourceSpendTests(CrmBase):
         from django.db import IntegrityError, transaction
         with self.assertRaises(IntegrityError), transaction.atomic():
             SourceSpend.objects.create(source="Facebook", month=dt.date(2026, 10, 2), amount=Decimal("1"))
+
+
+class SourceRoiTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.today = timezone.localdate()
+
+    def _lead(self, source, status="new", touched=False, **kw):
+        l = Lead.objects.create(name="L", source=source, status=status, assigned_to=self.a, **kw)
+        if touched:
+            Lead.objects.filter(pk=l.pk).update(first_touch_at=timezone.now())
+        return l
+
+    def test_counts_win_rate_and_spend_math(self):
+        for _ in range(10):
+            self._lead("Signup · facebook", touched=True)
+        for st in ("demo_booked", "demo_done", "won", "won"):
+            self._lead("Signup · facebook", status=st, touched=True)
+        for _ in range(4):
+            self._lead("Cold call")
+        SourceSpend.objects.create(source="Signup · facebook", month=self.today, amount=Decimal("14000"))
+        rows = {r["source"]: r for r in svc.source_roi(self.today - dt.timedelta(days=29), self.today)}
+        fb = rows["Signup · facebook"]
+        self.assertEqual((fb["leads"], fb["touched"], fb["demos"], fb["won"]), (14, 14, 4, 2))
+        self.assertEqual(fb["win_pct"], 14)
+        self.assertEqual((fb["spend"], fb["cost_per_lead"], fb["cost_per_won"]), (Decimal("14000"), Decimal("1000"), Decimal("7000")))
+        cc = rows["Cold call"]
+        self.assertEqual((cc["leads"], cc["won"], cc["spend"]), (4, 0, 0))
+        self.assertIsNone(cc["cost_per_lead"])                   # no spend entered: no made-up cost
+        self.assertIsNone(fb["cost_per_won"] if fb["won"] == 0 else None)
+
+    def test_cost_per_won_is_blank_with_no_wins(self):
+        self._lead("Meta lead ad")
+        SourceSpend.objects.create(source="Meta lead ad", month=self.today, amount=Decimal("500"))
+        r = svc.source_roi(self.today, self.today)[0]
+        self.assertEqual((r["cost_per_lead"], r["cost_per_won"]), (Decimal("500"), None))
+
+    def test_only_leads_created_in_range_count_and_blank_source_is_labelled(self):
+        old = self._lead("Old source")
+        Lead.objects.filter(pk=old.pk).update(created_at=timezone.now() - dt.timedelta(days=90))
+        self._lead("")
+        rows = {r["source"]: r for r in svc.source_roi(self.today - dt.timedelta(days=29), self.today)}
+        self.assertNotIn("Old source", rows)
+        self.assertIn("(no source)", rows)
+
+    def test_spend_without_leads_still_appears(self):
+        SourceSpend.objects.create(source="Google", month=self.today, amount=Decimal("900"))
+        r = {x["source"]: x for x in svc.source_roi(self.today - dt.timedelta(days=5), self.today)}["Google"]
+        self.assertEqual((r["leads"], r["spend"], r["cost_per_lead"]), (0, Decimal("900"), None))
+
+    def test_spend_view_validates_overwrites_and_is_admin_only(self):
+        url = reverse("control:crm_spend")
+        self.login(self.a)
+        self.assertEqual(self.client.post(url, {"source": "x", "month": "2026-10", "amount": "5"}).status_code, 403)
+        self.login(self.admin)
+        for bad in ({"source": "", "month": "2026-10", "amount": "5"}, {"source": "x", "month": "nope", "amount": "5"},
+                    {"source": "x", "month": "2026-10", "amount": "abc"}, {"source": "x", "month": "2026-10", "amount": "-5"}):
+            self.client.post(url, bad)
+        self.assertFalse(SourceSpend.objects.exists())
+        self.client.post(url, {"source": "Meta", "month": "2026-10", "amount": "1000"})
+        self.client.post(url, {"source": "Meta", "month": "2026-10", "amount": "2500.50"})
+        self.assertEqual(SourceSpend.objects.get().amount, Decimal("2500.50"))
+        r = self.client.post(url, {"source": "Meta", "month": "2026-10", "amount": "1", "next": "https://evil.test/"})
+        self.assertNotIn("evil.test", r["Location"])
+
+
+class FunnelForecastTests(CrmBase):
+    def test_funnel_is_cumulative_excludes_lost_archived_and_averages_days(self):
+        def mk(status, days_here=0, **kw):
+            l = Lead.objects.create(name="x", status=status, **kw)
+            Lead.objects.filter(pk=l.pk).update(stage_changed_at=timezone.now() - dt.timedelta(days=days_here))
+        for _ in range(4):
+            mk("new", 2)
+        for _ in range(3):
+            mk("contacted", 4)
+        mk("interested", 6)
+        mk("won", 1)
+        mk("lost")
+        mk("new", is_archived=True)
+        rows = {r["stage"]: r for r in svc.funnel()}
+        self.assertEqual([rows[s]["here"] for s in ("new", "contacted", "interested", "won")], [4, 3, 1, 1])
+        self.assertEqual([rows[s]["reached"] for s in ("new", "contacted", "interested", "won")], [9, 5, 2, 1])
+        self.assertEqual(rows["contacted"]["step_pct"], 56)             # 5 of 9 got past 'new'
+        self.assertIsNone(rows["new"]["step_pct"])
+        self.assertAlmostEqual(rows["new"]["avg_days"], 2.0, delta=0.1)
+        self.assertIsNone(rows["negotiating"]["avg_days"])
+
+    def test_stuck_leads_ranks_longest_first_and_skips_new_and_recent(self):
+        def mk(name, status, days):
+            l = Lead.objects.create(name=name, status=status, assigned_to=self.a)
+            Lead.objects.filter(pk=l.pk).update(stage_changed_at=timezone.now() - dt.timedelta(days=days))
+        mk("brandnew", "new", 30)           # new isn't 'stuck' (nobody has started)
+        mk("fresh", "interested", 2)
+        mk("old", "interested", 20)
+        mk("older", "demo_done", 40)
+        got = [l.name for l in svc.stuck_leads()]
+        self.assertEqual(got, ["older", "old"])
+        self.assertEqual(svc.stuck_leads()[0].stuck_days, 40)
+
+    def test_forecast_math_uses_settings_probabilities_and_price(self):
+        cfg = CrmSettings.load()
+        cfg.avg_plan_price = Decimal("3000")
+        cfg.stage_probabilities = {"negotiating": 50, "contacted": 10}
+        cfg.save()
+        for _ in range(4):
+            Lead.objects.create(name="n", status="negotiating", assigned_to=self.a)
+        for _ in range(10):
+            Lead.objects.create(name="c", status="contacted")
+        Lead.objects.create(name="a", status="negotiating", is_archived=True)
+        Lead.objects.create(name="w", status="won")
+        f = svc.forecast()
+        self.assertEqual(f["stores"], Decimal("3.0"))                   # 4×50% + 10×10%
+        self.assertEqual(f["mrr"], Decimal("9000"))
+        rows = {r["label"]: r for r in f["rows"]}
+        self.assertEqual((rows["Negotiating"]["n"], rows["Negotiating"]["pct"]), (4, 50))
+        self.assertNotIn("Won", rows)
+
+    def test_empty_database_is_all_zeros_not_errors(self):
+        self.assertEqual(svc.forecast()["stores"], Decimal("0.0"))
+        self.assertEqual(svc.stuck_leads(), [])
+        self.assertTrue(all(r["reached"] == 0 for r in svc.funnel()))
+
+
+class SpeedToLeadTests(CrmBase):
+    def test_median_and_percentages(self):
+        now = timezone.now()
+        for mins in (2, 3, 4, 20, 90):
+            l = Lead.objects.create(name="x", assigned_to=self.a)
+            Lead.objects.filter(pk=l.pk).update(assigned_at=now - dt.timedelta(hours=1), first_touch_at=now - dt.timedelta(hours=1) + dt.timedelta(minutes=mins))
+        today = timezone.localdate()
+        s = svc.speed_to_lead(today - dt.timedelta(days=1), today)
+        self.assertEqual((s["n"], s["median"], s["within_5"], s["within_30"]), (5, 4, 60, 80))
+
+    def test_no_data_and_waiting_list(self):
+        now = timezone.now()
+        a = Lead.objects.create(name="Waiting", assigned_to=self.a)
+        Lead.objects.filter(pk=a.pk).update(assigned_at=now - dt.timedelta(hours=3))
+        b = Lead.objects.create(name="JustNow", assigned_to=self.a)
+        Lead.objects.filter(pk=b.pk).update(assigned_at=now - dt.timedelta(minutes=10))
+        c = Lead.objects.create(name="Ancient", assigned_to=self.a)
+        Lead.objects.filter(pk=c.pk).update(assigned_at=now - dt.timedelta(days=9))
+        today = timezone.localdate()
+        s = svc.speed_to_lead(today, today)
+        self.assertEqual((s["n"], s["median"], s["within_5"]), (0, None, None))
+        self.assertEqual([l.name for l in s["waiting"]], ["Waiting"])     # >1h and <3 days only
+        self.assertEqual(s["waiting"][0].waiting_hours, 3)
+
+
+class LoggingFlagTests(CrmBase):
+    def _calls(self, user, start, n, gap_s, outcome="connected"):
+        Activity.objects.bulk_create([Activity(actor=user, kind="call", outcome=outcome,
+                                               occurred_at=start + dt.timedelta(seconds=i * gap_s)) for i in range(n)])
+
+    def _range(self):
+        t = timezone.localdate()
+        return t - dt.timedelta(days=1), t
+
+    def test_burst_is_flagged_but_a_normal_pace_is_not(self):
+        start = timezone.now() - dt.timedelta(hours=3)
+        self._calls(self.a, start, 25, 20, "no_answer")               # 25 calls in ~8 minutes
+        self._calls(self.b, start, 25, 120, "no_answer")              # 25 calls over 50 minutes
+        flags = svc.logging_flags(*self._range())
+        kinds = {(f["user"].pk, f["kind"]) for f in flags}
+        self.assertIn((self.a.pk, "burst"), kinds)
+        self.assertNotIn((self.b.pk, "burst"), kinds)
+        burst = [f for f in flags if f["kind"] == "burst"][0]
+        self.assertIn("25 calls", burst["detail"])
+
+    def test_perfect_connect_rate_needs_enough_calls(self):
+        start = timezone.now() - dt.timedelta(hours=5)
+        self._calls(self.a, start, 16, 600, "connected")              # 100% of 16
+        self._calls(self.b, start, 10, 600, "connected")              # 100% but only 10 calls
+        flags = svc.logging_flags(*self._range())
+        self.assertEqual([(f["user"].pk, f["kind"]) for f in flags], [(self.a.pk, "perfect")])
+        self.assertIn("16 of 16", flags[0]["detail"])
+
+    def test_realistic_mix_is_clean(self):
+        start = timezone.now() - dt.timedelta(hours=6)
+        for i in range(30):
+            Activity.objects.create(actor=self.a, kind="call", outcome="connected" if i % 4 == 0 else "no_answer",
+                                    occurred_at=start + dt.timedelta(minutes=i * 7))
+        self.assertEqual(svc.logging_flags(*self._range()), [])
+
+    def test_other_kinds_and_admin_activity_do_not_trigger(self):
+        start = timezone.now() - dt.timedelta(hours=2)
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="product_entry", outcome="done", occurred_at=start + dt.timedelta(seconds=i)) for i in range(30)])
+        self.assertEqual(svc.logging_flags(*self._range()), [])
+
+
+class InsightsPageTests(CrmBase):
+    def test_admin_only_and_renders_every_section(self):
+        url = reverse("control:crm_insights")
+        self.login(self.a)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.login(self.admin)
+        Lead.objects.create(name="Hot", source="Signup · facebook", status="negotiating", assigned_to=self.a)
+        html = self.client.get(url).content.decode()
+        for needle in ("Forecast", "Speed to lead", "Worth a look", "Where leads come from", "Funnel", "Stuck 7+ days",
+                       "Signup · facebook", "＋ Ad spend"):
+            self.assertIn(needle, html)
+        for key in ("7d", "30d", "month", "90d"):
+            self.assertEqual(self.client.get(url + f"?range={key}").status_code, 200)
+        self.assertEqual(self.client.get(url + "?range=junk").status_code, 200)
+
+    def test_insights_tab_only_for_admins(self):
+        self.login(self.admin)
+        self.assertIn('href="%s"' % reverse("control:crm_insights"), self.client.get(reverse("control:crm_board")).content.decode())
+        self.login(self.a)
+        self.assertNotIn('href="%s"' % reverse("control:crm_insights"), self.client.get(reverse("control:crm_leads") + "?view=list").content.decode())
+
+    def test_flags_are_shown_with_a_gentle_disclaimer(self):
+        start = timezone.now() - dt.timedelta(hours=2)
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="no_answer", occurred_at=start + dt.timedelta(seconds=i * 10)) for i in range(22)])
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_insights")).content.decode()
+        self.assertIn("22 calls logged within 10 minutes", html)
+        self.assertIn("not proof of anything", html)
+
+
+class StatementTests(CrmBase):
+    def _paid_invoice(self, manager):
+        p = Project.objects.create(name=f"Store{Project.objects.count()}", status="active")
+        sub = billing.ensure_subscription(Project.objects.get(pk=p.pk))
+        sub.manager = manager
+        sub.save(update_fields=["manager"])
+        billing.mark_invoice_paid(billing.issue_invoice(sub))
+        return sub
+
+    def _month(self):
+        t = timezone.localdate()
+        return f"{t:%Y-%m}", svc.month_bounds(t.year, t.month)
+
+    def test_month_bounds(self):
+        self.assertEqual(svc.month_bounds(2026, 2), (dt.date(2026, 2, 1), dt.date(2026, 2, 28)))
+        self.assertEqual(svc.month_bounds(2028, 2)[1], dt.date(2028, 2, 29))
+        self.assertEqual(svc.month_bounds(2026, 12)[1], dt.date(2026, 12, 31))
+
+    def test_rows_combine_activity_money_wins_and_commission(self):
+        self._paid_invoice(self.a)
+        first, last = self._month()[1]
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        svc.log_activity(actor=self.a, kind="demo", outcome="done")
+        Collection.objects.create(collected_by=self.a, amount=Decimal("1000"), mode="upi", reference="u", status="verified")
+        Collection.objects.create(collected_by=self.a, amount=Decimal("999"), mode="cash", reference="c")           # unverified: excluded
+        Lead.objects.create(name="W", assigned_to=self.a, status="won")
+        rows = {r["user"].pk: r for r in svc.statement_rows(first, last)}
+        a = rows[self.a.pk]
+        com = ManagerCommission.objects.get(manager=self.a)
+        sub_money = Collection.objects.get(collected_by=self.a, mode="subscription").amount   # auto-logged when the invoice was paid
+        self.assertEqual((a["calls"], a["demos"], a["won"], a["collection"]), (1, 1, 1, Decimal("1000") + sub_money))
+        self.assertEqual((a["com_pending"], a["com_total"]), (com.amount, com.amount))
+        self.assertEqual((rows[self.b.pk]["calls"], rows[self.b.pk]["com_total"]), (0, Decimal("0")))
+
+    def test_pages_admin_only_month_navigation_and_defaults(self):
+        url = reverse("control:crm_statements")
+        self.login(self.a)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.assertEqual(self.client.get(reverse("control:crm_statement", kwargs={"pk": self.a.pk})).status_code, 403)
+        self.login(self.admin)
+        m, _ = self._month()
+        for q in ("", f"?month={m}", "?month=2026-02", "?month=garbage", "?month=2026-13"):
+            self.assertEqual(self.client.get(url + q).status_code, 200, q)
+        html = self.client.get(url + "?month=2026-02").content.decode()
+        self.assertIn("February 2026", html)
+        self.assertIn("month=2026-01", html)
+        self.assertIn("month=2026-03", html)
+
+    def test_csv_downloads_are_correct_and_injection_safe(self):
+        self._paid_invoice(self.a)
+        User.objects.filter(pk=self.a.pk).update(first_name="=HYPERLINK(\"http://evil\")")
+        m, _ = self._month()
+        self.login(self.admin)
+        r = self.client.get(reverse("control:crm_statements") + f"?month={m}&format=csv")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        self.assertIn(f"crm-statement-{m}.csv", r["Content-Disposition"])
+        body = r.content.decode("utf-8-sig")
+        self.assertTrue(body.startswith("DGC,Calls,Spoke,Demos"))
+        self.assertNotIn("\n=HYPERLINK", body)                          # formula neutralised
+        self.assertIn("'=HYPERLINK", body)
+        d = self.client.get(reverse("control:crm_statement", kwargs={"pk": self.a.pk}) + f"?month={m}&format=csv")
+        self.assertIn("Commission", d.content.decode("utf-8-sig"))
+
+    def test_detail_lists_commission_collection_and_wins_and_404s_for_non_dgc(self):
+        self._paid_invoice(self.a)
+        Collection.objects.create(collected_by=self.a, amount=Decimal("2999"), mode="upi", reference="UTR77", status="verified")
+        Lead.objects.create(name="Won Co", business="Won Co Ltd", assigned_to=self.a, status="won")
+        m, _ = self._month()
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_statement", kwargs={"pk": self.a.pk}) + f"?month={m}").content.decode()
+        for needle in ("Commission lines", "UTR77", "Won Co Ltd", "INV-"):
+            self.assertIn(needle, html)
+        self.assertEqual(self.client.get(reverse("control:crm_statement", kwargs={"pk": self.owner.pk})).status_code, 404)
+        self.assertEqual(self.client.get(reverse("control:crm_statement", kwargs={"pk": self.admin.pk})).status_code, 404)
