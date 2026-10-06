@@ -1179,42 +1179,114 @@ def _nice(d):
     return str(int(d)) if d == d.to_integral() else str(d)
 
 
+def cheapest_dgc_plan():
+    """The cheapest plan a DGC can actually provision, judged by its YEARLY DGC
+    price (what a DGC pays the platform). Commission is counted on this, not on
+    the public page price."""
+    from apps.billing.models import Plan
+    return Plan.objects.filter(is_active=True, is_public=True, dgc_price_yearly__gt=0).order_by("dgc_price_yearly").first()
+
+
 def cheapest_yearly_plan():
-    """The cheapest public paid plan, judged by its YEARLY amount (what the 20%
-    is taken on), or None if no such plan exists."""
+    """Fallback only: the cheapest public plan by its public YEARLY price."""
     from apps.billing.models import Plan
     return Plan.objects.filter(is_active=True, is_public=True, price_yearly__gt=0).order_by("price_yearly").first()
+
+
+def _profile(user):
+    return CrmProfile.objects.filter(user=user).first() if user is not None else None
+
+
+def funnel_for(user=None):
+    """The three conversion rates for this DGC: the ones a platform admin set
+    for them, else the team defaults. Returns ints plus a flag saying whether
+    any of them is personal."""
+    cfg = CrmSettings.load()
+    prof = _profile(user)
+    pick = lambda mine, team: (mine if (prof is not None and mine) else team)  # noqa: E731
+    c1 = pick(getattr(prof, "conv_call_to_demo", None), cfg.conv_call_to_demo)
+    c2 = pick(getattr(prof, "conv_demo_to_trial", None), cfg.conv_demo_to_trial)
+    c3 = pick(getattr(prof, "conv_trial_to_paid", None), cfg.conv_trial_to_paid)
+    custom = prof is not None and any((prof.conv_call_to_demo, prof.conv_demo_to_trial, prof.conv_trial_to_paid))
+    return {"c1": int(c1), "c2": int(c2), "c3": int(c3), "custom": custom,
+            "overall": Decimal(c1) * Decimal(c2) * Decimal(c3) / Decimal(10000)}
 
 
 def client_value(user=None):
     """What ONE paying client is worth to a DGC, at the smallest plan:
 
-        commission  = value_commission_pct % (default 20) of the YEARLY plan amount
+        commission  = commission % (admin-set per DGC, else the team default 20)
+                      of the YEARLY **DGC price** (not the public page price)
         own charge  = whatever service charge this DGC set for themselves
         total       = commission + own charge
 
-    The yearly amount is the cheapest public plan's price_yearly (or the admin
-    override). These are estimates for motivation — real commission is paid by
-    the billing module on each plan's own percentage."""
+    Falls back to the public yearly price only if no plan has a DGC price at all.
+    Estimates for motivation — real commission is paid by the billing module."""
     cfg = CrmSettings.load()
-    yearly = cfg.min_ticket_override
-    if not yearly:
-        plan = cheapest_yearly_plan()
-        yearly = plan.price_yearly if plan else Decimal("14999")
-    yearly = Decimal(yearly)
-    pct = Decimal(cfg.value_commission_pct)
-    commission = (yearly * pct / Decimal(100)).quantize(Decimal("1"), rounding=_HALF_UP)
-    own = Decimal(0)
-    if user is not None:
-        prof = CrmProfile.objects.filter(user=user).only("service_charge").first()
-        own = Decimal(prof.service_charge) if prof else Decimal(0)
+    on_dgc_price = True
+    base = cfg.min_ticket_override
+    if not base:
+        plan = cheapest_dgc_plan()
+        if plan:
+            base = plan.dgc_price_yearly
+        else:
+            fallback = cheapest_yearly_plan()
+            base, on_dgc_price = (fallback.price_yearly if fallback else Decimal("14999")), False
+    base = Decimal(base)
+    prof = _profile(user)
+    pct = Decimal(prof.commission_pct if (prof is not None and prof.commission_pct) else cfg.value_commission_pct)
+    commission = (base * pct / Decimal(100)).quantize(Decimal("1"), rounding=_HALF_UP)
+    own = Decimal(prof.service_charge) if prof is not None else Decimal(0)
     own = own.quantize(Decimal("1"), rounding=_HALF_UP)
     total = commission + own
     return {
-        "yearly": yearly, "pct": pct, "commission": commission, "own": own, "total": total,
-        "yearly_label": inr(yearly), "pct_label": _nice(pct), "commission_label": inr(commission),
+        "yearly": base, "pct": pct, "commission": commission, "own": own, "total": total,
+        "yearly_label": inr(base), "pct_label": _nice(pct), "commission_label": inr(commission),
         "own_label": inr(own), "total_label": inr(total), "has_own": own > 0,
+        "on_dgc_price": on_dgc_price, "pct_custom": bool(prof is not None and prof.commission_pct),
     }
+
+
+SCENARIO_DEFS = [("calls", 40, "📞", "Call and contact"), ("meets", 10, "🤝", "Meet"), ("demos", 5, "🖥", "Give a demo to")]
+
+
+def scenarios(user, fn, cv, days):
+    """'If you do X today' cards. X is 40 calls, 10 meetings or 5 demos; each shows
+    what that turns into at this DGC's own percentages, today and — if repeated on
+    every working day — over the month."""
+    c1, c2, c3 = Decimal(fn["c1"]), Decimal(fn["c2"]), Decimal(fn["c3"])
+    out = []
+    for kind, n, icon, verb in SCENARIO_DEFS:
+        n = Decimal(n)
+        if kind == "calls":
+            meets = n * c1 / 100
+            chain = [("Calls", n)]
+        else:
+            meets = n                                   # a meeting and a demo are the same funnel step
+            chain = []
+        trials = meets * c2 / 100
+        paid = trials * c3 / 100
+        chain += [("Meet / demo", meets), ("Trials", trials), ("Paid clients", paid)]
+        top = chain[0][1] or Decimal(1)
+        out.append({
+            "kind": kind, "icon": icon, "verb": verb, "n": int(n),
+            "title": {"calls": f"{int(n)} people", "meets": f"{int(n)} people", "demos": f"{int(n)} people"}[kind],
+            "chain": [{"label": l, "n": _nice(v), "pct": max(7, int(v * 100 / top))} for l, v in chain],
+            "paid": _nice(paid), "paid_n": paid, "today_label": inr(paid * cv["total"]),
+            "month_clients": _nice(paid * days), "month_label": inr(paid * days * cv["total"]), "days": days,
+        })
+    return out
+
+
+def _hero(fn, cv):
+    """100 calls at this DGC's percentages -> what it gives."""
+    meets = Decimal(100) * fn["c1"] / 100
+    trials = meets * fn["c2"] / 100
+    paid = trials * fn["c3"] / 100
+    return {"calls": 100, "meets": _nice(meets), "trials": _nice(trials), "paid": _nice(paid),
+            "value_label": inr(paid * cv["total"]), "overall": _nice(fn["overall"]),
+            "bars": [{"label": l, "n": _nice(v), "pct": max(7, int(v))} for l, v in
+                     (("Calls", Decimal(100)), ("Meet / demo", meets), ("Trials", trials), ("Paid clients", paid))]}
 
 
 def possibility(user):
@@ -1222,8 +1294,9 @@ def possibility(user):
     plan (daily call target), their own open leads, and the funnel in settings.
     All simple multiplication — no promises, just what the funnel says."""
     cfg = CrmSettings.load()
-    c1, c2, c3 = (Decimal(cfg.conv_call_to_demo), Decimal(cfg.conv_demo_to_trial), Decimal(cfg.conv_trial_to_paid))
-    overall = c1 * c2 * c3 / Decimal(10000)                       # % of calls that end as a paid client
+    fn = funnel_for(user)
+    c1, c2, c3 = Decimal(fn["c1"]), Decimal(fn["c2"]), Decimal(fn["c3"])
+    overall = fn["overall"]                                        # % of calls that end as a paid client
     per_call = overall / Decimal(100)                              # paid clients per call
     cv = client_value(user)
     per_client = cv["total"]
@@ -1270,7 +1343,9 @@ def possibility(user):
     plan_rows = [{"label": l, "n": n, "n_label": _nice(n), "pct": max(7, int(n * 100 / target))}
                  for l, n in rows]
     return {
-        "cv": cv, "overall_pct": _nice(overall), "c": (int(c1), int(c2), int(c3)),
+        "cv": cv, "overall_pct": _nice(overall), "c": (int(c1), int(c2), int(c3)), "funnel_custom": fn["custom"],
+        "scenarios": scenarios(user, fn, cv, int(cfg.working_days_month or 26)),
+        "hero": _hero(fn, cv),
         "per100": [{"label": l, "n": _nice(n), "pct": max(7, int(n))} for l, n in per100],
         "plan": {"calls": int(target), "rows": plan_rows, "meets": _nice(meets), "trials": _nice(trials),
                  "paid": _nice(paid), "paid_n": paid, "value_label": inr(paid * per_client)},

@@ -17,9 +17,9 @@ MOUNT = "/admin/"
 # the context processor. Role gating is applied there too.
 _SECTIONS = [
     ("platform", "Platform", "◆", [
+        ("crm_welcome", "CRM", "\U0001f4ca"),      # a DGC's CRM (Welcome page) — first in their menu
+        ("crm_board", "CRM", "\U0001f4ca"),        # the admin's CRM (team board)
         ("stores", "Stores", "\U0001f3e2"),
-        ("crm_board", "CRM", "\U0001f4ca"),
-        ("crm_my_day", "CRM", "\U0001f4ca"),
         ("my_commissions", "My earnings", "\U0001f4b5"),
         ("affiliate_overview", "Affiliates", "\U0001f517"),
         ("billing", "Billing", "\U0001f4b0"),
@@ -108,7 +108,7 @@ _PLATFORM_ADMIN_ONLY = {"billing", "billing_plans", "skin_list", "users",
                         "platform_tracking", "learning", "testimonials", "coach", "affiliate_overview", "support_queue",
                         "crm_board"}
 # Items only for a DGC (platform manager) — an admin has the fuller view elsewhere.
-_DGC_ONLY = {"my_commissions", "crm_my_day"}
+_DGC_ONLY = {"my_commissions", "crm_welcome"}
 # Items only shown to a store owner / manager (not plain staff).
 _STORE_MANAGE_ONLY = {"payment_providers", "courier_configs", "domains", "team", "onboarding", "tracking",
                       "whatsapp", "social", "ai_keys", "support", "crm_owner_help"}
