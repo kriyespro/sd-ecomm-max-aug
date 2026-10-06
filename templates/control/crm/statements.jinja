@@ -1,0 +1,36 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% block page_title %}Statements{% endblock %}
+{% block crm_title %}Payout statements{% endblock %}
+{% block crm_sub %}· {{ first.strftime("%B %Y") }}{% endblock %}
+{% block crm_actions %}
+<a href="{{ url('control:crm_statements') }}?month={{ prev_month }}" class="rounded-full bg-white px-2.5 py-1 text-xs text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">←</a>
+<form class="inline"><input type="month" name="month" value="{{ month_value }}" onchange="this.form.submit()" class="h-7 rounded-full border border-pink-100 bg-white px-2.5 text-xs"></form>
+<a href="{{ url('control:crm_statements') }}?month={{ next_month }}" class="rounded-full bg-white px-2.5 py-1 text-xs text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">→</a>
+<a href="{{ url('control:crm_statements') }}?month={{ month_value }}&format=csv" class="rounded-full bg-pink-600 px-3.5 py-1 text-[13px] font-medium text-white hover:bg-pink-700">⬇ CSV</a>
+{% endblock %}
+
+{% block crm_body %}
+<div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
+  <table class="w-full text-left text-[13px]">
+    <thead class="bg-pink-50/70 text-[11px] uppercase tracking-wide text-pink-500"><tr>
+      <th class="px-3 py-2">DGC</th><th class="px-3 py-2 text-right">Calls</th><th class="px-3 py-2 text-right">Demos</th><th class="px-3 py-2 text-right">Won</th>
+      <th class="px-3 py-2 text-right">Collected ₹</th><th class="px-3 py-2 text-right">Pending ₹</th><th class="px-3 py-2 text-right">Approved ₹</th>
+      <th class="px-3 py-2 text-right">Paid ₹</th><th class="px-3 py-2 text-right">Commission ₹</th></tr></thead>
+    <tbody class="divide-y divide-pink-50">
+      {% for r in rows %}
+      <tr class="hover:bg-pink-50/40">
+        <td class="px-3 py-2 font-medium"><a href="{{ url('control:crm_statement', kwargs={'pk': r.user.pk}) }}?month={{ month_value }}" class="text-slate-800 hover:text-pink-700">{{ r.name }}</a></td>
+        <td class="px-3 py-2 text-right">{{ r.calls }}</td><td class="px-3 py-2 text-right">{{ r.demos }}</td><td class="px-3 py-2 text-right font-medium text-emerald-700">{{ r.won }}</td>
+        <td class="px-3 py-2 text-right">{{ r.collection }}</td><td class="px-3 py-2 text-right text-amber-700">{{ r.com_pending }}</td>
+        <td class="px-3 py-2 text-right text-sky-700">{{ r.com_approved }}</td><td class="px-3 py-2 text-right text-emerald-700">{{ r.com_paid }}</td>
+        <td class="px-3 py-2 text-right font-semibold">{{ r.com_total }}</td></tr>
+      {% else %}<tr><td colspan="9" class="px-4 py-6 text-center text-slate-400">No DGCs yet.</td></tr>{% endfor %}
+    </tbody>
+    {% if rows %}<tfoot class="border-t-2 border-pink-100 bg-pink-50/40 text-[13px] font-semibold"><tr>
+      <td class="px-3 py-2">Total</td><td class="px-3 py-2 text-right">{{ totals.calls }}</td><td class="px-3 py-2 text-right">{{ totals.demos }}</td><td class="px-3 py-2 text-right">{{ totals.won }}</td>
+      <td class="px-3 py-2 text-right">{{ totals.collection }}</td><td class="px-3 py-2 text-right">{{ totals.com_pending }}</td><td class="px-3 py-2 text-right">{{ totals.com_approved }}</td>
+      <td class="px-3 py-2 text-right">{{ totals.com_paid }}</td><td class="px-3 py-2 text-right">{{ totals.com_total }}</td></tr></tfoot>{% endif %}
+  </table>
+</div>
+<p class="text-[11px] text-slate-400">Commission is what each paid subscription invoice earned that month (pending → approved → paid is managed on the Billing → Commissions screen). “Collected” counts only verified collections. Click a name for the line-by-line statement.</p>
+{% endblock %}

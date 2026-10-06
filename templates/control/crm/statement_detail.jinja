@@ -1,0 +1,35 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% set _name = person.get_full_name() or person.email %}
+{% block page_title %}Statement · {{ _name }}{% endblock %}
+{% block crm_title %}{{ _name }}{% endblock %}
+{% block crm_sub %}· statement for {{ first.strftime("%B %Y") }}{% endblock %}
+{% block crm_actions %}
+<a href="{{ url('control:crm_statements') }}?month={{ month_value }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← All DGCs</a>
+<a href="{{ url('control:crm_statement', kwargs={'pk': person.pk}) }}?month={{ month_value }}&format=csv" class="rounded-full bg-pink-600 px-3.5 py-1 text-[13px] font-medium text-white hover:bg-pink-700">⬇ CSV</a>
+{% endblock %}
+
+{% block crm_body %}
+{% if me %}
+<div class="grid grid-cols-3 divide-x divide-y divide-pink-50 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-pink-100 sm:divide-y-0 xl:grid-cols-6">
+  {% for lab, val in [("Calls", me.calls), ("Spoke", me.connected), ("Demos", me.demos), ("Stores won", me.won), ("Collected ₹", me.collection), ("Commission ₹", me.com_total)] %}
+  <div class="px-3 py-2"><div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">{{ lab }}</div><div class="text-lg font-semibold text-pink-700">{{ val }}</div></div>
+  {% endfor %}
+</div>
+{% endif %}
+<div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+  <h3 class="mb-1 text-[13px] font-semibold text-pink-900">💵 Commission lines</h3>
+  <table class="w-full text-left text-[13px]"><tbody class="divide-y divide-pink-50">
+    {% for c in commissions %}<tr><td class="py-1.5 text-slate-500">{{ c.created_at.strftime("%d %b") }}</td><td class="font-medium">{{ c.subscription.project.name }}</td>
+      <td class="text-slate-500">{{ c.invoice.number }} · ₹{{ c.base_amount }} @ {{ c.rate_pct }}%</td><td class="text-right font-semibold">₹{{ c.amount }}</td><td class="pl-3 text-right text-[11px] text-slate-500">{{ c.get_status_display() }}</td></tr>
+    {% else %}<tr><td class="py-2 text-slate-400">No commission this month.</td></tr>{% endfor %}
+  </tbody></table>
+</div>
+<div class="grid gap-3 lg:grid-cols-2">
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100"><h3 class="mb-1 text-[13px] font-semibold text-pink-900">💰 Verified collections</h3>
+    {% for c in collections %}<div class="flex justify-between border-t border-pink-50 py-1.5 text-[13px]"><span>{{ c.collected_on.strftime("%d %b") }} · {{ c.get_mode_display() }}{% if c.project %} · {{ c.project.name }}{% endif %} <span class="font-mono text-[11px] text-slate-400">{{ c.reference }}</span></span><b>₹{{ c.amount }}</b></div>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">None.</p>{% endfor %}</div>
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100"><h3 class="mb-1 text-[13px] font-semibold text-pink-900">🎉 Stores won</h3>
+    {% for l in won %}<div class="flex justify-between border-t border-pink-50 py-1.5 text-[13px]"><span>{{ l.business or l.name }}</span><span class="text-slate-400">{{ l.stage_changed_at.strftime("%d %b") if l.stage_changed_at else "" }}</span></div>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">None.</p>{% endfor %}</div>
+</div>
+{% endblock %}

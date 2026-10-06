@@ -11,6 +11,7 @@ Platform admins see and assign everything; a DGC sees only their own rows.
 import csv
 import datetime as dt
 import io
+from decimal import Decimal
 
 from django import forms
 from django.conf import settings
@@ -46,6 +47,7 @@ from apps.crm.models import (
     Lead,
     LeadStatus,
     MessageTemplate,
+    SourceSpend,
     TemplateKind,
     StoreAssignment,
     StoreWorkRequest,
@@ -1127,6 +1129,147 @@ class TemplateDeleteView(PlatformAdminRequiredMixin, View):
         get_object_or_404(MessageTemplate, pk=pk).delete()
         messages.success(request, "Template deleted.")
         return redirect("control:crm_templates")
+
+
+# ───────────────────────────── insights + statements (admin) ─────────────────────────────
+
+_INSIGHT_RANGES = [("7d", "7 days"), ("30d", "30 days"), ("month", "This month"), ("90d", "90 days")]
+
+
+def _insight_range(key):
+    today = timezone.localdate()
+    if key == "7d":
+        return today - dt.timedelta(days=6), today, "Last 7 days"
+    if key == "month":
+        return today.replace(day=1), today, "This month"
+    if key == "90d":
+        return today - dt.timedelta(days=89), today, "Last 90 days"
+    return today - dt.timedelta(days=29), today, "Last 30 days"
+
+
+def _csv_cell(v):
+    """Neutralise spreadsheet formula injection (a lead name like =HYPERLINK(...))."""
+    t = "" if v is None else str(v)
+    return "'" + t if t[:1] in ("=", "+", "-", "@", "\t", "\r") else t
+
+
+def _csv_response(filename, header, rows):
+    from django.http import HttpResponse
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(header)
+    for r in rows:
+        w.writerow([_csv_cell(c) for c in r])
+    resp = HttpResponse("\ufeff" + buf.getvalue(), content_type="text/csv; charset=utf-8")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+class InsightsView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/insights.jinja"
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        key = self.request.GET.get("range", "30d")
+        start, end, label = _insight_range(key)
+        ctx.update(
+            range_key=key, range_label=label, ranges=_INSIGHT_RANGES, start=start, end=end,
+            sources=svc.source_roi(start, end), funnel=svc.funnel(), stuck=svc.stuck_leads(),
+            forecast=svc.forecast(), speed=svc.speed_to_lead(start, end), flags=svc.logging_flags(start, end),
+            known_sources=sorted(set(Lead.objects.exclude(source="").values_list("source", flat=True)
+                                     ) | set(SourceSpend.objects.values_list("source", flat=True))),
+            spends=SourceSpend.objects.all()[:8], this_month=timezone.localdate().replace(day=1).isoformat()[:7])
+        return ctx
+
+
+class SpendView(PlatformAdminRequiredMixin, View):
+    """Enter (or overwrite) the ad spend for a source in a month."""
+
+    def post(self, request):
+        source = request.POST.get("source", "").strip()[:60]
+        raw_amount, raw_month = request.POST.get("amount", "").strip(), request.POST.get("month", "").strip()
+        try:
+            amount = Decimal(raw_amount)
+            year, mon = [int(x) for x in raw_month.split("-")[:2]]
+            month = dt.date(year, mon, 1)
+            if not source or amount < 0 or amount > Decimal("99999999"):
+                raise ValueError
+        except (ValueError, ArithmeticError, TypeError):
+            messages.error(request, "Enter a source, a month and a spend amount.")
+        else:
+            SourceSpend.objects.update_or_create(source=source, month=month, defaults={"amount": amount})
+            messages.success(request, f"Saved ₹{amount} for {source}, {month:%b %Y}.")
+        return redirect(_post_next(request, reverse("control:crm_insights")))
+
+
+def _statement_month(request):
+    raw = request.GET.get("month", "")
+    try:
+        y, m = [int(x) for x in raw.split("-")[:2]]
+        return svc.month_bounds(y, m)
+    except (ValueError, TypeError):
+        today = timezone.localdate()
+        prev = today.replace(day=1) - dt.timedelta(days=1)          # default: last full month
+        return svc.month_bounds(prev.year, prev.month)
+
+
+class StatementsView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/statements.jinja"
+
+    def get(self, request, *args, **kwargs):
+        first, last = _statement_month(request)
+        rows = svc.statement_rows(first, last)
+        if request.GET.get("format") == "csv":
+            return _csv_response(
+                f"crm-statement-{first:%Y-%m}.csv",
+                ["DGC", "Calls", "Spoke", "Demos", "Trained others", "Stores won", "Collected (verified ₹)",
+                 "Commission pending ₹", "Commission approved ₹", "Commission paid ₹", "Commission total ₹"],
+                [[r["name"], r["calls"], r["connected"], r["demos"], r["trained_others"], r["won"], r["collection"],
+                  r["com_pending"], r["com_approved"], r["com_paid"], r["com_total"]] for r in rows])
+        ctx = self.get_context_data(rows=rows, first=first, last=last, **kwargs)
+        return self.render_to_response(ctx)
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        first = kw["first"]
+        prev = (first - dt.timedelta(days=1)).replace(day=1)
+        nxt = (first + dt.timedelta(days=32)).replace(day=1)
+        ctx.update(month_value=f"{first:%Y-%m}", prev_month=f"{prev:%Y-%m}", next_month=f"{nxt:%Y-%m}",
+                   totals={k: sum(r[k] for r in kw["rows"]) for k in
+                           ("calls", "demos", "won", "collection", "com_pending", "com_approved", "com_paid", "com_total")})
+        return ctx
+
+
+class StatementDetailView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/statement_detail.jinja"
+
+    def get(self, request, pk, *args, **kwargs):
+        from apps.billing.models import ManagerCommission
+
+        person = get_object_or_404(svc.dgc_users(), pk=pk)
+        first, last = _statement_month(request)
+        lo, hi = svc.day_bounds(first, last)
+        commissions = list(ManagerCommission.objects.filter(manager=person, created_at__gte=lo, created_at__lt=hi)
+                           .select_related("subscription__project", "invoice").order_by("created_at"))
+        collections = list(Collection.objects.filter(collected_by=person, collected_on__gte=first, collected_on__lte=last,
+                                                     status=CollectionStatus.VERIFIED).select_related("project"))
+        won = list(Lead.objects.filter(assigned_to=person, status=LeadStatus.WON, stage_changed_at__gte=lo,
+                                       stage_changed_at__lt=hi))
+        if request.GET.get("format") == "csv":
+            rows = [["Commission", c.created_at.date(), c.subscription.project.name, c.invoice.number, c.base_amount,
+                     c.rate_pct, c.amount, c.status] for c in commissions]
+            rows += [["Collection", c.collected_on, c.project.name if c.project else "", c.reference, "", "", c.amount,
+                      c.get_mode_display()] for c in collections]
+            rows += [["Store won", l.stage_changed_at.date() if l.stage_changed_at else "", l.business or l.name, "", "", "", "", ""]
+                     for l in won]
+            return _csv_response(f"crm-statement-{person.pk}-{first:%Y-%m}.csv",
+                                 ["Type", "Date", "Store", "Reference", "Base ₹", "Rate %", "Amount ₹", "Status / mode"], rows)
+        row = svc.statement_rows(first, last)
+        mine = next((r for r in row if r["user"].pk == person.pk), None)
+        ctx = self.get_context_data(person=person, first=first, last=last, commissions=commissions,
+                                    collections=collections, won=won, me=mine, month_value=f"{first:%Y-%m}", **kwargs)
+        return self.render_to_response(ctx)
 
 
 # ───────────────────────────── targets ─────────────────────────────

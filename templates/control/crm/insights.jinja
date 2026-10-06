@@ -1,0 +1,111 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% from "control/crm/_crm.jinja" import range_tabs %}
+{% block page_title %}Insights{% endblock %}
+{% block crm_title %}Insights{% endblock %}
+{% block crm_sub %}· {{ range_label }} · what's working, what's stuck{% endblock %}
+{% block crm_actions %}{{ range_tabs(ranges, range_key) }}<a href="{{ url('control:crm_statements') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🧾 Statements</a>{% endblock %}
+
+{% block crm_body %}
+{# ── forecast ───────────────────────────────────────────────────────── #}
+<div class="grid gap-3 lg:grid-cols-3">
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="text-[13px] font-semibold text-pink-900">📈 Forecast <span class="font-normal text-slate-400">· from the open pipeline</span></h3>
+    <div class="mt-1 flex items-baseline gap-4">
+      <div><div class="text-2xl font-semibold text-pink-700">≈ {{ forecast.stores }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">new paying stores</div></div>
+      <div><div class="text-2xl font-semibold text-emerald-600">₹{{ forecast.mrr }}</div><div class="text-[10px] uppercase tracking-wide text-slate-400">new monthly revenue</div></div>
+    </div>
+    <table class="mt-2 w-full text-[12px]">
+      {% for r in forecast.rows %}<tr class="border-t border-pink-50"><td class="py-1 text-slate-600">{{ r.label }}</td><td class="text-right text-slate-500">{{ r.n }} × {{ r.pct }}%</td><td class="text-right font-medium text-slate-700">{{ r.expected }}</td></tr>{% endfor %}
+    </table>
+    <p class="mt-1 text-[10px] text-slate-400">Uses ₹{{ forecast.price }}/month per store. Change the average price and the stage chances in <a class="underline" href="{{ url('control:crm_settings') }}">settings</a>.</p>
+  </div>
+
+  {# ── speed to lead ────────────────────────────────────────────────── #}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="text-[13px] font-semibold text-pink-900">⚡ Speed to lead</h3>
+    {% if speed.n %}
+    <div class="mt-1 flex items-baseline gap-4">
+      <div><div class="text-2xl font-semibold text-pink-700">{{ speed.median }}<span class="text-sm font-normal"> min</span></div><div class="text-[10px] uppercase tracking-wide text-slate-400">median first call</div></div>
+      <div><div class="text-lg font-semibold text-slate-700">{{ speed.within_5 }}%</div><div class="text-[10px] uppercase tracking-wide text-slate-400">within 5 min</div></div>
+      <div><div class="text-lg font-semibold text-slate-700">{{ speed.within_30 }}%</div><div class="text-[10px] uppercase tracking-wide text-slate-400">within 30 min</div></div>
+    </div>
+    <p class="mt-1 text-[11px] text-slate-500">{{ speed.n }} lead{{ '' if speed.n == 1 else 's' }} handed out in this period.</p>
+    {% else %}<p class="mt-2 text-sm text-slate-400">No leads were assigned and called in this period yet.</p>{% endif %}
+    {% if speed.waiting %}
+    <p class="mt-2 text-[11px] font-semibold text-rose-700">Waiting over an hour with no call:</p>
+    {% for l in speed.waiting %}<a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex justify-between border-t border-rose-50 py-1 text-[12px] hover:bg-rose-50/50"><span class="truncate">{{ l.name }}</span><span class="shrink-0 text-slate-500">{{ l.assigned_to.first_name or l.assigned_to.email }} · {{ l.waiting_hours }}h</span></a>{% endfor %}
+    {% endif %}
+  </div>
+
+  {# ── honest logging ───────────────────────────────────────────────── #}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 {{ 'ring-amber-200' if flags else 'ring-pink-100' }}">
+    <h3 class="text-[13px] font-semibold text-pink-900">🔎 Worth a look</h3>
+    {% for f in flags %}
+    <div class="mt-1.5 border-t border-amber-50 pt-1.5 text-[12px]">
+      <a href="{{ url('control:crm_person', kwargs={'pk': f.user.pk}) }}" class="font-medium text-slate-800 hover:text-pink-700">{{ f.user.get_full_name() or f.user.email }}</a>
+      <span class="text-slate-600">— {{ f.detail }}{% if f.when %} (around {{ f.when.strftime("%d %b %H:%M") }}){% endif %}</span>
+    </div>
+    {% else %}<p class="mt-2 text-sm text-slate-400">Nothing unusual in how calls were logged. 👌</p>{% endfor %}
+    <p class="mt-2 text-[10px] text-slate-400">Calls are logged by hand, so these are only prompts for a friendly chat — not proof of anything.</p>
+  </div>
+</div>
+
+{# ── lead sources ───────────────────────────────────────────────────── #}
+<div class="overflow-x-auto rounded-2xl bg-white shadow-sm ring-1 ring-pink-100">
+  <div class="flex flex-wrap items-center justify-between gap-2 px-3.5 pt-3">
+    <h3 class="text-[13px] font-semibold text-pink-900">🎯 Where leads come from <span class="font-normal text-slate-400">· created {{ range_label|lower }}</span></h3>
+  </div>
+  <table class="mt-1 w-full text-left text-[13px]">
+    <thead class="bg-pink-50/70 text-[11px] uppercase tracking-wide text-pink-500"><tr>
+      <th class="px-3 py-2">Source</th><th class="px-3 py-2 text-right">Leads</th><th class="px-3 py-2 text-right">Called</th>
+      <th class="px-3 py-2 text-right">Demo+</th><th class="px-3 py-2 text-right">Won</th><th class="px-3 py-2 text-right">Win %</th>
+      <th class="px-3 py-2 text-right">Spend ₹</th><th class="px-3 py-2 text-right">₹ / lead</th><th class="px-3 py-2 text-right">₹ / won</th></tr></thead>
+    <tbody class="divide-y divide-pink-50">
+      {% for r in sources %}
+      <tr class="hover:bg-pink-50/40"><td class="px-3 py-2 font-medium text-slate-800">{{ r.source }}</td>
+        <td class="px-3 py-2 text-right">{{ r.leads }}</td><td class="px-3 py-2 text-right text-slate-500">{{ r.touched }}</td>
+        <td class="px-3 py-2 text-right text-slate-500">{{ r.demos }}</td><td class="px-3 py-2 text-right font-medium text-emerald-700">{{ r.won }}</td>
+        <td class="px-3 py-2 text-right">{{ r.win_pct }}%</td>
+        <td class="px-3 py-2 text-right text-slate-500">{{ r.spend if r.spend else '—' }}</td>
+        <td class="px-3 py-2 text-right">{{ r.cost_per_lead if r.cost_per_lead is not none else '—' }}</td>
+        <td class="px-3 py-2 text-right font-medium">{{ r.cost_per_won if r.cost_per_won is not none else '—' }}</td></tr>
+      {% else %}<tr><td colspan="9" class="px-4 py-6 text-center text-slate-400">No leads created in this period.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="{{ url('control:crm_spend') }}" class="flex flex-wrap items-center gap-1.5 border-t border-pink-50 px-3.5 py-2.5 text-[12px]">
+    {{ csrf_input }}<input type="hidden" name="next" value="{{ request.get_full_path() }}">
+    <span class="font-medium text-pink-900">＋ Ad spend</span>
+    <input name="source" list="srcs" required placeholder="Source (e.g. Signup · facebook)" class="h-8 min-w-[10rem] flex-1 rounded-md border border-slate-200 px-2 text-[12px]">
+    <datalist id="srcs">{% for s in known_sources %}<option value="{{ s }}">{% endfor %}</datalist>
+    <input type="month" name="month" value="{{ this_month }}" required class="h-8 rounded-md border border-slate-200 px-2 text-[12px]">
+    <input name="amount" inputmode="decimal" required placeholder="₹ spent" class="h-8 w-24 rounded-md border border-slate-200 px-2 text-[12px]">
+    <button class="h-8 rounded-md bg-pink-600 px-3 font-medium text-white hover:bg-pink-700">Save</button>
+    <span class="text-[10px] text-slate-400">Overwrites that source + month. Type the source exactly as it appears above.</span>
+  </form>
+</div>
+
+<div class="grid gap-3 lg:grid-cols-2">
+  {# ── funnel ─────────────────────────────────────────────────────── #}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-1 text-[13px] font-semibold text-pink-900">🪜 Funnel <span class="font-normal text-slate-400">· all open + won leads</span></h3>
+    {% set top = funnel[0].reached or 1 %}
+    {% for r in funnel %}
+    <div class="border-t border-pink-50 py-1.5 text-[12px]">
+      <div class="flex items-center justify-between"><span class="font-medium text-slate-700">{{ r.label }}</span>
+        <span class="text-slate-500"><b class="text-pink-700">{{ r.reached }}</b> got this far{% if r.step_pct is not none %} · {{ r.step_pct }}% of previous{% endif %}{% if r.avg_days is not none %} · now here {{ r.here }} (avg {{ r.avg_days }}d){% endif %}</span></div>
+      <div class="mt-1 h-1.5 rounded-full bg-pink-50"><div class="h-1.5 rounded-full bg-pink-500" style="width: {{ (100 * r.reached // top) }}%"></div></div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# ── stuck ──────────────────────────────────────────────────────── #}
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-1 text-[13px] font-semibold text-pink-900">🧊 Stuck 7+ days in a stage</h3>
+    {% for l in stuck %}
+    <a href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}" class="flex items-center justify-between gap-2 border-t border-pink-50 py-1.5 text-[13px] hover:bg-pink-50/50">
+      <span class="min-w-0 truncate">{{ l.name }} <span class="text-[11px] text-slate-400">{{ l.get_status_display() }}</span></span>
+      <span class="shrink-0 text-[11px] text-slate-500">{{ (l.assigned_to.first_name or l.assigned_to.email) if l.assigned_to else 'unassigned' }} · <b class="text-rose-600">{{ l.stuck_days }}d</b></span></a>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">Nothing is stuck. 🎉</p>{% endfor %}
+  </div>
+</div>
+{% endblock %}

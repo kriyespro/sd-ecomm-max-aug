@@ -969,3 +969,186 @@ def onboarding_steps(user):
          "Use 'Deal won' on a lead — that creates the store."),
     ]
     return [{"label": a, "done": b, "hint": c} for a, b, c in steps]
+
+
+# ── admin insights ─────────────────────────────────────────────────────────
+
+import statistics as _stats
+
+STAGE_ORDER = ["new", "contacted", "interested", "demo_booked", "demo_done", "negotiating", "won"]
+_DEMO_REACHED = ("demo_booked", "demo_done", "negotiating", "won")
+
+
+def _month_floor(d):
+    return d.replace(day=1)
+
+
+def source_roi(start, end):
+    """Per lead source for leads created in [start, end]: funnel counts, win rate,
+    and (if ad spend was entered) cost per lead / per won store."""
+    lo, hi = day_bounds(start, end)
+    rows = {}
+    leads = Lead.objects.filter(created_at__gte=lo, created_at__lt=hi)
+    for r in leads.values("source").annotate(
+            n=Count("id"),
+            touched=Count("id", filter=Q(first_touch_at__isnull=False)),
+            demos=Count("id", filter=Q(status__in=_DEMO_REACHED)),
+            won=Count("id", filter=Q(status=LeadStatus.WON))):
+        label = r["source"] or "(no source)"
+        rows[label] = {"source": label, "leads": r["n"], "touched": r["touched"], "demos": r["demos"], "won": r["won"],
+                       "spend": Decimal("0")}
+    from .models import SourceSpend
+    spends = SourceSpend.objects.filter(month__gte=_month_floor(start), month__lte=end)
+    for sp in spends:
+        row = rows.setdefault(sp.source, {"source": sp.source, "leads": 0, "touched": 0, "demos": 0, "won": 0,
+                                          "spend": Decimal("0")})
+        row["spend"] += sp.amount
+    out = []
+    for row in rows.values():
+        row["win_pct"] = round(100 * row["won"] / row["leads"]) if row["leads"] else 0
+        row["cost_per_lead"] = (row["spend"] / row["leads"]).quantize(Decimal("1")) if row["spend"] and row["leads"] else None
+        row["cost_per_won"] = (row["spend"] / row["won"]).quantize(Decimal("1")) if row["spend"] and row["won"] else None
+        out.append(row)
+    return sorted(out, key=lambda r: (-r["leads"], r["source"]))
+
+
+def funnel():
+    """Open + won leads (lost excluded) as a cumulative funnel: how many got at
+    least as far as each stage, the step conversion, and average days spent in
+    the stage they're sitting in now."""
+    now = timezone.now()
+    qs = Lead.objects.filter(is_archived=False).exclude(status=LeadStatus.LOST)
+    by = {st: [] for st in STAGE_ORDER}
+    for st, changed, created in qs.values_list("status", "stage_changed_at", "created_at"):
+        if st in by:
+            by[st].append((now - (changed or created)).total_seconds() / 86400)
+    counts = [len(by[st]) for st in STAGE_ORDER]
+    reached = [sum(counts[i:]) for i in range(len(STAGE_ORDER))]
+    rows = []
+    for i, st in enumerate(STAGE_ORDER):
+        prev = reached[i - 1] if i else None
+        rows.append({
+            "stage": st, "label": LeadStatus(st).label, "here": counts[i], "reached": reached[i],
+            "step_pct": round(100 * reached[i] / prev) if prev else None,
+            "avg_days": round(sum(by[st]) / len(by[st]), 1) if by[st] else None,
+        })
+    return rows
+
+
+def stuck_leads(days=7, limit=10):
+    """Open leads that have sat in the same stage for ``days``+ days (longest first)."""
+    cut = timezone.now() - dt.timedelta(days=days)
+    qs = (Lead.objects.filter(is_archived=False, status__in=[s for s in OPEN_LEAD_STATUSES if s != LeadStatus.NEW])
+          .filter(Q(stage_changed_at__lt=cut) | Q(stage_changed_at__isnull=True, created_at__lt=cut))
+          .select_related("assigned_to").order_by("stage_changed_at", "created_at")[:limit])
+    now = timezone.now()
+    out = list(qs)
+    for l in out:
+        l.stuck_days = (now - (l.stage_changed_at or l.created_at)).days
+    return out
+
+
+def forecast():
+    """Expected new paying stores / MRR from the open pipeline, using the
+    configured stage probabilities and average plan price."""
+    cfg = CrmSettings.load()
+    rows, stores = [], Decimal("0")
+    counts = {r["status"]: r["n"] for r in Lead.objects.filter(
+        is_archived=False, status__in=OPEN_LEAD_STATUSES).values("status").annotate(n=Count("id"))}
+    for st in STAGE_ORDER[:-1]:
+        n = counts.get(st, 0)
+        p = cfg.probability(st)
+        exp = Decimal(n) * Decimal(p) / Decimal(100)
+        stores += exp
+        rows.append({"label": LeadStatus(st).label, "n": n, "pct": p, "expected": exp.quantize(Decimal("0.1"))})
+    return {"rows": rows, "stores": stores.quantize(Decimal("0.1")),
+            "mrr": (stores * cfg.avg_plan_price).quantize(Decimal("1")), "price": cfg.avg_plan_price}
+
+
+def speed_to_lead(start, end):
+    """How fast assigned leads get their first touch (minutes), plus the leads
+    that have been waiting more than an hour right now."""
+    lo, hi = day_bounds(start, end)
+    mins = []
+    for a, f in Lead.objects.filter(assigned_at__gte=lo, assigned_at__lt=hi, first_touch_at__isnull=False
+                                    ).values_list("assigned_at", "first_touch_at"):
+        mins.append(max(0.0, (f - a).total_seconds() / 60))
+    waiting = list(Lead.objects.filter(
+        assigned_to__isnull=False, first_touch_at__isnull=True, is_archived=False,
+        status__in=OPEN_LEAD_STATUSES, assigned_at__lt=timezone.now() - dt.timedelta(hours=1),
+        assigned_at__gte=timezone.now() - dt.timedelta(days=3)).select_related("assigned_to").order_by("assigned_at")[:10])
+    now = timezone.now()
+    for l in waiting:
+        l.waiting_hours = int((now - l.assigned_at).total_seconds() // 3600)
+    n = len(mins)
+    return {
+        "n": n, "median": round(_stats.median(mins)) if mins else None,
+        "within_5": round(100 * sum(1 for m in mins if m <= 5) / n) if n else None,
+        "within_30": round(100 * sum(1 for m in mins if m <= 30) / n) if n else None,
+        "waiting": waiting,
+    }
+
+
+BURST_CALLS, BURST_MINUTES = 20, 10
+ALL_CONNECTED_MIN, ALL_CONNECTED_PCT = 15, 95
+
+
+def logging_flags(start, end):
+    """Gentle sanity checks on manually-logged calls. These are prompts to have a
+    conversation, not proof of anything: bursts of calls too fast to be real and
+    suspiciously perfect connect rates."""
+    lo, hi = day_bounds(start, end)
+    calls = {}
+    for actor, when, outcome in Activity.objects.filter(
+            kind=ActivityKind.CALL, occurred_at__gte=lo, occurred_at__lt=hi
+    ).order_by("actor", "occurred_at").values_list("actor", "occurred_at", "outcome"):
+        calls.setdefault(actor, []).append((when, outcome))
+    users = {u.pk: u for u in crm_people().filter(pk__in=calls)}
+    flags = []
+    window = dt.timedelta(minutes=BURST_MINUTES)
+    for uid, rows in calls.items():
+        user = users.get(uid)
+        if user is None:
+            continue
+        times = [w for w, _ in rows]
+        j, worst, at = 0, 0, None
+        for i in range(len(times)):
+            while times[i] - times[j] > window:
+                j += 1
+            if i - j + 1 > worst:
+                worst, at = i - j + 1, times[j]
+        if worst >= BURST_CALLS:
+            flags.append({"user": user, "kind": "burst", "when": at,
+                          "detail": f"{worst} calls logged within {BURST_MINUTES} minutes"})
+        n = len(rows)
+        ok = sum(1 for _, o in rows if o == ActivityOutcome.CONNECTED)
+        if n >= ALL_CONNECTED_MIN and 100 * ok / n >= ALL_CONNECTED_PCT:
+            flags.append({"user": user, "kind": "perfect", "when": None,
+                          "detail": f"{ok} of {n} calls marked ‘spoke to them’ ({round(100 * ok / n)}%)"})
+    return sorted(flags, key=lambda f: (person_label(f["user"]), f["kind"]))
+
+
+def month_bounds(year, month):
+    first = dt.date(year, month, 1)
+    last = (first.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
+    return first, last
+
+
+def statement_rows(first, last):
+    """One row per DGC for a month: activity, verified money, won stores, commission."""
+    from apps.billing.models import ManagerCommission
+    rows, totals = person_numbers(first, last, users=list(dgc_users()))
+    lo, hi = day_bounds(first, last)
+    won = {r["assigned_to"]: r["n"] for r in Lead.objects.filter(
+        status=LeadStatus.WON, stage_changed_at__gte=lo, stage_changed_at__lt=hi).values("assigned_to").annotate(n=Count("id"))}
+    com = {}
+    for r in ManagerCommission.objects.filter(created_at__gte=lo, created_at__lt=hi).values("manager", "status").annotate(t=Sum("amount")):
+        com.setdefault(r["manager"], {})[r["status"]] = r["t"] or Decimal("0")
+    out = []
+    for r in rows:
+        c = com.get(r["user"].pk, {})
+        out.append({**r, "won": won.get(r["user"].pk, 0),
+                    "com_pending": c.get("pending", Decimal("0")), "com_approved": c.get("approved", Decimal("0")),
+                    "com_paid": c.get("paid", Decimal("0")),
+                    "com_total": sum(c.values(), Decimal("0"))})
+    return out
