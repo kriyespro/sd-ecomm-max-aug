@@ -22,6 +22,9 @@ from .models import (
     Lead,
     LeadStatus,
     OPEN_LEAD_STATUSES,
+    CrmProfile,
+    CrmSettings,
+    normalize_phone,
     StoreAssignment,
     StoreWorkRequest,
     TargetMetric,
@@ -33,6 +36,8 @@ from .models import (
 )
 
 User = get_user_model()
+
+FRESH_HOURS = 24   # an untouched inbound lead stays 'fresh' (top of the queue) this long
 
 DEFAULT_TARGETS = {TargetMetric.CALLS: 40, TargetMetric.DEMOS: 2, TargetMetric.COLLECTION: 0}
 
@@ -105,6 +110,10 @@ def log_activity(*, actor, kind, outcome="", lead=None, project=None, note="", c
     )
     if lead is not None:
         fields = []
+        if lead.first_touch_at is None and kind in (
+                ActivityKind.CALL, ActivityKind.WHATSAPP, ActivityKind.DEMO, ActivityKind.FOLLOW_UP):
+            lead.first_touch_at = timezone.now()
+            fields.append("first_touch_at")
         if kind == ActivityKind.DEMO and lead.status in (
                 LeadStatus.NEW, LeadStatus.CONTACTED, LeadStatus.INTERESTED, LeadStatus.DEMO_BOOKED):
             lead.status = LeadStatus.DEMO_DONE
@@ -362,10 +371,23 @@ def call_queue(user, *, skip=()):
     today = timezone.localdate()
     lo, _ = day_bounds(today)
     worked = Activity.objects.filter(actor=user, lead=OuterRef("pk"), occurred_at__gte=lo)
+    from django.db.models import Case, IntegerField, Value, When
+
+    fresh_cut = timezone.now() - dt.timedelta(hours=FRESH_HOURS)
+    # Rank: 0 = brand-new inbound lead nobody has touched, 1 = due follow-up,
+    # then hotter stages before colder ones (a demo-done lead beats a cold one).
+    hot = Case(
+        When(status=LeadStatus.NEGOTIATING, then=Value(0)), When(status=LeadStatus.DEMO_DONE, then=Value(1)),
+        When(status=LeadStatus.DEMO_BOOKED, then=Value(2)), When(status=LeadStatus.INTERESTED, then=Value(3)),
+        When(status=LeadStatus.CONTACTED, then=Value(4)), default=Value(5), output_field=IntegerField())
     qs = (Lead.objects.filter(assigned_to=user, status__in=OPEN_LEAD_STATUSES, is_archived=False)
-          .annotate(worked_today=Exists(worked))
-          .filter(Q(next_follow_up__lte=today) | Q(next_follow_up__isnull=True, worked_today=False))
-          .order_by(F("next_follow_up").asc(nulls_last=True), "created_at"))
+          .annotate(worked_today=Exists(worked),
+                    fresh_rank=Case(When(first_touch_at__isnull=True, assigned_at__gte=fresh_cut, then=Value(0)),
+                                    default=Value(1), output_field=IntegerField()),
+                    heat=hot)
+          .filter(Q(next_follow_up__lte=today) | Q(next_follow_up__isnull=True, worked_today=False)
+                  | Q(fresh_rank=0))
+          .order_by("fresh_rank", F("next_follow_up").asc(nulls_last=True), "heat", "created_at"))
     if skip:
         qs = qs.exclude(pk__in=list(skip))
     return qs
@@ -632,3 +654,131 @@ def admin_inbox(limit=5):
         "trainings": section(TrainingLog.objects.filter(status=TrainingStatus.PENDING)
                              .select_related("trainee", "trainer", "initiated_by").order_by("created_at")),
     }
+
+
+# ── lead intake + speed-to-lead routing ────────────────────────────────────
+
+def phone_exists(phone, *, exclude_pk=None):
+    """Is this person already in the CRM? Matches on the normalised number, so
+    "+91 98765 43210" finds "9876543210"."""
+    norm = normalize_phone(phone)
+    if len(norm) < 7:           # too short to match reliably
+        return False
+    qs = Lead.objects.filter(phone_norm=norm)
+    if exclude_pk:
+        qs = qs.exclude(pk=exclude_pk)
+    return qs.exists()
+
+
+def _open_loads(user_ids):
+    rows = (Lead.objects.filter(assigned_to__in=user_ids, is_archived=False, status__in=OPEN_LEAD_STATUSES)
+            .values("assigned_to").annotate(n=Count("id")))
+    load = {pk: 0 for pk in user_ids}
+    for r in rows:
+        load[r["assigned_to"]] = r["n"]
+    return load
+
+
+def eligible_dgcs():
+    """Active DGCs who haven't switched themselves off for new leads."""
+    off = set(CrmProfile.objects.filter(accepts_leads=False).values_list("user_id", flat=True))
+    return [u for u in dgc_users().select_related("crm_profile") if u.pk not in off]
+
+
+def pick_dgc(lead, cfg=None):
+    """Who should get this lead? A DGC covering the lead's city wins; otherwise
+    the least-loaded available DGC. Respects the per-DGC capacity cap."""
+    cfg = cfg or CrmSettings.load()
+    cands = eligible_dgcs()
+    if not cands:
+        return None
+    load = _open_loads([u.pk for u in cands])
+    if cfg.capacity_per_dgc:
+        cands = [u for u in cands if load[u.pk] < cfg.capacity_per_dgc]
+        if not cands:
+            return None
+    city = (lead.city or "").strip().lower()
+    local = []
+    if city:
+        for u in cands:
+            prof = getattr(u, "crm_profile", None)
+            if prof and any(kw in city or city in kw for kw in prof.city_list()):
+                local.append(u)
+    pool = local or cands
+    return min(pool, key=lambda u: (load[u.pk], u.pk))
+
+
+def alert_new_lead(lead):
+    """Tell the DGC a lead was just handed to them (best-effort email; the
+    in-app banner on My day needs no sending)."""
+    cfg = CrmSettings.load()
+    who = lead.assigned_to
+    if not (cfg.alert_email and who and who.email):
+        return False
+    try:
+        from django.core.mail import send_mail
+        from django.urls import reverse
+
+        path = reverse("control:crm_lead", kwargs={"pk": lead.pk})
+        body = (f"New lead: {lead.name}\n{lead.business or ''} {lead.city or ''}\nPhone: {lead.phone or '—'}\n"
+                f"Source: {lead.source or '—'}\n\nCall within 5 minutes — it makes the difference.\n"
+                f"Open it: {path}\n")
+        send_mail(f"📞 New lead: {lead.name} — call now", body, None, [who.email], fail_silently=True)
+        return True
+    except Exception:  # noqa: BLE001 — an email hiccup must never block lead intake
+        import logging
+
+        logging.getLogger(__name__).exception("crm: lead alert email failed for lead %s", lead.pk)
+        return False
+
+
+def route_lead(lead, *, actor=None):
+    """Auto-assign an unassigned lead. Returns the DGC or None (left in the pool)."""
+    cfg = CrmSettings.load()
+    if lead.assigned_to_id or not cfg.auto_assign:
+        return None
+    target = pick_dgc(lead, cfg)
+    if target is None:
+        return None
+    lead.assigned_to, lead.assigned_by, lead.auto_assigned = target, actor, True
+    lead.assigned_at = timezone.now()
+    lead.save(update_fields=["assigned_to", "assigned_by", "auto_assigned", "assigned_at", "updated_at"])
+    alert_new_lead(lead)
+    return target
+
+
+def ingest_lead(*, name="", phone="", business="", city="", source="", notes="", acquisition=None,
+                assign_to=None, converted_project=None, route=True):
+    """Single door for inbound leads (signup hook, capture webhook, forms).
+
+    * duplicate phone -> returns (existing_lead, False), nothing is changed;
+    * ``assign_to`` (e.g. the referring DGC) beats auto-routing;
+    * otherwise the lead is auto-routed (city, then least-loaded).
+    Returns ``(lead, created)``."""
+    name = (name or "").strip()[:120]
+    phone = (phone or "").strip()[:20]
+    if not name and not phone:
+        raise ValueError("A name or a phone number is required.")
+    if phone and phone_exists(phone):
+        return Lead.objects.filter(phone_norm=normalize_phone(phone)).first(), False
+    lead = Lead.objects.create(
+        name=name or phone, phone=phone, business=(business or "")[:160], city=(city or "")[:80],
+        source=(source or "inbound")[:60], notes=(notes or "")[:2000], acquisition=acquisition or {},
+        converted_project=converted_project, assigned_to=assign_to,
+        auto_assigned=False)
+    if assign_to is not None:
+        alert_new_lead(lead)
+    elif route:
+        route_lead(lead)
+    return lead, True
+
+
+def lead_from_signup(project, *, name, phone, city="", ref_user=None):
+    """A store owner just self-signed-up (often from an ad): make them a lead and
+    get a DGC on the phone fast. The referring DGC, if any, keeps the lead."""
+    src = project.signup_source or {}
+    label = src.get("utm_source") or src.get("lp") or "organic"
+    return ingest_lead(
+        name=name, phone=phone, business=project.name, city=city,
+        source=f"Signup · {label}"[:60], notes=f"Self-signup, trial started. Store: {project.name}",
+        acquisition=dict(src), assign_to=ref_user, converted_project=project)

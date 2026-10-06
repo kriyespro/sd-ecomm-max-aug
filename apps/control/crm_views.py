@@ -13,6 +13,7 @@ import datetime as dt
 import io
 
 from django import forms
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
@@ -38,6 +39,8 @@ from apps.crm.models import (
     ActivityOutcome,
     Collection,
     CollectionMode,
+    CrmProfile,
+    CrmSettings,
     CollectionStatus,
     DailyTarget,
     Lead,
@@ -103,10 +106,17 @@ class MyDayView(PlatformStaffRequiredMixin, TemplateView):
         rows, totals = svc.person_numbers(start, end, users=[u])
         today = timezone.localdate()
         skip = [int(i) for i in self.request.GET.get("skip", "").split(",")[:50] if i.isdigit()]
+        fresh_cut = timezone.now() - dt.timedelta(hours=svc.FRESH_HOURS)
+        fresh = list(Lead.objects.filter(
+            assigned_to=u, is_archived=False, first_touch_at__isnull=True, assigned_at__gte=fresh_cut,
+            status__in=[s_ for s_ in LeadStatus.values if s_ not in ("won", "lost")]).order_by("assigned_at")[:5])
+        for f in fresh:
+            f.waiting_mins = max(0, int((timezone.now() - f.assigned_at).total_seconds() // 60))
         queue = svc.call_queue(u, skip=skip)
         nxt = queue.first()
         ctx.update(
-            nxt=nxt, queue_left=queue.count(), skip_ids=skip,
+            nxt=nxt, queue_left=queue.count(), skip_ids=skip, fresh=fresh,
+            crm_profile=CrmProfile.objects.filter(user=u).first(),
             nxt_activity=nxt.activities.select_related("actor")[:3] if nxt else [],
             skip_param=",".join(map(str, skip + ([nxt.pk] if nxt else []))),
             today_calls=rows[0]["calls"] if key == "today" else Activity.objects.filter(
@@ -216,7 +226,7 @@ class LeadCreateView(PlatformStaffRequiredMixin, View):
         if not form.is_valid():
             messages.error(request, "Add a name or a phone number.")
             return redirect(back)
-        if phone and Lead.objects.filter(phone=phone).exists():
+        if phone and svc.phone_exists(phone):
             messages.warning(request, "That number is already in the CRM — nothing added.")
             return redirect(back)
         lead = form.save(commit=False)
@@ -518,7 +528,7 @@ class LeadImportView(PlatformStaffRequiredMixin, View):
             if i == 0 and row[0].lower() in ("name", "lead", "full name"):
                 continue
             name, phone, biz, city, src = row[:5]
-            if not name or (phone and Lead.objects.filter(phone=phone).exists()):
+            if not name or (phone and svc.phone_exists(phone)):
                 skipped += 1
                 continue
             if made >= 2000:
@@ -935,6 +945,75 @@ class OwnerHelpView(StoreRoleRequiredMixin, ActiveProjectMixin, TemplateView):
                                        note=request.POST.get("note", ""))
                 messages.success(request, "Request sent to the platform team.")
         return redirect("control:crm_owner_help")
+
+
+class MyProfileView(PlatformStaffRequiredMixin, View):
+    """A DGC's own lead preferences: pause new leads, cities covered."""
+
+    def post(self, request):
+        prof, _ = CrmProfile.objects.get_or_create(user=request.user)
+        prof.accepts_leads = bool(request.POST.get("accepts_leads"))
+        prof.cities = ", ".join(c.strip() for c in request.POST.get("cities", "").split(",") if c.strip())[:200]
+        prof.save()
+        messages.success(request, "Saved." if prof.accepts_leads else "Saved — you won't get new leads until you switch this back on.")
+        return redirect(_post_next(request, reverse("control:crm_my_day")))
+
+
+class CrmSettingsForm(forms.ModelForm):
+    STAGES = [("new", "New"), ("contacted", "Contacted"), ("interested", "Interested"),
+              ("demo_booked", "Demo booked"), ("demo_done", "Demo done"), ("negotiating", "Negotiating")]
+
+    class Meta:
+        model = CrmSettings
+        exclude = ["stage_probabilities", "created_at", "updated_at"]
+        widgets = {"digest_emails": forms.Textarea(attrs={"rows": 1, "placeholder": "a@x.com, b@y.com"})}
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        for key, label in self.STAGES:
+            self.fields[f"p_{key}"] = forms.IntegerField(
+                min_value=0, max_value=100, label=f"{label} %", initial=self.instance.probability(key))
+        self.fields["quiet_after_hour"].widget.attrs.update(min=0, max=23)
+
+    def clean_quiet_after_hour(self):
+        h = self.cleaned_data["quiet_after_hour"]
+        if not 0 <= h <= 23:
+            raise forms.ValidationError("Use an hour from 0 to 23.")
+        return h
+
+    def clean_digest_emails(self):
+        raw = self.cleaned_data["digest_emails"]
+        emails = [e.strip() for e in raw.replace("\n", ",").split(",") if e.strip()]
+        for e in emails:
+            forms.EmailField().clean(e)
+        return ", ".join(emails)
+
+    def save(self, commit=True):
+        obj = super().save(commit=False)
+        obj.stage_probabilities = {k: self.cleaned_data[f"p_{k}"] for k, _ in self.STAGES}
+        if commit:
+            obj.save()
+        return obj
+
+
+class CrmSettingsView(PlatformAdminRequiredMixin, TemplateView):
+    template_name = "control/crm/settings.jinja"
+
+    def get_context_data(self, **kw):
+        ctx = super().get_context_data(**kw)
+        ctx["form"] = kw.get("form") or CrmSettingsForm(instance=CrmSettings.load())
+        ctx["capture_on"] = bool(getattr(settings, "CRM_CAPTURE_TOKEN", ""))
+        ctx["capture_url"] = self.request.build_absolute_uri(reverse("crm_capture"))
+        ctx["stage_fields"] = [f"p_{k}" for k, _ in CrmSettingsForm.STAGES]
+        return ctx
+
+    def post(self, request):
+        form = CrmSettingsForm(request.POST, instance=CrmSettings.load())
+        if form.is_valid():
+            form.save()
+            messages.success(request, "CRM settings saved.")
+            return redirect("control:crm_settings")
+        return self.render_to_response(self.get_context_data(form=form))
 
 
 # ───────────────────────────── targets ─────────────────────────────

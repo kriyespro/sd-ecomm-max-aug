@@ -3,7 +3,7 @@
 {% block page_title %}CRM board{% endblock %}
 {% block crm_title %}Team board{% endblock %}
 {% block crm_sub %}{{ range_label }} · {{ start }}{% if end != start %} → {{ end }}{% endif %}{% endblock %}
-{% block crm_actions %}{{ range_tabs(ranges, range_key, ("" if active_only else "&active=0")) }}<a href="{{ url('control:crm_targets') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🎯 Targets</a>{% endblock %}
+{% block crm_actions %}{{ range_tabs(ranges, range_key, ("" if active_only else "&active=0")) }}<a href="{{ url('control:crm_targets') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">🎯 Targets</a><a href="{{ url('control:crm_settings') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">⚙ Settings</a>{% endblock %}
 
 {% block crm_body %}
 {% macro stat(label, value, sub="", tone="pink") %}

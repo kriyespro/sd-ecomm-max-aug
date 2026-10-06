@@ -31,6 +31,27 @@ def request_wants_password_form(request) -> bool:
     return request.GET.get("password") == "1"
 
 
+def _crm_lead_from_signup(project, *, name, phone, city, ref_code):
+    """Every self-signup becomes a CRM lead so a DGC calls them fast. Strictly
+    best-effort: a CRM problem must never break someone's signup."""
+    try:
+        from apps.crm import services as crm
+
+        from .models import PlatformRole, Profile
+
+        ref_user = None
+        if (ref_code or "").strip():
+            prof = Profile.objects.select_related("user").filter(
+                affiliate_code=ref_code.strip()[:16], platform_role=PlatformRole.MANAGER,
+                is_banned=False, user__is_active=True).first()
+            ref_user = prof.user if prof else None
+        crm.lead_from_signup(project, name=name, phone=phone, city=city, ref_user=ref_user)
+    except Exception:  # noqa: BLE001
+        import logging
+
+        logging.getLogger(__name__).exception("crm: could not create a lead from signup %s", project.pk)
+
+
 class LoginView(auth_views.LoginView):
     template_name = "accounts/login.jinja"
     redirect_authenticated_user = True
@@ -443,6 +464,7 @@ class SignupCompleteView(FormView):
                 form.add_error(None, msg)
             return self.form_invalid(form)
 
+        ref_code = self.request.session.get("signup_ref", "")
         self.request.session.pop(_PENDING, None)
         self.request.session.pop("signup_ref", None)
         self.request.session.pop("signup_store_name", None)
@@ -455,6 +477,9 @@ class SignupCompleteView(FormView):
                      name=self.pending.get("name") or "",
                      city=form.cleaned_data["city"], state=form.cleaned_data["state"],
                      postal_code=form.cleaned_data["postal_code"])
+        _crm_lead_from_signup(_project, name=self.pending.get("name") or "",
+                              phone=form.cleaned_data["phone"], city=form.cleaned_data["city"],
+                              ref_code=ref_code)
         login(self.request, user)
         twofactor.grant_signup_grace(self.request)
         return redirect("control:onboarding")
