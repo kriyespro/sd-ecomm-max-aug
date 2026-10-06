@@ -422,8 +422,9 @@ class CrmSettings(TimeStampedModel):
     conv_call_to_demo = models.PositiveSmallIntegerField(default=10, help_text="Of every 100 calls, how many become a meeting / demo (%).")
     conv_demo_to_trial = models.PositiveSmallIntegerField(default=60, help_text="Of the meetings / demos, how many start a free trial (%).")
     conv_trial_to_paid = models.PositiveSmallIntegerField(default=50, help_text="Of the trials, how many become paying clients with proper follow-up (%).")
+    value_commission_pct = models.PositiveSmallIntegerField(default=20, help_text="The share of a client's YEARLY plan amount counted as a DGC's earning in the estimates (%). Estimates only — real commission follows each plan's setting.")
     min_ticket_override = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True,
-                                              help_text="Minimum monthly plan price used in DGC earnings estimates. Blank = the cheapest public plan.")
+                                              help_text="Smallest YEARLY plan amount used in the estimates. Blank = the cheapest public plan's yearly price.")
     working_days_month = models.PositiveSmallIntegerField(default=26, help_text="Working days per month used in the monthly projection.")
     # bookkeeping so the hourly jobs send each alert/digest once
     last_quiet_on = models.DateField(null=True, blank=True, editable=False)
@@ -457,6 +458,10 @@ class CrmProfile(TimeStampedModel):
     accepts_leads = models.BooleanField(default=True, help_text="Off = skipped by auto-assign (e.g. on leave).")
     cities = models.CharField(max_length=200, blank=True,
                               help_text="Cities / areas this DGC covers, comma-separated. New leads from these go to them first.")
+    # The DGC's own fee for what they do for a client (setup, product entry, training…).
+    # Added on top of the commission in their "what a client is worth" numbers.
+    service_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0,
+                                         help_text="Your own service charge per client (₹), added to your earnings estimates.")
 
     def city_list(self):
         return [c.strip().lower() for c in self.cities.split(",") if c.strip()]

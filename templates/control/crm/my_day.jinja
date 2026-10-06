@@ -10,7 +10,7 @@
 {% if fresh %}
 <div class="rounded-2xl bg-rose-50 px-3.5 py-2.5 ring-2 ring-rose-200">
   <p class="text-[12px] font-semibold text-rose-800">🔔 {{ fresh|length }} new lead{{ '' if fresh|length == 1 else 's' }} for you — call within 5 minutes, it makes the difference</p>
-  <p class="text-[11px] text-rose-700/80">Each one that becomes a paid client is worth at least <b>{{ possible.min.per_month_label }}/month</b> to you, every month they stay.</p>
+  <p class="text-[11px] text-rose-700/80">Each one that becomes a paid client is worth at least <b>{{ possible.cv.total_label }}</b> to you.</p>
   {% for f in fresh %}
   <div class="mt-1.5 flex flex-wrap items-center justify-between gap-2 border-t border-rose-100 pt-1.5 text-[13px]">
     <a href="{{ url('control:crm_lead', kwargs={'pk': f.pk}) }}" class="min-w-0 truncate font-medium text-slate-800 hover:text-pink-700">{{ f.name }}
@@ -48,7 +48,7 @@
 <div class="flex flex-wrap gap-1.5 text-[12px]">
   {% if streak.days %}<span class="rounded-full bg-orange-50 px-2.5 py-1 font-medium text-orange-700 ring-1 ring-orange-200" title="Days in a row with {{ streak.bar }}+ calls">🔥 {{ streak.days }}-day streak</span>{% endif %}
   {% if earnings.earned %}<span class="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 ring-1 ring-emerald-200">💰 ₹{{ earnings.earned }} commission this month</span>{% endif %}
-  {% if earnings.expected %}<span class="rounded-full bg-pink-50 px-2.5 py-1 text-pink-800 ring-1 ring-pink-200" title="Probability-weighted from your open leads; each win ≈ ₹{{ earnings.per_win }}/month">📈 Pipeline could add ≈ ₹{{ earnings.expected }}{% if earnings.hot %} · {{ earnings.hot }} hot{% endif %}</span>{% endif %}
+  {% if earnings.expected %}<span class="rounded-full bg-pink-50 px-2.5 py-1 text-pink-800 ring-1 ring-pink-200" title="Probability-weighted from your open leads; each paid client ≈ {{ earnings.per_win|inr }}">📈 Pipeline could add ≈ ₹{{ earnings.expected }}{% if earnings.hot %} · {{ earnings.hot }} hot{% endif %}</span>{% endif %}
   {% if best_window %}<span class="rounded-full bg-sky-50 px-2.5 py-1 text-sky-700 ring-1 ring-sky-200" title="From your last 60 days of calls ({{ best_window.calls }} in this window)">⏰ You connect best {{ best_window.label }} · {{ best_window.pct }}% spoke</span>{% endif %}
 </div>
 {% endif %}
@@ -100,7 +100,7 @@
   <div class="mt-1.5 flex flex-wrap items-center gap-2 text-[12px]">
     {{ status_select(nxt) }}
     {% if nxt.next_follow_up %}<span class="text-amber-700">⏰ due {{ nxt.next_follow_up.strftime("%d %b") }}</span>{% endif %}
-    <span class="text-emerald-700" title="If this lead becomes a paying client on the smallest plan">💰 worth ≥ {{ possible.min.per_month_label }}/month</span>
+    <span class="text-emerald-700" title="{{ possible.cv.pct_label }}% of the {{ possible.cv.yearly_label }} yearly plan{% if possible.cv.has_own %} + your {{ possible.cv.own_label }} service charge{% endif %}">💰 worth ≥ {{ possible.cv.total_label }}</span>
   </div>
 
   {# the two things you do first: call, or WhatsApp #}

@@ -859,30 +859,21 @@ def demos_for(user):
 
 # -- earnings / streak / best time ------------------------------------------
 
-def _monthly_commission_pct():
-    from decimal import Decimal as D
-
-    from apps.billing.models import Plan
-    plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
-    try:
-        return D(plan.commission_pct_for("monthly")) if plan else D("20")
-    except Exception:  # noqa: BLE001
-        return D("20")
-
-
 def svc_month_end(d):
     """Last calendar day of ``d``'s month."""
     return (d.replace(day=28) + dt.timedelta(days=4)).replace(day=1) - dt.timedelta(days=1)
 
 
 def earnings_preview(user):
-    """What this DGC has earned this month, and what their pipeline could add
-    (probability-weighted, using the configured average plan price)."""
+    """What this DGC has earned in real commission this month, and what their
+    open pipeline could be worth (probability-weighted, using the same
+    per-client value as the 'what's possible' card: yearly-plan commission plus
+    their own service charge)."""
     from decimal import Decimal as D
 
     from apps.billing.models import ManagerCommission
     cfg = CrmSettings.load()
-    rate = _monthly_commission_pct() / D(100)
+    cv = client_value(user)
     today = biz_today()
     m_lo, m_hi = day_bounds(today.replace(day=1), svc_month_end(today))
     rows = ManagerCommission.objects.filter(manager=user, created_at__gte=m_lo,
@@ -891,11 +882,10 @@ def earnings_preview(user):
     earned = sum(by.values(), D("0"))
     stages = {r["status"]: r["n"] for r in Lead.objects.filter(
         assigned_to=user, is_archived=False, status__in=OPEN_LEAD_STATUSES).values("status").annotate(n=Count("id"))}
-    expected = sum((D(stages.get(st, 0)) * D(cfg.probability(st)) / D(100) * cfg.avg_plan_price * rate
-                    for st in stages), D("0"))
+    expected = sum((D(stages.get(st, 0)) * D(cfg.probability(st)) / D(100) * cv["total"] for st in stages), D("0"))
     hot = stages.get(LeadStatus.NEGOTIATING, 0) + stages.get(LeadStatus.DEMO_DONE, 0)
     return {"earned": earned.quantize(D("1")), "expected": expected.quantize(D("1")), "hot": hot,
-            "per_win": (cfg.avg_plan_price * rate).quantize(D("1"))}
+            "per_win": cv["total"]}
 
 
 def _calls_by_local_day(user, days=60):
@@ -1070,7 +1060,7 @@ def forecast(user=None):
     mrr = stores * cfg.avg_plan_price
     return {"rows": rows, "stores": stores.quantize(Decimal("0.1")),
             "mrr": mrr.quantize(Decimal("1")), "price": cfg.avg_plan_price,
-            "commission": (mrr * _monthly_commission_pct() / Decimal(100)).quantize(Decimal("1"))}
+            "value": (stores * client_value(user)["total"]).quantize(Decimal("1")) if user is not None else None}
 
 
 def speed_to_lead(start, end, user=None):
@@ -1189,19 +1179,42 @@ def _nice(d):
     return str(int(d)) if d == d.to_integral() else str(d)
 
 
-def min_ticket():
-    """The smallest monthly plan a client can pick (admin override, else the
-    cheapest public paid plan) and what one such client pays the DGC each month."""
+def cheapest_yearly_plan():
+    """The cheapest public paid plan, judged by its YEARLY amount (what the 20%
+    is taken on), or None if no such plan exists."""
     from apps.billing.models import Plan
+    return Plan.objects.filter(is_active=True, is_public=True, price_yearly__gt=0).order_by("price_yearly").first()
+
+
+def client_value(user=None):
+    """What ONE paying client is worth to a DGC, at the smallest plan:
+
+        commission  = value_commission_pct % (default 20) of the YEARLY plan amount
+        own charge  = whatever service charge this DGC set for themselves
+        total       = commission + own charge
+
+    The yearly amount is the cheapest public plan's price_yearly (or the admin
+    override). These are estimates for motivation — real commission is paid by
+    the billing module on each plan's own percentage."""
     cfg = CrmSettings.load()
-    ticket = cfg.min_ticket_override
-    if not ticket:
-        plan = Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0).order_by("price_monthly").first()
-        ticket = plan.price_monthly if plan else Decimal("1499")
-    pct = _monthly_commission_pct()
-    per_month = (ticket * pct / Decimal(100)).quantize(Decimal("1"), rounding=_HALF_UP)
-    return {"ticket": Decimal(ticket), "pct": pct, "per_month": per_month, "per_year": per_month * 12,
-            "ticket_label": inr(ticket), "per_month_label": inr(per_month), "per_year_label": inr(per_month * 12)}
+    yearly = cfg.min_ticket_override
+    if not yearly:
+        plan = cheapest_yearly_plan()
+        yearly = plan.price_yearly if plan else Decimal("14999")
+    yearly = Decimal(yearly)
+    pct = Decimal(cfg.value_commission_pct)
+    commission = (yearly * pct / Decimal(100)).quantize(Decimal("1"), rounding=_HALF_UP)
+    own = Decimal(0)
+    if user is not None:
+        prof = CrmProfile.objects.filter(user=user).only("service_charge").first()
+        own = Decimal(prof.service_charge) if prof else Decimal(0)
+    own = own.quantize(Decimal("1"), rounding=_HALF_UP)
+    total = commission + own
+    return {
+        "yearly": yearly, "pct": pct, "commission": commission, "own": own, "total": total,
+        "yearly_label": inr(yearly), "pct_label": _nice(pct), "commission_label": inr(commission),
+        "own_label": inr(own), "total_label": inr(total), "has_own": own > 0,
+    }
 
 
 def possibility(user):
@@ -1212,8 +1225,8 @@ def possibility(user):
     c1, c2, c3 = (Decimal(cfg.conv_call_to_demo), Decimal(cfg.conv_demo_to_trial), Decimal(cfg.conv_trial_to_paid))
     overall = c1 * c2 * c3 / Decimal(10000)                       # % of calls that end as a paid client
     per_call = overall / Decimal(100)                              # paid clients per call
-    mt = min_ticket()
-    per_client = Decimal(mt["per_month"])
+    cv = client_value(user)
+    per_client = cv["total"]
 
     def step(calls):
         meets = calls * c1 / 100
@@ -1233,10 +1246,10 @@ def possibility(user):
     for w in (1, 2, 3, 4):
         clients = target * days * Decimal(w) / 4 * per_call
         weeks.append({"week": w, "clients": clients, "clients_label": _nice(clients),
-                      "monthly": clients * per_client, "monthly_label": inr(clients * per_client)})
-    top = weeks[-1]["monthly"] or Decimal(1)
+                      "value": clients * per_client, "value_label": inr(clients * per_client)})
+    top = weeks[-1]["value"] or Decimal(1)
     for w in weeks:
-        w["pct"] = max(8, int(w["monthly"] * 100 / top))
+        w["pct"] = max(8, int(w["value"] * 100 / top))
 
     stages = []
     counts = {r["status"]: r["n"] for r in Lead.objects.filter(
@@ -1257,17 +1270,16 @@ def possibility(user):
     plan_rows = [{"label": l, "n": n, "n_label": _nice(n), "pct": max(7, int(n * 100 / target))}
                  for l, n in rows]
     return {
-        "min": mt, "overall_pct": _nice(overall), "c": (int(c1), int(c2), int(c3)),
+        "cv": cv, "overall_pct": _nice(overall), "c": (int(c1), int(c2), int(c3)),
         "per100": [{"label": l, "n": _nice(n), "pct": max(7, int(n))} for l, n in per100],
         "plan": {"calls": int(target), "rows": plan_rows, "meets": _nice(meets), "trials": _nice(trials),
-                 "paid": _nice(paid), "paid_n": paid, "monthly_label": inr(paid * per_client),
-                 "yearly_label": inr(paid * per_client * 12)},
+                 "paid": _nice(paid), "paid_n": paid, "value_label": inr(paid * per_client)},
         "progress": {"done": done, "target": int(target), "pct": min(100, int(done * 100 / target)),
                      "left": max(0, int(target) - done), "paid_so_far": _nice(Decimal(done) * per_call),
                      "left_paid": _nice(Decimal(max(0, int(target) - done)) * per_call),
                      "value_so_far_label": inr(Decimal(done) * per_call * per_client)},
         "month": {"days": int(days), "weeks": weeks, "clients": weeks[-1]["clients_label"],
-                  "monthly_label": weeks[-1]["monthly_label"]},
+                  "value_label": weeks[-1]["value_label"]},
         "leads": {"stages": stages, "total": total_open, "expected": _nice(exp_paid),
                   "value_label": inr(exp_paid * per_client),
                   "untouched": Lead.objects.filter(assigned_to=user, is_archived=False, first_touch_at__isnull=True,
