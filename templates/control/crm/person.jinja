@@ -1,0 +1,81 @@
+{% extends "control/crm/base_crm.jinja" %}
+{% from "control/crm/_crm.jinja" import range_tabs, bar %}
+{% set _name = person.get_full_name() or person.email %}
+{% block page_title %}{{ _name }}{% endblock %}
+{% block crm_title %}{{ _name }}{% endblock %}
+{% block crm_sub %}· last active <b class="{{ 'text-emerald-700' if me.last_active else 'text-slate-500' }}">{{ me.last_active_label }}</b>{% endblock %}
+{% block crm_actions %}
+<a href="{{ url('control:crm_board') }}" class="rounded-full bg-white px-3 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-100 hover:bg-pink-50">← Team board</a>
+{{ range_tabs(ranges, range_key) }}
+{% endblock %}
+
+{% block crm_body %}
+<div class="grid grid-cols-3 divide-x divide-y divide-pink-50 overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-pink-100 sm:divide-y-0 xl:grid-cols-6">
+  {% macro stat(label, value, sub="", tone="pink") %}
+  <div class="px-3 py-2"><div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">{{ label }}</div>
+    <div class="text-lg font-semibold leading-tight {{ 'text-emerald-600' if tone == 'green' else 'text-pink-700' }}">{{ value }}</div>
+    {% if sub %}<div class="truncate text-[10px] leading-tight text-slate-500">{{ sub }}</div>{% endif %}</div>
+  {% endmacro %}
+  <div class="px-3 py-2"><div class="text-[10px] font-semibold uppercase tracking-wide text-pink-400">Calls</div>
+    <div class="text-lg font-semibold leading-tight text-pink-700">{{ me.calls }}{% if range_key == 'today' %}<span class="text-xs font-normal text-slate-400"> / {{ targets.calls }}</span>{% endif %}</div>
+    {% if range_key == 'today' %}{{ bar(me.calls, targets.calls) }}{% else %}<div class="text-[10px] text-slate-500">{{ me.connected }} spoke</div>{% endif %}</div>
+  {{ stat("Demos", me.demos, ("goal " ~ targets.demos) if range_key == 'today' else "") }}
+  {{ stat("Trained others", me.trained_others) }}
+  {{ stat("Collection", "₹" ~ me.collection, ("+₹" ~ me.collection_pending ~ " unverified") if me.collection_pending else "verified", "green") }}
+  {{ stat("Products", me.products, me.store_work ~ " store jobs") }}
+  {{ stat("WhatsApp", me.whatsapp) }}
+</div>
+
+{# their pipeline — each stage opens exactly their leads in that stage #}
+<div class="flex flex-wrap items-center gap-1 rounded-xl bg-white px-2.5 py-1.5 text-[12px] shadow-sm ring-1 ring-pink-100">
+  <span class="mr-1 text-[10px] font-semibold uppercase tracking-wide text-pink-400">Their pipeline · {{ open_total }} open</span>
+  {% for v, lab, n in stages %}
+  <a href="{{ url('control:crm_leads') }}?view=list&assignee={{ person.pk }}&status={{ v }}" class="rounded-full px-2 py-0.5 text-slate-600 hover:bg-pink-50">{{ lab }} <b class="{{ 'text-pink-700' if n else 'text-slate-300' }}">{{ n }}</b></a>{% if not loop.last %}<span class="text-pink-200">›</span>{% endif %}
+  {% endfor %}
+  <span class="mx-1 text-pink-100">|</span>
+  <span class="text-emerald-700">🎉 {{ won }}</span><span class="ml-1 text-slate-400">✕ {{ lost }}</span>
+  {% if overdue %}<a href="{{ url('control:crm_leads') }}?view=list&assignee={{ person.pk }}&due=1" class="ml-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ overdue }} overdue</a>{% endif %}
+  {% if training_waiting %}<span class="ml-1 rounded-full bg-violet-50 px-2 py-0.5 text-violet-700">🧑‍🏫 {{ training_waiting }} to train</span>{% endif %}
+</div>
+
+<div class="grid items-start gap-3 lg:grid-cols-3">
+  <div class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100 lg:col-span-2">
+    <h3 class="mb-1 text-[13px] font-semibold text-pink-900">Recent activity</h3>
+    {% for a in recent %}
+    <div class="flex items-start justify-between gap-2 border-t border-pink-50 py-1.5 text-[13px]">
+      <span class="min-w-0">{{ a.get_kind_display() }}{% if a.outcome %} <span class="text-slate-500">· {{ a.get_outcome_display() }}</span>{% endif %}
+        {% if a.lead %}<a href="{{ url('control:crm_lead', kwargs={'pk': a.lead_id}) }}" class="text-pink-700 hover:underline">{{ a.lead.name }}</a>{% endif %}
+        {% if a.note %}<span class="block truncate text-[11px] text-slate-500">{{ a.note }}</span>{% endif %}</span>
+      <span class="shrink-0 text-[11px] text-slate-400">{{ a.occurred_at.strftime("%d %b %H:%M") }}</span></div>
+    {% else %}<p class="border-t border-pink-50 pt-2 text-sm text-slate-400">No activity yet.</p>{% endfor %}
+  </div>
+
+  <div class="space-y-3">
+    <form method="post" action="{{ url('control:crm_task_create') }}" class="cf rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+      {{ csrf_input }}<input type="hidden" name="assignee" value="{{ person.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path() }}">
+      <h3 class="mb-1.5 text-[13px] font-semibold text-pink-900">＋ Give {{ person.first_name or 'them' }} a task</h3>
+      <input name="title" required maxlength="200" placeholder="e.g. Call 20 jewellers in Pune" class="block w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px]">
+      <div class="mt-1.5 flex gap-1.5">
+        <input type="date" name="due_on" class="min-w-0 flex-1 rounded-lg border border-slate-200 px-2 py-1.5 text-[13px]">
+        <button class="rounded-lg bg-pink-600 px-3 text-[13px] font-medium text-white hover:bg-pink-700">Assign</button>
+      </div>
+      {% for t in open_tasks %}<p class="mt-1.5 truncate text-[11px] text-slate-500">• {{ t.title }}{% if t.due_on %} <span class="text-slate-400">({{ t.due_on.strftime("%d %b") }})</span>{% endif %}</p>{% endfor %}
+    </form>
+
+    <form method="post" action="{{ url('control:crm_person_transfer', kwargs={'pk': person.pk}) }}"
+          onsubmit="return confirm('Move all {{ open_total }} open leads away from {{ _name|e }}?')"
+          class="rounded-2xl bg-white px-3.5 py-3 shadow-sm ring-1 ring-pink-100">
+      {{ csrf_input }}
+      <h3 class="mb-1 text-[13px] font-semibold text-pink-900">↪ Transfer their open leads</h3>
+      <p class="mb-1.5 text-[11px] text-slate-500">For when {{ person.first_name or 'they' }} leave or go quiet. History stays with each lead.</p>
+      <div class="flex gap-1.5">
+        <select name="to" class="min-w-0 flex-1 rounded-lg border border-slate-200 py-1.5 pl-2 pr-7 text-[13px]">
+          <option value="spread">Spread evenly across all other DGCs</option>
+          {% for p in others %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}
+        </select>
+        <button {{ 'disabled' if not open_total }} class="rounded-lg bg-white px-3 text-[13px] font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50 disabled:opacity-40">Move {{ open_total }}</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

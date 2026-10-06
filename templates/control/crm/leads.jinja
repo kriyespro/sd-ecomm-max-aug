@@ -46,6 +46,18 @@
   {% if g.get('q') or g.get('status') or g.get('assignee') or g.get('due') or g.get('archived') %}<a href="{{ url('control:crm_leads') }}" class="text-[11px] text-slate-500 underline">Clear</a>{% endif %}
 </form>
 
+{% if is_admin and unassigned_count and not archived_view %}
+<form method="post" action="{{ url('control:crm_lead_distribute') }}" class="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl bg-amber-50 px-3 py-2 text-[12px] ring-1 ring-amber-200">
+  {{ csrf_input }}<input type="hidden" name="next" value="{{ request.get_full_path() }}">
+  <span class="font-semibold text-amber-900">⚠ {{ unassigned_count }} unassigned</span>
+  <span class="text-amber-800/80">share evenly between:</span>
+  {% for p in dgcs %}
+  <label class="inline-flex cursor-pointer items-center gap-1 rounded-full bg-white px-2.5 py-1 text-slate-700 ring-1 ring-amber-200"><input type="checkbox" name="assignees" value="{{ p.pk }}" checked class="h-3.5 w-3.5 rounded border-amber-300 text-pink-600"> {{ p.first_name or p.email }}</label>
+  {% else %}<span class="text-amber-800">No DGCs yet.</span>{% endfor %}
+  <button class="ml-auto rounded-lg bg-pink-600 px-3 py-1.5 font-medium text-white hover:bg-pink-700">Share {{ unassigned_count }} evenly</button>
+</form>
+{% endif %}
+
 <form method="post" action="{{ url('control:crm_lead_assign') }}" x-data="{ n: 0 }"
       @change="n = $el.querySelectorAll('input[name=ids]:checked').length">
   {{ csrf_input }}
@@ -91,6 +103,7 @@
     <select name="assignee" class="rounded-full border-0 bg-white py-1 pl-3 pr-8 text-[13px] text-slate-800 focus:ring-2 focus:ring-pink-300">
       {% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>
     <button class="rounded-full bg-pink-500 px-4 py-1 font-semibold text-white hover:bg-pink-400">Assign</button>
+    <button formaction="{{ url('control:crm_lead_distribute') }}" title="Split the ticked leads evenly across all DGCs" class="rounded-full bg-white/15 px-3 py-1 font-semibold text-white ring-1 ring-white/30 hover:bg-white/25">⚖ Spread evenly</button>
     {% endif %}
     {% if not archived_view %}
     <span class="text-pink-300">· set status</span>
@@ -110,7 +123,7 @@
   {{ csrf_input }}<span class="font-medium text-pink-900">📥 Import CSV</span><span class="text-xs text-slate-500">columns: name, phone, business, city, source</span>
   <a href="{{ url('control:crm_lead_import_sample') }}" class="rounded-lg bg-white px-2.5 py-1 text-xs font-medium text-pink-800 ring-1 ring-pink-200 hover:bg-pink-50">⬇ Download sample CSV</a>
   <input type="file" name="file" accept=".csv" required class="text-xs">
-  {% if is_admin %}<select name="assignee" class="h-7 rounded-md border border-pink-200 bg-white py-0 pl-1.5 pr-6 text-[11px]"><option value="">Unassigned</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% else %}<span class="text-[11px] text-slate-500">added to your own list</span>{% endif %}
+  {% if is_admin %}<label class="inline-flex items-center gap-1 text-[11px] text-pink-900"><input type="checkbox" name="spread" value="1" class="h-3.5 w-3.5 rounded border-pink-300 text-pink-600"> Split evenly among all DGCs</label><select name="assignee" class="h-7 rounded-md border border-pink-200 bg-white py-0 pl-1.5 pr-6 text-[11px]"><option value="">or give all to…</option>{% for p in people %}<option value="{{ p.pk }}">{{ p.get_full_name() or p.email }}</option>{% endfor %}</select>{% else %}<span class="text-[11px] text-slate-500">added to your own list</span>{% endif %}
   <button class="rounded-lg bg-pink-600 px-3 py-1 font-medium text-white hover:bg-pink-700">Import</button>
 </form>
 {% if page_obj and page_obj.has_other_pages() %}<div class="flex gap-3 text-sm text-pink-700">{% if page_obj.has_previous() %}<a href="?{{ qs }}page={{ page_obj.previous_page_number() }}">← Prev</a>{% endif %}{% if page_obj.has_next() %}<a href="?{{ qs }}page={{ page_obj.next_page_number() }}">Next →</a>{% endif %}</div>{% endif %}

@@ -16,7 +16,7 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Q
+from django.db.models import Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -85,6 +85,8 @@ class CrmBoardView(PlatformAdminRequiredMixin, TemplateView):
             rows = [r for r in rows if any((
                 r["calls"], r["demos"], r["trained"], r["collection"], r["collection_pending"],
                 r["products"], r["store_work"], r["whatsapp"], r["trained_others"]))]
+        ctx.update(inbox=svc.admin_inbox(), pipeline=svc.pipeline_counts(), dgcs=svc.dgc_users(),
+                   people=svc.crm_people())
         ctx.update(range_key=key, range_label=label, ranges=_RANGES, rows=rows, active_only=active_only,
                    totals=totals, extras=svc.board_extras(), start=start, end=end)
         return ctx
@@ -190,7 +192,12 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
                    editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
                    people=svc.crm_people(), g=self.request.GET, form=LeadForm(),
                    today=timezone.localdate(), qs=(g.urlencode() + "&") if g else "",
-                   archived_view=bool(self.request.GET.get("archived")))
+                   archived_view=bool(self.request.GET.get("archived")),
+                   dgcs=svc.dgc_users() if _admin(self.request.user) else [],
+                   unassigned_count=Lead.objects.filter(
+                       assigned_to__isnull=True, is_archived=False,
+                       status__in=[s for s in LeadStatus.values if s not in ("won", "lost")]).count()
+                   if _admin(self.request.user) else 0)
         return ctx
 
 
@@ -313,6 +320,95 @@ class LeadAssignView(PlatformAdminRequiredMixin, View):
         return redirect(_post_next(request, reverse("control:crm_leads")))
 
 
+class LeadDistributeView(PlatformAdminRequiredMixin, View):
+    """Spread leads evenly over DGCs. With ``ids`` -> those leads; without ->
+    every unassigned open lead. ``assignees`` defaults to all DGCs."""
+
+    UNASSIGNED_CAP = 2000
+
+    def post(self, request):
+        ids = [int(i) for i in request.POST.getlist("ids") if i.isdigit()]
+        picked = [int(i) for i in request.POST.getlist("assignees") if i.isdigit()]
+        people = svc.dgc_users()
+        if picked:
+            people = people.filter(pk__in=picked)
+        people = list(people)
+        if not people:
+            messages.error(request, "Choose at least one DGC to share the leads between.")
+            return redirect(_post_next(request, reverse("control:crm_leads")))
+        if ids:
+            if len(ids) > svc.BULK_ARCHIVE_MAX:
+                messages.error(request, f"Pick at most {svc.BULK_ARCHIVE_MAX} leads at a time.")
+                return redirect(_post_next(request, reverse("control:crm_leads")))
+            leads = Lead.objects.filter(pk__in=ids, is_archived=False)
+        else:
+            leads = Lead.objects.filter(assigned_to__isnull=True, is_archived=False,
+                                        status__in=[s for s in LeadStatus.values if s not in ("won", "lost")]
+                                        ).order_by("created_at")[:self.UNASSIGNED_CAP]
+        got = svc.distribute_leads(leads, people, actor=request.user)
+        total = sum(got.values())
+        if not total:
+            messages.info(request, "No leads to share out.")
+        else:
+            who = {u.pk: svc.person_label(u) for u in people}
+            detail = ", ".join(f"{who[pk]} {n}" for pk, n in got.items() if n)
+            messages.success(request, f"Shared {total} lead(s) evenly: {detail}.")
+        return redirect(_post_next(request, reverse("control:crm_leads")))
+
+
+class PersonView(PlatformAdminRequiredMixin, TemplateView):
+    """One DGC at a glance: today's numbers, their pipeline, how long since
+    they did anything, and the levers an admin needs (task, transfer leads)."""
+
+    template_name = "control/crm/person.jinja"
+
+    def get_context_data(self, pk, **kw):
+        ctx = super().get_context_data(**kw)
+        person = get_object_or_404(svc.crm_people(), pk=pk)
+        key = self.request.GET.get("range", "today")
+        start, end, label = svc.resolve_range(key)
+        rows, _ = svc.person_numbers(start, end, users=[person])
+        today = timezone.localdate()
+        mine = Lead.objects.filter(assigned_to=person, is_archived=False)
+        stage = {r["status"]: r["n"] for r in mine.values("status").annotate(n=Count("id"))}
+        open_n = sum(stage.get(s.value, 0) for s in svc.BOARD_STAGES)
+        ctx.update(
+            person=person, me=rows[0], range_key=key, range_label=label, ranges=_RANGES,
+            stages=[(s.value, s.label, stage.get(s.value, 0)) for s in svc.BOARD_STAGES],
+            won=stage.get("won", 0), lost=stage.get("lost", 0), open_total=open_n,
+            overdue=mine.filter(next_follow_up__lt=today, status__in=[s.value for s in svc.BOARD_STAGES]).count(),
+            recent=Activity.objects.filter(actor=person).select_related("lead")[:15],
+            open_tasks=Task.objects.filter(assignee=person, status=TaskStatus.OPEN)[:6],
+            others=svc.crm_people().exclude(pk=person.pk), targets=rows[0]["targets"],
+            training_waiting=TrainingLog.objects.filter(trainer=person, status=TrainingStatus.ASSIGNED).count(),
+        )
+        return ctx
+
+
+class LeadTransferView(PlatformAdminRequiredMixin, View):
+    """Move all of one DGC's open leads to someone else, or spread them evenly
+    over every other DGC."""
+
+    def post(self, request, pk):
+        src = get_object_or_404(svc.crm_people(), pk=pk)
+        back = reverse("control:crm_person", kwargs={"pk": pk})
+        to = request.POST.get("to", "")
+        if to == "spread":
+            targets = list(svc.dgc_users().exclude(pk=src.pk))
+        elif to.isdigit() and int(to) != src.pk:
+            targets = list(svc.crm_people().filter(pk=int(to)))
+        else:
+            targets = []
+        if not targets:
+            messages.error(request, "Choose who should take over these leads.")
+            return redirect(back)
+        got = svc.transfer_leads(src, targets, actor=request.user)
+        total = sum(got.values())
+        messages.success(request, f"Moved {total} open lead(s) from {svc.person_label(src)}." if total
+                         else f"{svc.person_label(src)} has no open leads to move.")
+        return redirect(back)
+
+
 class LeadBulkStatusView(PlatformStaffRequiredMixin, View):
     """Set one stage on every ticked lead. Same rules as a single move (won is
     refused, history written), scoped to the caller's own leads."""
@@ -414,7 +510,9 @@ class LeadImportView(PlatformStaffRequiredMixin, View):
             who = User.objects.filter(pk=request.POST.get("assignee") or 0).first()
         else:
             who = request.user
+        spread = _admin(request.user) and bool(request.POST.get("spread"))
         made = skipped = 0
+        created = []
         for i, row in enumerate(csv.reader(io.StringIO(text))):
             row = [c.strip() for c in row] + [""] * 5
             if i == 0 and row[0].lower() in ("name", "lead", "full name"):
@@ -425,13 +523,18 @@ class LeadImportView(PlatformStaffRequiredMixin, View):
                 continue
             if made >= 2000:
                 break
-            Lead.objects.create(name=name[:120], phone=phone[:20], business=biz[:160],
-                                city=city[:80], source=(src or "import")[:60],
-                                assigned_to=who, assigned_by=request.user if who else None,
-                                created_by=request.user)
+            created.append(Lead.objects.create(
+                name=name[:120], phone=phone[:20], business=biz[:160], city=city[:80],
+                source=(src or "import")[:60], assigned_to=None if spread else who,
+                assigned_by=request.user if (who and not spread) else None, created_by=request.user))
             made += 1
+        note = ""
+        if spread and created:
+            got = svc.distribute_leads(created, svc.dgc_users(), actor=request.user)
+            note = f" Split evenly across {sum(1 for n in got.values() if n)} DGC(s)." if got else \
+                " No DGCs to split between — leads left unassigned."
         messages.success(request, f"Imported {made} lead(s); skipped {skipped} "
-                                  "(blank name or phone already in the CRM).")
+                                  f"(blank name or phone already in the CRM).{note}")
         return redirect("control:crm_leads")
 
 
@@ -525,7 +628,7 @@ class TaskCreateView(PlatformAdminRequiredMixin, View):
             messages.success(request, "Task assigned.")
         else:
             messages.error(request, "Task needs a title and an assignee.")
-        return redirect("control:crm_tasks")
+        return redirect(_post_next(request, reverse("control:crm_tasks")))
 
 
 class TaskDoneView(PlatformStaffRequiredMixin, View):
@@ -688,7 +791,7 @@ class TrainingRespondView(PlatformStaffRequiredMixin, View):
             svc.respond_training(log, actor=request.user, ok=request.POST.get("action") != "reject")
         except svc.TrainingError as exc:
             raise PermissionDenied(str(exc))
-        return redirect("control:crm_training")
+        return redirect(_post_next(request, reverse("control:crm_training")))
 
 
 class TrainingAssignView(PlatformAdminRequiredMixin, View):
@@ -702,7 +805,7 @@ class TrainingAssignView(PlatformAdminRequiredMixin, View):
             messages.success(request, f"{svc.person_label(trainer)} will train {log.student_label}.")
         except svc.TrainingError as exc:
             messages.error(request, str(exc))
-        return redirect("control:crm_training")
+        return redirect(_post_next(request, reverse("control:crm_training")))
 
 
 class TrainingMarkTrainedView(PlatformStaffRequiredMixin, View):
@@ -782,7 +885,7 @@ class WorkAssignView(PlatformAdminRequiredMixin, View):
         else:
             svc.assign_store_work(wr, who, actor=request.user)
             messages.success(request, f"Assigned to {svc.person_label(who)}.")
-        return redirect("control:crm_work")
+        return redirect(_post_next(request, reverse("control:crm_work")))
 
 
 class WorkRevokeView(PlatformAdminRequiredMixin, View):
