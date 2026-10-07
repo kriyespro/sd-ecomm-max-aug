@@ -4490,3 +4490,97 @@ class MyDaySingleFoldTests(CrmBase):
         fold = html.split("More for today")[1]
         self.assertEqual(fold.count("<summary"), 0)
         self.assertIn("My lead settings", fold)
+
+
+class LeadRowHeatAndSortTests(CrmBase):
+    """Leads list: row background/weight escalate with how close a lead is to
+    converting (Won deepest + boldest), Lost sinks to the bottom, the hottest
+    open leads float to the top — all driven from one source of truth,
+    apps.crm.models.STAGE_ROW_TONE / STAGE_RANK."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+        self.url = reverse("control:crm_leads") + "?view=list"
+
+    def _mk(self, name, status, **kw):
+        return Lead.objects.create(name=name, status=status, assigned_to=self.a, **kw)
+
+    def test_rank_escalates_with_how_close_to_converting_won_highest_lost_lowest(self):
+        order = ["lost", "new", "contacted", "interested", "demo_booked", "demo_done", "negotiating", "won"]
+        from apps.crm.models import STAGE_RANK
+        ranks = [STAGE_RANK[s] for s in order]
+        self.assertEqual(ranks, sorted(ranks))                 # strictly increasing in this exact order
+        self.assertEqual(STAGE_RANK["lost"], min(STAGE_RANK.values()))
+        self.assertEqual(STAGE_RANK["won"], max(STAGE_RANK.values()))
+
+    def test_row_tone_gets_darker_and_bolder_toward_won(self):
+        from apps.crm.models import STAGE_ROW_TONE
+        weights = ["", "", "", "", "font-medium", "font-semibold", "font-bold", "font-extrabold"]
+        order = ["lost", "new", "contacted", "interested", "demo_booked", "demo_done", "negotiating", "won"]
+        self.assertEqual([STAGE_ROW_TONE[s]["weight"] for s in order[1:]], weights[1:])   # excludes lost (its own muted tier)
+        # background never gets LIGHTER as the funnel progresses (new..won)
+        depth = {"": 0, "bg-emerald-50": 1, "bg-emerald-100": 2, "bg-emerald-200": 3}
+        progressed = [depth[STAGE_ROW_TONE[s]["bg"]] for s in order[1:]]
+        self.assertEqual(progressed, sorted(progressed))
+        self.assertEqual(STAGE_ROW_TONE["won"]["bg"], "bg-emerald-200")
+        self.assertEqual(STAGE_ROW_TONE["lost"]["text"], "text-slate-400")   # muted, not green
+
+    def test_list_orders_hottest_and_won_first_lost_last(self):
+        lost = self._mk("Lost one", LeadStatus.LOST)
+        new = self._mk("New one", LeadStatus.NEW)
+        nego = self._mk("Negotiating one", LeadStatus.NEGOTIATING)
+        won = self._mk("Won one", LeadStatus.WON)
+        demo = self._mk("Demo one", LeadStatus.DEMO_DONE)
+        html = self.client.get(self.url).content.decode()
+        order = [n for n in (won.name, nego.name, demo.name, new.name, lost.name) if n in html]
+        positions = [html.index(n) for n in (won.name, nego.name, demo.name, new.name, lost.name)]
+        self.assertEqual(positions, sorted(positions))          # exactly: Won, Negotiating, Demo done, New, Lost
+
+    def test_single_status_filter_falls_through_to_followup_then_recency(self):
+        due_soon = self._mk("Due soon", LeadStatus.CONTACTED, next_follow_up=biz_today())
+        due_later = self._mk("Due later", LeadStatus.CONTACTED, next_follow_up=biz_today() + dt.timedelta(days=5))
+        no_date_newer = self._mk("No date, newer", LeadStatus.CONTACTED)
+        html = self.client.get(self.url + "&status=contacted").content.decode()
+        # due-soonest still comes before a later follow-up date, within the same status
+        self.assertLess(html.index(due_soon.name), html.index(due_later.name))
+
+    def test_row_carries_rank_and_tone_classes_matching_the_shared_dict(self):
+        from apps.crm.models import STAGE_ROW_TONE
+        lead = self._mk("Hot Lead", LeadStatus.NEGOTIATING)
+        html = self.client.get(self.url).content.decode()
+        row = html.split(f'data-rank="{STAGE_ROW_TONE["negotiating"]["rank"]}"')[1].split("</tr>")[0]
+        self.assertIn("Hot Lead", row)
+        self.assertIn(STAGE_ROW_TONE["negotiating"]["bg"], row)
+        self.assertIn(STAGE_ROW_TONE["negotiating"]["weight"], row)
+        self.assertIn("transition-colors duration-500", row)
+
+    def test_won_row_has_no_status_dropdown_but_still_carries_its_tone(self):
+        from apps.crm.models import STAGE_ROW_TONE
+        lead = self._mk("Won Lead", LeadStatus.WON)
+        html = self.client.get(self.url).content.decode()
+        row = html.split(f'data-rank="{STAGE_ROW_TONE["won"]["rank"]}"')[1].split("</tr>")[0]
+        self.assertNotIn(f'data-lead="{lead.pk}"', row)          # locked: no select, can't be dragged back down
+        self.assertIn("🎉 Won", row)
+        self.assertIn(STAGE_ROW_TONE["won"]["bg"], row)
+
+    def test_the_tone_json_blob_is_present_and_matches_the_python_dict(self):
+        import json as _json
+        from apps.crm.models import STAGE_ROW_TONE
+        self._mk("Any", LeadStatus.NEW)
+        html = self.client.get(self.url).content.decode()
+        blob = html.split('id="crm-stage-tone">')[1].split("</script>")[0]
+        parsed = _json.loads(blob)
+        self.assertEqual(parsed, STAGE_ROW_TONE)
+
+    def test_dgc_still_only_sees_their_own_leads_in_this_sorted_list(self):
+        mine = self._mk("Mine", LeadStatus.NEGOTIATING)
+        theirs = Lead.objects.create(name="Not mine", status=LeadStatus.WON, assigned_to=self.b)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("Mine", html)
+        self.assertNotIn("Not mine", html)
+
+    def test_archived_view_still_works_with_the_new_ordering(self):
+        lead = self._mk("Archived hot", LeadStatus.NEGOTIATING, is_archived=True)
+        self.assertEqual(self.client.get(self.url + "&archived=1").status_code, 200)
+        self.assertIn("Archived hot", self.client.get(self.url + "&archived=1").content.decode())

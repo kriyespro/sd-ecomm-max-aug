@@ -14,6 +14,10 @@
 {% endblock %}
 
 {% block crm_body %}
+{# Read by the shared status-change handler in base_crm.jinja so a row recolors
+   + resorts (hottest/Won to the top, Lost to the bottom) the instant you pick a
+   new status — no reload. One source of truth: apps.crm.models.STAGE_ROW_TONE. #}
+<script type="application/json" id="crm-stage-tone">{{ stage_tone_json|safe }}</script>
 <form id="addlead" method="post" action="{{ url('control:crm_lead_create') }}" class="hidden rounded-2xl bg-white px-3 py-3 shadow-sm ring-1 ring-pink-200">
   <style>
     #addlead [data-field] label{font-size:11px;font-weight:600;color:#9d174d;text-transform:uppercase;letter-spacing:.03em}
@@ -71,10 +75,11 @@
         <th class="hidden px-3 py-2 sm:table-cell">Follow-up</th><th class="px-3 py-2"></th></tr></thead>
       <tbody class="divide-y divide-pink-50">
         {% for l in leads %}
-        <tr class="hover:bg-pink-50/40">
+        {% set tone = stage_tone[l.status] %}
+        <tr data-rank="{{ tone.rank }}" class="transition-colors duration-500 hover:bg-pink-50/40 {{ tone.bg }} {{ tone.text }} {{ tone.weight }}">
           <td class="px-3 py-1.5"><input type="checkbox" name="ids" value="{{ l.pk }}" class="rounded border-pink-300 text-pink-600"></td>
           <td class="px-3 py-1.5">
-            <a class="font-medium text-slate-800 hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
+            <a class="hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>
             <span class="hidden text-xs text-slate-400 sm:inline">{% if l.business %}· {{ l.business }}{% endif %}{% if l.city %} · {{ l.city }}{% endif %}{% if l.phone %} · {{ l.phone }}{% endif %}</span>
             <div class="text-[11px] text-slate-400 sm:hidden">{{ l.business or "" }}{% if l.business and l.city %} · {% endif %}{{ l.city or "" }}{% if l.phone %}{% if l.business or l.city %} · {% endif %}{{ l.phone }}{% endif %}
               {% if l.next_follow_up %}<span class="{{ 'font-medium text-rose-600' if l.next_follow_up <= today else 'text-amber-700' }}">⏰ {{ l.next_follow_up.strftime("%d %b") }}</span>{% endif %}</div>
