@@ -4,17 +4,27 @@
    crm_sub, crm_actions and crm_body. #}
 {% set _un = request.resolver_match.url_name if request.resolver_match else "" %}
 {% set _adm = request.user.is_superuser or (request.user.profile and request.user.profile.is_platform_admin) %}
-{% set _tabs = [
+{# Primary = always visible, the 2-3 screens a role actually lives in.
+   Overflow = everything else, tucked behind one "More" dropdown so the bar
+   never grows past a handful of buttons no matter how many CRM screens exist. #}
+{% set _primary = [
   ("Welcome", "crm_welcome", "crm_welcome", false, "🎯"),
   ("Board", "crm_board", "crm_board", true, "📊"),
   ("My day", "crm_my_day", "crm_my_day", false, "☀️"),
   ("Leads", "crm_leads", "crm_lead", false, "📞"),
+] %}
+{% set _overflow = [
   ("Tasks", "crm_tasks", "crm_task", false, "✅"),
   ("Money", "crm_collections", "crm_collection", false, "💰"),
   ("Training", "crm_training", "crm_training", false, "🎓"),
   ("Store work", "crm_work", "crm_work", false, "🛠"),
   ("Insights", "crm_insights", "crm_insights", false, "📈"),
+  ("Targets", "crm_targets", "crm_targets", true, "🎯"),
+  ("Statements", "crm_statements", "crm_statement", true, "🧾"),
+  ("Templates", "crm_templates", "crm_template", true, "💬"),
+  ("Settings", "crm_settings", "crm_settings", true, "⚙"),
 ] %}
+
 
 {% block content %}
 <style>
@@ -32,8 +42,8 @@
       </div>
       <div class="flex flex-wrap items-center gap-2">{% block crm_actions %}{% endblock %}</div>
     </div>
-    <nav class="-mx-1 mt-2.5 flex gap-1 overflow-x-auto px-1 pb-0.5" aria-label="CRM sections">
-      {% for label, name, prefix, admin_only, icon in _tabs %}
+    <nav class="-mx-1 mt-2.5 flex items-center gap-1 overflow-x-auto px-1 pb-0.5" aria-label="CRM sections">
+      {% for label, name, prefix, admin_only, icon in _primary %}
       {% if (name == 'crm_welcome' and not _adm) or (name != 'crm_welcome' and (_adm or not admin_only)) %}
       {% set on = _un.startswith(prefix) %}
       <a href="{{ url('control:' ~ name) }}"
@@ -41,6 +51,25 @@
         <span class="mr-1">{{ icon }}</span>{{ label }}</a>
       {% endif %}
       {% endfor %}
+      {% set _rest = [] %}
+      {% set _rest_has_active = namespace(v=false) %}
+      {% for label, name, prefix, admin_only, icon in _overflow %}
+      {% if _adm or not admin_only %}
+        {% set _ = _rest.append((label, name, prefix, icon)) %}
+        {% if _un.startswith(prefix) %}{% set _rest_has_active.v = true %}{% endif %}
+      {% endif %}
+      {% endfor %}
+      {% if _rest %}
+      <details class="group relative shrink-0">
+        <summary class="cursor-pointer list-none rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if _rest_has_active.v else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
+          <span class="mr-1">⋯</span>More<span class="ml-0.5 inline-block text-[10px] transition group-open:rotate-180">▾</span></summary>
+        <div class="absolute left-0 z-30 mt-1 w-48 rounded-xl bg-white py-1.5 text-[13px] shadow-lg ring-1 ring-pink-100">
+          {% for label, name, prefix, icon in _rest %}
+          <a href="{{ url('control:' ~ name) }}" class="flex items-center gap-2 px-3 py-1.5 {{ 'font-semibold text-pink-700' if _un.startswith(prefix) else 'text-slate-700 hover:bg-pink-50' }}"><span>{{ icon }}</span>{{ label }}</a>
+          {% endfor %}
+        </div>
+      </details>
+      {% endif %}
     </nav>
   </div>
   {% block crm_body %}{% endblock %}
