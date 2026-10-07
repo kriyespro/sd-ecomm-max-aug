@@ -202,6 +202,7 @@ def _lead_qs(user):
 
 
 LEADS_VIEW_COOKIE = "crm_leads_view"
+LEADS_AUTO_COOKIE = "crm_leads_auto"
 
 
 class LeadListView(PlatformStaffRequiredMixin, ListView):
@@ -221,7 +222,16 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         resp = super().get(request, *args, **kwargs)
         if g.get("view") == "list":
             resp.set_cookie(LEADS_VIEW_COOKIE, "list", max_age=60 * 60 * 24 * 365, samesite="Lax")
+        if "auto" in g:
+            resp.set_cookie(LEADS_AUTO_COOKIE, "1" if g.get("auto") == "1" else "0",
+                            max_age=60 * 60 * 24 * 365, samesite="Lax")
         return resp
+
+    def _auto_mode(self):
+        g = self.request.GET
+        if "auto" in g:
+            return g.get("auto") == "1"
+        return self.request.COOKIES.get(LEADS_AUTO_COOKIE) == "1"
 
     def get_queryset(self):
         g = self.request.GET
@@ -237,18 +247,29 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         if g.get("q"):
             q = g["q"].strip()
             qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(business__icontains=q))
-        # Hottest / most-converted first (Won at the very top, Lost sunk to
-        # the bottom — see STAGE_RANK), then whoever's follow-up is soonest
-        # due, then the newest. A single-status filter makes the rank tie
-        # for everyone, so it quietly falls through to the follow-up/recency
-        # order within that one status.
-        rank = Case(*(When(status=st, then=Value(r)) for st, r in STAGE_RANK.items()), output_field=IntegerField())
-        return qs.annotate(_rank=rank).order_by("-_rank", F("next_follow_up").asc(nulls_last=True), "-created_at")
+        if self._auto_mode():
+            # Auto ON: hottest / most-converted first (Won at the very top),
+            # then whoever's follow-up is soonest due, then the newest. A
+            # single-status filter makes the rank tie for everyone, so it
+            # quietly falls through to the follow-up/recency order within
+            # that one status. Lost is sunk to the bottom via its own lowest
+            # rank in STAGE_RANK.
+            rank = Case(*(When(status=st, then=Value(r)) for st, r in STAGE_RANK.items()), output_field=IntegerField())
+            return qs.annotate(_rank=rank).order_by("-_rank", F("next_follow_up").asc(nulls_last=True), "-created_at")
+        # Auto OFF (the default): plain newest-first, the order a DGC has
+        # always worked in, so a fresh lead never needs scrolling to find.
+        # The one thing kept from Auto either way: Lost sinks to the bottom
+        # instead of cluttering the middle of the list.
+        return qs.order_by(Case(When(status=LeadStatus.LOST, then=Value(1)), default=Value(0),
+                                output_field=IntegerField()), "-created_at")
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
         g = self.request.GET.copy()
         g.pop("page", None)
+        auto_base = g.copy()
+        auto_base.pop("auto", None)
+        auto_mode = self._auto_mode()
         ctx.update(statuses=LeadStatus.choices, is_admin=_admin(self.request.user),
                    # Inline status edit: everything except "won" (that has its own store flow)
                    editable_statuses=[c for c in LeadStatus.choices if c[0] != LeadStatus.WON],
@@ -260,9 +281,12 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
                        assigned_to__isnull=True, is_archived=False,
                        status__in=[s for s in LeadStatus.values if s not in ("won", "lost")]).count()
                    if _admin(self.request.user) else 0,
-                   # Row shading by stage (hottest = deepest green + boldest) and the
-                   # matching JSON the JS recolor-on-change handler reads — one dict,
-                   # see apps.crm.models.STAGE_ROW_TONE.
+                   # "Auto": off by default — see _auto_mode. ON reorders hottest/Won
+                   # first and shades rows by stage; OFF keeps the plain newest-first
+                   # order everyone is used to (only Lost still sinks to the bottom).
+                   # Row shading + the matching JSON the JS recolor-on-change handler
+                   # reads both come from one dict — apps.crm.models.STAGE_ROW_TONE.
+                   auto_mode=auto_mode, auto_toggle_url="?" + auto_base.urlencode() + ("&" if auto_base else "") + "auto=",
                    stage_tone=STAGE_ROW_TONE, stage_tone_json=json.dumps(STAGE_ROW_TONE))
         return ctx
 
