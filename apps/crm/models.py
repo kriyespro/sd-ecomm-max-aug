@@ -40,24 +40,23 @@ OPEN_LEAD_STATUSES = [
     LeadStatus.DEMO_BOOKED, LeadStatus.DEMO_DONE, LeadStatus.NEGOTIATING,
 ]
 
-# One source of truth for "how close to converting is this lead, and how
-# should it look": rank sorts the leads list (hottest / most-converted first,
-# Won at the very top, Lost sunk to the bottom) and the same entry shades a
-# lead's row (bg/text/weight escalating from plain through to deep-green
-# bold as a lead gets hotter). Passed to the template as both a Python dict
-# (for the server-rendered row) and JSON (so the JS recolor-on-change handler
-# reads the exact same tiers — see templates/control/crm/leads.jinja).
-STAGE_ROW_TONE = {
-    LeadStatus.LOST: {"rank": -1, "bg": "bg-slate-50", "text": "text-slate-400", "weight": ""},
-    LeadStatus.NEW: {"rank": 0, "bg": "", "text": "text-slate-800", "weight": ""},
-    LeadStatus.CONTACTED: {"rank": 1, "bg": "", "text": "text-slate-800", "weight": ""},
-    LeadStatus.INTERESTED: {"rank": 2, "bg": "bg-emerald-50", "text": "text-slate-800", "weight": ""},
-    LeadStatus.DEMO_BOOKED: {"rank": 3, "bg": "bg-emerald-50", "text": "text-emerald-900", "weight": "font-medium"},
-    LeadStatus.DEMO_DONE: {"rank": 4, "bg": "bg-emerald-100", "text": "text-emerald-900", "weight": "font-semibold"},
-    LeadStatus.NEGOTIATING: {"rank": 5, "bg": "bg-emerald-100", "text": "text-emerald-900", "weight": "font-bold"},
-    LeadStatus.WON: {"rank": 6, "bg": "bg-emerald-200", "text": "text-emerald-900", "weight": "font-extrabold"},
+# One fixed color per stage of the pipeline — the "win ladder" (new through
+# to Won), a plain progression with no sorting or row-tinting attached. This
+# is the documented source of truth; the Jinja macro (status_select in
+# templates/control/crm/_crm.jinja) and the JS recolor-on-change handler
+# (templates/control/crm/base_crm.jinja) each inline the identical map rather
+# than importing it, so they have no context/JSON plumbing to keep working —
+# a test asserts all three stay in step.
+STATUS_COLOR = {
+    LeadStatus.NEW: ("bg-slate-100", "text-slate-700"),
+    LeadStatus.CONTACTED: ("bg-sky-50", "text-sky-800"),
+    LeadStatus.INTERESTED: ("bg-amber-50", "text-amber-800"),
+    LeadStatus.DEMO_BOOKED: ("bg-violet-50", "text-violet-800"),
+    LeadStatus.DEMO_DONE: ("bg-indigo-50", "text-indigo-800"),
+    LeadStatus.NEGOTIATING: ("bg-orange-100", "text-orange-800"),
+    LeadStatus.WON: ("bg-emerald-50", "text-emerald-700"),
+    LeadStatus.LOST: ("bg-rose-50", "text-rose-700"),
 }
-STAGE_RANK = {status: v["rank"] for status, v in STAGE_ROW_TONE.items()}
 
 
 class Lead(TimeStampedModel):

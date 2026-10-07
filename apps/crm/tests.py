@@ -4492,94 +4492,82 @@ class MyDaySingleFoldTests(CrmBase):
         self.assertIn("My lead settings", fold)
 
 
-class LeadRowHeatAndSortTests(CrmBase):
-    """Leads list with 'Auto' ON: row background/weight escalate with how
-    close a lead is to converting (Won deepest + boldest), Lost sinks to the
-    bottom, the hottest open leads float to the top — all driven from one
-    source of truth, apps.crm.models.STAGE_ROW_TONE / STAGE_RANK. Auto is OFF
-    by default (see LeadsAutoToggleTests) — these all pass &auto=1 to opt in."""
+
+
+class StatusColorLadderTests(CrmBase):
+    """Each pipeline stage gets its own fixed badge color — no sorting, no
+    row-tinting, no toggle. apps.crm.models.STATUS_COLOR is the documented
+    source of truth; the Jinja macro and the JS change-handler each inline an
+    identical copy (no context/JSON plumbing), so these tests pin all three
+    to the same values."""
+
+    JINJA_PATH = "templates/control/crm/_crm.jinja"
+    JS_PATH = "templates/control/crm/base_crm.jinja"
 
     def setUp(self):
         super().setUp()
         self.login(self.a)
-        self.url = reverse("control:crm_leads") + "?view=list&auto=1"
 
-    def _mk(self, name, status, **kw):
-        return Lead.objects.create(name=name, status=status, assigned_to=self.a, **kw)
+    def test_every_status_has_a_distinct_color_pair(self):
+        from apps.crm.models import STATUS_COLOR, LeadStatus
+        self.assertEqual(set(STATUS_COLOR), set(LeadStatus.values))
+        pairs = list(STATUS_COLOR.values())
+        self.assertEqual(len(pairs), len(set(pairs)), "two stages share an identical color — not a real ladder")
+        for bg, text in pairs:
+            self.assertTrue(bg.startswith("bg-"))
+            self.assertTrue(text.startswith("text-"))
 
-    def test_rank_escalates_with_how_close_to_converting_won_highest_lost_lowest(self):
-        order = ["lost", "new", "contacted", "interested", "demo_booked", "demo_done", "negotiating", "won"]
-        from apps.crm.models import STAGE_RANK
-        ranks = [STAGE_RANK[s] for s in order]
-        self.assertEqual(ranks, sorted(ranks))                 # strictly increasing in this exact order
-        self.assertEqual(STAGE_RANK["lost"], min(STAGE_RANK.values()))
-        self.assertEqual(STAGE_RANK["won"], max(STAGE_RANK.values()))
+    def test_lost_is_red_toned_not_grey_and_won_is_green(self):
+        from apps.crm.models import STATUS_COLOR, LeadStatus
+        self.assertIn("rose", STATUS_COLOR[LeadStatus.LOST][0])
+        self.assertIn("emerald", STATUS_COLOR[LeadStatus.WON][0])
 
-    def test_row_tone_gets_darker_and_bolder_toward_won(self):
-        from apps.crm.models import STAGE_ROW_TONE
-        weights = ["", "", "", "", "font-medium", "font-semibold", "font-bold", "font-extrabold"]
-        order = ["lost", "new", "contacted", "interested", "demo_booked", "demo_done", "negotiating", "won"]
-        self.assertEqual([STAGE_ROW_TONE[s]["weight"] for s in order[1:]], weights[1:])   # excludes lost (its own muted tier)
-        # background never gets LIGHTER as the funnel progresses (new..won)
-        depth = {"": 0, "bg-emerald-50": 1, "bg-emerald-100": 2, "bg-emerald-200": 3}
-        progressed = [depth[STAGE_ROW_TONE[s]["bg"]] for s in order[1:]]
-        self.assertEqual(progressed, sorted(progressed))
-        self.assertEqual(STAGE_ROW_TONE["won"]["bg"], "bg-emerald-200")
-        self.assertEqual(STAGE_ROW_TONE["lost"]["text"], "text-slate-400")   # muted, not green
+    def test_jinja_macro_matches_the_python_dict_exactly(self):
+        import re
+        from apps.crm.models import STATUS_COLOR
+        src = open(self.JINJA_PATH).read()
+        block = src.split("STATUS_COLOR = {")[1].split("} %}")[0]
+        found = dict(re.findall(r'"(\w+)":\s*"([^"]+)"', block))
+        for status, (bg, text) in STATUS_COLOR.items():
+            self.assertEqual(found.get(status), f"{bg} {text}", status)
 
-    def test_list_orders_hottest_and_won_first_lost_last(self):
-        lost = self._mk("Lost one", LeadStatus.LOST)
-        new = self._mk("New one", LeadStatus.NEW)
-        nego = self._mk("Negotiating one", LeadStatus.NEGOTIATING)
-        won = self._mk("Won one", LeadStatus.WON)
-        demo = self._mk("Demo one", LeadStatus.DEMO_DONE)
-        html = self.client.get(self.url).content.decode()
-        order = [n for n in (won.name, nego.name, demo.name, new.name, lost.name) if n in html]
-        positions = [html.index(n) for n in (won.name, nego.name, demo.name, new.name, lost.name)]
-        self.assertEqual(positions, sorted(positions))          # exactly: Won, Negotiating, Demo done, New, Lost
+    def test_js_handler_matches_the_python_dict_exactly(self):
+        import re
+        from apps.crm.models import STATUS_COLOR
+        src = open(self.JS_PATH).read()
+        block = src.split("var STATUS_COLOR = {")[1].split("};")[0]
+        found = {m[0]: (m[1], m[2]) for m in re.findall(r"(\w+):\s*\['([\w-]+)',\s*'([\w-]+)'\]", block)}
+        for status, (bg, text) in STATUS_COLOR.items():
+            self.assertEqual(found.get(status), (bg, text), status)
 
-    def test_single_status_filter_falls_through_to_followup_then_recency(self):
-        due_soon = self._mk("Due soon", LeadStatus.CONTACTED, next_follow_up=biz_today())
-        due_later = self._mk("Due later", LeadStatus.CONTACTED, next_follow_up=biz_today() + dt.timedelta(days=5))
-        no_date_newer = self._mk("No date, newer", LeadStatus.CONTACTED)
-        html = self.client.get(self.url + "&status=contacted").content.decode()
-        # due-soonest still comes before a later follow-up date, within the same status
-        self.assertLess(html.index(due_soon.name), html.index(due_later.name))
+    def test_every_status_renders_its_own_color_on_the_badge(self):
+        from apps.crm.models import STATUS_COLOR
+        for status, (bg, text) in STATUS_COLOR.items():
+            lead = Lead.objects.create(name=f"L-{status}", status=status, assigned_to=self.a)
+            html = self.client.get(reverse("control:crm_lead", kwargs={"pk": lead.pk})).content.decode()
+            if status == "won":
+                self.assertIn("🎉 Won", html)
+                continue
+            badge = html.split(f'data-lead="{lead.pk}"')[1].split("</select>")[0]
+            self.assertIn(bg, badge, status)
+            self.assertIn(text, badge, status)
 
-    def test_row_carries_rank_and_tone_classes_matching_the_shared_dict(self):
-        from apps.crm.models import STAGE_ROW_TONE
-        lead = self._mk("Hot Lead", LeadStatus.NEGOTIATING)
-        html = self.client.get(self.url).content.decode()
-        row = html.split(f'data-rank="{STAGE_ROW_TONE["negotiating"]["rank"]}"')[1].split("</tr>")[0]
-        self.assertIn("Hot Lead", row)
-        self.assertIn(STAGE_ROW_TONE["negotiating"]["bg"], row)
-        self.assertIn(STAGE_ROW_TONE["negotiating"]["weight"], row)
-        self.assertIn("transition-colors duration-500", row)
-
-    def test_won_row_has_no_status_dropdown_but_still_carries_its_tone(self):
-        from apps.crm.models import STAGE_ROW_TONE
-        lead = self._mk("Won Lead", LeadStatus.WON)
-        html = self.client.get(self.url).content.decode()
-        row = html.split(f'data-rank="{STAGE_ROW_TONE["won"]["rank"]}"')[1].split("</tr>")[0]
-        self.assertNotIn(f'data-lead="{lead.pk}"', row)          # locked: no select, can't be dragged back down
-        self.assertIn("🎉 Won", row)
-        self.assertIn(STAGE_ROW_TONE["won"]["bg"], row)
-
-    def test_the_tone_json_blob_is_present_and_matches_the_python_dict(self):
-        import json as _json
-        from apps.crm.models import STAGE_ROW_TONE
-        self._mk("Any", LeadStatus.NEW)
-        html = self.client.get(self.url).content.decode()
-        blob = html.split('id="crm-stage-tone">')[1].split("</script>")[0]
-        parsed = _json.loads(blob)
-        self.assertEqual(parsed, STAGE_ROW_TONE)
+    def test_color_is_consistent_across_list_my_day_and_lead_page(self):
+        from apps.crm.models import STATUS_COLOR
+        lead = Lead.objects.create(name="Everywhere", status="interested", assigned_to=self.a)
+        bg, text = STATUS_COLOR["interested"]
+        for url in (reverse("control:crm_leads") + "?view=list",
+                    reverse("control:crm_lead", kwargs={"pk": lead.pk})):
+            html = self.client.get(url).content.decode()
+            badge = html.split(f'data-lead="{lead.pk}"')[1].split("</select>")[0]
+            self.assertIn(bg, badge)
+            self.assertIn(text, badge)
 
 
-class LeadsAutoToggleTests(CrmBase):
-    """'Auto' (hottest/Won-first + green heat shading) is OFF by default: a
-    DGC should never have to scroll past a pile of hot leads to find a fresh
-    one. Off keeps the plain newest-first order everyone is used to — the one
-    thing that survives either way is Lost sinking to the bottom."""
+class LeadsPlainOrderNoAutoTests(CrmBase):
+    """The hottest/Won-first reorder + row tint is gone outright (not just off
+    by default) — the list is plain newest-first, full stop. Lost still sinks
+    to the bottom; that is the one behaviour kept, unconditionally."""
 
     def setUp(self):
         super().setUp()
@@ -4589,87 +4577,37 @@ class LeadsAutoToggleTests(CrmBase):
     def _mk(self, name, status, **kw):
         return Lead.objects.create(name=name, status=status, assigned_to=self.a, **kw)
 
-    def test_off_by_default_no_query_no_cookie(self):
-        html = self.client.get(self.url).content.decode()
-        self.assertIn("🔥 Auto off", html)
-        self.assertNotIn("🔥 Auto on", html)
-        self.assertNotIn('id="crm-stage-tone"', html)
-        self.assertNotIn("data-rank=", html)
-
-    def test_off_is_plain_newest_first_but_lost_still_sinks(self):
+    def test_newest_first_regardless_of_stage(self):
         old_hot = self._mk("Old negotiating", LeadStatus.NEGOTIATING)
         Lead.objects.filter(pk=old_hot.pk).update(created_at=timezone.now() - dt.timedelta(days=5))
-        lost = self._mk("Lost one", LeadStatus.LOST)
-        Lead.objects.filter(pk=lost.pk).update(created_at=timezone.now() - dt.timedelta(days=1))
-        fresh_new = self._mk("Brand new lead", LeadStatus.NEW)     # newest of all, status NEW (coldest stage)
+        fresh_new = self._mk("Brand new lead", LeadStatus.NEW)
         html = self.client.get(self.url).content.decode()
-        # newest-first wins over "hotness": the fresh NEW lead beats the older Negotiating one
         self.assertLess(html.index(fresh_new.name), html.index(old_hot.name))
-        # Lost still sinks below both, even though it's not the oldest
-        self.assertGreater(html.index(lost.name), html.index(old_hot.name))
-        self.assertGreater(html.index(lost.name), html.index(fresh_new.name))
 
-    def test_off_rows_have_no_green_escalation_lost_stays_muted(self):
-        nego = self._mk("Plain Negotiating", LeadStatus.NEGOTIATING)
-        won = self._mk("Plain Won", LeadStatus.WON)
-        lost = self._mk("Plain Lost", LeadStatus.LOST)
+    def test_lost_always_sinks_to_the_bottom(self):
+        lost = self._mk("Lost one", LeadStatus.LOST)
+        Lead.objects.filter(pk=lost.pk).update(created_at=timezone.now())           # even the NEWEST
+        older_open = self._mk("Older open one", LeadStatus.NEW)
+        Lead.objects.filter(pk=older_open.pk).update(created_at=timezone.now() - dt.timedelta(days=3))
         html = self.client.get(self.url).content.decode()
+        self.assertGreater(html.index(lost.name), html.index(older_open.name))
 
-        def row_tr_open_tag(name):
-            return html.split(name)[0].rsplit("<tr", 1)[1].split(">")[0]
+    def test_no_auto_toggle_no_rank_attribute_no_tone_json(self):
+        self._mk("Any", LeadStatus.NEGOTIATING)
+        html = self.client.get(self.url).content.decode()
+        self.assertNotIn("Auto", html.split("CRM sections")[0].split("＋ Add lead")[0] if "＋ Add lead" in html else html)
+        self.assertNotIn("data-rank=", html)
+        self.assertNotIn('id="crm-stage-tone"', html)
+        self.assertNotIn("transition-colors duration-500", html)
 
-        for lead in (nego, won):
-            tag = row_tr_open_tag(lead.name)
-            for bad in ("bg-emerald-50", "bg-emerald-100", "bg-emerald-200", "font-bold", "font-extrabold"):
-                self.assertNotIn(bad, tag, lead.name)
-        lost_tag = row_tr_open_tag(lost.name)
-        self.assertIn("bg-slate-50", lost_tag)
-        self.assertIn("text-slate-400", lost_tag)
+    def test_single_status_filter_is_plain_recency_no_followup_tiebreak(self):
+        due_later = self._mk("Created first, due later", LeadStatus.CONTACTED,
+                             next_follow_up=biz_today() + dt.timedelta(days=5))
+        Lead.objects.filter(pk=due_later.pk).update(created_at=timezone.now() - dt.timedelta(minutes=5))
+        due_soon_but_older = self._mk("Created second, due soon", LeadStatus.CONTACTED, next_follow_up=biz_today())
+        html = self.client.get(self.url + "&status=contacted").content.decode()
+        self.assertLess(html.index(due_soon_but_older.name), html.index(due_later.name))  # newest wins, not soonest-due
 
-    def test_query_param_turns_it_on_for_this_request_and_sets_a_cookie(self):
-        self._mk("Hot", LeadStatus.NEGOTIATING)
-        r = self.client.get(self.url + "&auto=1")
-        html = r.content.decode()
-        self.assertIn("🔥 Auto on", html)
-        self.assertIn('id="crm-stage-tone"', html)
-        self.assertEqual(r.cookies["crm_leads_auto"].value, "1")
-
-    def test_cookie_persists_the_choice_on_a_later_plain_visit(self):
-        self.client.get(self.url + "&auto=1")                       # sets the cookie
-        html = self.client.get(self.url).content.decode()           # no ?auto= this time
-        self.assertIn("🔥 Auto on", html)
-        self.assertIn('id="crm-stage-tone"', html)
-
-    def test_explicit_auto_0_overrides_a_sticky_on_cookie(self):
-        self.client.get(self.url + "&auto=1")
-        r = self.client.get(self.url + "&auto=0")
-        self.assertIn("🔥 Auto off", r.content.decode())
-        self.assertEqual(r.cookies["crm_leads_auto"].value, "0")
-        self.assertIn("🔥 Auto off", self.client.get(self.url).content.decode())   # cookie now remembers OFF
-
-    def test_toggle_button_points_at_the_opposite_state_and_keeps_other_filters(self):
-        html = self.client.get(self.url + "&status=won&q=ravi").content.decode()
-        btn = html.split("🔥 Auto off")[0].rsplit("<a ", 1)[1]
-        self.assertIn("auto=1", btn)
-        self.assertIn("status=won", btn)
-        self.assertIn("q=ravi", btn)
-        html_on = self.client.get(self.url + "&auto=1&status=won").content.decode()
-        btn_on = html_on.split("🔥 Auto on")[0].rsplit("<a ", 1)[1]
-        self.assertIn("auto=0", btn_on)
-
-    def test_archived_view_unaffected_by_auto_state(self):
+    def test_archived_view_still_plain_ordering(self):
         self._mk("Archived", LeadStatus.NEGOTIATING, is_archived=True)
-        for q in ("&archived=1", "&archived=1&auto=1"):
-            self.assertEqual(self.client.get(self.url + q).status_code, 200)
-
-    def test_dgc_still_only_sees_their_own_leads_in_this_sorted_list(self):
-        mine = self._mk("Mine", LeadStatus.NEGOTIATING)
-        theirs = Lead.objects.create(name="Not mine", status=LeadStatus.WON, assigned_to=self.b)
-        html = self.client.get(self.url).content.decode()
-        self.assertIn("Mine", html)
-        self.assertNotIn("Not mine", html)
-
-    def test_archived_view_still_works_with_the_new_ordering(self):
-        lead = self._mk("Archived hot", LeadStatus.NEGOTIATING, is_archived=True)
         self.assertEqual(self.client.get(self.url + "&archived=1").status_code, 200)
-        self.assertIn("Archived hot", self.client.get(self.url + "&archived=1").content.decode())
