@@ -8,7 +8,7 @@
        get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
        get salePrice() { return this.cur ? (this.cur.sale !== null ? Number(this.cur.sale) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
        get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
-       fmt(n) { return {{ currency | tojson }} + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
+       fmt(n) { return "₹" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
      }'>
   <div class="aspect-square bg-line/40 sm:aspect-auto">
     <img src="{{ (imgs[0].renditions.get('1024') or imgs[0].image.url) if imgs else placeholder(1000, 1250, 'Product photo') }}" alt="{{ product.title }}"

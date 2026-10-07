@@ -22,7 +22,7 @@
        get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
        get salePrice() { return this.cur ? (this.cur.sale_price !== null ? Number(this.cur.sale_price) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
        get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
-       fmt(n) { return {{ currency | tojson }} + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
+       fmt(n) { return "₹" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
      }'
      @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
 
