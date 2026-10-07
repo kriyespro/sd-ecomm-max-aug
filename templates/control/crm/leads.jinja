@@ -10,20 +10,10 @@
   <a href="{{ url('control:crm_leads') }}?view=list" class="rounded-full bg-pink-600 px-3 py-1 text-xs font-medium text-white">☰ List</a>
   <a href="{{ url('control:crm_lead_board') }}" class="rounded-full px-3 py-1 text-xs font-medium text-pink-800 hover:bg-pink-50">▦ Board</a>
 </div>
-<a href="{{ auto_toggle_url }}{{ '0' if auto_mode else '1' }}" title="Sort hottest/Won to the top and shade rows by stage. Off = plain, newest-first (Lost still sinks to the bottom)."
-   class="rounded-full px-3 py-1 text-[13px] font-medium ring-1 {{ 'bg-pink-600 text-white ring-pink-600' if auto_mode else 'bg-white text-pink-800 ring-pink-100 hover:bg-pink-50' }}">🔥 Auto {{ 'on' if auto_mode else 'off' }}</a>
 <button type="button" onclick="document.getElementById('addlead').classList.toggle('hidden')" class="rounded-full bg-pink-600 px-3.5 py-1 text-[13px] font-medium text-white hover:bg-pink-700">＋ Add lead</button>
 {% endblock %}
 
 {% block crm_body %}
-{% if auto_mode %}
-{# Read by the shared status-change handler in base_crm.jinja so a row recolors
-   + resorts (hottest/Won to the top, Lost to the bottom) the instant you pick a
-   new status — no reload. One source of truth: apps.crm.models.STAGE_ROW_TONE.
-   Only rendered in Auto mode — with Auto off, leaving this out is what makes
-   the shared handler quietly skip the recolor/reorder (no tr[data-rank] to find). #}
-<script type="application/json" id="crm-stage-tone">{{ stage_tone_json|safe }}</script>
-{% endif %}
 <form id="addlead" method="post" action="{{ url('control:crm_lead_create') }}" class="hidden rounded-2xl bg-white px-3 py-3 shadow-sm ring-1 ring-pink-200">
   <style>
     #addlead [data-field] label{font-size:11px;font-weight:600;color:#9d174d;text-transform:uppercase;letter-spacing:.03em}
@@ -81,15 +71,9 @@
         <th class="hidden px-3 py-2 sm:table-cell">Follow-up</th><th class="px-3 py-2"></th></tr></thead>
       <tbody class="divide-y divide-pink-50">
         {% for l in leads %}
-        {# Lost stays muted regardless of Auto — only the hottest-first green
-           escalation (and the reorder-on-change it drives) is behind the toggle. #}
-        {% if auto_mode %}{% set tone = stage_tone[l.status] %}
-        <tr data-rank="{{ tone.rank }}" class="transition-colors duration-500 hover:bg-pink-50/40 {{ tone.bg }} {{ tone.text }} {{ tone.weight }}">
-        {% elif l.status == 'lost' %}
-        <tr class="transition-colors duration-500 hover:bg-pink-50/40 bg-slate-50 text-slate-400">
-        {% else %}
-        <tr class="transition-colors duration-500 hover:bg-pink-50/40">
-        {% endif %}
+        {# Row itself stays plain — only the status badge is colored (see
+           status_select's STATUS_COLOR); no row-wide tint, no reordering. #}
+        <tr class="hover:bg-pink-50/40">
           <td class="px-3 py-1.5"><input type="checkbox" name="ids" value="{{ l.pk }}" class="rounded border-pink-300 text-pink-600"></td>
           <td class="px-3 py-1.5">
             <a class="hover:text-pink-700" href="{{ url('control:crm_lead', kwargs={'pk': l.pk}) }}">{{ l.name }}</a>

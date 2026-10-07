@@ -150,13 +150,29 @@
    handler in base_crm (move endpoint: history entry, won guard, per-user
    access). Won deals are a locked badge — they keep the create-store flow.
    NOTE: keep the option list in step with LeadStatus (a test checks it). #}
+{# One fixed color per pipeline stage — the "win ladder" (new -> ... -> won),
+   always on, no sorting or row-tinting attached to it, just this one badge.
+   Kept in step with the identical STATUS_COLOR map inlined in base_crm.jinja's
+   change handler, so a live status change recolors to the exact shade a page
+   reload would show. #}
+{% set STATUS_COLOR = {
+  "new": "bg-slate-100 text-slate-700",
+  "contacted": "bg-sky-50 text-sky-800",
+  "interested": "bg-amber-50 text-amber-800",
+  "demo_booked": "bg-violet-50 text-violet-800",
+  "demo_done": "bg-indigo-50 text-indigo-800",
+  "negotiating": "bg-orange-100 text-orange-800",
+  "won": "bg-emerald-50 text-emerald-700",
+  "lost": "bg-rose-50 text-rose-700",
+} %}
+
 {% macro status_select(lead, big=false) %}
 {% if lead.status == 'won' %}
 <span class="whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700" title="Won deals are locked">🎉 Won</span>
 {% else %}
 <span class="inline-flex items-center gap-1">
   <select data-lead="{{ lead.pk }}" data-prev="{{ lead.status }}" data-url="{{ url('control:crm_lead_move', kwargs={'pk': lead.pk}) }}" aria-label="Change status of {{ lead.name }}"
-          class="{{ 'h-9 text-[13px]' if big else 'h-9 text-[13px] sm:h-6 sm:text-[11px]' }} cursor-pointer rounded-full border-0 py-0 pl-3 pr-8 font-medium focus:ring-1 focus:ring-pink-400 sm:pl-2 sm:pr-6 {{ 'bg-slate-100 text-slate-600' if lead.status == 'lost' else 'bg-pink-50 text-pink-800' }}">
+          class="{{ 'h-9 text-[13px]' if big else 'h-9 text-[13px] sm:h-6 sm:text-[11px]' }} cursor-pointer rounded-full border-0 py-0 pl-3 pr-8 font-medium focus:ring-1 focus:ring-pink-400 sm:pl-2 sm:pr-6 {{ STATUS_COLOR[lead.status] }}">
     {% for v, lab in [("new", "New"), ("contacted", "Contacted"), ("interested", "Interested"), ("demo_booked", "Demo booked"), ("demo_done", "Demo done"), ("negotiating", "Negotiating"), ("lost", "Lost")] %}
     <option value="{{ v }}" {{ 'selected' if lead.status == v }}>{{ lab }}</option>
     {% endfor %}
