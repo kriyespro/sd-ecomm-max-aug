@@ -11,6 +11,7 @@ Platform admins see and assign everything; a DGC sees only their own rows.
 import csv
 import datetime as dt
 import io
+import json
 from decimal import Decimal
 
 from django import forms
@@ -18,7 +19,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
-from django.db.models import Count, Q
+from django.db.models import Case, Count, F, IntegerField, Q, Value, When
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -50,6 +51,8 @@ from apps.crm.models import (
     LeadStatus,
     MessageTemplate,
     SourceSpend,
+    STAGE_RANK,
+    STAGE_ROW_TONE,
     TemplateKind,
     StoreAssignment,
     StoreWorkRequest,
@@ -234,7 +237,13 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
         if g.get("q"):
             q = g["q"].strip()
             qs = qs.filter(Q(name__icontains=q) | Q(phone__icontains=q) | Q(business__icontains=q))
-        return qs
+        # Hottest / most-converted first (Won at the very top, Lost sunk to
+        # the bottom — see STAGE_RANK), then whoever's follow-up is soonest
+        # due, then the newest. A single-status filter makes the rank tie
+        # for everyone, so it quietly falls through to the follow-up/recency
+        # order within that one status.
+        rank = Case(*(When(status=st, then=Value(r)) for st, r in STAGE_RANK.items()), output_field=IntegerField())
+        return qs.annotate(_rank=rank).order_by("-_rank", F("next_follow_up").asc(nulls_last=True), "-created_at")
 
     def get_context_data(self, **kw):
         ctx = super().get_context_data(**kw)
@@ -250,7 +259,11 @@ class LeadListView(PlatformStaffRequiredMixin, ListView):
                    unassigned_count=Lead.objects.filter(
                        assigned_to__isnull=True, is_archived=False,
                        status__in=[s for s in LeadStatus.values if s not in ("won", "lost")]).count()
-                   if _admin(self.request.user) else 0)
+                   if _admin(self.request.user) else 0,
+                   # Row shading by stage (hottest = deepest green + boldest) and the
+                   # matching JSON the JS recolor-on-change handler reads — one dict,
+                   # see apps.crm.models.STAGE_ROW_TONE.
+                   stage_tone=STAGE_ROW_TONE, stage_tone_json=json.dumps(STAGE_ROW_TONE))
         return ctx
 
 

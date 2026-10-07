@@ -141,6 +141,29 @@
       sel.classList.toggle('bg-pink-50', !lost); sel.classList.toggle('text-pink-800', !lost);
       var f = sel.parentElement && sel.parentElement.querySelector('[data-flash]');
       if (f) { f.style.opacity = 1; setTimeout(function () { f.style.opacity = 0; }, 1400); }
+      // on the leads LIST table only: recolor the whole row for the new stage
+      // (hotter = deeper green + bolder — see apps.crm.models.STAGE_ROW_TONE)
+      // and slide it to its new spot — hottest/most-converted at the top,
+      // Lost sunk to the bottom, so the good leads are the first thing you see.
+      var tr = sel.closest('tr[data-rank]');
+      var toneEl = document.getElementById('crm-stage-tone');
+      if (tr && toneEl) {
+        try {
+          var meta = JSON.parse(toneEl.textContent)[next];
+          if (meta) {
+            ['bg-slate-50', 'bg-emerald-50', 'bg-emerald-100', 'bg-emerald-200',
+             'text-slate-400', 'text-slate-800', 'text-emerald-900',
+             'font-medium', 'font-semibold', 'font-bold', 'font-extrabold'
+            ].forEach(function (c) { tr.classList.remove(c); });
+            [meta.bg, meta.text, meta.weight].forEach(function (c) { if (c) tr.classList.add(c); });
+            tr.dataset.rank = meta.rank;
+            var tbody = tr.parentElement;
+            var target = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-rank]'))
+              .find(function (r) { return r !== tr && Number(r.dataset.rank) < Number(tr.dataset.rank); });
+            if (target) tbody.insertBefore(tr, target); else tbody.appendChild(tr);
+          }
+        } catch (e) {}
+      }
       if (window.__crmToast) window.__crmToast('Status saved ✓', true);
     } catch (e) {
       sel.value = prev;
