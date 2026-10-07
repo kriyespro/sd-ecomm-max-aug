@@ -42,15 +42,22 @@
       </div>
       <div class="flex flex-wrap items-center gap-2">{% block crm_actions %}{% endblock %}</div>
     </div>
-    <nav class="-mx-1 mt-2.5 flex items-center gap-1 overflow-x-auto px-1 pb-0.5" aria-label="CRM sections">
-      {% for label, name, prefix, admin_only, icon in _primary %}
-      {% if (name == 'crm_welcome' and not _adm) or (name != 'crm_welcome' and (_adm or not admin_only)) %}
-      {% set on = _un.startswith(prefix) %}
-      <a href="{{ url('control:' ~ name) }}"
-         class="shrink-0 rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if on else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
-        <span class="mr-1">{{ icon }}</span>{{ label }}</a>
-      {% endif %}
-      {% endfor %}
+    {# Two parts, deliberately NOT one scrolling row: the primary pills scroll
+       horizontally on a narrow phone, but the "More" dropdown panel must sit
+       OUTSIDE that overflow:auto container — a scrolling ancestor clips any
+       absolutely-positioned child at its own edge, which silently hid the
+       panel (it opened, just invisible/cut off) when both lived in one nav. #}
+    <nav class="mt-2.5 flex items-center gap-1" aria-label="CRM sections">
+      <div class="-mx-1 flex min-w-0 gap-1 overflow-x-auto px-1 pb-0.5">
+        {% for label, name, prefix, admin_only, icon in _primary %}
+        {% if (name == 'crm_welcome' and not _adm) or (name != 'crm_welcome' and (_adm or not admin_only)) %}
+        {% set on = _un.startswith(prefix) %}
+        <a href="{{ url('control:' ~ name) }}"
+           class="shrink-0 rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if on else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
+          <span class="mr-1">{{ icon }}</span>{{ label }}</a>
+        {% endif %}
+        {% endfor %}
+      </div>
       {% set _rest = [] %}
       {% set _rest_has_active = namespace(v=false) %}
       {% for label, name, prefix, admin_only, icon in _overflow %}
@@ -60,15 +67,17 @@
       {% endif %}
       {% endfor %}
       {% if _rest %}
-      <details class="group relative shrink-0">
-        <summary class="cursor-pointer list-none rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if _rest_has_active.v else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
-          <span class="mr-1">⋯</span>More<span class="ml-0.5 inline-block text-[10px] transition group-open:rotate-180">▾</span></summary>
-        <div class="absolute left-0 z-30 mt-1 w-48 rounded-xl bg-white py-1.5 text-[13px] shadow-lg ring-1 ring-pink-100">
+      <div class="relative shrink-0" x-data="{ open: false }" @click.outside="open = false" @keydown.escape.window="open = false">
+        <button type="button" @click="open = !open"
+                class="rounded-full px-3 py-1 text-[13px] font-medium transition {{ 'bg-pink-600 text-white shadow-sm' if _rest_has_active.v else 'bg-white/70 text-pink-800 ring-1 ring-pink-100 hover:bg-white' }}">
+          <span class="mr-1">⋯</span>More<span class="ml-0.5 inline-block text-[10px] transition" :class="open ? 'rotate-180' : ''">▾</span></button>
+        <div x-show="open" x-cloak x-transition @click="open = false"
+             class="absolute left-0 z-30 mt-1 w-48 rounded-xl bg-white py-1.5 text-[13px] shadow-lg ring-1 ring-pink-100">
           {% for label, name, prefix, icon in _rest %}
           <a href="{{ url('control:' ~ name) }}" class="flex items-center gap-2 px-3 py-1.5 {{ 'font-semibold text-pink-700' if _un.startswith(prefix) else 'text-slate-700 hover:bg-pink-50' }}"><span>{{ icon }}</span>{{ label }}</a>
           {% endfor %}
         </div>
-      </details>
+      </div>
       {% endif %}
     </nav>
   </div>

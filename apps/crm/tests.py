@@ -4394,7 +4394,7 @@ class CrmSimplifiedNavTests(CrmBase):
 
     def test_dgc_primary_tabs_are_just_three(self):
         self.login(self.a)
-        nav = self.client.get(reverse("control:crm_welcome")).content.decode().split("CRM sections")[1].split("<details")[0]
+        nav = self.client.get(reverse("control:crm_welcome")).content.decode().split("CRM sections")[1].split("x-data=")[0]
         for want in ("Welcome", "My day", "Leads"):
             self.assertIn(want, nav)
         for hidden in ("Tasks", "Money", "Training", "Store work", "Insights"):
@@ -4402,7 +4402,7 @@ class CrmSimplifiedNavTests(CrmBase):
 
     def test_admin_primary_tabs_are_just_two(self):
         self.login(self.admin)
-        nav = self.client.get(reverse("control:crm_board")).content.decode().split("CRM sections")[1].split("<details")[0]
+        nav = self.client.get(reverse("control:crm_board")).content.decode().split("CRM sections")[1].split("x-data=")[0]
         self.assertIn("Board", nav)
         self.assertIn("Leads", nav)
         for hidden in ("Tasks", "Money", "Training", "Store work", "Insights", "Targets", "Statements", "Templates", "Settings"):
@@ -4411,17 +4411,19 @@ class CrmSimplifiedNavTests(CrmBase):
     def test_everything_else_is_one_click_away_in_more(self):
         self.login(self.admin)
         html = self.client.get(reverse("control:crm_board")).content.decode()
-        more = html.split('class="group relative shrink-0">')[1].split("</details>")[0]
+        more = html.split("CRM sections")[1].split("x-data=")[1].split("</nav>")[0]
         for want in ("Tasks", "Money", "Training", "Store work", "Insights", "Targets", "Statements", "Templates", "Settings"):
             self.assertIn(want, more)
         for url_name in ("crm_tasks", "crm_collections", "crm_training", "crm_work", "crm_insights",
                          "crm_targets", "crm_statements", "crm_templates", "crm_settings"):
             self.assertIn(reverse(f"control:{url_name}"), more)
+        self.assertIn('@click.outside="open = false"', more)                 # closes when you click away
+        self.assertIn('x-show="open"', more)                                 # hidden until opened, not clipped by any overflow:auto ancestor
 
     def test_dgc_more_menu_has_no_admin_only_screens(self):
         self.login(self.a)
         html = self.client.get(reverse("control:crm_welcome")).content.decode()
-        more = html.split('class="group relative shrink-0">')[1].split("</details>")[0]
+        more = html.split("CRM sections")[1].split("x-data=")[1].split("</nav>")[0]
         for hidden in ("Targets", "Statements", "Templates", "Settings"):
             self.assertNotIn(hidden, more)
         for want in ("Tasks", "Money", "Training", "Store work", "Insights"):
