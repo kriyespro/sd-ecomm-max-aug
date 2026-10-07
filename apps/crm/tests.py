@@ -4493,15 +4493,16 @@ class MyDaySingleFoldTests(CrmBase):
 
 
 class LeadRowHeatAndSortTests(CrmBase):
-    """Leads list: row background/weight escalate with how close a lead is to
-    converting (Won deepest + boldest), Lost sinks to the bottom, the hottest
-    open leads float to the top — all driven from one source of truth,
-    apps.crm.models.STAGE_ROW_TONE / STAGE_RANK."""
+    """Leads list with 'Auto' ON: row background/weight escalate with how
+    close a lead is to converting (Won deepest + boldest), Lost sinks to the
+    bottom, the hottest open leads float to the top — all driven from one
+    source of truth, apps.crm.models.STAGE_ROW_TONE / STAGE_RANK. Auto is OFF
+    by default (see LeadsAutoToggleTests) — these all pass &auto=1 to opt in."""
 
     def setUp(self):
         super().setUp()
         self.login(self.a)
-        self.url = reverse("control:crm_leads") + "?view=list"
+        self.url = reverse("control:crm_leads") + "?view=list&auto=1"
 
     def _mk(self, name, status, **kw):
         return Lead.objects.create(name=name, status=status, assigned_to=self.a, **kw)
@@ -4572,6 +4573,94 @@ class LeadRowHeatAndSortTests(CrmBase):
         blob = html.split('id="crm-stage-tone">')[1].split("</script>")[0]
         parsed = _json.loads(blob)
         self.assertEqual(parsed, STAGE_ROW_TONE)
+
+
+class LeadsAutoToggleTests(CrmBase):
+    """'Auto' (hottest/Won-first + green heat shading) is OFF by default: a
+    DGC should never have to scroll past a pile of hot leads to find a fresh
+    one. Off keeps the plain newest-first order everyone is used to — the one
+    thing that survives either way is Lost sinking to the bottom."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+        self.url = reverse("control:crm_leads") + "?view=list"
+
+    def _mk(self, name, status, **kw):
+        return Lead.objects.create(name=name, status=status, assigned_to=self.a, **kw)
+
+    def test_off_by_default_no_query_no_cookie(self):
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("🔥 Auto off", html)
+        self.assertNotIn("🔥 Auto on", html)
+        self.assertNotIn('id="crm-stage-tone"', html)
+        self.assertNotIn("data-rank=", html)
+
+    def test_off_is_plain_newest_first_but_lost_still_sinks(self):
+        old_hot = self._mk("Old negotiating", LeadStatus.NEGOTIATING)
+        Lead.objects.filter(pk=old_hot.pk).update(created_at=timezone.now() - dt.timedelta(days=5))
+        lost = self._mk("Lost one", LeadStatus.LOST)
+        Lead.objects.filter(pk=lost.pk).update(created_at=timezone.now() - dt.timedelta(days=1))
+        fresh_new = self._mk("Brand new lead", LeadStatus.NEW)     # newest of all, status NEW (coldest stage)
+        html = self.client.get(self.url).content.decode()
+        # newest-first wins over "hotness": the fresh NEW lead beats the older Negotiating one
+        self.assertLess(html.index(fresh_new.name), html.index(old_hot.name))
+        # Lost still sinks below both, even though it's not the oldest
+        self.assertGreater(html.index(lost.name), html.index(old_hot.name))
+        self.assertGreater(html.index(lost.name), html.index(fresh_new.name))
+
+    def test_off_rows_have_no_green_escalation_lost_stays_muted(self):
+        nego = self._mk("Plain Negotiating", LeadStatus.NEGOTIATING)
+        won = self._mk("Plain Won", LeadStatus.WON)
+        lost = self._mk("Plain Lost", LeadStatus.LOST)
+        html = self.client.get(self.url).content.decode()
+
+        def row_tr_open_tag(name):
+            return html.split(name)[0].rsplit("<tr", 1)[1].split(">")[0]
+
+        for lead in (nego, won):
+            tag = row_tr_open_tag(lead.name)
+            for bad in ("bg-emerald-50", "bg-emerald-100", "bg-emerald-200", "font-bold", "font-extrabold"):
+                self.assertNotIn(bad, tag, lead.name)
+        lost_tag = row_tr_open_tag(lost.name)
+        self.assertIn("bg-slate-50", lost_tag)
+        self.assertIn("text-slate-400", lost_tag)
+
+    def test_query_param_turns_it_on_for_this_request_and_sets_a_cookie(self):
+        self._mk("Hot", LeadStatus.NEGOTIATING)
+        r = self.client.get(self.url + "&auto=1")
+        html = r.content.decode()
+        self.assertIn("🔥 Auto on", html)
+        self.assertIn('id="crm-stage-tone"', html)
+        self.assertEqual(r.cookies["crm_leads_auto"].value, "1")
+
+    def test_cookie_persists_the_choice_on_a_later_plain_visit(self):
+        self.client.get(self.url + "&auto=1")                       # sets the cookie
+        html = self.client.get(self.url).content.decode()           # no ?auto= this time
+        self.assertIn("🔥 Auto on", html)
+        self.assertIn('id="crm-stage-tone"', html)
+
+    def test_explicit_auto_0_overrides_a_sticky_on_cookie(self):
+        self.client.get(self.url + "&auto=1")
+        r = self.client.get(self.url + "&auto=0")
+        self.assertIn("🔥 Auto off", r.content.decode())
+        self.assertEqual(r.cookies["crm_leads_auto"].value, "0")
+        self.assertIn("🔥 Auto off", self.client.get(self.url).content.decode())   # cookie now remembers OFF
+
+    def test_toggle_button_points_at_the_opposite_state_and_keeps_other_filters(self):
+        html = self.client.get(self.url + "&status=won&q=ravi").content.decode()
+        btn = html.split("🔥 Auto off")[0].rsplit("<a ", 1)[1]
+        self.assertIn("auto=1", btn)
+        self.assertIn("status=won", btn)
+        self.assertIn("q=ravi", btn)
+        html_on = self.client.get(self.url + "&auto=1&status=won").content.decode()
+        btn_on = html_on.split("🔥 Auto on")[0].rsplit("<a ", 1)[1]
+        self.assertIn("auto=0", btn_on)
+
+    def test_archived_view_unaffected_by_auto_state(self):
+        self._mk("Archived", LeadStatus.NEGOTIATING, is_archived=True)
+        for q in ("&archived=1", "&archived=1&auto=1"):
+            self.assertEqual(self.client.get(self.url + q).status_code, 200)
 
     def test_dgc_still_only_sees_their_own_leads_in_this_sorted_list(self):
         mine = self._mk("Mine", LeadStatus.NEGOTIATING)
