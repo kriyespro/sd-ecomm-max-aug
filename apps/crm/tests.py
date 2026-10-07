@@ -4385,3 +4385,106 @@ class WelcomeFirstInTheMenuTests(CrmBase):
         self.assertEqual(self._items(admin=True)[0], "crm_board")
         for admin in (True, False):
             self.assertEqual(sum(1 for n in self._items(admin) if n.startswith("crm_")), 1)
+
+
+class CrmSimplifiedNavTests(CrmBase):
+    """The tab bar was 8+ buttons wide for every role. Now: 2-3 primary tabs
+    (the screens that role actually lives in) + one 'More' dropdown for the
+    rest — same screens reachable, far less chrome visible at once."""
+
+    def test_dgc_primary_tabs_are_just_three(self):
+        self.login(self.a)
+        nav = self.client.get(reverse("control:crm_welcome")).content.decode().split("CRM sections")[1].split("<details")[0]
+        for want in ("Welcome", "My day", "Leads"):
+            self.assertIn(want, nav)
+        for hidden in ("Tasks", "Money", "Training", "Store work", "Insights"):
+            self.assertNotIn(hidden, nav)                                      # not in the always-visible part
+
+    def test_admin_primary_tabs_are_just_two(self):
+        self.login(self.admin)
+        nav = self.client.get(reverse("control:crm_board")).content.decode().split("CRM sections")[1].split("<details")[0]
+        self.assertIn("Board", nav)
+        self.assertIn("Leads", nav)
+        for hidden in ("Tasks", "Money", "Training", "Store work", "Insights", "Targets", "Statements", "Templates", "Settings"):
+            self.assertNotIn(hidden, nav)
+
+    def test_everything_else_is_one_click_away_in_more(self):
+        self.login(self.admin)
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        more = html.split('class="group relative shrink-0">')[1].split("</details>")[0]
+        for want in ("Tasks", "Money", "Training", "Store work", "Insights", "Targets", "Statements", "Templates", "Settings"):
+            self.assertIn(want, more)
+        for url_name in ("crm_tasks", "crm_collections", "crm_training", "crm_work", "crm_insights",
+                         "crm_targets", "crm_statements", "crm_templates", "crm_settings"):
+            self.assertIn(reverse(f"control:{url_name}"), more)
+
+    def test_dgc_more_menu_has_no_admin_only_screens(self):
+        self.login(self.a)
+        html = self.client.get(reverse("control:crm_welcome")).content.decode()
+        more = html.split('class="group relative shrink-0">')[1].split("</details>")[0]
+        for hidden in ("Targets", "Statements", "Templates", "Settings"):
+            self.assertNotIn(hidden, more)
+        for want in ("Tasks", "Money", "Training", "Store work", "Insights"):
+            self.assertIn(want, more)
+
+    def test_board_header_no_longer_crowded_with_duplicate_buttons(self):
+        self.login(self.admin)
+        actions = self.client.get(reverse("control:crm_board")).content.decode().split('block crm_actions')[0]  # irrelevant guard
+        html = self.client.get(reverse("control:crm_board")).content.decode()
+        header = html.split("CRM sections")[0].split("<h1")[1]
+        # the 4 old standalone header buttons are gone from the title row — they live in More now
+        self.assertEqual(header.count('🎯 Targets'), 0)
+        self.assertEqual(header.count('🧾 Statements'), 0)
+        self.assertEqual(header.count('💬 Templates'), 0)
+
+    def test_every_crm_screen_still_reachable_for_the_right_role(self):
+        self.login(self.admin)
+        for name in ("crm_board", "crm_leads", "crm_tasks", "crm_collections", "crm_training", "crm_work",
+                    "crm_insights", "crm_targets", "crm_statements", "crm_templates", "crm_settings"):
+            self.assertEqual(self.client.get(reverse(f"control:{name}") + ("?view=list" if name == "crm_leads" else "")).status_code, 200, name)
+        self.login(self.a)
+        for name in ("crm_welcome", "crm_my_day", "crm_leads", "crm_tasks", "crm_collections", "crm_training", "crm_work", "crm_insights"):
+            self.assertEqual(self.client.get(reverse(f"control:{name}") + ("?view=list" if name == "crm_leads" else "")).status_code, 200, name)
+
+
+class MyDaySingleFoldTests(CrmBase):
+    """Momentum / stores-assigned / onboarding / lead-settings used to be 4
+    separate <details> widgets scattered down the page. Now they are one
+    'More for today' fold — same info, one door."""
+
+    def setUp(self):
+        super().setUp()
+        self.login(self.a)
+        self.url = reverse("control:crm_my_day")
+
+    def _html(self):
+        return self.client.get(self.url).content.decode()
+
+    def test_exactly_one_more_for_today_fold_holding_everything(self):
+        wr = StoreWorkRequest.objects.create(project=self.store, kind="catalog", requested_by=self.owner)
+        svc.assign_store_work(wr, self.a, actor=self.admin)
+        for _ in range(12):
+            svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        html = self._html()
+        self.assertEqual(html.count("More for today"), 1)
+        fold = html.split("More for today")[1].split("{% endblock %}")[0] if "{% endblock %}" in html else html.split("More for today")[1]
+        for needle in ("day streak", "Stores assigned to me", "Getting started", "My lead settings", "I'm available for new leads"):
+            self.assertIn(needle, fold)
+
+    def test_core_work_still_renders_without_opening_the_fold(self):
+        # i.e. the important stuff (status, call, result buttons, follow-ups/tasks) is
+        # outside the fold, unaffected by this reorg
+        lead = Lead.objects.create(name="Core", phone="9000000001", assigned_to=self.a)
+        html = self._html()
+        before_fold = html.split("More for today")[0]
+        self.assertIn("Core", before_fold)
+        self.assertIn("How did it go?" if "Core" in before_fold else "", before_fold)
+        self.assertIn('data-lead=', before_fold)
+
+    def test_no_longer_four_separate_collapsibles_for_this_stuff(self):
+        html = self._html()
+        # the 4 old separate toggles (momentum chips, stores-assigned, getting-started, lead
+        # settings) no longer have their own <summary> -- they are plain headings inside the fold
+        fold = html.split("More for today")[1]
+        self.assertEqual(fold.count("<summary"), 0)
+        self.assertIn("My lead settings", fold)
