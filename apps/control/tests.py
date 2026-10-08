@@ -1,4 +1,5 @@
 import re
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -826,6 +827,13 @@ class PaymentProviderFormTests(TestCase):
         s = self.client.session
         s[ACTIVE_PROJECT_SESSION_KEY] = self.project.pk
         s.save()
+        # A changed key_id/key_secret now gets probed against Razorpay's real
+        # API (see PaymentProviderForm._verify_razorpay_credentials) — stub
+        # that out so these tests stay fast/offline by default; tests of the
+        # probe itself override this with their own patch.
+        self.ping_patcher = patch("apps.payments.providers.razorpay.RazorpayProvider.ping")
+        self.ping_patcher.start()
+        self.addCleanup(self.ping_patcher.stop)
 
     def _post(self, **extra):
         data = {
@@ -918,6 +926,41 @@ class PaymentProviderFormTests(TestCase):
         cfg.refresh_from_db()
         self.assertEqual(cfg.credentials["key_secret"], "keep-me")
         self.assertEqual(cfg.credentials["key_id"], "rzp_live_y")
+
+    def test_bad_credentials_are_rejected_at_save_not_at_checkout(self):
+        from apps.payments.models import PaymentProviderConfig
+        from apps.payments.providers.base import ProviderError
+
+        self.ping_patcher.stop()
+        with patch(
+            "apps.payments.providers.razorpay.RazorpayProvider.ping",
+            side_effect=ProviderError("Razorpay rejected this Key ID / Key secret pair (401 Unauthorized) — "
+                                       "copy both values fresh from the same key pair in Settings → API Keys."),
+        ):
+            resp = self._post(is_enabled="on")
+        self.ping_patcher.start()
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "401 Unauthorized")
+        self.assertFalse(
+            PaymentProviderConfig.objects.filter(project=self.project, provider="razorpay").exists()
+        )
+
+    def test_unrelated_edit_does_not_reverify_unchanged_credentials(self):
+        from apps.payments.models import PaymentProviderConfig
+
+        cfg = PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True,
+            credentials={"key_id": "rzp_live_x", "key_secret": "keep-me"},
+        )
+        self.ping_patcher.stop()
+        with patch("apps.payments.providers.razorpay.RazorpayProvider.ping") as ping:
+            resp = self.client.post(f"/admin/payments/providers/{cfg.pk}/", {
+                "provider": "razorpay", "display_name": "Razorpay", "priority": "200",
+                "is_enabled": "on", "key_id": "rzp_live_x", "key_secret": "",
+            })
+        self.ping_patcher.start()
+        self.assertEqual(resp.status_code, 302)
+        ping.assert_not_called()
 
 
 @override_settings(ALLOWED_HOSTS=["*"])

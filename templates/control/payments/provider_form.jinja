@@ -15,4 +15,27 @@
     <a href="{{ url('control:payment_providers') }}" class="rounded-lg px-4 py-2 text-sm text-slate-600 hover:bg-slate-100">Cancel</a>
   </div>
 </form>
+<script>
+(function () {
+  // PaymentProviderForm renders every provider's fields on one page (Key
+  // ID/secret, UPI ID/payee/QR) — only show the ones the selected provider
+  // actually uses, instead of handing every store owner all of them at once.
+  var sel = document.getElementById("{{ form.provider.id_for_label }}");
+  if (!sel) return;
+  var groups = { razorpay: ["key_id", "key_secret"], upi: ["upi_id", "payee_name", "qr_image"] };
+  var special = groups.razorpay.concat(groups.upi);
+  function apply() {
+    var val = sel.value;
+    special.forEach(function (name) {
+      var el = document.querySelector('[data-field="' + name + '"]');
+      if (!el) return;
+      var show = (groups.razorpay.indexOf(name) !== -1 && val === "razorpay") ||
+                 (groups.upi.indexOf(name) !== -1 && val === "upi");
+      el.classList.toggle("hidden", !show);
+    });
+  }
+  sel.addEventListener("change", apply);
+  apply();
+})();
+</script>
 {% endblock %}
