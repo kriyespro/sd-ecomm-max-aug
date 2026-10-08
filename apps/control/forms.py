@@ -268,7 +268,14 @@ class PaymentProviderForm(ProjectScopedForm):
     )
     key_secret = forms.CharField(
         required=False, label="Key secret", strip=False,
-        widget=forms.PasswordInput(render_value=False, attrs={"autocomplete": "new-password"}),
+        # autocomplete="new-password" invites Chrome's built-in "suggest a
+        # strong password" feature to silently replace this field's value
+        # with a random generated string on focus — that's a live way for a
+        # real Razorpay secret to get clobbered. "off" plus the common
+        # password-manager ignore hints keep this an inert text box.
+        widget=forms.PasswordInput(render_value=False, attrs={
+            "autocomplete": "off", "data-lpignore": "true", "data-1p-ignore": "true", "data-bwignore": "true",
+        }),
         help_text="Shown once by Razorpay when you generate the key pair.",
     )
 
@@ -326,6 +333,23 @@ class PaymentProviderForm(ProjectScopedForm):
                 "is_enabled",
                 "Add the Key ID and Key secret before enabling Razorpay.",
             )
+        elif provider == "razorpay" and cleaned.get("key_id") and has_secret:
+            # Checkout only ever discovers a bad key_id/key_secret pair when a
+            # real customer's order 401s against Razorpay. Catch that here
+            # instead, but only when the pair actually changed — an
+            # unrelated edit (priority, display name) shouldn't cost a live
+            # API round-trip on every save.
+            key_id = cleaned["key_id"].strip()
+            new_secret = (cleaned.get("key_secret") or "").strip()
+            existing_creds = self.instance.credentials or {}
+            secret_to_check = new_secret or existing_creds.get("key_secret", "")
+            changed = (
+                not self.instance.pk
+                or bool(new_secret)
+                or key_id != existing_creds.get("key_id", "")
+            )
+            if changed and secret_to_check:
+                self._verify_razorpay_credentials(key_id, secret_to_check)
         upi_id = (cleaned.get("upi_id") or "").strip()
         if upi_id:
             from apps.payments.providers.upi import UPI_ID_RE
@@ -338,6 +362,18 @@ class PaymentProviderForm(ProjectScopedForm):
         if qr and hasattr(qr, "size") and qr.size > 2 * 1024 * 1024:
             self.add_error("qr_image", "QR image must be under 2 MB.")
         return cleaned
+
+    def _verify_razorpay_credentials(self, key_id, key_secret):
+        from types import SimpleNamespace
+
+        from apps.payments.providers.base import ProviderError
+        from apps.payments.providers.razorpay import RazorpayProvider
+
+        probe = RazorpayProvider(SimpleNamespace(credentials={"key_id": key_id, "key_secret": key_secret}))
+        try:
+            probe.ping()
+        except ProviderError as exc:
+            self.add_error("key_secret", str(exc))
 
     def save(self, commit=True):
         obj = super().save(commit=False)

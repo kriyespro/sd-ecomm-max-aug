@@ -45,6 +45,23 @@ class RazorpayProvider(PaymentProvider):
 
     # --- API ------------------------------------------------------
 
+    def ping(self):
+        """Cheap authenticated read used to confirm key_id/key_secret actually
+        authenticate with Razorpay, before a store owner enables the gateway.
+        Only raises on a confirmed bad-credentials signal (401) — any other
+        failure (network blip, rate limit) can't be diagnosed here, so it's
+        swallowed rather than blocking an unrelated save."""
+        try:
+            self._api("GET", "/payments?count=1")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 401:
+                raise ProviderError(
+                    "Razorpay rejected this Key ID / Key secret pair (401 Unauthorized) — "
+                    "copy both values fresh from the same key pair in Settings → API Keys."
+                ) from exc
+        except (urllib.error.URLError, ValueError, TimeoutError):
+            pass
+
     def _api(self, method, path, payload=None):
         kid, secret = self._key_id(), self._key_secret()
         token = base64.b64encode(f"{kid}:{secret}".encode()).decode()
