@@ -96,7 +96,7 @@
   <h2 class="mb-8 text-center {{ heading_classes('text-3xl') }}">{{ section_titles.get('categories', 'Shop by category') }}</h2>
   <div class="fv-hide-sb flex gap-5 overflow-x-auto pb-2 sm:justify-center">
     {% for t in cat_tiles %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}" class="group w-24 shrink-0 text-center sm:w-32">
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"{{ ed_category(t.category) }} class="group w-24 shrink-0 text-center sm:w-32">
       <span class="mx-auto block aspect-square overflow-hidden rounded-full ring-2 ring-gold/50 ring-offset-2 ring-offset-paper transition group-hover:ring-accent">
         <img src="{{ t.image | media_src(400, 400, 'Category') }}" alt="{{ t.category.name }}" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
       </span>

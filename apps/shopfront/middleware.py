@@ -398,8 +398,8 @@ _EDIT_CSS = (
     "body.sd-ed [data-ed]{cursor:text;transition:outline-color .12s}"
     "body.sd-ed [data-ed]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
     "body.sd-ed [data-ed][data-ed-t=image]{cursor:pointer}"
-    "body.sd-ed [data-ed-product]{cursor:pointer}"
-    "body.sd-ed [data-ed-product]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
+    "body.sd-ed [data-ed-product],body.sd-ed [data-ed-category]{cursor:pointer}"
+    "body.sd-ed [data-ed-product]:hover,body.sd-ed [data-ed-category]:hover{outline:2px dashed #6366f1;outline-offset:3px}"
     "body.sd-ed [data-ed]:empty::before{content:attr(data-ed-ph);opacity:.55;font-style:italic}"
     "body.sd-ed [data-ed][contenteditable=true]{outline:2px solid #6366f1!important;outline-offset:3px;"
     "text-transform:none;min-width:2ch}"
@@ -484,12 +484,13 @@ class InlineEditMiddleware:
         script = format_html(
             '<script src="{}" defer data-active="{}" '
             'data-csrf="{}" data-save="{}" data-image="{}" data-undo="{}" data-redo="{}" '
-            'data-on="{}?edit=1" data-off="{}?edit=0" data-admin="/admin/" data-product="{}"></script>',
+            'data-on="{}?edit=1" data-off="{}?edit=0" data-admin="/admin/" data-product="{}" data-category="{}"></script>',
             _editor_script_src(), "1" if editing else "0", get_token(request),
             reverse("shopfront:edit_save"), reverse("shopfront:edit_image"),
             reverse("shopfront:edit_undo"), reverse("shopfront:edit_redo"),
             base, base,
             (admin_origin + reverse("control:product_edit", kwargs={"pk": 0})) if product_form else "",
+            (admin_origin + reverse("control:category_edit", kwargs={"pk": 0})) if product_form else "",
         )
         if editing and "</head>" in content:
             content = content.replace("</head>", _EDIT_CSS + "</head>", 1)

@@ -8,8 +8,17 @@
 {% endblock %}
 
 {% block content %}
+{% if next_url %}
+<div class="mx-auto mb-3 max-w-2xl">
+  <a href="{{ next_url }}"
+     class="inline-block rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+    ← Back to your store
+  </a>
+</div>
+{% endif %}
 <form method="post" enctype="multipart/form-data" class="mx-auto max-w-2xl space-y-4 rounded-xl bg-white p-6 ring-1 ring-slate-200">
   {{ csrf_input }}
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
   {% if form.non_field_errors() %}
   <div class="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ form.non_field_errors()|join(' ') }}</div>
   {% endif %}

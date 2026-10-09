@@ -317,30 +317,38 @@
   addEventListener('scroll', schedule, { passive: true }); addEventListener('resize', schedule);
   setInterval(schedule, 700); schedule();
 
-  // ---- product cards: "Edit product" opens the admin form, which returns here ----
+  // ---- product cards / category tiles: open the admin form, which returns here after Save ----
   var cardChips = [];
-  function editProductUrl(pk) {
+  var FORMS = [
+    { attr: 'data-ed-product', key: 'edProduct', tpl: function () { return cfg.product; }, label: 'Edit product' },
+    { attr: 'data-ed-category', key: 'edCategory', tpl: function () { return cfg.category; }, label: 'Edit category' }
+  ];
+  function adminFormUrl(tpl, pk) {
     // Admin on another origin (platform host): send the full storefront URL back.
-    var crossOrigin = /^https?:/.test(cfg.product) && cfg.product.indexOf(location.origin) !== 0;
+    var crossOrigin = /^https?:/.test(tpl) && tpl.indexOf(location.origin) !== 0;
     var back = crossOrigin ? location.href : location.pathname + location.search;
-    return cfg.product.replace('/0/', '/' + pk + '/') + '?next=' + encodeURIComponent(back);
+    return tpl.replace('/0/', '/' + pk + '/') + '?next=' + encodeURIComponent(back);
   }
   function buildCardChips() {
-    if (!cfg.product) return;
-    qsa('[data-ed-product]').forEach(function (el) {
-      if (cardChips.some(function (c) { return c.el === el; })) return;
-      var node = mk('<a class="badge" style="text-decoration:none">✎ Edit product</a>');
-      node.href = editProductUrl(el.dataset.edProduct);
-      layer.appendChild(node); cardChips.push({ el: el, node: node });
+    FORMS.forEach(function (f) {
+      if (!f.tpl()) return;
+      qsa('[' + f.attr + ']').forEach(function (el) {
+        if (cardChips.some(function (c) { return c.el === el; })) return;
+        var node = mk('<a class="badge" style="text-decoration:none"></a>');
+        node.href = adminFormUrl(f.tpl(), el.dataset[f.key]);
+        node.dataset.full = '✎ ' + f.label;
+        layer.appendChild(node); cardChips.push({ el: el, node: node });
+      });
     });
   }
   function layoutCardChips() {
     buildCardChips();
     cardChips.forEach(function (c) {
       var r = c.el.getBoundingClientRect();
-      var show = document.contains(c.el) && r.height > 80 && r.width > 80 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
+      var show = document.contains(c.el) && r.height > 50 && r.width > 50 && r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth;
       c.node.style.display = show ? 'inline-flex' : 'none';
       if (!show) return;
+      c.node.textContent = r.width >= 150 ? c.node.dataset.full : '✎';
       c.node.style.top = Math.max(8, r.top + 8) + 'px';
       c.node.style.left = Math.max(8, Math.min(innerWidth - c.node.offsetWidth - 8, r.left + (r.width - c.node.offsetWidth) / 2)) + 'px';
     });
@@ -432,11 +440,13 @@
       if (t.dataset.edT === 'image') pickImage(t); else startEdit(t);
       return;
     }
-    var card = cfg.product && e.target.closest && e.target.closest('[data-ed-product]');
-    if (card) {       // click anywhere on a product card -> its admin form (returns here after Save)
-      e.preventDefault(); e.stopPropagation();
-      location.href = editProductUrl(card.dataset.edProduct);
-      return;
+    for (var fi = 0; fi < FORMS.length; fi++) {   // product card / category tile -> its admin form
+      var f = FORMS[fi], hit = f.tpl() && e.target.closest && e.target.closest('[' + f.attr + ']');
+      if (hit) {
+        e.preventDefault(); e.stopPropagation();
+        location.href = adminFormUrl(f.tpl(), hit.dataset[f.key]);
+        return;
+      }
     }
     var m = e.target.closest && e.target.closest('[data-ed-money]');
     if (m) { e.preventDefault(); e.stopPropagation(); openMoney(m); return; }

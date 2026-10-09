@@ -95,7 +95,41 @@ class CategoryCreateView(_ScopedFormMixin, CreateView):
     success_url = reverse_lazy("control:category_list")
 
 
-class CategoryUpdateView(_ScopedFormMixin, UpdateView):
+class _StorefrontReturnMixin:
+    """An admin edit form opened from the storefront inline editor returns to the
+    storefront page it came from (``?next=``) after Save."""
+
+    def _next_url(self):
+        """Where to return after saving: the storefront page the inline editor's
+        card click came from. A same-host path, or an absolute URL on one of
+        *this store's own* domains (the admin may live on the platform host while
+        the storefront is on the store's domain). Anything else is ignored."""
+        from urllib.parse import urlparse
+
+        raw = self.request.POST.get("next") or self.request.GET.get("next") or ""
+        if not raw:
+            return ""
+        if raw.startswith("/"):
+            return safe_next(self.request, raw, "")
+        parts = urlparse(raw)
+        if parts.scheme in ("http", "https") and parts.hostname:
+            project = self.active_project
+            hosts = {d.host.strip().lower() for d in project.domains.all() if d.is_verified}
+            hosts.add((project.primary_domain or "").strip().lower())
+            if parts.hostname.lower() in hosts:
+                return raw
+        return ""
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["next_url"] = self._next_url()
+        return ctx
+
+    def get_success_url(self):
+        return self._next_url() or super().get_success_url()
+
+
+class CategoryUpdateView(_StorefrontReturnMixin, _ScopedFormMixin, UpdateView):
     model = Category
     form_class = CategoryForm
     template_name = "control/catalog/category_form.jinja"
@@ -519,36 +553,10 @@ class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
         return reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
 
 
-class ProductUpdateView(_ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
+class ProductUpdateView(_StorefrontReturnMixin, _ProductSizeColorMixin, _ScopedFormMixin, UpdateView):
     model = Product
     form_class = ProductForm
     template_name = "control/catalog/product_form.jinja"
-
-    def _next_url(self):
-        """Where to return after saving: the storefront page the inline editor's
-        card click came from. A same-host path, or an absolute URL on one of
-        *this store's own* domains (the admin may live on the platform host while
-        the storefront is on the store's domain). Anything else is ignored."""
-        from urllib.parse import urlparse
-
-        raw = self.request.POST.get("next") or self.request.GET.get("next") or ""
-        if not raw:
-            return ""
-        if raw.startswith("/"):
-            return safe_next(self.request, raw, "")
-        parts = urlparse(raw)
-        if parts.scheme in ("http", "https") and parts.hostname:
-            project = self.active_project
-            hosts = {d.host.strip().lower() for d in project.domains.all() if d.is_verified}
-            hosts.add((project.primary_domain or "").strip().lower())
-            if parts.hostname.lower() in hosts:
-                return raw
-        return ""
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["next_url"] = self._next_url()
-        return ctx
 
     def get_success_url(self):
         return self._next_url() or reverse_lazy("control:product_edit", kwargs={"pk": self.object.pk})
