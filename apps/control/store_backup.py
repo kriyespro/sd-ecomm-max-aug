@@ -186,7 +186,13 @@ def _model(entry):
 def _queryset(entry, project):
     Model = _model(entry)
     scope = entry.get("scope", "project")
-    return Model.objects.filter(**{scope: project})
+    qs = Model.objects.filter(**{scope: project})
+    if entry["key"] == "product":
+        # Trashed products don't belong in a backup/template — the restore
+        # side never carries trashed_at, so a trashed row would come back
+        # live in the target store, silently inflating its plan usage.
+        qs = qs.filter(trashed_at__isnull=True)
+    return qs
 
 
 # --- dump ---------------------------------------------------------------
@@ -243,7 +249,7 @@ def dump_store(project, *, include_sensitive: bool = False) -> bytes:
     from apps.catalog.models import Product
     from apps.orders.models import Order
 
-    n_products = Product.objects.filter(project=project).count()
+    n_products = Product.objects.filter(project=project, trashed_at__isnull=True).count()
     if n_products > MAX_PRODUCTS:
         raise BackupError(
             f"This store has {n_products} products — over the {MAX_PRODUCTS} backup limit."
