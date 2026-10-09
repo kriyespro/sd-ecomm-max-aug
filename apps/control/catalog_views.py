@@ -293,15 +293,36 @@ class ProductBulkStatusView(_ScopedQuerysetMixin, View):
 
     def post(self, request, *args, **kwargs):
         action = request.POST.get("action", "")
-        new_status = self._ACTIONS.get(action)
         pks = request.POST.getlist("pks")
-        if new_status is None or not pks:
+        if action not in self._ACTIONS and action != "trash":
+            messages.error(request, "Pick at least one product and an action.")
+            return redirect("control:product_list")
+        if not pks:
             messages.error(request, "Pick at least one product and an action.")
             return redirect("control:product_list")
         if len(pks) > BULK_ACTION_MAX_ROWS:
             messages.error(request, f"Select {BULK_ACTION_MAX_ROWS} or fewer at a time.")
             return redirect("control:product_list")
 
+        if action == "trash":
+            from apps.accounts.permissions import OWNER_MANAGER, assert_store_role
+
+            assert_store_role(request.user, self.active_project, OWNER_MANAGER,
+                              "Only the store owner or a manager can do this.")
+            qs = self.get_queryset().filter(pk__in=pks, trashed_at__isnull=True)
+            count = 0
+            for product in qs:
+                trash_product(product)
+                count += 1
+            record_audit(
+                actor=request.user, project=self.active_project, action=AuditLog.Action.UPDATE,
+                target=None, changes={"bulk_trashed": True, "count": count, "pks": pks},
+                request=request,
+            )
+            messages.success(request, f"{count} product(s) moved to Trash.")
+            return redirect("control:product_list")
+
+        new_status = self._ACTIONS[action]
         qs = self.get_queryset().filter(pk__in=pks)
         count = qs.update(status=new_status)
         record_audit(

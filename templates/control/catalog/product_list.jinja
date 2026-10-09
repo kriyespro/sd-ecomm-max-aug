@@ -64,6 +64,10 @@
     <button name="action" value="activate" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Activate</button>
     <button name="action" value="deactivate" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Deactivate</button>
     <button name="action" value="archive" class="rounded-lg border border-slate-300 px-2.5 py-1 text-slate-600 hover:bg-slate-50" onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0">Archive</button>
+    {% if can_manage_trash %}
+    <button name="action" value="trash" class="rounded-lg border border-red-300 bg-red-50 px-2.5 py-1 text-red-700 hover:bg-red-100"
+            onclick="return document.querySelectorAll('.bulk-row-check:checked').length > 0 && confirm('Move selected product(s) to Trash?')">Trash</button>
+    {% endif %}
   </form>
   {% endif %}
   <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">
