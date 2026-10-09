@@ -21,7 +21,8 @@ def custom_domain_count(project) -> int:
     qs = project.domains.all()
     from apps.projects import subdomains
 
-    for base in subdomains.all_base_domains():
+    base = subdomains.base_domain()
+    if base:
         qs = qs.exclude(host__iendswith=f".{base}")
     return qs.count()
 
