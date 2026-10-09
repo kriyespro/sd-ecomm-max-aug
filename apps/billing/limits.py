@@ -21,16 +21,23 @@ def custom_domain_count(project) -> int:
     qs = project.domains.all()
     from apps.projects import subdomains
 
-    base = subdomains.base_domain()
-    if base:
+    for base in subdomains.all_base_domains():
         qs = qs.exclude(host__iendswith=f".{base}")
     return qs.count()
+
+
+def product_count(project) -> int:
+    """Live products only — trashed (soft-deleted) ones don't count against
+    the plan's limit even though they still sit in the DB for 30 days."""
+    if not hasattr(project, "products"):
+        return 0
+    return project.products.filter(trashed_at__isnull=True).count()
 
 
 def usage(project) -> dict:
     """Current counts vs limits — for the plan screen UI."""
     plan = _plan(project)
-    products = project.products.count() if hasattr(project, "products") else 0
+    products = product_count(project)
     staff = project.memberships.filter(is_active=True, role__in=["owner", "manager", "staff"]).count()
     domains = custom_domain_count(project)
     return {
@@ -67,7 +74,7 @@ def _check(project, attr, current, label):
 
 
 def check_can_add_product(project):
-    _check(project, "max_products", project.products.count(), "products")
+    _check(project, "max_products", product_count(project), "products")
 
 
 def check_can_add_staff(project):
