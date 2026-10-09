@@ -78,6 +78,31 @@
       {% include "control/catalog/_product_rows.jinja" %}
     </tbody>
   </table></div>
+  {% if is_paginated %}
+  <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 px-4 py-3 text-xs text-slate-500">
+    <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }} · {{ page_obj.paginator.count }} products</span>
+    <div class="flex items-center gap-1">
+      {% set qs = {'q': q, 'status': status, 'category': category} %}
+      {% if page_obj.has_previous() %}
+      <a href="?{{ qs|urlencode }}&page={{ page_obj.previous_page_number() }}"
+         class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">Previous</a>
+      {% endif %}
+      {% for n in page_obj.paginator.page_range %}
+        {% if n == page_obj.number %}
+        <span class="rounded-lg bg-slate-900 px-2.5 py-1 font-semibold text-white">{{ n }}</span>
+        {% elif n == 1 or n == page_obj.paginator.num_pages or (n >= page_obj.number - 2 and n <= page_obj.number + 2) %}
+        <a href="?{{ qs|urlencode }}&page={{ n }}" class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">{{ n }}</a>
+        {% elif n == 2 or n == page_obj.paginator.num_pages - 1 %}
+        <span class="px-1">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next() %}
+      <a href="?{{ qs|urlencode }}&page={{ page_obj.next_page_number() }}"
+         class="rounded-lg border border-slate-300 px-2.5 py-1 hover:bg-slate-50">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 <script>
   document.addEventListener("DOMContentLoaded", function () {
