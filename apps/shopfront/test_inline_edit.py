@@ -344,6 +344,11 @@ class InlineEditV2Tests(TestCase):
         Banner.objects.create(project=self.project, name="Hero", placement=BannerPlacement.HERO, heading="Hi")
         self.admin = User.objects.create_superuser("root", "r@t.test", "pw")
         call_command("seed_festive_skin", verbosity=0)
+        from apps.categories.models import Category
+
+        self.category = Category.objects.create(project=self.project, name="Rings", is_active=True)
+        self.product.category = self.category
+        self.product.save()
 
     def save(self, kind, pk, field, value):
         return self.client.post(
@@ -432,6 +437,8 @@ class InlineEditV2Tests(TestCase):
             self.assertIn(f'data-ed-product="{self.product.pk}"', body, f"{slug} card edit button")
             self.assertIn('data-product="/admin/products/0/"', body, slug)
             self.assertIn("[data-ed-product]:hover", body, f"{slug} card hover outline")
+            self.assertIn(f'data-ed-category="{self.category.pk}"', body, f"{slug} category tile")
+            self.assertIn('data-category="/admin/categories/0/"', body, slug)
             self.assertNotIn(f'data-ed="product:{self.product.pk}:title"', body, f"{slug} inline title")
             self.assertNotIn("data-ed-money", body, f"{slug} inline price")
             self.assertIn(f'data-ed="menuitem:{self.item.pk}:label"', body, f"{slug} menu")
@@ -444,7 +451,7 @@ class InlineEditV2Tests(TestCase):
                 self.assertIn(f'data-ed="benefit:{self.trust.pk}:title"', body, f"{slug} trust")
             off = self.client.get("/", HTTP_HOST=HOST, data={"preview_skin": skin.pk, "edit": "0"})
             off_body = off.content.decode()
-            for marker in ("data-ed=", "data-ed-money", "data-ed-section", "data-ed-popup", 'data-ed-product="'):
+            for marker in ("data-ed=", "data-ed-money", "data-ed-section", "data-ed-popup", 'data-ed-product="', 'data-ed-category="'):
                 self.assertNotIn(marker, off_body, f"{slug} {marker} leaked outside edit mode")
             self.assertIn("setTimeout(() => { try { if (!localStorage", off_body, f"{slug} popup must still auto-open")
 
@@ -535,3 +542,26 @@ class InlineEditV2Tests(TestCase):
         for bad in ("https://evil.test/shop/", "https://other-store.test/", f"https://{HOST}.evil.test/", "ftp://acme.test/"):
             page = self.client.get(url, {"next": bad}, HTTP_HOST="platform.test").content.decode()
             self.assertNotIn("Back to your store", page, bad)
+
+    def test_category_form_returns_to_the_storefront(self):
+        self._admin_session()
+        url = f"/admin/categories/{self.category.pk}/"
+        page = self.client.get(url, {"next": "/?edit=1"}, HTTP_HOST=HOST)
+        body = page.content.decode()
+        self.assertIn('name="next" value="/?edit=1"', body)
+        self.assertIn("Back to your store", body)
+        resp = self.client.post(url, {"name": "Rings & Bands", "slug": "rings", "order": 0, "is_active": "on",
+                                      "home_row": "below", "next": "/?edit=1"}, HTTP_HOST=HOST)
+        errors = resp.context["form"].errors if resp.status_code == 200 and resp.context else None
+        self.assertEqual(resp.status_code, 302, errors)
+        self.assertEqual(resp["Location"], "/?edit=1")
+        # off-site next ignored
+        resp = self.client.get(url, {"next": "https://evil.test/"}, HTTP_HOST=HOST)
+        self.assertNotIn("Back to your store", resp.content.decode())
+
+    def test_handoff_session_category_tiles_use_admin_origin(self):
+        self.client.logout()
+        tok = inline_edit.handoff_url(self.admin, self.project, "https://platform.test")
+        self.client.get(f"/?sd_edit={tok.split('sd_edit=')[1]}&edit=1", HTTP_HOST=HOST)
+        body = self.client.get("/", HTTP_HOST=HOST).content.decode()
+        self.assertIn('data-category="https://platform.test/admin/categories/0/"', body)

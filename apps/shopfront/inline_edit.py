@@ -218,6 +218,14 @@ def ed_product(product):
     return format_html(' data-ed-product="{}"', product.pk)
 
 
+def ed_category(category):
+    """Marks a "Shop by category" tile: in edit mode a click opens that
+    category's admin form (returns here after Save)."""
+    if not is_editing() or not has_product_form() or getattr(category, "pk", None) is None:
+        return ""
+    return format_html(' data-ed-category="{}"', category.pk)
+
+
 def ed_section(key):
     """Wraps one reorderable homepage section so the editor can move it."""
     if not is_editing():

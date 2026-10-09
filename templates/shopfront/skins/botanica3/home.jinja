@@ -35,7 +35,7 @@
   <div class="{% if overflow %}flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-3 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-4 sm:gap-4 sm:overflow-visible lg:grid-cols-8{% else %}grid grid-cols-3 gap-3 sm:grid-cols-4 sm:gap-4 lg:grid-cols-8{% endif %}"
        {%- if overflow %} {{ auto_scroll_attrs(step=150) }}{% endif %}>
     {% for t in (rows if overflow else rows[:8]) %}
-    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"{{ ed_category(t.category) }}
        class="group text-center {% if overflow %}w-32 shrink-0 snap-start sm:w-36{% elif category_mobile_slider %}w-[30%] shrink-0 snap-start sm:w-auto{% endif %}">
       <div class="mx-auto aspect-square w-full max-w-[300px] overflow-hidden rounded-xl border border-line bg-line/40 b2-card">
         <img src="{{ t.image | media_src(300, 300, 'Category') }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="b2-img h-full w-full object-cover">

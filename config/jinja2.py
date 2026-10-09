@@ -167,10 +167,10 @@ def environment(**options):
             "placeholder": svg_placeholder,
         }
     )
-    from apps.shopfront.inline_edit import ed, ed_link, ed_money, ed_nav, ed_product, ed_section
+    from apps.shopfront.inline_edit import ed, ed_link, ed_category, ed_money, ed_nav, ed_product, ed_section
     from apps.shopfront.runtime import is_editing
 
-    env.globals.update({"ed": ed, "ed_link": ed_link, "ed_money": ed_money, "ed_nav": ed_nav, "ed_product": ed_product, "ed_section": ed_section, "is_editing": is_editing})
+    env.globals.update({"ed": ed, "ed_link": ed_link, "ed_category": ed_category, "ed_money": ed_money, "ed_nav": ed_nav, "ed_product": ed_product, "ed_section": ed_section, "is_editing": is_editing})
     env.filters["money"] = _money
     env.filters["rgb_channels"] = _rgb_channels
     env.filters["media_src"] = media_src
