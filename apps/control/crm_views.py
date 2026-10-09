@@ -88,14 +88,23 @@ class CrmBoardView(PlatformAdminRequiredMixin, TemplateView):
         key = self.request.GET.get("range", "today")
         start, end, label = svc.resolve_range(key)
         rows, totals = svc.person_numbers(start, end)
+        pipeline = svc.pipeline_counts()
+        # Charts: a leaderboard from THIS range's rows (before the idle-hiding
+        # filter below — it already only ranks people who actually called),
+        # the pipeline redrawn as a bar chart, and a 14-day momentum trend
+        # that's independent of the range tabs (it answers a different
+        # question: "is the team keeping up the pace", not "how much so far").
+        leaderboard = svc.leaderboard(rows)
+        funnel_chart = svc.funnel_chart(pipeline)
+        trend = svc.daily_trend()
         # Default view hides people with no activity; ?active=0 shows everyone.
         active_only = self.request.GET.get("active", "1") != "0"
         if active_only:
             rows = [r for r in rows if any((
                 r["calls"], r["demos"], r["trained"], r["collection"], r["collection_pending"],
                 r["products"], r["store_work"], r["whatsapp"], r["trained_others"]))]
-        ctx.update(inbox=svc.admin_inbox(), pipeline=svc.pipeline_counts(), dgcs=svc.dgc_users(),
-                   people=svc.crm_people())
+        ctx.update(inbox=svc.admin_inbox(), pipeline=pipeline, dgcs=svc.dgc_users(),
+                   people=svc.crm_people(), leaderboard=leaderboard, funnel_chart=funnel_chart, trend=trend)
         ctx.update(range_key=key, range_label=label, ranges=_RANGES, rows=rows, active_only=active_only,
                    totals=totals, extras=svc.board_extras(), start=start, end=end)
         return ctx

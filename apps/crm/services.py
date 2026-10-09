@@ -475,6 +475,97 @@ def time_ago(when):
     return "yesterday" if days == 1 else f"{days}d ago"
 
 
+def daily_trend(days=14):
+    """Team-wide calls / demos / verified collection, one row per day, oldest
+    first — the momentum mini-charts on the super-admin board. A fixed
+    14-day window, independent of the board's own Today/7d/Month range tabs
+    (those answer 'how much'; this answers 'is the team keeping it up')."""
+    from django.db.models.functions import TruncDate
+
+    end = biz_today()
+    start = end - dt.timedelta(days=days - 1)
+    lo, hi = day_bounds(start, end)
+    calls, demos = {}, {}
+    for r in (Activity.objects.filter(occurred_at__gte=lo, occurred_at__lt=hi,
+                                      kind__in=[ActivityKind.CALL, ActivityKind.DEMO])
+              .annotate(d=TruncDate("occurred_at", tzinfo=_biz_tz())).values("d", "kind").annotate(n=Count("id"))):
+        (calls if r["kind"] == ActivityKind.CALL else demos)[r["d"]] = r["n"]
+    money = {r["collected_on"]: r["t"] or Decimal(0) for r in
+            Collection.objects.filter(collected_on__gte=start, collected_on__lte=end,
+                                      status=CollectionStatus.VERIFIED)
+            .values("collected_on").annotate(t=Sum("amount"))}
+
+    rows = []
+    for i in range(days):
+        d = start + dt.timedelta(days=i)
+        rows.append({"date": d, "label": d.strftime("%d %b"), "dow": d.strftime("%a")[:1],
+                    "calls": calls.get(d, 0), "demos": demos.get(d, 0), "collection": money.get(d, Decimal(0))})
+
+    def _pct(n, peak):
+        return max(5, int(n * 100 / peak)) if n else 0
+
+    cpeak = max((r["calls"] for r in rows), default=0) or 1
+    dpeak = max((r["demos"] for r in rows), default=0) or 1
+    mpeak = max((r["collection"] for r in rows), default=Decimal(0)) or Decimal(1)
+    for r in rows:
+        r["calls_pct"] = _pct(r["calls"], cpeak)
+        r["demos_pct"] = _pct(r["demos"], dpeak)
+        r["collection_pct"] = _pct(r["collection"], mpeak)
+        r["collection_label"] = inr(r["collection"])
+
+    return {
+        "rows": rows, "days": days,
+        "calls_total": sum(r["calls"] for r in rows), "demos_total": sum(r["demos"] for r in rows),
+        "collection_total": inr(sum((r["collection"] for r in rows), Decimal(0))),
+        "calls_avg": round(sum(r["calls"] for r in rows) / days, 1),
+    }
+
+
+# ── funnel / leaderboard color ladders (both validated — see dataviz pass) ──
+
+# Ordinal, one hue, monotone lightness, light end >= 2:1 on a white card
+# (node scripts/validate_palette.js "<hexes>" --mode light --surface "#ffffff"
+# --ordinal — all slots below pass). Pink = activity magnitude (leaderboard);
+# emerald = closeness to winning (funnel) — echoes the existing won=green,
+# lost=rose language instead of inventing a third color story.
+LEADERBOARD_RAMP = ["bg-pink-400", "bg-pink-500", "bg-pink-600", "bg-pink-700", "bg-pink-800"]
+FUNNEL_RAMP = {
+    "new": "bg-emerald-500", "contacted": "bg-emerald-500",
+    "interested": "bg-emerald-600", "demo_booked": "bg-emerald-600",
+    "demo_done": "bg-emerald-700", "negotiating": "bg-emerald-700",
+    "won": "bg-emerald-900",
+}
+
+
+def leaderboard(rows, limit=8):
+    """Top callers for the board's range, as (name, calls, bg-class, pct-of-max)
+    — the chart form the skill calls for a magnitude ranking: one hue,
+    more-is-darker, bar length does the real work."""
+    ranked = sorted((r for r in rows if r["calls"]), key=lambda r: -r["calls"])[:limit]
+    if not ranked:
+        return []
+    peak = ranked[0]["calls"]
+    n = len(LEADERBOARD_RAMP)
+    out = []
+    for r in ranked:
+        bin_ = min(n - 1, int((r["calls"] / peak) * (n - 1))) if peak else 0
+        out.append({"name": r["name"], "calls": r["calls"], "bg": LEADERBOARD_RAMP[bin_],
+                   "pct": max(6, int(r["calls"] * 100 / peak))})
+    return out
+
+
+def funnel_chart(pipeline):
+    """The board's existing pipeline_counts(), redrawn as an ordinal bar chart
+    (fixed stage order — swapping it would change the meaning, so it is never
+    sorted by value) plus Won; Lost sits outside the ladder, shown separately."""
+    stages = [{"label": lab, "n": n, "bg": FUNNEL_RAMP[st]} for st, lab, n in pipeline["stages"]]
+    stages.append({"label": "Won", "n": pipeline["won"], "bg": FUNNEL_RAMP["won"]})
+    peak = max((s["n"] for s in stages), default=0) or 1
+    for s in stages:
+        s["pct"] = max(5, int(s["n"] * 100 / peak)) if s["n"] else 0
+    return {"stages": stages, "lost": pipeline["lost"]}
+
+
 def board_extras():
     today = biz_today()
     return {
