@@ -4611,3 +4611,169 @@ class LeadsPlainOrderNoAutoTests(CrmBase):
     def test_archived_view_still_plain_ordering(self):
         self._mk("Archived", LeadStatus.NEGOTIATING, is_archived=True)
         self.assertEqual(self.client.get(self.url + "&archived=1").status_code, 200)
+
+
+class DailyTrendTests(CrmBase):
+    """svc.daily_trend(): 14 oldest-first days, team-wide, independent of the
+    board's own range tabs."""
+
+    def test_fourteen_days_oldest_first_ending_today(self):
+        t = svc.daily_trend()
+        self.assertEqual(len(t["rows"]), 14)
+        self.assertEqual(t["rows"][-1]["date"], biz_today())
+        self.assertEqual(t["rows"][0]["date"], biz_today() - dt.timedelta(days=13))
+        dates = [r["date"] for r in t["rows"]]
+        self.assertEqual(dates, sorted(dates))
+
+    def test_counts_calls_demos_and_verified_collection_only(self):
+        today = biz_today()
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        svc.log_activity(actor=self.b, kind="call", outcome="no_answer")
+        svc.log_activity(actor=self.a, kind="demo", outcome="done")
+        Collection.objects.create(collected_by=self.a, amount=Decimal("1000"), mode="upi",
+                                  reference="u1", status=CollectionStatus.VERIFIED, collected_on=today)
+        Collection.objects.create(collected_by=self.a, amount=Decimal("500"), mode="cash",
+                                  reference="c1", status=CollectionStatus.UNVERIFIED, collected_on=today)
+        t = svc.daily_trend()
+        last = t["rows"][-1]
+        self.assertEqual((last["calls"], last["demos"], last["collection"]), (2, 1, Decimal("1000")))
+        self.assertEqual(t["calls_total"], 2)
+        self.assertEqual(t["demos_total"], 1)
+        self.assertEqual(t["collection_total"], "₹1,000")
+
+    def test_old_activity_outside_the_window_is_excluded(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected",
+                         occurred_at=timezone.now() - dt.timedelta(days=20))
+        self.assertEqual(svc.daily_trend()["calls_total"], 0)
+
+    def test_percentages_scale_to_the_busiest_day_and_zero_stays_zero(self):
+        today = biz_today()
+        Activity.objects.bulk_create([Activity(actor=self.a, kind="call", outcome="connected",
+                                               occurred_at=timezone.now()) for _ in range(10)])
+        t = svc.daily_trend()
+        last = t["rows"][-1]
+        other_days = t["rows"][:-1]
+        self.assertEqual(last["calls_pct"], 100)
+        self.assertTrue(all(r["calls_pct"] == 0 for r in other_days))        # no calls on those days
+
+    def test_empty_database_is_all_zeros_not_an_error(self):
+        t = svc.daily_trend()
+        self.assertEqual((t["calls_total"], t["demos_total"], t["collection_total"]), (0, 0, "₹0"))
+        self.assertTrue(all(r["calls_pct"] == 0 for r in t["rows"]))
+
+
+class LeaderboardChartTests(CrmBase):
+    def test_sorted_descending_capped_and_shaded_by_relative_magnitude(self):
+        c = _dgc("chetan")
+        for _ in range(5):
+            svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        for _ in range(20):
+            svc.log_activity(actor=self.b, kind="call", outcome="connected")
+        for _ in range(1):
+            svc.log_activity(actor=c, kind="call", outcome="connected")
+        rows, _ = svc.person_numbers(biz_today())
+        lb = svc.leaderboard(rows)
+        self.assertEqual([r["name"] for r in lb], ["bina", "anil", "chetan"])
+        self.assertEqual(lb[0]["pct"], 100)                      # the busiest is always full-width
+        self.assertEqual(lb[0]["bg"], svc.LEADERBOARD_RAMP[-1])  # darkest shade for the top caller
+        self.assertEqual(lb[-1]["bg"], svc.LEADERBOARD_RAMP[0])  # lightest shade for the quietest one shown
+
+    def test_people_with_zero_calls_are_left_out(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        rows, _ = svc.person_numbers(biz_today())
+        self.assertEqual({r["name"] for r in svc.leaderboard(rows)}, {"anil"})
+
+    def test_capped_at_the_limit(self):
+        people = [_dgc(f"p{i}") for i in range(10)]
+        for p in people:
+            svc.log_activity(actor=p, kind="call", outcome="connected")
+        rows, _ = svc.person_numbers(biz_today())
+        self.assertEqual(len(svc.leaderboard(rows, limit=8)), 8)
+
+    def test_empty_is_an_empty_list_not_an_error(self):
+        rows, _ = svc.person_numbers(biz_today())
+        self.assertEqual(svc.leaderboard(rows), [])
+
+
+class FunnelChartTests(CrmBase):
+    def test_fixed_stage_order_never_sorted_by_value(self):
+        Lead.objects.create(name="a", status=LeadStatus.NEGOTIATING)
+        Lead.objects.create(name="b", status=LeadStatus.NEW)
+        fc = svc.funnel_chart(svc.pipeline_counts())
+        self.assertEqual([s["label"] for s in fc["stages"]],
+                         ["New", "Contacted", "Interested", "Demo booked", "Demo done", "Negotiating", "Won"])
+
+    def test_color_deepens_monotonically_toward_won_lost_excluded(self):
+        for st in ("new", "interested", "demo_done", "won"):
+            Lead.objects.create(name=st, status=st)
+        Lead.objects.create(name="x", status=LeadStatus.LOST)
+        fc = svc.funnel_chart(svc.pipeline_counts())
+        order = [svc.FUNNEL_RAMP[s] for s in ("new", "interested", "demo_done", "won")]
+        shades = ["bg-emerald-500", "bg-emerald-600", "bg-emerald-700", "bg-emerald-900"]
+        self.assertEqual(order, shades)
+        self.assertEqual(fc["lost"], 1)
+        self.assertNotIn("lost", [s["label"].lower() for s in fc["stages"]])
+
+    def test_pct_is_relative_to_the_tallest_stage(self):
+        Lead.objects.create(name="a", status=LeadStatus.NEW)
+        Lead.objects.create(name="b", status=LeadStatus.NEW)
+        Lead.objects.create(name="c", status=LeadStatus.WON)
+        fc = svc.funnel_chart(svc.pipeline_counts())
+        by = {s["label"]: s for s in fc["stages"]}
+        self.assertEqual(by["New"]["pct"], 100)
+        self.assertEqual(by["Won"]["pct"], 50)
+        self.assertEqual(by["Contacted"]["pct"], 0)
+
+    def test_empty_pipeline_is_all_zeros_not_an_error(self):
+        fc = svc.funnel_chart(svc.pipeline_counts())
+        self.assertTrue(all(s["n"] == 0 for s in fc["stages"]))
+        self.assertEqual(fc["lost"], 0)
+
+
+class BoardChartsPageTests(CrmBase):
+    def setUp(self):
+        super().setUp()
+        self.login(self.admin)
+        self.url = reverse("control:crm_board")
+
+    def test_three_momentum_cards_leaderboard_and_funnel_all_render(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        Lead.objects.create(name="x", status=LeadStatus.INTERESTED)
+        html = self.client.get(self.url).content.decode()
+        for needle in ("Calls / day", "Demos / day", "Collected / day", "🏆 Leaderboard", "🪜 Pipeline"):
+            self.assertIn(needle, html, needle)
+        self.assertIn("anil", html)
+        self.assertIn("Interested", html)
+
+    def test_charts_are_admin_only(self):
+        # /admin/crm/ is PlatformStaffRequiredMixin (admin or DGC); a DGC gets
+        # redirected to their own Welcome page rather than the board, so the
+        # charts never render for them — not a 403, a different landing page.
+        self.login(self.a)
+        r = self.client.get(self.url)
+        self.assertRedirects(r, reverse("control:crm_welcome"))
+
+    def test_empty_states_do_not_error(self):
+        r = self.client.get(self.url)
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("No calls logged in this period yet.", r.content.decode())
+
+    def test_lost_leads_shown_separately_from_the_funnel_ladder(self):
+        Lead.objects.create(name="gone", status=LeadStatus.LOST)
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("1 lost", html)
+        self.assertIn("outside the ladder", html)
+
+    def test_every_bar_carries_a_native_title_not_hover_only(self):
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        html = self.client.get(self.url).content.decode()
+        self.assertIn("calls\"", html)             # e.g. title="09 Oct (F): 1 calls"
+        self.assertIn('tabindex="0"', html)
+
+    def test_leaderboard_links_to_nothing_it_cant_back_up_links_are_plain_text(self):
+        # the chart itself has no action links (pure glance view); the existing
+        # team table right below it still has the per-person drill-down
+        svc.log_activity(actor=self.a, kind="call", outcome="connected")
+        html = self.client.get(self.url).content.decode()
+        board_only = html.split("🏆 Leaderboard")[1].split("🪜 Pipeline")[0]
+        self.assertNotIn("<a ", board_only)

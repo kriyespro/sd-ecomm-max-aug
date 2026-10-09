@@ -34,6 +34,71 @@
   {% if extras.overdue_follow_ups %}<a href="{{ url('control:crm_leads') }}?view=list&due=1" class="rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-700 ring-1 ring-rose-200 hover:bg-rose-100">⏰ {{ extras.overdue_follow_ups }} overdue</a>{% endif %}
 </div>
 
+{# ── momentum: 14-day trend, three small multiples, one question each ──────
+   ("is the team keeping up the pace" — a different question from the range
+   tiles above, which only answer "how much so far"). Sequential: one hue
+   per chart, since each is a single series over time — color carries no
+   identity here. Every bar shows its value as a visible label where there's
+   room, plus a native title (exact date + value) everywhere, so nothing is
+   hover-only. #}
+<div class="grid gap-3 md:grid-cols-3">
+  {% macro trend_card(title, total, sub, rows, key, bg_class, unit) %}
+  <div class="rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-pink-100">
+    <div class="flex items-baseline justify-between">
+      <h3 class="text-[11px] font-semibold uppercase tracking-wide text-pink-400">{{ title }}</h3>
+      <span class="text-[10px] text-slate-400">{{ sub }}</span>
+    </div>
+    <div class="text-xl font-semibold leading-tight text-slate-800">{{ total }}</div>
+    <div class="mt-2 flex h-16 items-end gap-[3px]">
+      {% for r in rows %}
+      {% set shown = r.collection_label if key == 'collection' else (r[key] ~ unit) %}
+      <div tabindex="0" title="{{ r.label }} ({{ r.dow }}): {{ shown }}"
+           class="group flex h-full flex-1 flex-col-reverse items-center focus:outline-none">
+        <div class="w-full rounded-t {{ bg_class if r[key] else 'bg-slate-100' }} transition-opacity group-hover:opacity-80 group-focus:opacity-80"
+             style="height: {{ r[key ~ '_pct'] }}%; min-height: 2px;"></div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="mt-1 flex justify-between text-[9px] text-slate-300"><span>{{ rows[0].label }}</span><span>{{ rows[-1].label }}</span></div>
+  </div>
+  {% endmacro %}
+  {{ trend_card("📞 Calls / day", trend.calls_total, "avg " ~ trend.calls_avg ~ "/day", trend.rows, "calls", "bg-pink-500", " calls") }}
+  {{ trend_card("🖥 Demos / day", trend.demos_total, "last 14 days", trend.rows, "demos", "bg-violet-500", " demos") }}
+  {{ trend_card("💰 Collected / day", trend.collection_total, "verified, last 14 days", trend.rows, "collection", "bg-emerald-600", "") }}
+</div>
+
+{# ── leaderboard + funnel: two glanceable bar charts side by side ────────── #}
+<div class="grid gap-3 lg:grid-cols-2">
+  <div class="rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-pink-400">🏆 Leaderboard <span class="font-normal normal-case text-slate-400">· calls, {{ range_label|lower }}</span></h3>
+    {% if leaderboard %}
+    <div class="space-y-1.5">
+      {% for r in leaderboard %}
+      <div class="group" tabindex="0" title="{{ r.name }}: {{ r.calls }} calls">
+        <div class="mb-0.5 flex items-center justify-between text-[12px]"><span class="truncate text-slate-700">{{ r.name }}</span><b class="text-slate-800">{{ r.calls }}</b></div>
+        <div class="h-2.5 w-full rounded-full bg-pink-50"><div class="h-2.5 rounded-full {{ r.bg }} transition-opacity group-hover:opacity-80 group-focus:opacity-80" style="width: {{ r.pct }}%"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <p class="py-4 text-center text-[12px] text-slate-400">No calls logged in this period yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="rounded-2xl bg-white p-3.5 shadow-sm ring-1 ring-pink-100">
+    <h3 class="mb-2 text-[12px] font-semibold uppercase tracking-wide text-pink-400">🪜 Pipeline <span class="font-normal normal-case text-slate-400">· open leads by stage</span></h3>
+    <div class="space-y-1.5">
+      {% for s in funnel_chart.stages %}
+      <div class="group" tabindex="0" title="{{ s.label }}: {{ s.n }} lead{{ '' if s.n == 1 else 's' }}">
+        <div class="mb-0.5 flex items-center justify-between text-[12px]"><span class="text-slate-700">{{ s.label }}</span><b class="text-slate-800">{{ s.n }}</b></div>
+        <div class="h-2.5 w-full rounded-full bg-pink-50"><div class="h-2.5 rounded-full {{ s.bg }} transition-opacity group-hover:opacity-80 group-focus:opacity-80" style="width: {{ s.pct }}%"></div></div>
+      </div>
+      {% endfor %}
+    </div>
+    {% if funnel_chart.lost %}<p class="mt-2 border-t border-pink-50 pt-2 text-[11px] text-slate-400">+ <a href="{{ url('control:crm_leads') }}?view=list&status=lost" class="underline hover:text-rose-600">{{ funnel_chart.lost }} lost</a> (not shown — outside the ladder)</p>{% endif %}
+  </div>
+</div>
+
 {# ── inbox: everything waiting on you, actionable right here ──────────── #}
 {% macro panel_head(icon, title, section, href) %}
 <div class="mb-1 flex items-center justify-between">
