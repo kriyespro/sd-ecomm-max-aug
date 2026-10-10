@@ -1013,3 +1013,56 @@ class CeoOverviewDashboardTests(TestCase):
         self.assertNotContains(resp, "Server status")
         self.assertNotContains(resp, "Growth &amp; ops")
         self.assertContains(resp, "Recent activity")
+
+
+@override_settings(
+    PLATFORM_HOSTS=["mnxstore.com", "acme.test"], PLATFORM_BASE_DOMAIN="mnxstore.com",
+    PLATFORM_BRANDS=[{"key": "acme", "name": "Acme", "hosts": ["acme.test"],
+                      "base_domain": "acme.test"}],
+)
+class StoreCreateBrandTests(TestCase):
+    def setUp(self):
+        from apps.billing.models import Plan
+
+        self.admin = get_user_model().objects.create_superuser(
+            username="root", email="root@t.test", password="pw"
+        )
+        self.plan = Plan.objects.filter(is_active=True).order_by("sort_order").first()
+        self.client.force_login(self.admin)
+
+    def _payload(self, **over):
+        data = {
+            "name": "Brand Store", "subdomain": "bs", "primary_domain": "",
+            "currency": "INR", "country": "IN", "owner_email": "o@brand.test",
+            "plan": self.plan.pk, "period": "monthly", "brand": "acme",
+        }
+        data.update(over)
+        return data
+
+    def test_brand_field_shown(self):
+        r = self.client.get("/admin/stores/new/")
+        self.assertContains(r, 'name="brand"')
+        self.assertContains(r, "Acme")
+
+    def test_store_gets_brand_subdomain(self):
+        r = self.client.post("/admin/stores/new/", self._payload())
+        self.assertEqual(r.status_code, 302)
+        p = Project.objects.get(name="Brand Store")
+        self.assertEqual(p.brand, "acme")
+        self.assertEqual(p.primary_domain, "bs.acme.test")
+
+    def test_default_brand_keeps_default_apex(self):
+        r = self.client.post("/admin/stores/new/", self._payload(brand="default"))
+        self.assertEqual(r.status_code, 302)
+        p = Project.objects.get(name="Brand Store")
+        self.assertEqual(p.brand, "")
+        self.assertEqual(p.primary_domain, "bs.mnxstore.com")
+
+    def test_taken_check_is_per_brand(self):
+        other = Project.objects.create(name="Other")
+        Domain.objects.create(project=other, host="bs.mnxstore.com",
+                              is_verified=True, is_primary=True)
+        r = self.client.post("/admin/stores/new/", self._payload())
+        self.assertEqual(r.status_code, 302)  # free on acme.test
+        r = self.client.post("/admin/stores/new/", self._payload(name="Two", brand="default"))
+        self.assertEqual(r.status_code, 200)  # taken on mnxstore.com

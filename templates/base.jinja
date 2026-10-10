@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{{ project.name if project else "SD Commerce" }}{% endblock %}</title>
+  <title>{% block title %}{{ project.name if project else brand.name }}{% endblock %}</title>
   <meta name="description" content="{% block meta_description %}{% endblock %}">
 
   {% set _site_css = site_css_href() %}

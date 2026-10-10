@@ -79,7 +79,7 @@
     <span class="h-2.5 w-2.5 rounded-full bg-rose-300"></span><span class="h-2.5 w-2.5 rounded-full bg-amber-300"></span><span class="h-2.5 w-2.5 rounded-full bg-emerald-300"></span>
     <span class="ml-3 flex flex-1 items-center gap-1.5 rounded-md bg-white px-3 py-1 text-xs text-slate-500 ring-1 ring-slate-200">
       <svg class="h-3 w-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-      <span data-store-url>yourstore</span>.shopinaday.com
+      <span data-store-url>yourstore</span>.{{ brand.base_domain }}
     </span>
   </div>
   <div class="p-4 sm:p-5">
@@ -109,7 +109,7 @@
     {% for i in range(6) %}<div class="aspect-square rounded bg-gradient-to-br {{ ['from-rose-100 to-amber-100','from-brand-100 to-violet-100','from-sky-100 to-emerald-100'][i % 3] }}"></div>{% endfor %}
   </div>
   <div class="pulse mt-3 flex items-center justify-between rounded-xl bg-brand-600 px-3 py-2.5 text-white">
-    <span class="text-xs font-semibold">Shop now · <span data-store-url>yourstore</span>.shopinaday.com</span>{{ arrow() }}
+    <span class="text-xs font-semibold">Shop now · <span data-store-url>yourstore</span>.{{ brand.base_domain }}</span>{{ arrow() }}
   </div>
   <p class="mt-2 text-center text-[10px] text-slate-400">link in bio</p>
 </div>
@@ -240,7 +240,7 @@
     </div>
     {% if stats and stats.stores and stats.stores >= 5 %}
     <div class="border-t border-slate-200 py-3 text-center text-sm text-slate-600">
-      <span class="font-display font-bold text-slate-900">{{ stats.stores }}</span> stores already run on shopinaday
+      <span class="font-display font-bold text-slate-900">{{ stats.stores }}</span> stores already run on {{ brand.name }}
       {% if stats.products %}· <span class="font-display font-bold text-slate-900">{{ stats.products }}</span> products listed{% endif %}
     </div>
     {% endif %}
@@ -377,7 +377,7 @@
   </section>
 
   <footer class="border-t border-slate-200 py-6 text-center text-xs text-slate-400">
-    &copy; {{ now_year }} shopinaday · Hosted commerce for India ·
+    &copy; {{ now_year }} {{ brand.name }} · Hosted commerce for India ·
     <a href="{{ url('privacy') }}" class="hover:text-slate-600">Privacy</a> ·
     <a href="{{ url('terms') }}" class="hover:text-slate-600">Terms</a>
   </footer>

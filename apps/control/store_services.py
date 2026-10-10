@@ -52,7 +52,7 @@ def _get_or_create_staff_user(email, name="", password=None):
 def create_store(*, name, owner_email, plan, actor, request=None,
                  primary_domain="", currency="INR", country="IN",
                  owner_name="", period=BillingPeriod.MONTHLY, manager=None,
-                 owner_password=None, subdomain=""):
+                 owner_password=None, subdomain="", brand=""):
     name = (name or "").strip()
     if not name:
         raise ValidationError("Store name is required.")
@@ -63,10 +63,14 @@ def create_store(*, name, owner_email, plan, actor, request=None,
     if domain and Project.objects.filter(primary_domain=domain).exists():
         raise ValidationError(f"The domain {domain} is already assigned to a store.")
 
+    from apps.core.brand import DEFAULT_KEY, brand_by_key
+
+    brand_key = brand_by_key(brand).key
     project = Project.objects.create(
         name=name, primary_domain=domain or None,
         currency=currency or "INR", country=country or "IN",
         status=Project.Status.ACTIVE,
+        brand="" if brand_key == DEFAULT_KEY else brand_key,
     )
 
     # The post_save signal already tried to give the new store a trial
@@ -104,13 +108,13 @@ def create_store(*, name, owner_email, plan, actor, request=None,
         try:
             from apps.projects import subdomains
 
-            if subdomains.base_domain():
+            if subdomains.base_domain(project):
                 wanted = subdomains.slugify(subdomain)
-                if wanted and subdomains.is_available(wanted):
+                if wanted and subdomains.is_available(wanted, project=project):
                     slug = wanted
                 else:
                     slug = subdomains.unique_slug(
-                        wanted or owner_email.split("@")[0] or name
+                        wanted or owner_email.split("@")[0] or name, project=project
                     )
                 subdomains.assign(project, slug)
         except Exception:  # noqa: BLE001

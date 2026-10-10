@@ -34,8 +34,11 @@ def _is_platform_host(host: str) -> bool:
     host = (host or "").strip().lower()
     if not host:
         return False
+    from apps.core.brand import platform_domains
+
     bases = {(getattr(settings, "PLATFORM_BASE_DOMAIN", "") or "").strip().lower()}
     bases |= {h.strip().lower() for h in (getattr(settings, "PLATFORM_HOSTS", []) or [])}
+    bases |= platform_domains()
     bases.discard("")
     return any(host == b or host.endswith("." + b) for b in bases)
 
@@ -66,6 +69,11 @@ class Project(TimeStampedModel):
     # gclid / fbclid params and the landing-page slug ("lp"). Empty for stores
     # created any other way. Read-only marketing attribution.
     signup_source = models.JSONField(default=dict, blank=True)
+
+    # Which platform brand (apps.core.brand key) this store signed up under.
+    # Decides the apex of its auto subdomain and its branded e-mails. Blank =
+    # the default platform.
+    brand = models.CharField(max_length=40, blank=True, default="", db_index=True)
 
     # Opted in to sell wholesale/dropship to other stores on the platform
     # (apps.b2b). Owner-only toggle; reversible, independent of ``status``.

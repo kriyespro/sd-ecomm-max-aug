@@ -27,8 +27,21 @@ _SLUG_RE = re.compile(r"[^a-z0-9-]+")
 MAX_LEN = 40
 
 
-def base_domain():
-    return (getattr(settings, "PLATFORM_BASE_DOMAIN", "") or "").strip().lower()
+def base_domain(project=None, brand=None):
+    """The apex a store's auto subdomain hangs off: the store's brand's
+    ``base_domain`` (``project.brand``), else the default platform's."""
+    from apps.core import brand as brands
+
+    if brand is None:
+        brand = brands.brand_by_key(getattr(project, "brand", "") if project is not None else "")
+    return (brand.base_domain or "").strip().lower()
+
+
+def all_base_domains():
+    """Every brand's subdomain apex — for "is this a platform subdomain" checks."""
+    from apps.core import brand as brands
+
+    return {b.base_domain for b in brands.all_brands() if b.base_domain}
 
 
 def slugify(value):
@@ -37,14 +50,15 @@ def slugify(value):
     return s
 
 
-def host_for(slug):
-    return f"{slug}.{base_domain()}" if base_domain() else ""
+def host_for(slug, base=None):
+    base = base_domain() if base is None else base
+    return f"{slug}.{base}" if base else ""
 
 
-def is_available(slug, *, project=None):
+def is_available(slug, *, project=None, base=None):
     if not slug or slug in RESERVED or len(slug) < 2:
         return False
-    host = host_for(slug)
+    host = host_for(slug, base if base is not None else base_domain(project))
     if not host:
         return False
     qs = Domain.objects.filter(host=host)
@@ -53,17 +67,17 @@ def is_available(slug, *, project=None):
     return not qs.exists()
 
 
-def unique_slug(preferred, *, project=None):
+def unique_slug(preferred, *, project=None, base=None):
     """A free slug near ``preferred`` (email local-part or store name)."""
-    base = slugify(preferred) or "store"
-    if base in RESERVED or len(base) < 2:
-        base = f"{base}-store" if base else "my-store"
-    candidate, i = base, 2
-    while not is_available(candidate, project=project):
-        candidate = f"{base}-{i}"
+    stem = slugify(preferred) or "store"
+    if stem in RESERVED or len(stem) < 2:
+        stem = f"{stem}-store" if stem else "my-store"
+    candidate, i = stem, 2
+    while not is_available(candidate, project=project, base=base):
+        candidate = f"{stem}-{i}"
         i += 1
         if i > 200:  # give up gracefully — practically unreachable
-            candidate = f"{base}-{timezone.now().strftime('%H%M%S')}"
+            candidate = f"{stem}-{timezone.now().strftime('%H%M%S')}"
             break
     return candidate
 
@@ -72,14 +86,16 @@ def assign(project, slug, *, make_primary=True):
     """Point ``<slug>.<base>`` at ``project`` as a verified Domain, dropping any
     previous platform subdomain for the project. Returns the Domain or ``None``
     when no base domain is configured."""
-    base = base_domain()
+    base = base_domain(project)
     if not base:
         return None
-    host = host_for(slug)
+    host = host_for(slug, base)
 
-    Domain.objects.filter(
-        project=project, host__endswith=f".{base}"
-    ).exclude(host=host).delete()
+    # Drop the store's previous platform subdomain (on any brand's apex).
+    for b in all_base_domains():
+        Domain.objects.filter(
+            project=project, host__endswith=f".{b}"
+        ).exclude(host=host).delete()
 
     domain, _ = Domain.objects.get_or_create(project=project, host=host)
     if not domain.is_verified:
@@ -100,7 +116,7 @@ def assign(project, slug, *, make_primary=True):
 
 def current_slug(project):
     """The project's platform-subdomain slug, or ``""``."""
-    base = base_domain()
+    base = base_domain(project)
     if not base:
         return ""
     d = (

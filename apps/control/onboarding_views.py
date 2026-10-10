@@ -70,7 +70,7 @@ class OnboardingForm(forms.Form):
     def __init__(self, *args, project=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.project = project
-        if not subdomains.base_domain():
+        if not subdomains.base_domain(project):
             self.fields.pop("subdomain", None)
 
     def clean_subdomain(self):
@@ -117,7 +117,7 @@ class OnboardingView(StoreRoleRequiredMixin, ActiveProjectMixin, FormView):
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["store"] = self.active_project
-        ctx["base_domain"] = subdomains.base_domain()
+        ctx["base_domain"] = subdomains.base_domain(self.active_project)
         return ctx
 
     def form_valid(self, form):

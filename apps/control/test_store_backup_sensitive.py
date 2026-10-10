@@ -132,20 +132,21 @@ class DumpAndRestoreSensitiveTests(TestCase):
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())
         self.assertTrue(Customer.objects.filter(project=self.project, email="buyer@t.test").exists())
 
-    def test_restoring_a_different_stores_sensitive_backup_is_rejected(self):
+    def test_restoring_a_different_stores_sensitive_backup_skips_transaction_data(self):
         other = Project.objects.create(name="OtherCo", status="active")
         _seed_transaction_data(other)
         other_blob = store_backup.dump_store(other, include_sensitive=True)
 
-        with self.assertRaises(store_backup.BackupError):
-            store_backup.restore_store(
-                self.project, other_blob, actor=self.owner, include_sensitive=True,
-            )
+        counts = store_backup.restore_store(
+            self.project, other_blob, actor=self.owner, include_sensitive=True,
+        )
 
-        # nothing changed -- the whole transaction rolled back, including
-        # the catalog/CMS half that would otherwise have been safe to apply
+        # clone semantics: catalogue/CMS/theme come across, the source store's
+        # orders/customers/payments never do, and this store's own are kept
+        self.assertNotIn("order", counts)
+        self.assertNotIn("customer", counts)
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())
-        self.assertTrue(Product.objects.filter(project=self.project, slug="widget").exists())
+        self.assertEqual(Order.objects.filter(project=self.project).count(), 1)
 
     def test_order_cap_is_enforced_on_dump(self):
         with patch.object(store_backup, "MAX_ORDERS", 0):
@@ -267,5 +268,6 @@ class OwnerBackupScreenSensitiveTests(TestCase):
             "backup": SimpleUploadedFile("other.zip", other_blob, "application/zip"),
         }, follow=True)
         self.assertEqual(resp.status_code, 200)
-        self.assertNotContains(resp, "different store")
+        self.assertContains(resp, "Restored")
+        self.assertEqual(Order.objects.filter(project=self.project).count(), 1)
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())
