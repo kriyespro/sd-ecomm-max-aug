@@ -19,13 +19,14 @@
   <div class="space-y-4">
     <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-400">Store</h3>
     {{ render_field(form.name) }}
+    {% if 'brand' in form.fields %}{{ render_field(form.brand) }}{% endif %}
     {% if 'subdomain' in form.fields %}
     <div class="space-y-1">
       <label for="{{ form.subdomain.id_for_label }}" class="block text-sm font-medium text-slate-700">{{ form.subdomain.label }}</label>
       {% if base_domain %}
       <div class="mt-1 flex">
         {{ form.subdomain.as_widget(attrs={"class": _INPUT ~ " rounded-r-none", "placeholder": "your-store"}) }}
-        <span class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 text-sm text-slate-500">.{{ base_domain }}</span>
+        <span id="base-domain-suffix" class="inline-flex items-center whitespace-nowrap rounded-r-lg border border-l-0 border-slate-300 bg-slate-50 px-3 text-sm text-slate-500">.{{ base_domain }}</span>
       </div>
       {% else %}
       {{ form.subdomain.as_widget(attrs={"class": _INPUT}) }}
@@ -84,6 +85,14 @@
   name.addEventListener("input", function () {
     if (!edited) sub.value = slugify(name.value);
   });
+  var brandSel = document.getElementById("id_brand");
+  var suffix = document.getElementById("base-domain-suffix");
+  var bases = {{ brand_bases | tojson }};
+  if (brandSel && suffix) {
+    brandSel.addEventListener("change", function () {
+      suffix.textContent = "." + (bases[brandSel.value] || "");
+    });
+  }
 })();
 </script>
 {% endif %}

@@ -33,7 +33,12 @@ def is_enabled():
 
 
 def redirect_uri(request):
-    return settings.GOOGLE_OAUTH_REDIRECT_URI or request.build_absolute_uri(
+    from apps.core.brand import brand_for_request
+
+    # The pinned URI belongs to the default platform's host; another brand's
+    # callback must come back to its own host (the session cookie lives there).
+    pinned = settings.GOOGLE_OAUTH_REDIRECT_URI if brand_for_request(request).is_default else ""
+    return pinned or request.build_absolute_uri(
         reverse("accounts:google_callback")
     )
 

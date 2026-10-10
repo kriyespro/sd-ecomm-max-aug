@@ -6,7 +6,7 @@
 <div class="flex min-h-screen items-center justify-center px-4">
   <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
     <h1 class="text-lg font-semibold">Sign in</h1>
-    <p class="mt-1 text-sm text-slate-500">Mission Control access</p>
+    <p class="mt-1 text-sm text-slate-500">{{ "Mission Control access" if brand.is_default else brand.name ~ " sign in" }}</p>
 
     {% if messages %}
     {% for message in messages %}

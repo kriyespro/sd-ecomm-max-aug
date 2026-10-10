@@ -29,7 +29,9 @@ def root(request):
     """
     if getattr(request, "project", None):
         return redirect("/app/")
-    return render(request, "marketing/landing.jinja", _landing_context())
+    from apps.core.brand import brand_for_request
+
+    return render(request, brand_for_request(request).landing_template, _landing_context())
 
 
 LEGAL_UPDATED = "1 October 2026"
@@ -51,17 +53,20 @@ def legal_page(request, kind):
         trial_days = BillingSettings.load().self_signup_trial_days
     except Exception:  # noqa: BLE001
         trial_days = 7
+    from apps.core.brand import brand_for_request
+
+    brand = brand_for_request(request)
     return render(request, f"legal/{kind}.jinja", {
         "active": kind,
-        "entity": settings.LEGAL_ENTITY_NAME,
-        "contact_email": settings.LEGAL_CONTACT_EMAIL,
+        "entity": brand.legal_entity,
+        "contact_email": brand.contact_email,
         "updated": LEGAL_UPDATED,
         "trial_days": trial_days,
         "now_year": timezone.now().year,
         "meta": (
-            "How shopinaday collects, uses and protects your data."
+            f"How {brand.name} collects, uses and protects your data."
             if kind == "privacy" else
-            "The terms for using the shopinaday online store platform."
+            f"The terms for using the {brand.name} online store platform."
         ),
     })
 
@@ -97,6 +102,11 @@ def ad_landing(request, slug):
         raise Http404
     if getattr(request, "project", None):
         return redirect("/app/")
+    from apps.core.brand import brand_for_request
+
+    brand = brand_for_request(request)
+    if not brand.is_default:
+        page = _rebrand(page, brand.name)
     cheapest = (
         Plan.objects.filter(is_active=True, is_public=True, price_monthly__gt=0)
         .order_by("price_monthly").first()
@@ -122,10 +132,25 @@ def ad_landing(request, slug):
         "faq_jsonld": _faq_jsonld(page["faq"]),
         "trial_days": trial_days,
         "from_price": int(cheapest.price_monthly) if cheapest else None,
-        "features": COMMON_FEATURES,
+        "features": COMMON_FEATURES if brand.is_default else _rebrand(COMMON_FEATURES, brand.name),
         "steps": STEPS,
     })
-    return render(request, "marketing/ad_landing.jinja", ctx)
+    return render(request, brand.ad_template, ctx)
+
+
+def _rebrand(obj, name):
+    """Copy of the (str / tuple / list / dict) copy ``obj`` with the default
+    platform name swapped for ``name`` — lets one set of ad-page copy serve
+    every brand."""
+    if isinstance(obj, str):
+        return obj.replace("shopinaday", name)
+    if isinstance(obj, tuple):
+        return tuple(_rebrand(x, name) for x in obj)
+    if isinstance(obj, list):
+        return [_rebrand(x, name) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _rebrand(v, name) for k, v in obj.items()}
+    return obj
 
 
 def _landing_context():
@@ -234,6 +259,9 @@ def partners(request):
         # a store's own domain never serves the platform partner page
         return redirect("/app/")
 
+    from apps.core.brand import brand_for_request
+
+    tpl = brand_for_request(request).partners_template
     if request.method == "POST":
         form = PartnerApplicationForm(request.POST)
         if form.is_valid():
@@ -248,6 +276,6 @@ def partners(request):
                 "Application received. We'll email you once it's reviewed.",
             )
             return redirect(f"{reverse('partners')}#apply")
-        return render(request, "marketing/partners.jinja", _partner_context(form), status=400)
+        return render(request, tpl, _partner_context(form), status=400)
 
-    return render(request, "marketing/partners.jinja", _partner_context())
+    return render(request, tpl, _partner_context())

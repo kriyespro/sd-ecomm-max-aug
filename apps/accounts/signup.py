@@ -82,8 +82,12 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     profile.ui_mode = UiMode.EASY
     profile.save(update_fields=["phone", "ui_mode"])
 
+    from apps.core.brand import brand_for_request
+
+    brand_key = brand_for_request(request).key if request is not None else ""
     project = Project.objects.create(
         name=store_name, status=Project.Status.ACTIVE, currency="INR", country="IN",
+        brand="" if brand_key == "default" else brand_key,
     )
     Membership.objects.update_or_create(
         user=user, project=project,
@@ -95,8 +99,8 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     try:
         from apps.projects import subdomains
 
-        if subdomains.base_domain():
-            slug = subdomains.unique_slug(store_name or email.split("@")[0])
+        if subdomains.base_domain(project):
+            slug = subdomains.unique_slug(store_name or email.split("@")[0], project=project)
             subdomains.assign(project, slug)
     except Exception:  # noqa: BLE001
         import logging

@@ -44,6 +44,11 @@ class StoreCreateForm(forms.Form):
         widget=forms.TextInput(attrs={"autocapitalize": "none", "autocomplete": "off",
                                       "pattern": "[a-zA-Z0-9-]+", "data-subdomain": "1"}),
     )
+    brand = forms.ChoiceField(
+        required=False, label="Platform brand",
+        help_text="Which brand the owner signs in under. Decides the apex of the "
+                  "store's web address (<name>.<brand domain>).",
+    )
     primary_domain = forms.CharField(required=False, label="Custom domain",
                                      help_text="Optional. A domain the owner already "
                                                "owns, e.g. shop.brand.com. Overrides "
@@ -68,7 +73,7 @@ class StoreCreateForm(forms.Form):
         queryset=User.objects.filter(profile__platform_role=PlatformRole.MANAGER, is_active=True),
     )
 
-    def __init__(self, *args, actor=None, **kwargs):
+    def __init__(self, *args, actor=None, default_brand_key="default", **kwargs):
         super().__init__(*args, **kwargs)
         self._actor = actor
         # A Platform Manager can only sign a store up under their own name --
@@ -94,7 +99,16 @@ class StoreCreateForm(forms.Form):
                 or self.fields["plan"].queryset.first()
             )
 
-        base = subdomains.base_domain()
+        from apps.core import brand as brands
+
+        all_b = brands.all_brands()
+        if len(all_b) > 1:
+            self.fields["brand"].choices = [(b.key, b.name) for b in all_b]
+            self.fields["brand"].initial = default_brand_key
+        else:
+            self.fields.pop("brand", None)
+
+        base = any(b.base_domain for b in all_b)
         if base and "subdomain" in self.fields:
             self.fields["subdomain"].help_text = (
                 "Auto-filled from the store name — edit if you like. "
@@ -110,9 +124,23 @@ class StoreCreateForm(forms.Form):
         slug = subdomains.slugify(raw)
         if len(slug) < 2:
             raise forms.ValidationError("Use at least 2 letters or numbers.")
-        if not subdomains.is_available(slug):
-            raise forms.ValidationError("That address is taken — try another.")
         return slug
+
+    def clean(self):
+        cd = super().clean()
+        slug = cd.get("subdomain")
+        if slug and not self.errors.get("brand"):
+            from apps.core import brand as brands
+
+            base = brands.brand_by_key(cd.get("brand") or "").base_domain
+            if not base:
+                # The chosen brand has no subdomain apex configured -- there's
+                # nothing to check availability against, so drop it rather
+                # than reporting a bogus "taken" error.
+                cd["subdomain"] = ""
+            elif not subdomains.is_available(slug, base=base):
+                self.add_error("subdomain", "That address is taken — try another.")
+        return cd
 
     def clean_owner_password(self):
         pw = self.cleaned_data.get("owner_password") or ""
@@ -193,11 +221,19 @@ class StoreCreateView(_StoreScope, FormView):
     def get_form_kwargs(self):
         kw = super().get_form_kwargs()
         kw["actor"] = self.request.user
+        from apps.core.brand import brand_for_request
+
+        kw["default_brand_key"] = brand_for_request(self.request).key
         return kw
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["base_domain"] = subdomains.base_domain()
+        from apps.core import brand as brands
+
+        form = ctx["form"]
+        ctx["brand_bases"] = {b.key: b.base_domain for b in brands.all_brands()}
+        key = form["brand"].value() if "brand" in form.fields else ""
+        ctx["base_domain"] = brands.brand_by_key(key or "").base_domain
         return ctx
 
     def form_valid(self, form):
@@ -220,6 +256,7 @@ class StoreCreateView(_StoreScope, FormView):
                 period=form.cleaned_data["period"],
                 manager=manager, actor=actor, request=self.request,
                 owner_password=form.cleaned_data.get("owner_password") or None,
+                brand=form.cleaned_data.get("brand") or "",
             )
         except ValidationError as exc:
             for m in exc.messages:

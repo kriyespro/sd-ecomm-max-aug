@@ -388,6 +388,35 @@ PLATFORM_BASE_DOMAIN = _bare_host(env("DJANGO_PLATFORM_BASE_DOMAIN", "")) or (
     PLATFORM_HOSTS[0] if PLATFORM_HOSTS else ""
 )
 
+# White-label brands that share this deployment (one DB, one set of stores).
+# JSON list in DJANGO_PLATFORM_BRANDS, e.g.
+#   [{"key": "acme", "name": "Acme", "hosts": ["acme.com"],
+#     "base_domain": "acme.com", "legal_entity": "Acme Pvt Ltd",
+#     "contact_email": "help@acme.com", "from_email": "Acme <no-reply@acme.com>",
+#     "logo": "/static/brands/acme.svg",
+#     "landing_template": "marketing/brands/acme/landing.jinja"}]
+# The env-configured platform (PLATFORM_HOSTS / LEGAL_*) is the implicit
+# "default" brand. See apps.core.brand. Extra brands' hosts are added to
+# PLATFORM_HOSTS so they are never resolved as a store.
+import json as _json  # noqa: E402
+
+try:
+    PLATFORM_BRANDS = _json.loads(env("DJANGO_PLATFORM_BRANDS", "[]") or "[]")
+    if not isinstance(PLATFORM_BRANDS, list):
+        PLATFORM_BRANDS = []
+except ValueError:
+    PLATFORM_BRANDS = []
+for _b in PLATFORM_BRANDS:
+    if not isinstance(_b, dict):
+        continue
+    _raw_hosts = _b.get("hosts") or []
+    if isinstance(_raw_hosts, str):
+        _raw_hosts = [_raw_hosts]
+    for _h in _raw_hosts:
+        _h = _bare_host(_h)
+        if _h and _h not in PLATFORM_HOSTS:
+            PLATFORM_HOSTS.append(_h)
+
 # Shown on /privacy/ and /terms/. Blank contact email -> the pages point people
 # to the in-dashboard support tickets instead.
 LEGAL_ENTITY_NAME = env("DJANGO_LEGAL_ENTITY_NAME", "shopinaday")

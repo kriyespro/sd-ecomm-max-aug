@@ -1,6 +1,6 @@
 {% extends "base.jinja" %}
 
-{% block title %}{% block page_title %}Mission Control{% endblock %} · Mission Control{% endblock %}
+{% block title %}{% block page_title %}Mission Control{% endblock %} · {{ "Mission Control" if brand.is_default else brand.name }}{% endblock %}
 
 {# The marketing-site pixels never belong on an operator's admin pages. #}
 {% block platform_tracking %}{% endblock %}
@@ -92,8 +92,8 @@
            'lg:w-60': sidebar, 'lg:w-16': !sidebar
          }">
     <div class="flex h-14 items-center gap-2 px-4 font-semibold {{ _side_logo_text }}">
-      <span class="text-lg">⌘</span>
-      <span x-show="sidebar" x-cloak>Mission Control</span>
+      {% if brand.logo %}<img src="{{ brand.logo }}" alt="" class="h-6 w-auto">{% else %}<span class="text-lg">⌘</span>{% endif %}
+      <span x-show="sidebar" x-cloak>{{ "Mission Control" if brand.is_default else brand.name }}</span>
     </div>
     {# Accordion nav: click a section header to open it; opening one closes the
        rest. The section containing the current page is open on load. In the

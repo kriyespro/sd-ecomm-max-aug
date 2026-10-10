@@ -99,8 +99,12 @@ def _host_is_known(host: str) -> bool:
     platform = getattr(settings, "PLATFORM_HOSTS", ()) or ()
     if host in platform:
         return True
-    base = getattr(settings, "PLATFORM_BASE_DOMAIN", "") or ""
-    if base and (host == base or host.endswith("." + base)):
+    from .brand import platform_domains
+
+    bases = set(platform_domains())
+    bases.add(getattr(settings, "PLATFORM_BASE_DOMAIN", "") or "")
+    bases.discard("")
+    if any(host == b or host.endswith("." + b) for b in bases):
         return True
     from .store_resolver import binding_for_host
 
