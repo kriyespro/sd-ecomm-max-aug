@@ -432,6 +432,43 @@ class StorefrontPickerRenderTests(TestCase):
         variant = self.product.variants.get(name="S / Black")
         self.assertIn(variant.images.get().image.url, body)
 
+    def test_buy_button_not_hidden_when_stock_tracking_is_off(self):
+        """Regression: "Enforce stock limits" is off by default and the
+        admin copy promises shoppers can always buy — a combo's Stock field
+        then defaults to 0 and is just a note to the seller, never a real
+        limit. The storefront used to read that raw 0 as "out of stock"
+        and hide Buy now / dim Add to bag regardless of the toggle."""
+        self.assertFalse(self.product.track_variant_stock)
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        self.assertIn('trackStock: false', body)
+        self.assertIn('this.trackStock ? this.cur.stock : null', body)
+
+    def test_buy_button_respects_stock_once_tracking_is_on(self):
+        self.product.track_variant_stock = True
+        self.product.save(update_fields=["track_variant_stock"])
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        self.assertIn('trackStock: true', body)
+
+    def test_shop_listing_card_falls_back_to_a_variants_own_photo_too(self):
+        """Same gap as the product page, on the listing/catalog grid: a
+        product with only combo photos (none of its own) used to show a
+        bare placeholder card."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        apply_size_color(
+            self.product, sizes=["S"], colors=["Black"],
+            images={combo_key("S", "Black"): [SimpleUploadedFile(
+                "s-black.png", _png_bytes(), content_type="image/png",
+            )]},
+        )
+        self.assertFalse(self.product.images.exists())
+        resp = self.client.get("/shop/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        variant = self.product.variants.get(name="S / Black")
+        self.assertIn(variant.image.url, body)
+
     def test_price_updates_with_the_selected_size_not_frozen_at_render_time(self):
         """Regression: the price shown was always the product's own price,
         server-baked once at render time — picking a size with its own

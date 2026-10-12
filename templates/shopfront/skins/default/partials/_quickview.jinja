@@ -1,4 +1,8 @@
 {% set imgs = product.images.all() | list %}
+{# Same fallback as the product page / listing card: a product with only
+   combo photos (none of its own) shows the first one it finds instead of
+   a bare placeholder. #}
+{% set fallback_url = none if imgs else (product.variants.all() | selectattr('is_active') | selectattr('image') | map(attribute='image.url') | first) %}
 <button @click="quickOpen=false" class="absolute right-4 top-4 z-10 text-mute hover:text-ink">✕</button>
 <div class="grid sm:grid-cols-2"
      x-data='{
@@ -11,7 +15,7 @@
        fmt(n) { return "₹" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
      }'>
   <div class="aspect-square bg-line/40 sm:aspect-auto">
-    <img src="{{ (imgs[0].renditions.get('1024') or imgs[0].image.url) if imgs else placeholder(1000, 1250, 'Product photo') }}" alt="{{ product.title }}"
+    <img src="{{ (imgs[0].renditions.get('1024') or imgs[0].image.url) if imgs else (fallback_url or placeholder(1000, 1250, 'Product photo')) }}" alt="{{ product.title }}"
          {% if imgs and imgs[0].srcset %}srcset="{{ imgs[0].srcset }}" sizes="(min-width:640px) 40vw, 100vw"{% endif %}
          decoding="async" class="h-full w-full object-cover">
   </div>
