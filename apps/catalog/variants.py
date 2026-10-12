@@ -402,6 +402,7 @@ def storefront_axes(variants):
         stock = tracked_stock[v.pk] if v.pk in tracked_stock else (v.stock or 0)
         base_price = v.price if v.price is not None else v.product.price
         on_sale = v.sale_price is not None and v.sale_price < base_price
+        gallery = [im.image.url for im in v.images.all()]
         vmap[combo_key(s, c)] = {
             "pk": v.pk,
             "price": str(base_price),
@@ -409,6 +410,10 @@ def storefront_axes(variants):
             "in_stock": stock > 0,
             "stock": stock,
             "image": v.image.url if v.image else None,
+            # Every photo in this combo's own gallery — the product page swaps
+            # its whole image strip to these the moment the combo is picked,
+            # not just the one cover shot "image" above.
+            "images": gallery,
         }
 
     if not any_axis:
