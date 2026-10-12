@@ -121,7 +121,7 @@ class ComboImageTests(TestCase):
     def test_uploaded_combo_image_is_saved_on_the_variant(self):
         apply_size_color(
             self.product, sizes=[], colors=["Red", "Blue"],
-            images={combo_key("", "Red"): self._upload()},
+            images={combo_key("", "Red"): [self._upload()]},
         )
         red = self.product.variants.get(name="Red")
         blue = self.product.variants.get(name="Blue")
@@ -131,7 +131,7 @@ class ComboImageTests(TestCase):
     def test_resave_without_a_new_file_keeps_the_existing_image(self):
         apply_size_color(
             self.product, sizes=[], colors=["Red"],
-            images={combo_key("", "Red"): self._upload()},
+            images={combo_key("", "Red"): [self._upload()]},
         )
         first_name = self.product.variants.get(name="Red").image.name
 
@@ -146,7 +146,7 @@ class ComboImageTests(TestCase):
     def test_storefront_axes_reports_the_combo_image_url(self):
         apply_size_color(
             self.product, sizes=[], colors=["Red", "Blue"],
-            images={combo_key("", "Red"): self._upload()},
+            images={combo_key("", "Red"): [self._upload()]},
         )
         axes = storefront_axes(self.product.variants.filter(is_active=True))
         self.assertIsNotNone(axes["map"][combo_key("", "Red")]["image"])
@@ -155,7 +155,7 @@ class ComboImageTests(TestCase):
     def test_size_color_of_reports_the_combo_image_url_for_prefill(self):
         apply_size_color(
             self.product, sizes=[], colors=["Red"],
-            images={combo_key("", "Red"): self._upload()},
+            images={combo_key("", "Red"): [self._upload()]},
         )
         _, _, rows = size_color_of(self.product)
         self.assertTrue(rows[combo_key("", "Red")]["image_url"])
@@ -399,9 +399,9 @@ class StorefrontPickerRenderTests(TestCase):
 
         apply_size_color(
             self.product, sizes=["S", "M"], colors=["Black", "White"],
-            images={combo_key("S", "Black"): SimpleUploadedFile(
+            images={combo_key("S", "Black"): [SimpleUploadedFile(
                 "s-black.png", _png_bytes(), content_type="image/png",
-            )},
+            )]},
         )
         resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
         body = resp.content.decode()

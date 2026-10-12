@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 
-from apps.catalog.models import Attribute, AttributeValue, ProductKind, Variant
+from apps.catalog.models import Attribute, AttributeValue, ProductKind, Variant, VariantImage
 
 SIZE = "Size"
 COLOR = "Color"
@@ -50,17 +50,50 @@ def _dec(val):
 
 
 def images_from_files(files):
-    """Pull ``combo_image[key]`` uploads out of a submitted product form's
+    """Pull ``combo_images[key]`` uploads out of a submitted product form's
     ``request.FILES`` — same key shape as ``matrix_from_post``'s combo_*
-    fields, one optional photo per Size/Colour combo."""
+    fields, any number of photos per Size/Colour combo (used for a brand
+    new combo that has no ``Variant`` row — hence no pk — to upload
+    against yet; a saved combo instead gets its own AJAX gallery
+    uploader, see ``attach_variant_images``)."""
     out = {}
-    prefix = "combo_image["
+    prefix = "combo_images["
     for name in files:
         if name.startswith(prefix) and name.endswith("]"):
-            f = files.get(name)
-            if f:
-                out[name[len(prefix):-1]] = f
+            fs = files.getlist(name)
+            if fs:
+                out[name[len(prefix):-1]] = fs
     return out
+
+
+def attach_variant_images(variant, files):
+    """Append uploaded files to a variant's gallery, then keep
+    ``Variant.image`` — the denormalised cover everything else (storefront
+    swap, prefill thumbnail) reads — pointed at the primary shot.
+    Returns the created ``VariantImage`` rows."""
+    if not files:
+        return []
+    start = variant.images.order_by("-order").values_list("order", flat=True).first() or 0
+    has_primary = variant.images.filter(is_primary=True).exists()
+    created = []
+    for i, f in enumerate(files):
+        created.append(VariantImage.objects.create(
+            variant=variant, image=f,
+            order=start + i + 1, is_primary=(not has_primary and i == 0),
+        ))
+    sync_variant_cover(variant)
+    return created
+
+
+def sync_variant_cover(variant):
+    """Point ``Variant.image`` at the gallery's primary shot (or clear it
+    when the gallery is empty) — the single field legacy/storefront code
+    still reads."""
+    primary = variant.images.order_by("-is_primary", "order", "id").first()
+    name = primary.image.name if primary else ""
+    if variant.image.name != name:
+        variant.image.name = name
+        variant.save(update_fields=["image"])
 
 
 def _int(val):
@@ -157,10 +190,11 @@ def apply_size_color(product, *, sizes, colors, matrix=None, images=None):
 
     ``matrix`` maps ``combo_key(size, color)`` -> ``{"price", "sale_price",
     "stock"}`` (any missing / blank -> inherit product price, stock 0).
-    ``images`` maps ``combo_key(size, color)`` -> an uploaded file for that
-    combo's own photo — optional, and only replaces a variant's existing
-    image when a new file is actually posted for it (a blank file input on
-    re-save leaves whatever photo was already there alone).
+    ``images`` maps ``combo_key(size, color)`` -> a list of uploaded files to
+    *add* to that combo's gallery — optional, and additive (an empty/missing
+    list on re-save leaves whatever photos were already there alone; this is
+    only the new-combo path, since it runs before the row has a pk to attach
+    to any other way — a saved combo instead gets its own AJAX uploader).
     Returns ``(created, updated, deactivated)`` counts.
     """
     matrix = matrix or {}
@@ -213,13 +247,13 @@ def apply_size_color(product, *, sizes, colors, matrix=None, images=None):
         sale = _dec(row.get("sale_price"))
         stock = _int(row.get("stock"))
         label = " / ".join(x for x in (s, c) if x)
-        img_file = images.get(combo_key(s, c))
+        img_files = images.get(combo_key(s, c))
 
         v = by_sig.get(sig)
         if v is None:
             v = Variant.objects.create(
                 product=product, name=label, price=price, sale_price=sale,
-                stock=stock, is_active=True, image=img_file or None,
+                stock=stock, is_active=True,
             )
             v.attribute_values.set(pair)
             created += 1
@@ -227,15 +261,14 @@ def apply_size_color(product, *, sizes, colors, matrix=None, images=None):
             v.name, v.price, v.sale_price, v.stock, v.is_active = (
                 label, price, sale, stock, True,
             )
-            update_fields = ["name", "price", "sale_price", "stock", "is_active"]
-            if img_file:
-                v.image = img_file
-                update_fields.append("image")
-            v.save(update_fields=update_fields)
+            v.save(update_fields=["name", "price", "sale_price", "stock", "is_active"])
             # keep any non-axis values, refresh the axis ones
             keep = [av for av in v.attribute_values.all() if av.id not in all_axis_ids]
             v.attribute_values.set(keep + pair)
             updated += 1
+
+        if img_files:
+            attach_variant_images(v, img_files)
 
     for v in existing:
         sig = axis_sig(v)
@@ -269,7 +302,7 @@ def size_color_of(product):
     seen_s, seen_c = set(), set()
 
     for v in product.variants.filter(is_active=True).prefetch_related(
-        "attribute_values__attribute"
+        "attribute_values__attribute", "images"
     ):
         s = c = ""
         for av in v.attribute_values.all():
@@ -285,11 +318,14 @@ def size_color_of(product):
         if c and c not in seen_c:
             seen_c.add(c)
             colors.append(c)
+        gallery = sorted(v.images.all(), key=lambda im: (not im.is_primary, im.order, im.id))
         rows[combo_key(s, c)] = {
             "price": "" if v.price is None else f"{v.price:.2f}",
             "sale_price": "" if v.sale_price is None else f"{v.sale_price:.2f}",
             "stock": str(v.stock or 0),
             "image_url": v.image.url if v.image else "",
+            "variant_id": v.pk,
+            "gallery": [{"pk": im.pk, "url": im.image.url} for im in gallery],
         }
     return sizes, colors, rows
 

@@ -22,7 +22,17 @@ from django.views.generic import (
 )
 
 from apps.catalog import importer as product_importer
-from apps.catalog.models import Brand, Product, ProductImage, ProductKind, ProductStatus, ProductType, Tag
+from apps.catalog.models import (
+    Brand,
+    Product,
+    ProductImage,
+    ProductKind,
+    ProductStatus,
+    ProductType,
+    Tag,
+    Variant,
+    VariantImage,
+)
 from apps.categories.models import Category
 from apps.core.events import Events, emit
 from apps.core.models import AuditLog
@@ -660,6 +670,58 @@ class ProductImageMoveView(_ProductImageBase):
         return self._render_panel(product)
 
 
+class _VariantImageBase(ActiveProjectMixin, View):
+    """Per-combo gallery uploader — only reachable once a Size/Colour combo
+    has actually been saved (and so has a ``Variant.pk`` to attach to). A
+    brand new, not-yet-saved combo instead rides along in the main product
+    form as a plain multi-file input (see ``_size_color.jinja``)."""
+
+    def get_variant(self):
+        variant = get_object_or_404(Variant, pk=self.kwargs["pk"])
+        if variant.product.project_id != self.active_project.pk:
+            raise Http404
+        return variant
+
+
+class VariantImageUploadView(_VariantImageBase):
+    def post(self, request, *args, **kwargs):
+        from apps.catalog.variants import attach_variant_images
+
+        variant = self.get_variant()
+        files = request.FILES.getlist("images")
+        created = attach_variant_images(variant, files)
+        if created:
+            record_audit(actor=request.user, project=self.active_project,
+                         action=AuditLog.Action.UPDATE, target=variant.product,
+                         changes={"variant_images_added": len(created), "variant": variant.pk},
+                         request=request)
+            return JsonResponse({
+                "ok": True,
+                "images": [{"pk": im.pk, "url": im.image.url} for im in created],
+            })
+        return JsonResponse({"ok": False, "error": "No file received."}, status=400)
+
+
+class VariantImageDeleteView(_VariantImageBase):
+    def post(self, request, *args, **kwargs):
+        from apps.catalog.variants import sync_variant_cover
+
+        variant = self.get_variant()
+        img = VariantImage.objects.filter(pk=kwargs["image_pk"], variant=variant).first()
+        if img is None:
+            return JsonResponse({"ok": False, "error": "Not found."}, status=404)
+        was_primary = img.is_primary
+        img.image.delete(save=False)
+        img.delete()
+        if was_primary:
+            nxt = variant.images.order_by("order", "id").first()
+            if nxt is not None:
+                nxt.is_primary = True
+                nxt.save(update_fields=["is_primary"])
+        sync_variant_cover(variant)
+        return JsonResponse({"ok": True})
+
+
 class ProductDuplicateView(_ScopedQuerysetMixin, View):
     """Clone a product (+ its tags, attribute values, variants and images) as a
     draft and open the copy for editing."""
@@ -668,7 +730,8 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
 
     def post(self, request, *args, **kwargs):
         from apps.billing import limits
-        from apps.catalog.models import ProductStatus, Variant
+        from apps.catalog.models import ProductStatus
+        from apps.catalog.variants import sync_variant_cover
 
         src = get_object_or_404(self.get_queryset(), pk=self.kwargs["pk"])
         try:
@@ -699,9 +762,24 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
             new_v.pk = None
             new_v._state.adding = True
             new_v.sku = ""
+            new_v.image = None  # re-populated from its own cloned gallery below
             new_v.product = clone
             new_v.save()
             new_v.attribute_values.set(v.attribute_values.all())
+
+            for vimg in v.images.all():
+                if not vimg.image:
+                    continue
+                try:
+                    vimg.image.open("rb")
+                    data = vimg.image.read()
+                finally:
+                    vimg.image.close()
+                new_vimg = VariantImage(
+                    variant=new_v, order=vimg.order, is_primary=vimg.is_primary,
+                )
+                new_vimg.image.save(os.path.basename(vimg.image.name), ContentFile(data), save=True)
+            sync_variant_cover(new_v)
 
         for img in src.images.all():
             if not img.image:
