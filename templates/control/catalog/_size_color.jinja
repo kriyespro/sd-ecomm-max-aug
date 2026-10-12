@@ -5,9 +5,21 @@
    price[KEY] / combo_sale[KEY] / combo_stock[KEY] where KEY is "<size>|||
    <color>" — either list may be left blank for a one-axis product, which
    apps.catalog.variants already treats correctly (no code changes needed
-   there). Reconciled server-side by apps.catalog.variants. #}
+   there). Reconciled server-side by apps.catalog.variants.
+
+   Photo column: a combo that's already a saved Variant (has a pk — see
+   "variant_id" in sc_rows) gets its own AJAX gallery uploader with a
+   per-file progress bar, same feel as the product-level Images panel. A
+   combo just typed into the Sizes/Colours boxes has no Variant yet, so it
+   falls back to a plain multi-file input bundled into this same POST
+   (combo_images[KEY], apps.catalog.variants.images_from_files) — it gets
+   its own uploader the moment this form is saved and the combo becomes a
+   real row. #}
 <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200"
-     x-data='sizeColor({{ sc_rows|tojson }}, {{ sc_sizes|tojson }}, {{ sc_colors|tojson }})'>
+     x-data='sizeColor({{ sc_rows|tojson }}, {{ sc_sizes|tojson }}, {{ sc_colors|tojson }},
+                       {{ url("control:variant_image_upload", kwargs={"pk": 999999999})|tojson }},
+                       {{ url("control:variant_image_delete", kwargs={"pk": 999999999, "image_pk": 888888888})|tojson }},
+                       "{{ csrf_token }}")'>
   {% if jewellery_sizes %}
   <h2 class="text-sm font-semibold text-slate-700">Ring &amp; bangle size, and colour</h2>
   <p class="mt-1 text-xs text-slate-400">
@@ -86,13 +98,38 @@
                        placeholder="0">
               </td>
               <td class="py-2">
-                <div class="flex items-center gap-2">
-                  <template x-if="val(key(s, c), 'image_url')">
-                    <img :src="val(key(s, c), 'image_url')" class="h-9 w-9 rounded object-cover ring-1 ring-slate-200">
-                  </template>
-                  <input type="file" accept="image/*" :name="'combo_image[' + key(s, c) + ']'"
+                <template x-if="variantId(key(s, c))">
+                  <div class="flex flex-col gap-1">
+                    <div class="flex flex-wrap items-center gap-1">
+                      <template x-for="im in gallery(key(s, c))" :key="im.pk">
+                        <div class="group relative h-9 w-9 shrink-0">
+                          <img :src="im.url" class="h-9 w-9 rounded object-cover ring-1 ring-slate-200">
+                          <button type="button" title="Remove"
+                                  @click="removeImage(key(s, c), im.pk)"
+                                  class="absolute -right-1.5 -top-1.5 hidden h-4 w-4 rounded-full bg-red-600 text-[10px] leading-4 text-white group-hover:block">×</button>
+                        </div>
+                      </template>
+                      <label class="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded border border-dashed border-slate-300 text-slate-400 hover:border-slate-500 hover:text-slate-600"
+                             title="Add photo(s)">
+                        <span class="text-sm leading-none">+</span>
+                        <input type="file" accept="image/*" multiple class="sr-only"
+                               @change="uploadFiles(key(s, c), $event.target.files); $event.target.value = ''">
+                      </label>
+                    </div>
+                    <template x-for="row in queue(key(s, c))" :key="row.name">
+                      <div class="w-28 text-[10px]" :class="row.failed ? 'text-red-600' : 'text-slate-400'">
+                        <span x-text="row.failed ? (row.name + ' failed') : (row.name + ' ' + row.pct + '%')"></span>
+                        <div class="mt-0.5 h-1 overflow-hidden rounded bg-slate-100">
+                          <div class="h-full rounded bg-slate-900" :style="'width:' + row.pct + '%'"></div>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="!variantId(key(s, c))">
+                  <input type="file" accept="image/*" multiple :name="'combo_images[' + key(s, c) + ']'"
                          class="block w-28 text-xs text-slate-500 file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-xs file:text-slate-700 hover:file:bg-slate-200">
-                </div>
+                </template>
               </td>
             </tr>
           </template>
@@ -100,19 +137,25 @@
       </table>
       <p class="mt-2 text-xs text-slate-400" x-text="combos.length + ' variant' + (combos.length === 1 ? '' : 's')"></p>
       <p class="mt-1 text-xs text-slate-400">
-        Photo is optional per combo — leave blank to keep showing the product's own gallery.
-        On the storefront, picking that combo swaps in this photo automatically.
+        Photos are optional per combo — leave blank to keep showing the product's own gallery.
+        On the storefront, picking that combo swaps in its own photo automatically. A combo you
+        just typed in uploads its photos once you hit Save below; an already-saved combo uploads
+        them straight away.
       </p>
     </div>
   </template>
 </div>
 
 <script>
-function sizeColor(rows, sizes, colors) {
+function sizeColor(rows, sizes, colors, uploadTmpl, deleteTmpl, csrf) {
   return {
     rows: rows || {},
     sizes: sizes || '',
     colors: colors || '',
+    uploadTmpl: uploadTmpl,
+    deleteTmpl: deleteTmpl,
+    csrf: csrf,
+    uploading: {},
     _split(s) {
       return [...new Set((s || '').split(/[,\n]/).map(x => x.trim()).filter(Boolean))];
     },
@@ -128,6 +171,61 @@ function sizeColor(rows, sizes, colors) {
     key(s, c) { return s + '|||' + c; },
     label(s, c) { return [s, c].filter(Boolean).join(' / '); },
     val(k, f) { return (this.rows[k] && this.rows[k][f]) || ''; },
+    variantId(k) { return this.rows[k] && this.rows[k].variant_id; },
+    gallery(k) { return (this.rows[k] && this.rows[k].gallery) || []; },
+    queue(k) { return this.uploading[k] || []; },
+
+    uploadFiles(k, files) {
+      const vid = this.variantId(k);
+      if (!vid || !files || !files.length) return;
+      Array.prototype.slice.call(files).forEach((file) => this._uploadOne(k, vid, file));
+    },
+
+    _uploadOne(k, vid, file) {
+      if (!this.uploading[k]) this.uploading[k] = [];
+      const row = { name: file.name, pct: 0, failed: false };
+      this.uploading[k].push(row);
+
+      const fd = new FormData();
+      fd.append('images', file);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', this.uploadTmpl.replace('999999999', vid));
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+      xhr.setRequestHeader('X-CSRFToken', this.csrf);
+      xhr.upload.onprogress = (e) => {
+        if (!e.lengthComputable) return;
+        row.pct = Math.round((e.loaded / e.total) * 100);
+      };
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          this.uploading[k] = this.uploading[k].filter((r) => r !== row);
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.ok && data.images) {
+              if (!this.rows[k]) this.rows[k] = {};
+              this.rows[k].gallery = (this.rows[k].gallery || []).concat(data.images);
+            }
+          } catch (e) { /* ignore malformed response, row already cleared */ }
+        } else {
+          row.failed = true;
+        }
+      };
+      xhr.onerror = () => { row.failed = true; };
+      xhr.send(fd);
+    },
+
+    removeImage(k, imagePk) {
+      const vid = this.variantId(k);
+      if (!vid) return;
+      fetch(this.deleteTmpl.replace('999999999', vid).replace('888888888', imagePk), {
+        method: 'POST',
+        headers: { 'X-CSRFToken': this.csrf, 'X-Requested-With': 'XMLHttpRequest' },
+      }).then(() => {
+        if (this.rows[k] && this.rows[k].gallery) {
+          this.rows[k].gallery = this.rows[k].gallery.filter((im) => im.pk !== imagePk);
+        }
+      });
+    },
   };
 }
 </script>

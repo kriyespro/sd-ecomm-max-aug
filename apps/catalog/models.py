@@ -365,3 +365,28 @@ class Variant(TimeStampedModel):
         if self.sale_price is not None and self.sale_price < base:
             return self.sale_price
         return base
+
+
+class VariantImage(TimeStampedModel):
+    """One Size/Colour combo's own photo gallery — a combo can carry several
+    shots (front/back/detail), same idea as ``ProductImage`` but scoped to a
+    single ``Variant``. ``Variant.image`` is kept as a denormalised "cover"
+    (always the primary gallery shot) so the storefront swap picker and any
+    existing reader of that field keep working unchanged."""
+
+    variant = models.ForeignKey(Variant, on_delete=models.CASCADE, related_name="images")
+    image = models.ImageField(upload_to="variants/gallery/")
+    order = models.PositiveIntegerField(default=0)
+    is_primary = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-is_primary", "order", "id"]
+
+    def __str__(self):
+        return f"VariantImage<{self.variant_id}>"
+
+    def save(self, *args, **kwargs):
+        from apps.media.services import shrink_image_field
+
+        shrink_image_field(self.image, target_kb=60, max_edge=800)
+        super().save(*args, **kwargs)

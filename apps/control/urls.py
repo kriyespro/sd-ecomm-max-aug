@@ -136,6 +136,8 @@ urlpatterns = [
     path("products/<int:pk>/images/<int:image_pk>/primary/", cat.ProductImagePrimaryView.as_view(), name="product_image_primary"),
     path("products/<int:pk>/images/<int:image_pk>/delete/", cat.ProductImageDeleteView.as_view(), name="product_image_delete"),
     path("products/<int:pk>/images/<int:image_pk>/move/<str:dir>/", cat.ProductImageMoveView.as_view(), name="product_image_move"),
+    path("variants/<int:pk>/images/upload/", cat.VariantImageUploadView.as_view(), name="variant_image_upload"),
+    path("variants/<int:pk>/images/<int:image_pk>/delete/", cat.VariantImageDeleteView.as_view(), name="variant_image_delete"),
 
     # Jewellery / gemstone certificates
     path("certificates/", certv.CertificateListView.as_view(), name="certificates"),
