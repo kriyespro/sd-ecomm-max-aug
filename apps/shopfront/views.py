@@ -242,7 +242,7 @@ class ProductView(View):
         project = current_project(request)
         product = get_object_or_404(
             Product.objects.select_related("brand", "category").prefetch_related(
-                "images", "variants__attribute_values__attribute"
+                "images", "variants__attribute_values__attribute", "variants__images"
             ),
             project=project, slug=slug, status="active",
         )
@@ -287,12 +287,27 @@ class ProductView(View):
         breakdown, review_total = _rating_breakdown(reviews_qs)
 
         active_variants = [v for v in product.variants.all() if v.is_active]
+
+        # The product itself may carry no photos of its own (seller only
+        # shot each Size/Colour combo) — fall back to the first combo that
+        # has any, so the page never shows a bare placeholder when real
+        # photos exist, just under the wrong owner.
+        own_images = list(product.images.all())
+        fallback_gallery = []
+        if not own_images:
+            for v in active_variants:
+                gallery = [im.image.url for im in v.images.all()]
+                if gallery:
+                    fallback_gallery = gallery
+                    break
+
         ctx = base_context(
             request, project,
             product=product,
             # reuse the prefetched variants instead of re-querying
             variants=active_variants,
             variant_options=variant_axes(active_variants),
+            fallback_gallery=fallback_gallery,
             reviews=reviews_qs,
             rating_breakdown=breakdown,
             review_total=review_total,
@@ -312,10 +327,11 @@ class ProductView(View):
         if product.category_id:
             _crumbs.append((product.category.name, f"/c/{product.category.slug}/"))
         _crumbs.append((product.title, f"/p/{product.slug}/"))
+        _seo_image = own_images[0].image.url if own_images else (fallback_gallery[0] if fallback_gallery else "")
         request._seo = {
             "type": "product", "obj": product, "crumbs": _crumbs,
             "available": ctx.get("available"),
-            "image": (product.images.all()[0].image.url if product.images.all() else ""),
+            "image": _seo_image,
         }
         return render(request, "shopfront/product.jinja", ctx)
 

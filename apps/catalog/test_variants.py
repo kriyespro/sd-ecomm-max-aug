@@ -405,12 +405,32 @@ class StorefrontPickerRenderTests(TestCase):
         )
         resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
         body = resp.content.decode()
-        # The combo's own photo url reaches the same `map` the price reads...
-        self.assertIn('"image":', body)
-        # ...and an overlay <img> bound to the selected combo's photo swaps
-        # in over the product's own gallery.
-        self.assertIn('x-show="cur && cur.image"', body)
-        self.assertIn(':src="cur && cur.image"', body)
+        # The combo's own gallery urls reach the same `map` the price reads...
+        self.assertIn('"images":', body)
+        # ...and the gallery getter swaps the whole image strip to the
+        # selected combo's own photos over the product's own gallery.
+        self.assertIn('get urls()', body)
+        self.assertIn('this.cur.images', body)
+
+    def test_falls_back_to_a_variants_own_photo_when_product_has_none(self):
+        """Regression: a seller who only ever shot each Size/Colour combo
+        (never the product itself) used to get a bare placeholder — the
+        product's own (empty) gallery was the only thing rendered. The page
+        must fall back to the first combo that has a photo."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        apply_size_color(
+            self.product, sizes=["S", "M"], colors=["Black", "White"],
+            images={combo_key("S", "Black"): [SimpleUploadedFile(
+                "s-black.png", _png_bytes(), content_type="image/png",
+            )]},
+        )
+        self.assertFalse(self.product.images.exists())
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        self.assertIn('fallbackImages: [', body)
+        variant = self.product.variants.get(name="S / Black")
+        self.assertIn(variant.images.get().image.url, body)
 
     def test_price_updates_with_the_selected_size_not_frozen_at_render_time(self):
         """Regression: the price shown was always the product's own price,
