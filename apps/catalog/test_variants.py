@@ -373,6 +373,38 @@ class StorefrontPickerRenderTests(TestCase):
         self.assertIn('sel["Size"] = "S"', body)  # axis button
         self.assertIn(combo_key("M", "White"), body)  # variant map key
 
+    def test_gallery_x_data_attribute_is_never_split_by_a_stray_apostrophe(self):
+        """Regression: the gallery's `x-data` is a JS object embedded in a
+        single-quoted HTML attribute. A literal "'" anywhere inside it
+        (even inside a JS // comment someone adds later) closes the
+        attribute early and dumps the rest of the object as raw page
+        text — which is exactly what happened once (a comment said
+        "the product's own photos"). Parse the real HTML (not just grep
+        the raw string) and check the x-data attribute value actually
+        contains the getters declared near the end of the object, proving
+        the browser's own parser would see one unbroken attribute."""
+        from html.parser import HTMLParser
+
+        apply_size_color(
+            self.product, sizes=["S"], colors=["Black"],
+            images={combo_key("S", "Black"): []},
+        )
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+
+        found = {}
+
+        class _Grab(HTMLParser):
+            def handle_starttag(self, tag, attrs):
+                for name, value in attrs:
+                    if name == "x-data" and value and "baseImages" in value:
+                        found["x_data"] = value
+
+        _Grab().feed(body)
+        self.assertIn("x_data", found, "no <div x-data='{...}'> found by a real HTML parser")
+        self.assertIn("get displayPrice()", found["x_data"])
+        self.assertIn("get comboImages()", found["x_data"])
+
     def test_stock_badge_and_add_to_bag_share_the_pickers_selection_state(self):
         """Regression: the top stock badge and the Add-to-bag button used to
         be computed once server-side from an aggregate across every variant,
