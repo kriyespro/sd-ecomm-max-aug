@@ -1,13 +1,29 @@
 {# product card — expects `p` (Product) #}
 {% set img = (p.images.all() | first) %}
+{# A product with no photos of its own (only Size/Colour combo photos
+   uploaded) falls back to the first combo that has one, same rule as the
+   product detail page — otherwise the card shows a bare placeholder even
+   though real photos exist, just under a variant instead of the product. #}
+{% set fallback_url = none %}
+{% if not img %}
+  {% set fallback_url = (p.variants.all() | selectattr('is_active') | selectattr('image') | map(attribute='image.url') | first) %}
+{% endif %}
 <article{{ ed_product(p) }} class="group relative">
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden bg-white">
     <div class="aspect-[4/5] overflow-hidden bg-line/40">
-      <img src="{{ (img.image if img else none) | media_src(1000, 1250, 'Product photo') }}"
-           {% if img and img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
-           {% if img and img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
-           alt="{{ (img.alt if img else '') or p.title }}" loading="lazy" decoding="async"
+      {% if img %}
+      <img src="{{ img.image | media_src(1000, 1250, 'Product photo') }}"
+           {% if img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
+           {% if img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
+           alt="{{ img.alt or p.title }}" loading="lazy" decoding="async"
            class="card-img h-full w-full object-cover">
+      {% elif fallback_url %}
+      <img src="{{ fallback_url }}" alt="{{ p.title }}" loading="lazy" decoding="async"
+           class="card-img h-full w-full object-cover">
+      {% else %}
+      <img src="{{ none | media_src(1000, 1250, 'Product photo') }}" alt="{{ p.title }}" loading="lazy" decoding="async"
+           class="card-img h-full w-full object-cover">
+      {% endif %}
     </div>
   </a>
 

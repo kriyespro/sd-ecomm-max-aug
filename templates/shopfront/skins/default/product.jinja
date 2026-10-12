@@ -12,6 +12,12 @@
        fallbackImages: [{% for u in fallback_gallery %}{{ u | tojson }}{{ "," if not loop.last }}{% endfor %}],
        lb: false,
        hasAxes: {{ "true" if (variant_options and variant_options.axes) else "false" }},
+       // "Enforce stock limits" is off by default for Size/Colour combos —
+       // the Stock column is then just the seller's own note, and shoppers
+       // can always buy (see _size_color.jinja) — so avail must stay
+       // unlimited (null) for an untracked combo instead of reading its
+       // raw, usually-never-filled-in stock number as "0 left".
+       trackStock: {{ "true" if product.track_variant_stock else "false" }},
        sel: { {% if variant_options and variant_options.axes %}{% for ax in variant_options.axes %}{{ ax.name | tojson }}: {{ ax.options[0] | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %} },
        map: {{ (variant_options.map if variant_options else {}) | tojson }},
        get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
@@ -28,7 +34,7 @@
        get total() { return this.urls.length; },
        next() { this.active = (this.active + 1) % this.total },
        prev() { this.active = (this.active - 1 + this.total) % this.total },
-       get avail() { return this.hasAxes ? (this.cur ? this.cur.stock : 0) : {{ available if available is not none else "null" }} },
+       get avail() { return this.hasAxes ? (this.cur ? (this.trackStock ? this.cur.stock : null) : 0) : {{ available if available is not none else "null" }} },
        get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
        get salePrice() { return this.cur ? (this.cur.sale_price !== null ? Number(this.cur.sale_price) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
        get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
