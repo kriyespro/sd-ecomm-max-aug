@@ -3,7 +3,7 @@ from decimal import Decimal
 from django.core.cache import cache
 from django.test import TestCase, override_settings
 
-from apps.catalog.models import Attribute, Product, ProductKind, Variant
+from apps.catalog.models import Attribute, Product, ProductImage, ProductKind, Variant
 from apps.catalog.variants import (
     apply_size_color,
     combo_key,
@@ -416,7 +416,9 @@ class StorefrontPickerRenderTests(TestCase):
         """Regression: a seller who only ever shot each Size/Colour combo
         (never the product itself) used to get a bare placeholder — the
         product's own (empty) gallery was the only thing rendered. The page
-        must fall back to the first combo that has a photo."""
+        must fall back to the first combo that has a photo, as a real
+        server-rendered <img> — not something only a working Alpine
+        script would ever draw."""
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         apply_size_color(
@@ -428,9 +430,26 @@ class StorefrontPickerRenderTests(TestCase):
         self.assertFalse(self.product.images.exists())
         resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
         body = resp.content.decode()
-        self.assertIn('fallbackImages: [', body)
+        self.assertIn('baseImages: [', body)
         variant = self.product.variants.get(name="S / Black")
-        self.assertIn(variant.images.get().image.url, body)
+        url = variant.images.get().image.url
+        self.assertIn(url, body)
+        self.assertIn(f'<img src="{url}"', body)
+
+    def test_products_own_photos_render_as_real_img_tags_not_js_only(self):
+        """The ordinary, most common case: a product with its own photos
+        (whether or not it also has Size/Colour combos). They must be real
+        <img> tags in the page source — not something that only appears if
+        a client-side script happens to run without error."""
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        img = ProductImage.objects.create(
+            product=self.product, is_primary=True,
+            image=SimpleUploadedFile("own.png", _png_bytes(), content_type="image/png"),
+        )
+        resp = self.client.get(f"/p/{self.product.slug}/", HTTP_HOST="shop.rack.test")
+        body = resp.content.decode()
+        self.assertIn(f'<img src="{img.image.url}"', body)
 
     def test_buy_button_not_hidden_when_stock_tracking_is_off(self):
         """Regression: "Enforce stock limits" is off by default and the
