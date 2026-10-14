@@ -13,35 +13,52 @@
   {'icon': '✦', 'title': 'Skin-safe plating', 'description': 'Tarnish resistant'},
 ] %}
 
-{# Portrait image, title + product count below, "Shop Now" pill revealed on
-   hover over a darkened overlay — matches the live theme's cat-block/cat-img/
-   cat-hover-overlay/cat-shop-btn (5-up desktop grid, not a square 8-up). #}
-{% macro category_row(heading='Shop by category', tiles=none, pad='py-6', title_key='categories', subtitle='Start with the piece that feels most like you.') %}
+{# Centred heading + a short gold underline rule + optional subtitle — the
+   live theme repeats this exact trio above every home-page section. #}
+{% macro section_heading(text, subtitle=none) %}
+<div class="mb-9 text-center">
+  <h2 class="{{ heading_classes('text-2xl sm:text-3xl', 'text-center') }} text-accent">{{ text }}</h2>
+  <span class="mx-auto mt-2 block h-[3px] w-10 rounded-full bg-gold"></span>
+  {% if subtitle %}<p class="mt-2.5 text-sm text-mute">{{ subtitle }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro view_all_btn(label, href) %}
+<div class="mt-9 text-center">
+  <a href="{{ href }}" class="inline-block rounded-full border border-accent px-7 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent hover:text-white">{{ label }}</a>
+</div>
+{% endmacro %}
+
+{# White card, portrait photo with a scalloped bottom edge, title + a short
+   gold underline below — matches the live theme's cat-block/cat-img card
+   (not a plain overlay-text tile). The "Shop Now" pill still reveals on
+   hover over the photo, same as the live cards' hover state. #}
+{% macro category_row(heading='Shop by category', tiles=none, pad='py-16', title_key='categories', subtitle='Start with the piece that feels most like you.') %}
 {% set rows = tiles if tiles is not none else cat_tiles %}
 {% if rows %}
 {% set overflow = rows|length > 10 %}
 <section class="mx-auto max-w-7xl px-5 {{ pad }} lg:px-8">
-  {% if show_category_headings %}
-  <div class="relative mb-5 {{ 'text-center' if heading_align == 'center' else '' }}">
-    <h2 class="{{ heading_classes() }} text-accent">{{ section_titles.get(title_key, heading) }}</h2>
-    {% if subtitle %}<p class="mt-1.5 text-sm text-mute">{{ subtitle }}</p>{% endif %}
-  </div>
-  {% endif %}
+  {% if show_category_headings %}{{ section_heading(section_titles.get(title_key, heading), subtitle) }}{% endif %}
   <div class="{% if overflow %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-4 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-3 sm:gap-5 sm:overflow-visible lg:grid-cols-5{% else %}grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-5 lg:grid-cols-5{% endif %}"
        {%- if overflow %} {{ auto_scroll_attrs(step=190) }}{% endif %}>
     {% for t in (rows if overflow else rows[:10]) %}
     <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"{{ ed_category(t.category) }}
-       class="group block {% if overflow %}w-36 shrink-0 snap-start sm:w-44{% elif category_mobile_slider %}w-[42%] shrink-0 snap-start sm:w-auto{% endif %}">
-      <div class="relative aspect-[4/5] w-full overflow-hidden rounded-xl bg-cream">
+       class="group block overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(28,26,26,.04),0_14px_30px_-22px_rgba(28,26,26,.25)] {% if overflow %}w-40 shrink-0 snap-start sm:w-48{% elif category_mobile_slider %}w-[45%] shrink-0 snap-start sm:w-auto{% endif %}">
+      <div class="relative aspect-[4/5] w-full overflow-hidden">
         <img src="{{ t.image | media_src(400, 500, 'Category') }}" alt="{{ t.category.name }}" width="400" height="500" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
         <div class="absolute inset-0 bg-accent/0 transition-colors duration-300 group-hover:bg-accent/30"></div>
         <span class="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-300 group-hover:opacity-100">
           <span class="rounded-full bg-white px-5 py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent">Shop Now</span>
         </span>
+        {# scalloped divider — a repeating row of punched-out half-circles
+           along the photo's bottom edge, into the white footer below #}
+        <div class="absolute inset-x-0 bottom-0 h-3 bg-white"
+             style="mask-image:radial-gradient(circle at 8px 4px,transparent 8px,#000 8.3px);mask-size:16px 16px;mask-repeat:repeat-x;mask-position:bottom left;-webkit-mask-image:radial-gradient(circle at 8px 4px,transparent 8px,#000 8.3px);-webkit-mask-size:16px 16px;-webkit-mask-repeat:repeat-x;-webkit-mask-position:bottom left;"></div>
       </div>
-      <p class="mt-2.5 text-center text-[13px] font-medium leading-tight text-ink group-hover:text-accent">{{ t.category.name }}</p>
-      {% set _count = t.category.products.filter(status='active').count() %}
-      <p class="text-center text-[11px] text-mute">{{ _count }} Product{{ 's' if _count != 1 }}</p>
+      <div class="px-3 py-3.5 text-center">
+        <p class="text-[13px] font-medium leading-tight text-ink group-hover:text-accent">{{ t.category.name }}</p>
+        <span class="mx-auto mt-1.5 block h-[2px] w-6 rounded-full bg-gold"></span>
+      </div>
     </a>
     {% endfor %}
   </div>
@@ -160,16 +177,14 @@
 </section>
 {% endif %}
 
-{# ============ TRUST STRIP ============ #}
-<div class="border-y border-line bg-cream">
-  <div class="mx-auto grid max-w-7xl grid-cols-2 sm:grid-cols-4">
+{# ============ TRUST STRIP — individual rounded cards, not an inline row ============ #}
+<div class="bg-cream py-12">
+  <div class="mx-auto grid max-w-7xl grid-cols-2 gap-3 px-5 sm:gap-4 lg:grid-cols-4 lg:px-8">
     {% for item in trust_strip %}
-    <div class="flex items-center gap-3 border-t border-line px-5 py-5 sm:border-t-0">
-      <span{{ ed('benefit', item, 'icon') }} class="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-gold/40 bg-gold/10 text-gold">{{- item.icon or '✦' -}}</span>
-      <div>
-        <p{{ ed('benefit', item, 'title') }} class="text-[12px] font-semibold leading-tight text-ink">{{- item.title -}}</p>
-        <p{{ ed('benefit', item, 'description') }} class="mt-0.5 text-[10px] uppercase tracking-luxe text-mute">{{- item.description -}}</p>
-      </div>
+    <div class="rounded-2xl bg-white p-5 text-center shadow-[0_1px_2px_rgba(28,26,26,.04),0_14px_30px_-22px_rgba(28,26,26,.2)]">
+      <span{{ ed('benefit', item, 'icon') }} class="mx-auto grid h-11 w-11 place-items-center rounded-full bg-accent-soft text-lg text-accent">{{- item.icon or '✦' -}}</span>
+      <p{{ ed('benefit', item, 'title') }} class="mt-3 text-[13px] font-semibold leading-tight text-ink">{{- item.title -}}</p>
+      <p{{ ed('benefit', item, 'description') }} class="mt-1 text-[11px] leading-snug text-mute">{{- item.description -}}</p>
     </div>
     {% endfor %}
   </div>
@@ -181,10 +196,8 @@
 
 {% macro _section_budget_bands() %}
 {% if budget_bands %}
-<section class="cv-auto mx-auto max-w-7xl px-5 pb-4 pt-10 lg:px-8">
-  <div class="mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-    <h2 class="flex-1 {{ heading_classes() }} text-accent">{{ section_titles.get('budget_bands', 'Shop by budget') }}</h2>
-  </div>
+<section class="cv-auto mx-auto max-w-7xl px-5 pb-4 pt-16 lg:px-8">
+  {{ section_heading(section_titles.get('budget_bands', 'Shop by budget')) }}
   <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
     {% for b in budget_bands[:5] %}
     <a href="{{ url('shopfront:shop') }}{{ ('?' ~ b.query) if b.query }}" class="group text-center">
@@ -204,17 +217,10 @@
 {% endmacro %}
 
 {% macro _section_featured() %}
-<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
-  <div class="relative mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-    <div class="{{ 'w-full' if heading_align == 'center' else 'flex-1' }}">
-      {% if not hide_featured_eyebrow %}
-      <p class="{{ align_class() }} text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ section_titles.get('featured_eyebrow', 'Best sellers') }}</p>
-      {% endif %}
-      <h2 class="mt-1 {{ heading_classes() }} text-accent">{{ section_titles.get('featured', 'Featured') }}</h2>
-    </div>
-    <a href="{{ url('shopfront:shop') }}" class="{{ 'sm:absolute sm:bottom-0 sm:right-0' if heading_align == 'center' }} text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
-  </div>
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-16 pb-6 lg:px-8">
+  {{ section_heading(section_titles.get('featured', 'New Arrivals - Easy to fall for'), section_titles.get('featured_sub', 'Meet the newest pieces waiting to become your next favourite.')) }}
   {{ product_slider(featured, ref='featuredSlider', gap='gap-x-4 sm:gap-x-5') }}
+  {{ view_all_btn('View Featured', url('shopfront:shop')) }}
 </section>
 {% endmacro %}
 
@@ -225,8 +231,8 @@
   {'icon': '✦', 'title': 'Made to be worn daily', 'description': 'Pieces that hold up to everyday wear.'},
 ] %}
 <section class="cv-auto bg-accent text-white">
-  <div class="mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
-    <h2 class="{{ heading_classes(default_align='text-center') }}">{{ section_titles.get('benefits', 'Why it works') }}</h2>
+  <div class="mx-auto max-w-7xl px-5 pt-16 pb-16 lg:px-8">
+    <h2 class="{{ heading_classes(default_align='text-center') }} text-center">{{ section_titles.get('benefits', 'Why it works') }}</h2>
     <div class="mx-auto mt-3 h-px w-16 bg-gold"></div>
     <div class="mt-12 grid gap-10 sm:grid-cols-3">
       {% for item in _benefits %}
@@ -243,12 +249,10 @@
 
 {% macro _section_new_arrivals() %}
 {% if new_arrivals %}
-<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
-  <div class="relative mb-9 flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
-    <h2 class="{{ 'w-full' if heading_align == 'center' else 'flex-1' }} {{ heading_classes() }} text-accent">{{ section_titles.get('new_arrivals', 'New arrivals') }}</h2>
-    <a href="{{ url('shopfront:shop') }}?sort=new" class="{{ 'sm:absolute sm:bottom-0 sm:right-0' if heading_align == 'center' }} text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">View all</a>
-  </div>
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-16 pb-6 lg:px-8">
+  {{ section_heading(section_titles.get('new_arrivals', 'New arrivals'), section_titles.get('new_arrivals_sub', 'Fresh in — before everyone else sees them.')) }}
   {{ product_slider(new_arrivals, ref='newArrivalsSlider', gap='gap-x-4 sm:gap-x-5') }}
+  {{ view_all_btn('View New Arrivals', url('shopfront:shop') ~ '?sort=new') }}
 </section>
 {% endif %}
 {% endmacro %}
@@ -256,8 +260,8 @@
 {% macro _section_testimonials() %}
 {% if testimonials %}
 <section class="cv-auto border-y border-line bg-cream">
-  <div class="mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
-    <h2 class="mb-10 {{ heading_classes(default_align='text-center') }} text-accent">{{ section_titles.get('testimonials', 'What people say') }}</h2>
+  <div class="mx-auto max-w-7xl px-5 pt-16 pb-16 lg:px-8">
+    {{ section_heading(section_titles.get('testimonials', 'What people say')) }}
     <div class="grid gap-6 md:grid-cols-3">
       {% for r in testimonials %}
       <figure class="rounded-2xl border border-line bg-white p-8 text-center shadow-[0_18px_44px_-24px_rgba(87,5,23,.25)]">
@@ -273,31 +277,41 @@
 {% endmacro %}
 
 {% macro _section_newsletter() %}
-<section class="cv-auto mx-auto max-w-3xl px-5 pt-10 pb-20 text-center lg:px-8">
-  <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ section_titles.get('newsletter_eyebrow', 'Join the inner circle') }}</p>
+<section class="cv-auto mx-auto max-w-3xl px-5 pt-16 pb-20 text-center lg:px-8">
+  <p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ section_titles.get('newsletter_eyebrow', 'Join the ' ~ store.name ~ ' Circle') }}</p>
   <h2 class="mt-3 {{ heading_classes('text-3xl sm:text-4xl', 'text-center') }} text-accent">{{ section_titles.get('newsletter', 'Get 10% off your first order') }}</h2>
-  <p class="mt-3 text-sm text-mute">New drops, restocks and members-only offers. No spam.</p>
+  <p class="mt-3 text-sm text-mute">New drops, styling inspiration and members-only offers — straight to your inbox.</p>
   <form class="mx-auto mt-8 flex max-w-md items-center overflow-hidden rounded-full border border-line pl-5"
         @submit.prevent="pushToast({msg:'Thanks — check your inbox', kind:'success'})">
-    <input required type="email" placeholder="Email address" class="w-full bg-transparent py-3 text-sm outline-none placeholder:text-mute">
-    <button class="shrink-0 rounded-full bg-accent px-6 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-gold hover:text-accent">Join</button>
+    <input required type="email" placeholder="Enter your email" class="w-full bg-transparent py-3 text-sm outline-none placeholder:text-mute">
+    <button class="shrink-0 rounded-full bg-accent px-6 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-gold hover:text-accent">Join the Circle</button>
   </form>
+  {% if store_profile and store_profile.social_links %}
+  <div class="mt-6 flex items-center justify-center gap-4">
+    {% for label, href in store_profile.social_links %}
+    <a href="{{ href }}" target="_blank" rel="noopener" aria-label="{{ label }}" title="{{ label }}" class="text-mute transition hover:text-accent">
+      <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        {% if label == 'Instagram' %}<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/>
+        {% elif label == 'Facebook' %}<path d="M14 8h2V5h-2a4 4 0 0 0-4 4v2H8v3h2v6h3v-6h2.5l.5-3H13V9a1 1 0 0 1 1-1z"/>
+        {% elif label == 'YouTube' %}<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>
+        {% else %}<path d="M4 4l16 16M20 4 4 20"/>
+        {% endif %}
+      </svg>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
 </section>
 {% endmacro %}
 
 {% macro _section_instagram() %}
 {% if instagram_items %}
-<section class="cv-auto mx-auto max-w-7xl px-5 pt-10 pb-16 lg:px-8">
-  <div class="mb-9 text-center">
-    <h2 class="{{ heading_classes() }} text-accent">{{ section_titles.get('instagram', 'From our Instagram') }}</h2>
-    {% if store_profile and store_profile.instagram_url %}
-    <a href="{{ store_profile.instagram_url }}" target="_blank" rel="noopener" class="mt-1 inline-block text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">Follow us</a>
-    {% endif %}
-  </div>
-  <div class="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:px-0"
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-16 pb-16 lg:px-8">
+  {{ section_heading(section_titles.get('instagram', 'From our Instagram')) }}
+  <div class="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-5 lg:gap-4 lg:overflow-visible lg:px-0"
        {{ auto_scroll_attrs(step=200, interval=2000) }}>
-    {% for it in instagram_items[:12] %}
-    <a href="{{ it.href or '#' }}" {{ 'target=_blank rel=noopener' if it.href }} class="group relative block aspect-square w-40 shrink-0 snap-start overflow-hidden rounded-xl bg-cream sm:w-48">
+    {% for it in instagram_items[:10] %}
+    <a href="{{ it.href or '#' }}" {{ 'target=_blank rel=noopener' if it.href }} class="group relative block aspect-square w-40 shrink-0 snap-start overflow-hidden rounded-xl bg-cream sm:w-48 lg:w-auto">
       <img src="{{ (it.image.url if it.image else '') | media_src(600, 600, 'Instagram') }}" alt="{{ it.caption }}" width="600" height="600" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
       <span class="absolute inset-0 grid place-items-center bg-accent/0 text-white opacity-0 transition group-hover:bg-accent/30 group-hover:opacity-100">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
@@ -305,6 +319,9 @@
     </a>
     {% endfor %}
   </div>
+  {% if store_profile and store_profile.instagram_url %}
+  {{ view_all_btn('Visit Instagram', store_profile.instagram_url) }}
+  {% endif %}
 </section>
 {% endif %}
 {% endmacro %}

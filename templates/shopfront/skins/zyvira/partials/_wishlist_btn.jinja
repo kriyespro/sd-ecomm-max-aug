@@ -1,0 +1,44 @@
+{# Zyvira wishlist toggle — three looks, chosen by the including page:
+   `wb_style == 'icon'` (product cards: a plain circle over the photo,
+   bottom-left) · `wb_style == 'pill'` (PDP action row, alongside Share) ·
+   else the plain labelled link (used nowhere in this skin currently, kept
+   as the safe default). The toggle view always re-renders this same file
+   and echoes back whichever `style` hidden field the clicked form sent, so
+   the button keeps its look across the htmx swap. #}
+{% set slug = wl_slug or product.slug %}
+{% if wb_style == 'icon' %}
+<form hx-post="{{ url('shopfront:wishlist_toggle') }}" hx-swap="outerHTML" class="inline-block">
+  <input type="hidden" name="product" value="{{ slug }}">
+  <input type="hidden" name="style" value="icon">
+  <button type="submit" title="{{ 'Sign in to save' if wl_need_login else ('Saved' if wl_active else 'Add to wishlist') }}"
+          class="grid h-9 w-9 place-items-center rounded-full border border-line bg-white/95 text-accent shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-white">
+    <svg class="h-4 w-4" fill="{{ 'currentColor' if wl_active else 'none' }}" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+      <path d="M12 21s-7-4.5-9.5-9C1 8.5 3 5 6.5 5 9 5 12 7.5 12 7.5S15 5 17.5 5C21 5 23 8.5 21.5 12 19 16.5 12 21 12 21Z"/>
+    </svg>
+  </button>
+</form>
+{% elif wb_style == 'pill' %}
+<form hx-post="{{ url('shopfront:wishlist_toggle') }}" hx-swap="outerHTML" class="block flex-1">
+  <input type="hidden" name="product" value="{{ slug }}">
+  <input type="hidden" name="style" value="pill">
+  <button type="submit"
+          class="flex w-full items-center justify-center gap-2 rounded-full border border-line bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:border-accent hover:text-accent">
+    <svg class="h-4 w-4" fill="{{ 'currentColor' if wl_active else 'none' }}" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
+      <path d="M12 21s-7-4.5-9.5-9C1 8.5 3 5 6.5 5 9 5 12 7.5 12 7.5S15 5 17.5 5C21 5 23 8.5 21.5 12 19 16.5 12 21 12 21Z"/>
+    </svg>
+    {% if wl_need_login %}Sign in{% elif wl_active %}Saved{% else %}Wishlist{% endif %}
+  </button>
+</form>
+{% else %}
+<form hx-post="{{ url('shopfront:wishlist_toggle') }}" hx-swap="outerHTML" class="inline">
+  <input type="hidden" name="product" value="{{ slug }}">
+  <button class="inline-flex items-center gap-2 text-[12px] font-medium text-mute hover:text-accent">
+    <svg class="h-4 w-4" fill="{{ 'currentColor' if wl_active else 'none' }}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+      <path d="M12 21s-7-4.5-9.5-9C1 8.5 3 5 6.5 5 9 5 12 7.5 12 7.5S15 5 17.5 5C21 5 23 8.5 21.5 12 19 16.5 12 21 12 21Z"/>
+    </svg>
+    {% if wl_need_login %}Sign in to save
+    {% elif wl_active %}Saved
+    {% else %}Save to wishlist{% endif %}
+  </button>
+</form>
+{% endif %}

@@ -26,13 +26,13 @@
      }'
      @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
 
-  <nav class="mb-6 break-words text-xs text-mute">
+  <nav class="mb-6 inline-block break-words rounded-full bg-cream px-4 py-2 text-xs text-mute">
     <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
-    <span class="mx-1">/</span>
+    <span class="mx-1">·</span>
     <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop</a>
-    {% if product.category %}<span class="mx-1">/</span>
+    {% if product.category %}<span class="mx-1">·</span>
     <a href="{{ url('shopfront:shop') }}?category={{ product.category.slug }}" class="hover:text-accent">{{ product.category.name }}</a>{% endif %}
-    <span class="mx-1">/</span><span class="text-ink">{{ product.title }}</span>
+    <span class="mx-1">·</span><span class="text-ink">{{ product.title }}</span>
   </nav>
 
   {# PRODUCT BANNER — placement "product" (or the "category" banner for this product's category) #}
@@ -105,8 +105,8 @@
       </div>
     </div>
 
-    {# ---------- BUY COLUMN ---------- #}
-    <div class="lg:sticky lg:top-28 lg:h-fit lg:pt-2">
+    {# ---------- BUY COLUMN — white bordered/shadow card ---------- #}
+    <div class="rounded-2xl border border-line bg-white p-6 shadow-[0_1px_2px_rgba(28,26,26,.04),0_20px_44px_-28px_rgba(28,26,26,.3)] lg:sticky lg:top-28 lg:h-fit">
       {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ product.brand.name }}</p>{% endif %}
       <h1 class="mt-2 break-words font-display text-3xl leading-tight text-ink sm:text-4xl">{{ product.title }}</h1>
 
@@ -156,16 +156,16 @@
             <button type="button" @click="q++" class="px-3.5 text-mute hover:text-accent">+</button>
           </div>
           <div class="flex flex-1 gap-3">
+            <button type="submit"
+                    class="htmx-hide flex-1 rounded-full py-3.5 text-[11px] font-semibold uppercase tracking-luxe transition-colors"
+                    :class="(avail !== null && avail <= 0) ? 'bg-stone-200 text-mute pointer-events-none' : 'bg-accent text-white hover:bg-gold hover:text-accent'">
+              <span x-text="(avail !== null && avail <= 0) ? 'Sold out' : 'Add to bag'"></span>
+            </button>
             <button type="submit" name="buy_now" value="1"
-                    class="htmx-hide flex-1 rounded-full border border-accent py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent hover:text-white"
+                    class="htmx-hide flex-1 rounded-full bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white transition-colors hover:bg-ink/85"
                     :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}"
                     x-show="!(avail !== null && avail <= 0)">
               Buy now
-            </button>
-            <button type="submit"
-                    class="htmx-hide flex-1 rounded-full bg-accent py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white transition-colors hover:bg-gold hover:text-accent"
-                    :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}">
-              <span x-text="(avail !== null && avail <= 0) ? 'Notify me' : 'Add to bag'"></span>
             </button>
           </div>
         </div>
@@ -176,7 +176,15 @@
       {% set wa_style = 'block' %}
       <div class="mt-3 [&_a]:rounded-full">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
 
-      <div class="mt-3">{% include "shopfront/partials/_wishlist_btn.jinja" %}</div>
+      <div class="mt-3 flex gap-2.5">
+        {% set wb_style = 'pill' %}
+        {% include "shopfront/partials/_wishlist_btn.jinja" %}
+        <button type="button" onclick="navigator.share ? navigator.share({title: document.title, url: location.href}) : (navigator.clipboard.writeText(location.href), $dispatch('toast', {msg:'Link copied', kind:'success'}))"
+                class="flex flex-1 items-center justify-center gap-2 rounded-full border border-line bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:border-accent hover:text-accent">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path stroke-linecap="round" d="m8.2 10.7 7.6-4.4M8.2 13.3l7.6 4.4"/></svg>
+          Share
+        </button>
+      </div>
 
       {% if delivery %}
       <div class="mt-5 rounded-xl border border-line bg-cream px-4 py-3 text-sm">
@@ -188,12 +196,18 @@
       </div>
       {% endif %}
 
-      {# trust strip #}
-      <div class="mt-5 grid grid-cols-2 gap-3 text-xs text-mute sm:grid-cols-4">
-        {% for t in ['Free returns','Secure checkout','COD available','Skin-safe plating'] %}
-        <div class="flex items-center gap-1.5">
-          <svg class="h-3.5 w-3.5 shrink-0 text-gold" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="m5 13 4 4L19 7"/></svg>
-          {{ t }}
+      {# trust row — 3 cards #}
+      <div class="mt-5 grid grid-cols-3 gap-2.5 rounded-xl border border-line bg-cream p-3 text-center">
+        {% for icon, t in [
+          ('<path d="m5 13 4 4L19 7"/>', 'Quality Checked'),
+          ('<path stroke-linecap="round" d="M3 7h13M3 12h9M3 17h5"/><path d="M19 15l2 2-2 2M21 17H11"/>', '7-Day Returns'),
+          ('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', 'Secure Checkout'),
+        ] %}
+        <div>
+          <span class="mx-auto grid h-9 w-9 place-items-center rounded-full bg-white text-accent">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">{{ icon | safe }}</svg>
+          </span>
+          <p class="mt-1.5 text-[10px] font-medium leading-tight text-ink">{{ t }}</p>
         </div>
         {% endfor %}
       </div>
@@ -263,8 +277,8 @@
     </div>
     <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="flex shrink-0 gap-2">
       <input type="hidden" name="product" value="{{ product.slug }}">
-      <button type="submit" name="buy_now" value="1" class="rounded-full border border-accent px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-accent">Buy now</button>
       <button type="submit" class="rounded-full bg-accent px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white">Add to bag</button>
+      <button type="submit" name="buy_now" value="1" class="rounded-full bg-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white">Buy now</button>
     </form>
   </div>
 </div>

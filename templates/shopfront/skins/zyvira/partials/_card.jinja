@@ -1,9 +1,12 @@
-{# product card — expects `p` (Product). Rounded 10px photo, pill badges,
-   circular icon-only quick-add/quick-view on hover — matches Zyvira's
-   product-grid-list card language, including its hover photo-swap (img1/img2). #}
+{# product card — expects `p` (Product). Matches the live theme's
+   product-grid-list card: hover photo-swap, a discount-% badge top-left,
+   and a wishlist circle (bottom-left) + "Add to Bag" pill (bottom-right)
+   overlaid directly on the photo — not hover-only. Star row always shows,
+   even at 0 reviews, same as the live cards. #}
 {% set imgs = p.images.all() | list %}
 {% set img = imgs[0] if imgs else none %}
 {% set img2 = imgs[1] if imgs|length > 1 else none %}
+{% set _pct = ((1 - (p.current_price / p.price)) * 100) | round | int if (p.on_sale and p.price) else 0 %}
 <article{{ ed_product(p) }} class="group relative">
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden rounded-xl bg-cream">
     <div class="relative aspect-square overflow-hidden rounded-xl">
@@ -19,37 +22,33 @@
     </div>
   </a>
 
-  {% if p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-cream">Sale{% set _pct = ((1 - (p.current_price / p.price)) * 100) | round | int if p.price else 0 %}{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
+  {% if p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-cream">Sale{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
   {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">New</span>{% endif %}
 
-  <button hx-get="{{ url('shopfront:quickview', kwargs={'slug': p.slug}) }}" hx-target="#quickview-body" hx-swap="innerHTML"
-          @click="$dispatch('open-quick')" title="Quick view"
-          class="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-white/90 text-accent opacity-0 shadow-sm backdrop-blur transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-white">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-  </button>
-
-  <div class="absolute inset-x-3 bottom-[4.5rem] flex translate-y-2 gap-1.5 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
-    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="min-w-0 flex-1">
-      <input type="hidden" name="product" value="{{ p.slug }}">
-      <button class="w-full rounded-full bg-accent/95 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-white backdrop-blur hover:bg-gold hover:text-accent">
-        Add to bag
-      </button>
-    </form>
-    {% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}
+  {# wishlist — plain circle, bottom-left, always visible (matches the live cards) #}
+  <div class="absolute left-3 bottom-3">
+    {% set wl_slug = p.slug %}{% set wl_active = false %}{% set wb_style = 'icon' %}
+    {% include "shopfront/partials/_wishlist_btn.jinja" %}
   </div>
+
+  {# add to bag — pill, bottom-right, always visible #}
+  <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="absolute right-3 bottom-3">
+    <input type="hidden" name="product" value="{{ p.slug }}">
+    <button class="rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-white">
+      Add to Bag
+    </button>
+  </form>
 
   <div class="mt-3">
     <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block font-display text-lg leading-tight text-ink hover:text-accent">{{ p.title }}</a>
+    <p class="mt-0.5 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) if p.rating_count else '☆☆☆☆☆' }}<span class="text-mute"> ({{ p.rating_count or 0 }})</span></p>
     <p{{ ed_money(p) }} class="mt-1 text-sm">
       {% if p.on_sale %}
-      <span class="text-mute line-through">{{ p.price | money }}</span>
-      <span class="ml-1 font-semibold text-accent">{{ p.current_price | money }}</span>
+      <span class="font-semibold text-accent">{{ p.current_price | money }}</span>
+      <span class="ml-1 text-mute line-through">{{ p.price | money }}</span>
       {% else %}
       <span class="font-semibold text-ink">{{ p.price | money }}</span>
       {% endif %}
     </p>
-    {% if p.rating_count %}
-    <p class="mt-0.5 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) }}<span class="text-mute"> ({{ p.rating_count }})</span></p>
-    {% endif %}
   </div>
 </article>
