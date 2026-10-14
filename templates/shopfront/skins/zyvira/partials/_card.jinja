@@ -1,20 +1,26 @@
 {# product card — expects `p` (Product). Rounded 10px photo, pill badges,
    circular icon-only quick-add/quick-view on hover — matches Zyvira's
-   product-grid-list card language. #}
-{% set img = (p.images.all() | first) %}
+   product-grid-list card language, including its hover photo-swap (img1/img2). #}
+{% set imgs = p.images.all() | list %}
+{% set img = imgs[0] if imgs else none %}
+{% set img2 = imgs[1] if imgs|length > 1 else none %}
 <article{{ ed_product(p) }} class="group relative">
   <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden rounded-xl bg-cream">
-    <div class="aspect-square overflow-hidden rounded-xl">
+    <div class="relative aspect-square overflow-hidden rounded-xl">
       <img src="{{ (img.image if img else none) | media_src(1000, 1000, 'Product photo') }}"
            {% if img and img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
            {% if img and img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
            alt="{{ (img.alt if img else '') or p.title }}" loading="lazy" decoding="async"
            class="card-img h-full w-full object-cover">
+      {% if img2 %}
+      <img src="{{ img2.image | media_src(1000, 1000, 'Product photo') }}" alt="" loading="lazy" decoding="async"
+           class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+      {% endif %}
     </div>
   </a>
 
-  {% if p.on_sale %}<span class="absolute left-3 top-3 rounded-full bg-accent px-3 py-1 text-[10px] font-semibold uppercase tracking-luxe text-white">Sale</span>
-  {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-full bg-gold px-3 py-1 text-[10px] font-semibold uppercase tracking-luxe text-accent">New</span>{% endif %}
+  {% if p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-cream">Sale{% set _pct = ((1 - (p.current_price / p.price)) * 100) | round | int if p.price else 0 %}{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
+  {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">New</span>{% endif %}
 
   <button hx-get="{{ url('shopfront:quickview', kwargs={'slug': p.slug}) }}" hx-target="#quickview-body" hx-swap="innerHTML"
           @click="$dispatch('open-quick')" title="Quick view"

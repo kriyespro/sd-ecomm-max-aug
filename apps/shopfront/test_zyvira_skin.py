@@ -34,6 +34,19 @@ class ZyviraSkinTests(TestCase):
         self.assertContains(resp, "Kumbh Sans")
         self.assertContains(resp, "zy-rule")
 
+    def test_home_category_tile_renders(self):
+        from apps.catalog.models import Product
+        from apps.categories.models import Category
+
+        cat = Category.objects.create(project=self.project, name="Rings", slug="rings")
+        Product.objects.create(
+            project=self.project, category=cat, title="Gold Ring", slug="gold-ring",
+            price=Decimal("1000"), status="active",
+        )
+        resp = self._get("/")
+        self.assertContains(resp, "Shop Now")
+        self.assertContains(resp, "1 Product")
+
     def test_shop_renders(self):
         resp = self._get("/shop/")
         self.assertEqual(resp.status_code, 200)
@@ -50,7 +63,7 @@ class ZyviraSkinTests(TestCase):
         )
         resp = self._get("/shop/")
         self.assertContains(resp, "Add to bag")
-        self.assertContains(resp, "Sale")
+        self.assertContains(resp, "Sale 25%")
 
     def test_product_page_renders(self):
         from apps.catalog.models import Product
@@ -65,3 +78,29 @@ class ZyviraSkinTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Add to bag")
         self.assertContains(resp, "Care instructions")
+
+    def test_card_shows_hover_second_photo(self):
+        from apps.catalog.models import Product
+        from apps.catalog.models import ProductImage
+        from apps.categories.models import Category
+
+        cat = Category.objects.create(project=self.project, name="Rings", slug="rings")
+        p = Product.objects.create(
+            project=self.project, category=cat, title="Gold Ring", slug="gold-ring",
+            price=Decimal("1000"), status="active",
+        )
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from PIL import Image
+        import io
+
+        def _png():
+            buf = io.BytesIO()
+            Image.new("RGB", (600, 600), (200, 150, 90)).save(buf, format="PNG")
+            return buf.getvalue()
+
+        for _ in range(2):
+            ProductImage.objects.create(
+                product=p, image=SimpleUploadedFile("p.png", _png(), content_type="image/png"),
+            )
+        resp = self._get("/shop/")
+        self.assertContains(resp, "group-hover:opacity-100")
