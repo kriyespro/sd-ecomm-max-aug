@@ -1,53 +1,77 @@
 {# product card — expects `p` (Product). Matches the live theme's
-   product-grid-list card: hover photo-swap, a discount-% badge top-left,
-   and a wishlist circle (bottom-left) + "Add to Bag" pill (bottom-right)
-   overlaid directly on the photo — not hover-only. Star row always shows,
-   even at 0 reviews, same as the live cards. #}
+   product-grid-list card: a white bordered/shadowed card (not a bare
+   image+caption), hover photo-swap, a badge top-left (Sale %/New/Sold out),
+   and a wishlist circle (bottom-left) + Add-to-Bag/Sold-out pill
+   (bottom-right) overlaid directly on the photo — not hover-only. Star row
+   always shows, even at 0 reviews, same as the live cards.
+
+   `stock_map` (optional, set by HomeView/ShopView — {product_id: available
+   qty} in one bulk query, see apps/shopfront/views.py `_stock_map`) drives
+   the Sold-out state without a per-card inventory query. A product absent
+   from the map has no inventory rows at all, i.e. untracked = always
+   available — same convention the PDP's `avail` uses. Included from a
+   context with no `stock_map` at all (e.g. a skin that hasn't wired it, or
+   PDP's related/recently-viewed rails) just never shows Sold out. #}
 {% set imgs = p.images.all() | list %}
 {% set img = imgs[0] if imgs else none %}
 {% set img2 = imgs[1] if imgs|length > 1 else none %}
 {% set _pct = ((1 - (p.current_price / p.price)) * 100) | round | int if (p.on_sale and p.price) else 0 %}
-<article{{ ed_product(p) }} class="group relative">
-  <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="block overflow-hidden rounded-xl bg-cream">
-    <div class="relative aspect-square overflow-hidden rounded-xl">
+{% set _avail = stock_map.get(p.id) if (stock_map is defined and stock_map) else none %}
+{% set _sold_out = _avail is not none and _avail <= 0 %}
+<article{{ ed_product(p) }} class="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(28,26,26,.04),0_16px_32px_-24px_rgba(28,26,26,.25)]">
+  {# image + overlays share this positioning box, but only the <img>s sit
+     inside the <a> — badge/wishlist/add-to-bag are its siblings (absolute,
+     same visual box) so a button/form is never nested inside the anchor,
+     which browsers handle inconsistently for clicks (invalid HTML: no
+     interactive content inside an <a>). #}
+  <div class="relative aspect-square overflow-hidden bg-cream">
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="absolute inset-0 block">
       <img src="{{ (img.image if img else none) | media_src(1000, 1000, 'Product photo') }}"
            {% if img and img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
            {% if img and img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
            alt="{{ (img.alt if img else '') or p.title }}" loading="lazy" decoding="async"
-           class="card-img h-full w-full object-cover">
+           class="card-img h-full w-full object-cover {{ 'opacity-70' if _sold_out }}">
       {% if img2 %}
       <img src="{{ img2.image | media_src(1000, 1000, 'Product photo') }}" alt="" loading="lazy" decoding="async"
            class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100">
       {% endif %}
+    </a>
+
+    {% if _sold_out %}<span class="absolute left-3 top-3 rounded-lg bg-ink px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">Sold out</span>
+    {% elif p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-cream">Sale{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
+    {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">New</span>{% endif %}
+
+    {# wishlist — plain circle, bottom-left, always visible #}
+    <div class="absolute left-3 bottom-3">
+      {% set wl_slug = p.slug %}{% set wl_active = false %}{% set wb_style = 'icon' %}
+      {% include "shopfront/partials/_wishlist_btn.jinja" %}
     </div>
-  </a>
 
-  {% if p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-cream">Sale{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
-  {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">New</span>{% endif %}
-
-  {# wishlist — plain circle, bottom-left, always visible (matches the live cards) #}
-  <div class="absolute left-3 bottom-3">
-    {% set wl_slug = p.slug %}{% set wl_active = false %}{% set wb_style = 'icon' %}
-    {% include "shopfront/partials/_wishlist_btn.jinja" %}
+    {# add to bag / sold out — pill, bottom-right, always visible #}
+    {% if _sold_out %}
+    <span class="absolute right-3 bottom-3 rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-mute shadow-sm backdrop-blur">Sold Out</span>
+    {% else %}
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="absolute right-3 bottom-3">
+      <input type="hidden" name="product" value="{{ p.slug }}">
+      <button class="rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-white">
+        Add to Bag
+      </button>
+    </form>
+    {% endif %}
   </div>
 
-  {# add to bag — pill, bottom-right, always visible #}
-  <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="absolute right-3 bottom-3">
-    <input type="hidden" name="product" value="{{ p.slug }}">
-    <button class="rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-white">
-      Add to Bag
-    </button>
-  </form>
-
-  <div class="mt-3">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block font-display text-lg leading-tight text-ink hover:text-accent">{{ p.title }}</a>
-    <p class="mt-0.5 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) if p.rating_count else '☆☆☆☆☆' }}<span class="text-mute"> ({{ p.rating_count or 0 }})</span></p>
-    <p{{ ed_money(p) }} class="mt-1 text-sm">
+  <div class="flex flex-1 flex-col p-3.5">
+    {# title — sans, semibold, 2-line clamp (not the serif display font;
+       that's for headings only, matches the live theme's plain bold
+       product-card titles) #}
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block line-clamp-2 text-[13px] font-semibold leading-snug text-ink hover:text-accent sm:text-sm">{{ p.title }}</a>
+    <p class="mt-1 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) if p.rating_count else '☆☆☆☆☆' }}<span class="text-mute"> ({{ p.rating_count or 0 }})</span></p>
+    <p{{ ed_money(p) }} class="mt-1.5 flex items-baseline gap-1.5">
       {% if p.on_sale %}
-      <span class="font-semibold text-accent">{{ p.current_price | money }}</span>
-      <span class="ml-1 text-mute line-through">{{ p.price | money }}</span>
+      <span class="text-lg font-bold text-accent">{{ p.current_price | money }}</span>
+      <span class="text-xs text-mute line-through">{{ p.price | money }}</span>
       {% else %}
-      <span class="font-semibold text-ink">{{ p.price | money }}</span>
+      <span class="text-lg font-bold text-ink">{{ p.price | money }}</span>
       {% endif %}
     </p>
   </div>

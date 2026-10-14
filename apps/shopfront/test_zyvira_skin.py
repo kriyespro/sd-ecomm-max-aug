@@ -119,6 +119,35 @@ class ZyviraSkinTests(TestCase):
         self.assertContains(resp, "Statement and stacking rings for every day.")
         self.assertContains(resp, "Acme Collection")
 
+    def test_card_shows_sold_out_when_stock_is_zero(self):
+        from apps.catalog.models import Product
+        from apps.categories.models import Category
+        from apps.inventory.models import InventoryItem, Warehouse
+
+        cat = Category.objects.create(project=self.project, name="Rings", slug="rings")
+        sold_out = Product.objects.create(
+            project=self.project, category=cat, title="Empty Ring", slug="empty-ring",
+            price=Decimal("1000"), status="active",
+        )
+        in_stock = Product.objects.create(
+            project=self.project, category=cat, title="Stocked Ring", slug="stocked-ring",
+            price=Decimal("1000"), status="active",
+        )
+        wh = Warehouse.objects.create(project=self.project, name="Main", is_default=True)
+        InventoryItem.objects.create(warehouse=wh, product=sold_out, quantity=0, reserved=0)
+        InventoryItem.objects.create(warehouse=wh, product=in_stock, quantity=5, reserved=0)
+        # in_stock has inventory tracked (and available); a third product
+        # with NO InventoryItem row at all should also read as available
+        # (untracked = always in stock, same convention as the PDP).
+        untracked = Product.objects.create(
+            project=self.project, category=cat, title="Untracked Ring", slug="untracked-ring",
+            price=Decimal("1000"), status="active",
+        )
+        resp = self._get("/shop/")
+        self.assertContains(resp, "Sold out")
+        self.assertContains(resp, "Sold Out")
+        self.assertContains(resp, "Add to Bag", count=2)  # in_stock + untracked
+
     def test_card_shows_hover_second_photo(self):
         from apps.catalog.models import Product
         from apps.catalog.models import ProductImage
