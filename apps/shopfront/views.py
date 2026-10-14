@@ -134,6 +134,7 @@ class HomeView(View):
             request, project,
             featured=featured, new_arrivals=new_arrivals,
             cat_tiles=tiles, cat_tiles_top=tiles_top, testimonials=testimonials,
+            stock_map=_stock_map(featured + new_arrivals),
         )
         request._seo = {"type": "home"}
         return render(request, "shopfront/home.jinja", ctx)
@@ -187,6 +188,7 @@ class ShopView(View):
             price_min=f.get("min", ""), price_max=f.get("max", ""),
             all_categories=Category.objects.filter(project=project, is_active=True),
             result_count=page.paginator.count,
+            stock_map=_stock_map(page.object_list),
         )
         if _htmx(request):
             return render(request, "shopfront/partials/_grid.jinja", ctx)
@@ -217,6 +219,26 @@ class CategoryView(ShopView):
 def _available(product):
     agg = product.inventory_items.aggregate(a=Sum(F("quantity") - F("reserved")))
     return agg["a"]
+
+
+def _stock_map(products):
+    """``{product_id: available_qty}`` for a list/queryset of products, in
+    one query — the bulk form of ``_available()`` for a card grid (so a
+    skin's card can show a cheap, N+1-free "Sold out" state instead of
+    hitting inventory per card). A product absent from the dict has no
+    ``InventoryItem`` rows at all, i.e. stock isn't tracked for it — same
+    "untracked = always available" convention as the PDP's ``avail``."""
+    from apps.inventory.models import InventoryItem
+
+    ids = [p.id for p in products]
+    if not ids:
+        return {}
+    rows = (
+        InventoryItem.objects.filter(product_id__in=ids)
+        .values("product_id")
+        .annotate(avail=Sum(F("quantity") - F("reserved")))
+    )
+    return {r["product_id"]: r["avail"] for r in rows}
 
 
 def _rating_breakdown(reviews_qs):
