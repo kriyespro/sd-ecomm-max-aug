@@ -46,6 +46,19 @@ SKIN_TITLES = {
         ("bestsellers", "Best sellers"),
         ("testimonials", "What our customers say"),
     ],
+    "zyvira": [
+        ("categories", "Shop by category"),
+        ("categories_top", "Browse the shop"),
+        ("budget_bands", "Shop by budget"),
+        ("featured_eyebrow", "Best sellers"),
+        ("featured", "Featured"),
+        ("benefits", "Why it works"),
+        ("new_arrivals", "New arrivals"),
+        ("testimonials", "What people say"),
+        ("newsletter_eyebrow", "Join the inner circle"),
+        ("newsletter", "Get 10% off your first order"),
+        ("instagram", "From our Instagram"),
+    ],
 }
 
 

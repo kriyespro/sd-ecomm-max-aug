@@ -52,6 +52,17 @@ SKIN_SECTIONS = {
         ("categories", "Shop by category"),
         ("new_arrivals", "New arrivals"),
     ],
+    "zyvira": [
+        ("categories", "Shop by category"),
+        ("budget_bands", "Shop by budget"),
+        ("promo", "Promo banner (first one — extra banners stay near the footer)"),
+        ("featured", "Featured"),
+        ("benefits", "Why it works"),
+        ("new_arrivals", "New arrivals"),
+        ("testimonials", "Testimonials"),
+        ("newsletter", "Newsletter"),
+        ("instagram", "Instagram feed"),
+    ],
 }
 
 
