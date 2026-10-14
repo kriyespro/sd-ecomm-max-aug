@@ -45,7 +45,7 @@ class ZyviraSkinTests(TestCase):
         )
         resp = self._get("/")
         self.assertContains(resp, "Shop Now")
-        self.assertContains(resp, "1 Product")
+        self.assertContains(resp, "Rings")
 
     def test_shop_renders(self):
         resp = self._get("/shop/")
@@ -62,7 +62,7 @@ class ZyviraSkinTests(TestCase):
             price=Decimal("1000"), sale_price=Decimal("750"), status="active",
         )
         resp = self._get("/shop/")
-        self.assertContains(resp, "Add to bag")
+        self.assertContains(resp, "Add to Bag")
         self.assertContains(resp, "Sale 25%")
 
     def test_product_page_renders(self):
@@ -78,6 +78,46 @@ class ZyviraSkinTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Add to bag")
         self.assertContains(resp, "Care instructions")
+
+    def test_header_is_transparent_overlay_only_on_home(self):
+        resp = self._get("/")
+        self.assertContains(resp, "home: true")
+        resp2 = self._get("/shop/")
+        self.assertContains(resp2, "home: false")
+
+    def test_wishlist_toggle_echoes_back_style(self):
+        from apps.catalog.models import Product
+        from apps.categories.models import Category
+
+        cat = Category.objects.create(project=self.project, name="Rings", slug="rings")
+        p = Product.objects.create(
+            project=self.project, category=cat, title="Gold Ring", slug="gold-ring",
+            price=Decimal("1000"), status="active",
+        )
+        # Stay logged in as self.admin (a platform admin, already logged in by
+        # setUp) rather than switching users — preview_skin only takes effect
+        # for a platform admin, and any authenticated user can wishlist.
+        resp = self.client.post(
+            f"/wishlist/toggle/?preview_skin={self.skin.pk}",
+            {"product": p.slug, "style": "pill"},
+            HTTP_HOST="acme.test",
+        )
+        self.assertContains(resp, 'value="pill"')
+        self.assertContains(resp, "Saved")
+
+    def test_shop_category_intro_renders_banner_and_description(self):
+        from apps.categories.models import Category
+
+        Category.objects.create(
+            project=self.project, name="Rings", slug="rings",
+            description="Statement and stacking rings for every day.",
+        )
+        resp = self.client.get(
+            "/shop/", {"category": "rings", "preview_skin": self.skin.pk},
+            HTTP_HOST="acme.test",
+        )
+        self.assertContains(resp, "Statement and stacking rings for every day.")
+        self.assertContains(resp, "Acme Collection")
 
     def test_card_shows_hover_second_photo(self):
         from apps.catalog.models import Product

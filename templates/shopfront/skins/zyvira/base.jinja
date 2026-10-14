@@ -1,9 +1,10 @@
 {# Zyvira skin — deep wine (#570517) + warm gold (#cea452) on cream/white,
    DM Serif Display over Kumbh Sans. Pill buttons, 10px-rounded photo cards,
-   gold announcement bar, centred logo-left header with a separate nav row,
-   maroon footer base. Ships base + home + shop + product + card + grid;
-   every other page (cart/checkout/account/order/track/page/wishlist)
-   inherits from skins/default/. #}
+   solid maroon announcement bar, single-row header (nav-left/logo-center/
+   icons-right) that's a transparent white-text overlay on the home hero
+   until scrolled, maroon footer base. Ships base + home + shop + product +
+   card + grid; every other page (cart/checkout/account/order/track/page/
+   wishlist) inherits from skins/default/. #}
 <!doctype html>
 <html lang="en" class="scroll-smooth">
 <head>
@@ -65,20 +66,27 @@
       @cart-open.window="cartOpen=true; quickOpen=false" @toast.window="pushToast($event.detail)"
       @open-quick.window="quickOpen=true">
 
-  {# ============ ANNOUNCEMENT — gold bar ============ #}
+  {# ============ ANNOUNCEMENT — solid maroon bar, always (not transparent
+     even on the home-page overlay state — matches every live screenshot) ============ #}
   {% if announcement %}
-  <div class="bg-gold px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-accent sm:text-[12px]">
+  <div class="bg-accent px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-white sm:text-[12px]">
     {{ announcement.heading }}
     {% if announcement.cta_url %}<a href="{{ announcement.cta_url }}" class="ml-2 underline underline-offset-2 hover:no-underline">{{ announcement.cta_label or 'Shop' }}</a>{% endif %}
   </div>
   {% endif %}
 
-  {# ============ HEADER — single row: nav-left / logo-center / icons-right
-     (matches the live theme's header-main: megamenu-content | logo | right-block-box
-     all in one flex row, not a separate nav row under the logo) ============ #}
-  <header x-data="{ scrolled: false }" @scroll.window="scrolled = window.scrollY > 10"
-          :class="scrolled ? 'shadow-[0_1px_2px_rgba(28,26,26,.05),0_14px_30px_-20px_rgba(28,26,26,.3)]' : ''"
-          class="sticky top-0 z-40 border-b border-line bg-paper/95 backdrop-blur-md transition-shadow">
+  {# ============ HEADER — single row: nav-left / logo-center / icons-right.
+     On the home page, before scrolling, it's a transparent white-text overlay
+     on top of the hero (the live theme's "homepage transparent state"); it
+     becomes the usual solid white/ink bar once scrolled, and is always solid
+     on every other page. The zero-height ``relative`` wrapper anchors the
+     overlay's ``absolute`` positioning right below the announcement bar
+     (which stays in normal flow) without needing to know its height. #}
+  {% set _home = request.resolver_match.url_name == 'home' %}
+  <div class="relative">
+  <header x-data="{ scrolled: false, home: {{ 'true' if _home else 'false' }} }" @scroll.window="scrolled = window.scrollY > 10"
+          :class="(home && !scrolled) ? 'absolute inset-x-0 top-0 bg-transparent text-white border-transparent' : 'sticky top-0 bg-paper/95 text-ink border-line shadow-[0_1px_2px_rgba(28,26,26,.05)] backdrop-blur-md'"
+          class="z-40 border-b transition-colors duration-300">
     <div class="mx-auto flex max-w-7xl items-center gap-4 px-5 py-3.5 lg:px-8">
       <button class="shrink-0 lg:hidden" @click="menuOpen=true" aria-label="Menu">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -103,8 +111,10 @@
         {% endfor %}
       </nav>
 
-      {# logo — centred between nav and icons #}
-      <a href="{{ url('shopfront:home') }}" class="min-w-0 shrink-0 truncate font-display text-xl tracking-wide text-accent sm:text-2xl lg:text-[1.6rem]">
+      {# logo — centred between nav and icons; white on the transparent
+         overlay, accent (maroon) once the header goes solid #}
+      <a href="{{ url('shopfront:home') }}" :class="(home && !scrolled) ? 'text-white' : 'text-accent'"
+         class="min-w-0 shrink-0 truncate font-display text-xl tracking-wide sm:text-2xl lg:text-[1.6rem]">
         {% include "shopfront/partials/_brand.jinja" %}
       </a>
 
@@ -139,6 +149,7 @@
       </div>
     </div>
   </header>
+  </div>
 
   {# mobile menu #}
   <div x-show="menuOpen" x-cloak class="fixed inset-0 z-50 lg:hidden">
@@ -166,42 +177,33 @@
 
   <main>{% block content %}{% endblock %}</main>
 
-  {# ============ FOOTER — newsletter+social top bar, then
-     Brand / Contact / Quick Links / Shop columns, maroon bottom bar
-     (matches the live theme's news-list + footer-list layout) ============ #}
+  {# ============ FOOTER — Brand / Contact / Quick Links / Shop columns,
+     maroon bottom bar (the newsletter lives in its own home-page section,
+     not the footer — matches the live theme's news-list sitting above the
+     footer, and footer-list below it) ============ #}
   <footer class="mt-24 bg-cream">
     <div class="mx-auto max-w-7xl px-5 lg:px-8"><div class="zy-rule"></div></div>
 
-    {# newsletter (left) + social icons (right) — its own full-width row #}
-    <div class="mx-auto flex max-w-7xl flex-col gap-4 px-5 pt-10 sm:flex-row sm:items-center sm:justify-between lg:px-8">
-      <form class="flex w-full max-w-sm items-center overflow-hidden rounded-full border border-line bg-paper pl-4" @submit.prevent="pushToast({msg:'Subscribed', kind:'success'})">
-        <input type="email" placeholder="Enter your email" class="w-full bg-transparent py-2.5 text-sm outline-none placeholder:text-mute">
-        <button class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-accent text-white" aria-label="Subscribe">
-          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l9 6 9-6M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"/></svg>
-        </button>
-      </form>
-      {% if store_profile and store_profile.social_links %}
-      <div class="flex items-center gap-4">
-        {% for label, href in store_profile.social_links %}
-        <a href="{{ href }}" target="_blank" rel="noopener" aria-label="{{ label }}" title="{{ label }}" class="grid h-9 w-9 place-items-center rounded-full border border-line text-mute transition hover:border-accent hover:text-accent">
-          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-            {% if label == 'Instagram' %}<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/>
-            {% elif label == 'Facebook' %}<path d="M14 8h2V5h-2a4 4 0 0 0-4 4v2H8v3h2v6h3v-6h2.5l.5-3H13V9a1 1 0 0 1 1-1z"/>
-            {% elif label == 'YouTube' %}<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>
-            {% else %}<path d="M4 4l16 16M20 4 4 20"/>
-            {% endif %}
-          </svg>
-        </a>
-        {% endfor %}
-      </div>
-      {% endif %}
-    </div>
-
-    <div class="mx-auto grid max-w-7xl gap-10 px-5 py-12 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
+    <div class="mx-auto grid max-w-7xl gap-10 px-5 py-16 sm:grid-cols-2 lg:grid-cols-4 lg:px-8">
       <div>
         <p class="font-display text-2xl text-accent">{{ store.name }}</p>
         {% if store_profile and store_profile.tagline %}<p{{ ed('profile', None, 'tagline') }} class="mt-3 text-sm leading-relaxed text-ink/70">{{ store_profile.tagline }}</p>
         {% else %}<p class="mt-3 text-sm leading-relaxed text-ink/70">Jewellery made for every mood, moment &amp; glow.</p>{% endif %}
+        {% if store_profile and store_profile.social_links %}
+        <div class="mt-4 flex items-center gap-3">
+          {% for label, href in store_profile.social_links %}
+          <a href="{{ href }}" target="_blank" rel="noopener" aria-label="{{ label }}" title="{{ label }}" class="text-ink/60 transition hover:text-accent">
+            <svg class="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              {% if label == 'Instagram' %}<rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="0.6" fill="currentColor"/>
+              {% elif label == 'Facebook' %}<path d="M14 8h2V5h-2a4 4 0 0 0-4 4v2H8v3h2v6h3v-6h2.5l.5-3H13V9a1 1 0 0 1 1-1z"/>
+              {% elif label == 'YouTube' %}<rect x="2.5" y="6" width="19" height="12" rx="3"/><path d="m10 9 5 3-5 3z" fill="currentColor"/>
+              {% else %}<path d="M4 4l16 16M20 4 4 20"/>
+              {% endif %}
+            </svg>
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
       <div>
         <p class="text-[11px] font-semibold uppercase tracking-luxe text-mute">Contact</p>

@@ -850,10 +850,17 @@ class LogoutView(View):
 class WishlistToggleView(View):
     def post(self, request):
         project = current_project(request)
+        # Optional UI-context hint a skin's own button form can set (e.g.
+        # ``<input type="hidden" name="style" value="icon">`` on a product
+        # card) so the swapped-back button keeps the same look it was
+        # clicked in — the PDP's own include never sets it, so it keeps
+        # rendering that skin's default (usually labelled) button.
+        wb_style = request.POST.get("style", "")
         if not request.user.is_authenticated:
             return render(request, "shopfront/partials/_wishlist_btn.jinja",
                           base_context(request, project, wl_need_login=True,
-                                       wl_slug=request.POST.get("product", "")))
+                                       wl_slug=request.POST.get("product", ""),
+                                       wb_style=wb_style))
         product = get_object_or_404(Product, project=project, slug=request.POST.get("product"))
         customer = customers_svc.get_or_create_customer(
             project=project, email=request.user.email, user=request.user
@@ -865,7 +872,8 @@ class WishlistToggleView(View):
         else:
             wishlist_svc.add_item(wishlist=wl, product=product)
         return render(request, "shopfront/partials/_wishlist_btn.jinja",
-                      base_context(request, project, wl_slug=product.slug, wl_active=not in_list))
+                      base_context(request, project, wl_slug=product.slug, wl_active=not in_list,
+                                   wb_style=wb_style))
 
 
 class WishlistPageView(View):

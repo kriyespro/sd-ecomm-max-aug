@@ -2,15 +2,33 @@
 {% block title %}Shop · {{ store.name }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
+{% set _active_cat = (all_categories | selectattr('slug', 'equalto', active_category) | first) if active_category else none %}
+
+<nav class="mx-auto mb-6 mt-8 block w-fit rounded-full bg-cream px-4 py-2 text-xs text-mute lg:max-w-7xl">
+  <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
+  {% if _active_cat %}<span class="mx-1">·</span><span class="text-ink">{{ _active_cat.name }}</span>{% endif %}
+</nav>
+
+<div class="mx-auto max-w-7xl px-5 pb-12 lg:px-8">
   <header class="mb-8 text-center">
+    {% if _active_cat %}<span class="mb-3 inline-block rounded-full bg-cream px-4 py-1.5 text-[10px] font-semibold uppercase tracking-luxe text-accent">{{ store.name }} Collection</span>{% endif %}
     <h1 class="font-display text-3xl text-accent sm:text-4xl">
-      {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
+      {% if _active_cat %}{{ _active_cat.name }}
       {% elif query %}“{{ query }}”
       {% else %}Shop all{% endif %}
     </h1>
-    <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
+    <span class="mx-auto mt-2 block h-[3px] w-10 rounded-full bg-gold"></span>
+    <p class="mt-3 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
   </header>
+
+  {% if _active_cat and (_active_cat.banner or _active_cat.image) %}
+  <div class="mb-8 overflow-hidden rounded-2xl">
+    <img src="{{ (_active_cat.banner.url if _active_cat.banner else _active_cat.image.url) | media_src(1600, 500, _active_cat.name) }}" alt="{{ _active_cat.name }}" loading="lazy" decoding="async" class="h-56 w-full object-cover sm:h-72">
+  </div>
+  {% endif %}
+  {% if _active_cat and _active_cat.description %}
+  <p class="mx-auto mb-10 max-w-3xl text-center text-sm leading-relaxed text-ink/75">{{ _active_cat.description }}</p>
+  {% endif %}
 
   {# category pill row #}
   {% if all_categories %}
