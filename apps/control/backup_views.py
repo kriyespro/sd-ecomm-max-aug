@@ -157,9 +157,12 @@ class OwnerRestoreView(_OwnerOnly, View):
 
         store = self.active_project
         upload_id = request.POST.get("upload_id", "")
-        if (request.POST.get("confirm_name", "") or "").strip() != store.name:
+        if not chunked_upload.names_match(request.POST.get("confirm_name", ""), store.name):
             chunked_upload.abort(upload_id)
-            return JsonResponse({"ok": False, "error": "Type your store's exact name to confirm."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": f'Type your store\'s exact name ("{store.name}") to confirm.'},
+                status=400,
+            )
 
         try:
             archive = chunked_upload.finalize(upload_id, _MAX_UPLOAD)

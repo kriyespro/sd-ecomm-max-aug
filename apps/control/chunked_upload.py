@@ -21,6 +21,7 @@ there's no large client upload involved for those at all.
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from pathlib import Path
 
@@ -28,6 +29,21 @@ from django.conf import settings
 
 CHUNK_UPLOAD_DIR = Path(settings.BASE_DIR) / "var" / "restore_uploads"
 _UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def names_match(typed: str, actual: str) -> bool:
+    """Is ``typed`` the confirm-your-store's-name text the restore screens
+    ask for? Still an exact match (this gates a destructive wipe, not a
+    search box) -- but tolerant of the differences a human typing a name
+    they can only *see*, not copy, would never notice: a stray leading/
+    trailing space (e.g. picked up from the onboarding form that set the
+    name and was never stripped), or the same name typed vs. pasted coming
+    out as different Unicode normalization forms for an accented
+    character."""
+    def norm(s: str) -> str:
+        return unicodedata.normalize("NFC", (s or "").strip())
+
+    return norm(typed) == norm(actual)
 
 
 class ChunkUploadError(Exception):
