@@ -42,9 +42,35 @@ from datetime import datetime, timezone as dt_timezone
 from django.apps import apps
 from django.core.files.base import ContentFile
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import transaction
+from django.db import connection, transaction
 
 logger = logging.getLogger(__name__)
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def _consistent_read():
+    """Every query inside one ``_dump_store_into`` call (the product list,
+    then each related model in turn) must see a single, unmoving snapshot
+    of the data -- otherwise a store edited *while* a slow dump is running
+    (one query after another, not one single read) can produce a manifest
+    where, say, a ProductImage added after the product list was already
+    read ends up with a ``product`` id that's nowhere in that same
+    manifest. Restoring that row then violates a NOT NULL constraint --
+    and previously rolled back the *entire* restore over that one orphaned
+    row (see _restore_store_from's own per-row fallback for the other half
+    of this fix). Postgres' REPEATABLE READ isolation takes its snapshot
+    at the transaction's first query and holds it for every later query in
+    that same transaction, which is exactly what one dump needs. SQLite
+    (tests) has no such statement -- a single-process test run has no
+    concurrent writer to race against, so plain atomic() there is already
+    enough."""
+    with transaction.atomic():
+        if connection.vendor == "postgresql":
+            connection.cursor().execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        yield
 
 FORMAT_VERSION = 1
 MAX_PRODUCTS = 5000
@@ -262,7 +288,8 @@ def dump_store(project, *, include_sensitive: bool = False) -> bytes:
             )
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        _dump_store_into(zf, project, "", include_sensitive=include_sensitive)
+        with _consistent_read():
+            _dump_store_into(zf, project, "", include_sensitive=include_sensitive)
     return buf.getvalue()
 
 
@@ -291,7 +318,8 @@ def dump_platform() -> bytes:
             skin = getattr(getattr(project, "theme_settings", None), "skin", None)
             meta["skin"] = skin.slug if skin is not None else ""
             index["stores"].append(meta)
-            _dump_store_into(zf, project, f"stores/{project.pk}/")
+            with _consistent_read():
+                _dump_store_into(zf, project, f"stores/{project.pk}/")
         zf.writestr("platform.json", json.dumps(index, cls=DjangoJSONEncoder))
     return buf.getvalue()
 
@@ -393,6 +421,7 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
             for f in entry["fields"]:
                 kwargs[f] = row.get(f)
             deferred_self = None
+            skip_row = False
             for fk, target in entry.get("fks", {}).items():
                 old = row.get(fk)
                 if old is None:
@@ -402,7 +431,26 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
                     deferred_self = (fk, old)
                     kwargs[f"{fk}_id"] = None
                 else:
-                    kwargs[f"{fk}_id"] = idmap.get(target, {}).get(old)
+                    new_id = idmap.get(target, {}).get(old)
+                    # A backup taken mid-edit (dump_store reads one model
+                    # after another, not one atomic snapshot before this
+                    # fix -- see _consistent_read) could have a row whose
+                    # FK target just isn't anywhere in this same manifest.
+                    # If the model requires this FK, inserting it with a
+                    # null id would violate a NOT NULL constraint and --
+                    # since the whole restore is one transaction -- roll
+                    # back *everything* over this one orphaned row. Drop
+                    # just this row instead.
+                    if new_id is None and not Model._meta.get_field(fk).null:
+                        logger.warning(
+                            "restore: dropping %s (old id %s) -- its %s (old id %s) "
+                            "wasn't restored from this backup", key, row.get("_id"), fk, old,
+                        )
+                        skip_row = True
+                        break
+                    kwargs[f"{fk}_id"] = new_id
+            if skip_row:
+                continue
             obj = Model(**kwargs)
             obj.save()
             idmap[key][row["_id"]] = obj.pk
@@ -412,7 +460,7 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
                 tok = row.get(f"__file__{name}")
                 if tok:
                     pending_files.append((Model, obj.pk, name, tok))
-        counts[key] = len(rows)
+        counts[key] = len(idmap[key])
 
     for Model, new_pk, key, fk, old_target in self_links:
         new_target = idmap[key].get(old_target)
