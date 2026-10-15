@@ -1,10 +1,16 @@
-{# Upload % for any <form data-restore-progress>, shown while the (possibly
-   large) .zip is uploading. The actual wipe + rebuild runs afterwards in a
-   background job (apps.control.tasks.run_store_restore_task) -- the view
-   this form posts to just queues it and redirects right away, so there's no
-   long server-side phase to show a spinner for here any more. See the page
-   itself (restore_job in context) for the job's own done/running/error
-   status after the redirect. #}
+{# Chunked upload + progress for any <form data-restore-progress
+   data-chunk-url="..." data-redirect-url="...">. A single giant POST for a
+   multi-hundred-MB backup .zip can take longer to transfer than
+   Cloudflare's own edge-to-origin timeout (~100s on Free/Pro) -- that's
+   upstream of nginx and Django entirely, so no amount of backend
+   fast-pathing fixes it (see apps.control.chunked_upload's module
+   docstring). This slices the file client-side and POSTs it a few MB at a
+   time to ``data-chunk-url``, then POSTs confirm_name + the assembled
+   upload's id to the form's own ``action`` (now a JSON finalize endpoint,
+   not a page) to actually queue the restore, and finally navigates to
+   ``data-redirect-url`` itself -- that's the one page load that carries
+   the flash message. Include this partial once per page, after the
+   form(s). #}
 <div id="restore-overlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4">
   <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
     <div class="flex items-center gap-3">
@@ -19,7 +25,7 @@
       <div id="ro-bar" class="h-full rounded-full bg-slate-800 transition-all duration-200" style="width:0%"></div>
     </div>
     <ol class="mt-4 space-y-1 text-xs text-slate-500">
-      <li id="ro-s1" class="font-semibold text-slate-800">1. Upload file</li>
+      <li id="ro-s1" class="font-semibold text-slate-800">1. Upload file (in small pieces)</li>
       <li id="ro-s2">2. Queue restore job</li>
       <li id="ro-s3">3. Done — restore continues in the background</li>
     </ol>
@@ -33,6 +39,7 @@
 <script>
 (function () {
   var ov = document.getElementById('restore-overlay');
+  var CHUNK_SIZE = 4 * 1024 * 1024;
   function $(id) { return document.getElementById(id); }
   function mark(active) {
     ['ro-s1', 'ro-s2', 'ro-s3'].forEach(function (id, i) {
@@ -40,45 +47,86 @@
       $(id).className = on ? 'font-semibold text-slate-800' : (i + 1 < active ? 'text-emerald-600' : '');
     });
   }
-  document.querySelectorAll('form[data-restore-progress]').forEach(function (form) {
-    form.addEventListener('submit', function (e) {
-      if (!window.XMLHttpRequest || !window.FormData) return;
-      e.preventDefault();
-      var xhr = new XMLHttpRequest(), started = Date.now(), timer = null;
-      ov.classList.remove('hidden'); ov.classList.add('flex');
-      xhr.upload.onprogress = function (ev) {
-        if (!ev.lengthComputable) return;
-        var p = Math.round(ev.loaded / ev.total * 100);
-        $('ro-pct').textContent = p + '%';
-        $('ro-bar').style.width = p + '%';
-      };
-      xhr.upload.onload = function () {
-        mark(2);
-        $('ro-title').textContent = 'Queueing restore…';
-        $('ro-pct').textContent = '';
-        $('ro-bar').style.width = '';
-        $('ro-bar').classList.add('indet');
-        $('ro-note').textContent = 'Almost there.';
-      };
-      xhr.onload = function () {
-        clearInterval(timer);
+  function csrftoken() {
+    var m = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+  function postForm(url, fields) {
+    var fd = new FormData();
+    Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+    return fetch(url, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrftoken() } })
+      .then(function (r) {
+        return r.json().catch(function () { throw new Error('Unexpected response (HTTP ' + r.status + ').'); });
+      })
+      .then(function (j) {
+        if (!j.ok) throw new Error(j.error || 'Request failed.');
+        return j;
+      });
+  }
+  function fail(err) {
+    ov.classList.add('hidden'); ov.classList.remove('flex');
+    alert(err.message || 'Restore failed. Reload the page and try again.');
+  }
+  function uploadChunks(form, file, uploadId) {
+    var total = file.size, sent = 0, index = 0;
+    function next() {
+      if (sent >= total) { return finalize(); }
+      var slice = file.slice(sent, Math.min(sent + CHUNK_SIZE, total));
+      var fd = new FormData();
+      fd.append('upload_id', uploadId);
+      fd.append('chunk_index', index);
+      fd.append('chunk', slice, 'chunk');
+      fetch(form.dataset.chunkUrl, { method: 'POST', body: fd, headers: { 'X-CSRFToken': csrftoken() } })
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) throw new Error(j.error || 'Upload failed.');
+          sent += slice.size;
+          index += 1;
+          var pct = Math.round(sent / total * 100);
+          $('ro-pct').textContent = pct + '%';
+          $('ro-bar').style.width = pct + '%';
+          next();
+        })
+        .catch(fail);
+    }
+    function finalize() {
+      mark(2);
+      $('ro-title').textContent = 'Queueing restore…';
+      $('ro-pct').textContent = '';
+      $('ro-bar').style.width = '';
+      $('ro-bar').classList.add('indet');
+      $('ro-note').textContent = 'Almost there.';
+      var confirmInput = form.querySelector('[name="confirm_name"]');
+      postForm(form.action, {
+        upload_id: uploadId,
+        confirm_name: confirmInput ? confirmInput.value : '',
+      }).then(function () {
         mark(3);
         $('ro-bar').classList.remove('indet');
         $('ro-bar').style.width = '100%';
         $('ro-pct').textContent = '100%';
-        // The redirected page carries the flash message; render it as-is.
-        var url = xhr.responseURL || window.location.href;
-        document.open(); document.write(xhr.responseText); document.close();
-        try { history.replaceState(null, '', url); } catch (err) {}
-      };
-      xhr.onerror = xhr.ontimeout = function () {
-        clearInterval(timer);
-        ov.classList.add('hidden'); ov.classList.remove('flex');
-        alert('Restore request failed or timed out. Reload the page to check whether it finished.');
-      };
-      xhr.timeout = 15 * 60 * 1000;
-      xhr.open('POST', form.action);
-      xhr.send(new FormData(form));
+        window.location = form.dataset.redirectUrl;
+      }).catch(fail);
+    }
+    next();
+  }
+  document.querySelectorAll('form[data-restore-progress]').forEach(function (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var fileInput = form.querySelector('input[type="file"]');
+      var file = fileInput && fileInput.files[0];
+      if (!file) { alert('Choose a backup .zip file.'); return; }
+      var uploadId = (window.crypto && window.crypto.randomUUID)
+        ? window.crypto.randomUUID().replace(/-/g, '')
+        : (Date.now().toString(16) + Math.random().toString(16).slice(2)).padEnd(32, '0').slice(0, 32);
+      mark(1);
+      $('ro-title').textContent = 'Uploading backup…';
+      $('ro-pct').textContent = '0%';
+      $('ro-bar').style.width = '0%';
+      $('ro-bar').classList.remove('indet');
+      $('ro-note').textContent = 'Uploading in small pieces — keep this tab open.';
+      ov.classList.remove('hidden'); ov.classList.add('flex');
+      uploadChunks(form, file, uploadId);
     });
   });
 })();

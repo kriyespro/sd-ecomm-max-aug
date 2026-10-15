@@ -171,6 +171,20 @@ def run_store_restore_task(job_id: int):
     job.save(update_fields=["status", "counts", "error", "archive", "updated_at"])
 
 
+@shared_task(name="apps.control.tasks.purge_stale_restore_uploads_task")
+def purge_stale_restore_uploads_task():
+    """Clean up abandoned chunked-upload .part files (see
+    chunked_upload.purge_stale's docstring) -- a closed tab or crashed
+    browser mid-upload never calls finalize() or abort(), so these would
+    otherwise sit on disk forever."""
+    from .chunked_upload import purge_stale
+
+    removed = purge_stale(max_age_seconds=24 * 3600)
+    if removed:
+        logger.info("restore uploads: purged %s stale .part file(s)", removed)
+    return {"removed": removed}
+
+
 def queue_store_restore(project, archive: bytes, *, actor=None,
                         include_sensitive: bool = False, source_label: str = ""):
     """Save an uploaded backup .zip onto a new :class:`StoreRestoreJob` and

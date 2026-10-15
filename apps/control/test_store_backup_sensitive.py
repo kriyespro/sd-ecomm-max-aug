@@ -12,6 +12,7 @@ screen via the subscription-manager bypass (apps.accounts.permissions
 OwnerBackupScreenTests already covers the plain-membership case; this file
 is entirely about the sensitive half."""
 
+import uuid
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -31,6 +32,19 @@ from apps.payments.models import Payment, Refund
 from apps.projects.models import Project
 
 User = get_user_model()
+
+
+def _chunked_restore(client, chunk_url, finalize_url, blob, confirm_name):
+    """Backup restore uploads go through chunked_upload now (see that
+    module's docstring) -- one small chunk-POST, then a JSON finalize-POST,
+    instead of a single multipart request carrying the whole .zip."""
+    upload_id = uuid.uuid4().hex
+    client.post(chunk_url, {
+        "upload_id": upload_id,
+        "chunk_index": "0",
+        "chunk": SimpleUploadedFile("chunk", blob, "application/octet-stream"),
+    })
+    return client.post(finalize_url, {"upload_id": upload_id, "confirm_name": confirm_name})
 
 
 def _seed_transaction_data(project, *, user=None):
@@ -198,11 +212,10 @@ class OwnerBackupScreenSensitiveTests(TestCase):
         blob = self.client.get("/admin/backup/download/").content
         Order.objects.filter(project=self.project).update(number="CHANGED")
 
-        resp = self.client.post("/admin/backup/restore/", {
-            "confirm_name": "ScreenCo",
-            "backup": SimpleUploadedFile("b.zip", blob, "application/zip"),
-        }, follow=True)
-        self.assertContains(resp, "orders")
+        resp = _chunked_restore(
+            self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", blob, "ScreenCo",
+        )
+        self.assertTrue(resp.json()["ok"])
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())
 
     def test_dgc_without_membership_download_excludes_sensitive_data(self):
@@ -238,11 +251,11 @@ class OwnerBackupScreenSensitiveTests(TestCase):
 
         self._login(dgc)
         Order.objects.filter(project=self.project).update(number="STILL-HERE")
-        resp = self.client.post("/admin/backup/restore/", {
-            "confirm_name": "ScreenCo",
-            "backup": SimpleUploadedFile("b.zip", full_blob, "application/zip"),
-        }, follow=True)
+        resp = _chunked_restore(
+            self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", full_blob, "ScreenCo",
+        )
         self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
         self.assertTrue(Order.objects.filter(project=self.project, number="STILL-HERE").exists())
         self.assertFalse(Order.objects.filter(project=self.project, number="SB-1").exists())
 
@@ -263,11 +276,10 @@ class OwnerBackupScreenSensitiveTests(TestCase):
         other_blob = self.client.get("/admin/backup/download/").content
 
         self._login(self.owner)
-        resp = self.client.post("/admin/backup/restore/", {
-            "confirm_name": "ScreenCo",
-            "backup": SimpleUploadedFile("other.zip", other_blob, "application/zip"),
-        }, follow=True)
+        resp = _chunked_restore(
+            self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", other_blob, "ScreenCo",
+        )
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Restoring")
+        self.assertTrue(resp.json()["ok"])
         self.assertEqual(Order.objects.filter(project=self.project).count(), 1)
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())
