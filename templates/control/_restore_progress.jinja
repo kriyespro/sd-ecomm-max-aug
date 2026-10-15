@@ -1,7 +1,10 @@
-{# Upload % + restore-in-progress indicator for any <form data-restore-progress>.
-   Include once per page, after the form(s). Upload % is real (XHR upload
-   events); the restore phase runs server-side in one request, so it shows an
-   animated bar + elapsed timer instead of a fake percentage. #}
+{# Upload % for any <form data-restore-progress>, shown while the (possibly
+   large) .zip is uploading. The actual wipe + rebuild runs afterwards in a
+   background job (apps.control.tasks.run_store_restore_task) -- the view
+   this form posts to just queues it and redirects right away, so there's no
+   long server-side phase to show a spinner for here any more. See the page
+   itself (restore_job in context) for the job's own done/running/error
+   status after the redirect. #}
 <div id="restore-overlay" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/60 p-4">
   <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
     <div class="flex items-center gap-3">
@@ -17,10 +20,10 @@
     </div>
     <ol class="mt-4 space-y-1 text-xs text-slate-500">
       <li id="ro-s1" class="font-semibold text-slate-800">1. Upload file</li>
-      <li id="ro-s2">2. Wipe &amp; rebuild store (products, pages, menus, images)</li>
-      <li id="ro-s3">3. Done</li>
+      <li id="ro-s2">2. Queue restore job</li>
+      <li id="ro-s3">3. Done — restore continues in the background</li>
     </ol>
-    <p id="ro-note" class="mt-3 text-xs text-slate-400">Keep this tab open. Do not refresh.</p>
+    <p id="ro-note" class="mt-3 text-xs text-slate-400">Uploading…</p>
   </div>
 </div>
 <style>
@@ -51,16 +54,11 @@
       };
       xhr.upload.onload = function () {
         mark(2);
-        $('ro-title').textContent = 'Restoring store…';
-        $('ro-pct').textContent = '0:00';
+        $('ro-title').textContent = 'Queueing restore…';
+        $('ro-pct').textContent = '';
         $('ro-bar').style.width = '';
         $('ro-bar').classList.add('indet');
-        $('ro-note').textContent = 'Rebuilding your store. This can take a few minutes for large backups — keep this tab open.';
-        var t0 = Date.now();
-        timer = setInterval(function () {
-          var s = Math.floor((Date.now() - t0) / 1000);
-          $('ro-pct').textContent = Math.floor(s / 60) + ':' + ('0' + (s % 60)).slice(-2);
-        }, 500);
+        $('ro-note').textContent = 'Almost there.';
       };
       xhr.onload = function () {
         clearInterval(timer);

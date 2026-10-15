@@ -268,6 +268,6 @@ class OwnerBackupScreenSensitiveTests(TestCase):
             "backup": SimpleUploadedFile("other.zip", other_blob, "application/zip"),
         }, follow=True)
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Restored")
+        self.assertContains(resp, "Restoring")
         self.assertEqual(Order.objects.filter(project=self.project).count(), 1)
         self.assertTrue(Order.objects.filter(project=self.project, number="SB-1").exists())

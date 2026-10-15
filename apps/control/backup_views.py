@@ -67,6 +67,7 @@ class OwnerBackupView(_OwnerOnly, TemplateView):
         # Automatic daily snapshots always carry orders/customers/payments
         # (apps.control.tasks.daily_store_backup_task) -- owner-only, same
         # rule as the manual download/restore above.
+        ctx["restore_job"] = self.active_project.restore_jobs.first()
         if include_sensitive:
             ctx["auto_snapshots"] = self.active_project.backup_snapshots.all()[:RETENTION_DAYS]
         elif store_role(self.request.user, self.active_project) == StoreRole.OWNER:
@@ -133,25 +134,24 @@ class OwnerRestoreView(_OwnerOnly, View):
         if upload.size and upload.size > _MAX_UPLOAD:
             messages.error(request, "That file is too large.")
             return redirect("control:owner_backup")
+        archive = upload.read()
         try:
-            counts = store_backup.restore_store(
-                store, upload.read(), actor=request.user,
-                include_sensitive=self._include_sensitive(),
-            )
+            store_backup.precheck_archive(archive)
         except store_backup.BackupError as exc:
             messages.error(request, str(exc))
             return redirect("control:owner_backup")
-        except Exception as exc:  # noqa: BLE001
-            import logging
 
-            logging.getLogger(__name__).exception("owner restore failed")
-            messages.error(request, f"Restore failed: {exc}")
-            return redirect("control:owner_backup")
-        detail = f"({counts.get('product', 0)} products, {counts.get('category', 0)} categories"
-        if "order" in counts:
-            detail += f", {counts.get('order', 0)} orders, {counts.get('customer', 0)} customers"
-        detail += ")"
-        messages.success(request, f"Restored — {sum(counts.values())} items {detail}.")
+        from .tasks import queue_store_restore
+
+        queue_store_restore(
+            store, archive, actor=request.user,
+            include_sensitive=self._include_sensitive(), source_label="owner upload",
+        )
+        messages.info(
+            request,
+            "Restoring your store in the background — this can take a few minutes "
+            "for a large store. Refresh this page to check progress.",
+        )
         return redirect("control:owner_backup")
 
 
@@ -182,23 +182,17 @@ class OwnerBackupSnapshotRestoreView(_OwnerSnapshotBase, View):
     def post(self, request, *args, **kwargs):
         snap = self.get_snapshot(kwargs["pk"])
         store = self.active_project
-        try:
-            counts = store_backup.restore_store(
-                store, snap.archive.read(), actor=request.user,
-                include_sensitive=snap.includes_orders,
-            )
-        except store_backup.BackupError as exc:
-            messages.error(request, str(exc))
-            return redirect("control:owner_backup")
-        except Exception as exc:  # noqa: BLE001
-            import logging
 
-            logging.getLogger(__name__).exception("snapshot restore failed")
-            messages.error(request, f"Restore failed: {exc}")
-            return redirect("control:owner_backup")
-        messages.success(
+        from .tasks import queue_store_restore
+
+        queue_store_restore(
+            store, snap.archive.read(), actor=request.user,
+            include_sensitive=snap.includes_orders,
+            source_label=f"snapshot {snap.created_at:%d %b %Y %H:%M}",
+        )
+        messages.info(
             request,
-            f"Restored from the {snap.created_at:%d %b %Y %H:%M} backup — "
-            f"{sum(counts.values())} items.",
+            "Restoring from that snapshot in the background — this can take a few "
+            "minutes for a large store. Refresh this page to check progress.",
         )
         return redirect("control:owner_backup")

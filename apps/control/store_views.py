@@ -314,6 +314,7 @@ class StoreDetailView(_StoreScope, DetailView):
         )
         ctx["store_url"] = trusted_base_url(self.request, store)
         ctx["control_login_url"] = self.request.build_absolute_uri(reverse("control:dashboard"))
+        ctx["restore_job"] = store.restore_jobs.first()
         return ctx
 
 
@@ -593,22 +594,19 @@ class StoreRestoreView(_StoreScope, View):
             messages.error(request, "That file is too large.")
             return redirect("control:store_detail", pk=pk)
 
+        archive = upload.read()
         try:
-            counts = store_backup.restore_store(store, upload.read(), actor=request.user)
+            store_backup.precheck_archive(archive)
         except store_backup.BackupError as exc:
             messages.error(request, str(exc))
             return redirect("control:store_detail", pk=pk)
-        except Exception as exc:  # noqa: BLE001
-            import logging
 
-            logging.getLogger(__name__).exception("store restore failed")
-            messages.error(request, f"Restore failed: {exc}")
-            return redirect("control:store_detail", pk=pk)
+        from .tasks import queue_store_restore
 
-        total = sum(counts.values())
-        messages.success(
+        queue_store_restore(store, archive, actor=request.user, source_label="platform-admin")
+        messages.info(
             request,
-            f"{store.name} restored from backup — {total} items loaded "
-            f"({counts.get('product', 0)} products, {counts.get('category', 0)} categories).",
+            f"Restoring {store.name} in the background — this can take a few minutes "
+            "for a large store. Refresh this page to check progress.",
         )
         return redirect("control:store_detail", pk=pk)

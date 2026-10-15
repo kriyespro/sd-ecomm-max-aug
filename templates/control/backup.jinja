@@ -3,6 +3,26 @@
 
 {% block content %}
 <div class="mx-auto max-w-2xl space-y-4">
+  {% if restore_job and restore_job.status in ('pending', 'running') %}
+  <div class="rounded-xl bg-amber-50 p-4 ring-1 ring-amber-200" data-restore-poll>
+    <p class="text-sm font-medium text-amber-900">
+      Restore {{ 'queued' if restore_job.status == 'pending' else 'in progress' }}{% if restore_job.source_label %} ({{ restore_job.source_label }}){% endif %} —
+      this page refreshes itself, or reload it any time.
+    </p>
+  </div>
+  <script>setTimeout(function () { location.reload(); }, 8000);</script>
+  {% elif restore_job and restore_job.status == 'error' %}
+  <div class="rounded-xl bg-red-50 p-4 ring-1 ring-red-200">
+    <p class="text-sm font-medium text-red-900">Last restore failed: {{ restore_job.error }}</p>
+  </div>
+  {% elif restore_job and restore_job.status == 'done' %}
+  <div class="rounded-xl bg-emerald-50 p-4 ring-1 ring-emerald-200">
+    <p class="text-sm font-medium text-emerald-900">
+      Last restore finished ({{ restore_job.updated_at.strftime('%d %b %Y, %H:%M') }}) —
+      {{ restore_job.counts.values() | sum }} items.
+    </p>
+  </div>
+  {% endif %}
   {% if include_sensitive %}
   <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200">
     <div class="flex items-start justify-between gap-3">
