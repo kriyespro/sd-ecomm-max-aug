@@ -116,3 +116,77 @@ def daily_store_backup_task():
 
     logger.info("daily store backup: %s created, %s failed/skipped", created, failed)
     return {"created": created, "failed": failed}
+
+
+@shared_task(name="apps.control.tasks.run_store_restore_task",
+            time_limit=1800, soft_time_limit=1740)
+def run_store_restore_task(job_id: int):
+    """Do the actual wipe + rebuild for a :class:`StoreRestoreJob` -- see
+    that model's docstring for why this runs here and not in the view's
+    request. Restore itself has no hard time limit of its own (big stores
+    legitimately take minutes); this task's own ``time_limit``/
+    ``soft_time_limit`` are set well above the global 120s/90s default
+    (CELERY_TASK_TIME_LIMIT/SOFT) for exactly that reason -- the global
+    default is fine for every other task in this app, just not this one."""
+    from .models import StoreRestoreJob
+    from .store_backup import BackupError, restore_store
+
+    try:
+        job = StoreRestoreJob.objects.select_related("project", "requested_by").get(pk=job_id)
+    except StoreRestoreJob.DoesNotExist:
+        logger.warning("restore job %s vanished before it could run", job_id)
+        return
+
+    job.status = StoreRestoreJob.Status.RUNNING
+    job.save(update_fields=["status", "updated_at"])
+
+    try:
+        archive_bytes = job.archive.read()
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("restore job %s: could not read uploaded archive", job_id)
+        job.status = StoreRestoreJob.Status.ERROR
+        job.error = f"Could not read the uploaded archive: {exc}"
+        job.save(update_fields=["status", "error", "updated_at"])
+        return
+
+    try:
+        counts = restore_store(
+            job.project, archive_bytes, actor=job.requested_by,
+            include_sensitive=job.include_sensitive,
+        )
+    except BackupError as exc:
+        job.status = StoreRestoreJob.Status.ERROR
+        job.error = str(exc)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("restore job %s: restore_store failed", job_id)
+        job.status = StoreRestoreJob.Status.ERROR
+        job.error = f"Restore failed: {exc}"
+    else:
+        job.status = StoreRestoreJob.Status.DONE
+        job.counts = counts
+
+    # The archive was only ever needed to get the bytes here -- don't keep a
+    # second multi-hundred-MB copy of every restore around forever.
+    job.archive.delete(save=False)
+    job.save(update_fields=["status", "counts", "error", "archive", "updated_at"])
+
+
+def queue_store_restore(project, archive: bytes, *, actor=None,
+                        include_sensitive: bool = False, source_label: str = ""):
+    """Save an uploaded backup .zip onto a new :class:`StoreRestoreJob` and
+    hand it to :func:`run_store_restore_task`. Called from the owner,
+    platform-admin and snapshot restore views in place of calling
+    ``store_backup.restore_store`` directly -- see that job model's
+    docstring for why."""
+    from django.core.files.base import ContentFile
+
+    from .models import StoreRestoreJob
+
+    job = StoreRestoreJob.objects.create(
+        project=project, include_sensitive=include_sensitive,
+        source_label=source_label, requested_by=actor,
+    )
+    slug = project.slug or f"store-{project.pk}"
+    job.archive.save(f"{slug}-restore-{job.pk}.zip", ContentFile(archive), save=True)
+    run_store_restore_task.delay(job.pk)
+    return job

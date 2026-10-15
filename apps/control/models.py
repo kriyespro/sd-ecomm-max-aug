@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 from apps.core.models import TimeStampedModel
@@ -32,3 +33,45 @@ class StoreBackupSnapshot(TimeStampedModel):
 
     def __str__(self):
         return f"{self.project.name} backup {self.created_at:%Y-%m-%d}"
+
+
+class StoreRestoreJob(TimeStampedModel):
+    """One queued/running/finished store_backup.restore_store() run.
+
+    Restoring a big store is one INSERT + media write per row (no
+    bulk_create -- fks get remapped row by row) -- easily minutes for a
+    few thousand products with images. Doing that inline in the request
+    that uploads the backup .zip hits Cloudflare's ~100s edge timeout
+    (524) long before Django responds, even though the restore itself
+    would've succeeded. So the view only creates this row (status=PENDING,
+    the uploaded archive saved to ``archive``) and queues
+    apps.control.tasks.run_store_restore_task(job.pk) -- the actual wipe +
+    rebuild happens in a Celery worker, which has its own much longer
+    time limit (see that task's ``time_limit=``), not the one HTTP
+    request/response cycle. ``archive`` is deleted once the job finishes
+    (done or error) -- it's only needed to get the bytes to the worker."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Queued"
+        RUNNING = "running", "Restoring"
+        DONE = "done", "Done"
+        ERROR = "error", "Failed"
+
+    project = models.ForeignKey(
+        "projects.Project", on_delete=models.CASCADE, related_name="restore_jobs",
+    )
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    include_sensitive = models.BooleanField(default=False)
+    archive = models.FileField(upload_to="restore_tmp/%Y/%m/%d/", blank=True)
+    source_label = models.CharField(max_length=120, blank=True)
+    counts = models.JSONField(default=dict, blank=True)
+    error = models.TextField(blank=True)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+    )
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.project.name} restore ({self.status})"

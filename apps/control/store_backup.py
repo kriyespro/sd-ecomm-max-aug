@@ -450,6 +450,27 @@ def _restore_store_from(zf: zipfile.ZipFile, project, prefix: str, archive: byte
     return counts
 
 
+def precheck_archive(archive: bytes) -> None:
+    """Cheap structural checks only -- valid zip, under the size caps, has a
+    store manifest. No DB writes. Callers that queue a restore onto
+    apps.control.tasks.run_store_restore_task (instead of calling
+    restore_store directly -- see StoreRestoreJob's docstring for why) run
+    this synchronously first, so a bad upload (not a zip, a full-platform
+    backup dropped on the wrong screen, a corrupt archive) still errors back
+    to the browser immediately instead of silently failing in the
+    background. restore_store() below repeats these same checks -- they're
+    cheap next to the actual restore, so that's fine."""
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(archive))
+    except zipfile.BadZipFile as exc:
+        raise BackupError("That file is not a valid .zip archive.") from exc
+    _safe_zip(zf)
+    if "manifest.json" not in zf.namelist():
+        if "platform.json" in zf.namelist():
+            raise BackupError("That's a full-platform backup — restore it from the platform dashboard.")
+        raise BackupError("Archive has no manifest.json — not a store backup.")
+
+
 @transaction.atomic
 def restore_store(project, archive: bytes, *, actor=None,
                   include_sensitive: bool = False) -> dict:

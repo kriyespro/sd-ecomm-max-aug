@@ -854,28 +854,23 @@ class DemoBackupRestoreView(ActiveProjectMixin, View):
     Catalogue / CMS / theme only — orders and customers are never touched."""
 
     def post(self, request, pk, *args, **kwargs):
-        from apps.control import store_backup
         from apps.control.models import StoreBackupSnapshot
 
         snap = get_object_or_404(StoreBackupSnapshot, pk=pk, project=self.active_project,
                                  includes_orders=False)
         nxt = safe_next(request, request.POST.get("next"), "control:cms_store_profile")
-        try:
-            counts = store_backup.restore_store(self.active_project, snap.archive.read(),
-                                                actor=request.user, include_sensitive=False)
-        except store_backup.BackupError as exc:
-            messages.error(request, str(exc))
-            return redirect(nxt)
-        except Exception as exc:  # noqa: BLE001
-            import logging
 
-            logging.getLogger(__name__).exception("safety restore failed")
-            messages.error(request, f"Restore failed: {exc}")
-            return redirect(nxt)
+        from .tasks import queue_store_restore
+
+        queue_store_restore(
+            self.active_project, snap.archive.read(), actor=request.user,
+            include_sensitive=False, source_label=f"safety backup {snap.created_at:%d %b %Y, %H:%M}",
+        )
         record_audit(actor=request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=self.active_project,
                      changes={"restored_backup": snap.label, "taken": snap.created_at.isoformat()},
                      request=request)
-        messages.success(request, f"Restored your store from the backup taken "
-                                  f"{snap.created_at:%d %b %Y, %H:%M} UTC ({sum(counts.values())} items).")
+        messages.info(request, f"Restoring your store from the backup taken "
+                               f"{snap.created_at:%d %b %Y, %H:%M} UTC in the background — "
+                               f"reload the page to check progress.")
         return redirect(nxt)
