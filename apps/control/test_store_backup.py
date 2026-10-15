@@ -1,4 +1,5 @@
 import io
+import uuid
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
@@ -23,6 +24,20 @@ def _png():
     b = io.BytesIO()
     Image.new("RGB", (80, 80), "teal").save(b, format="PNG")
     return b.getvalue()
+
+
+def _chunked_restore(client, chunk_url, finalize_url, blob, confirm_name):
+    """Backup restore uploads go through chunked_upload now (see that
+    module's docstring) -- one small chunk-POST, then a JSON finalize-POST,
+    instead of a single multipart request carrying the whole .zip."""
+    upload_id = uuid.uuid4().hex
+    chunk_resp = client.post(chunk_url, {
+        "upload_id": upload_id,
+        "chunk_index": "0",
+        "chunk": SimpleUploadedFile("chunk", blob, "application/octet-stream"),
+    })
+    finalize_resp = client.post(finalize_url, {"upload_id": upload_id, "confirm_name": confirm_name})
+    return chunk_resp, finalize_resp
 
 
 def _build_source(project):
@@ -144,21 +159,23 @@ class StoreBackupViewTests(TestCase):
         blob = b"".join(r.streaming_content) if r.streaming else r.content
 
         with self.captureOnCommitCallbacks(execute=True):
-            resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
-                "confirm_name": "B Co",
-                "backup": SimpleUploadedFile("bk.zip", blob, "application/zip"),
-            })
-        self.assertEqual(resp.status_code, 302)
+            _, resp = _chunked_restore(
+                self.client, f"/admin/stores/{self.b.pk}/restore/chunk/",
+                f"/admin/stores/{self.b.pk}/restore/", blob, "B Co",
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.b).count(), 3)
 
     def test_restore_needs_exact_name(self):
         self._login(self.admin)
         blob = self.client.get(f"/admin/stores/{self.a.pk}/backup/").content
-        resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
-            "confirm_name": "wrong",
-            "backup": SimpleUploadedFile("bk.zip", blob, "application/zip"),
-        })
-        self.assertEqual(resp.status_code, 302)
+        _, resp = _chunked_restore(
+            self.client, f"/admin/stores/{self.b.pk}/restore/chunk/",
+            f"/admin/stores/{self.b.pk}/restore/", blob, "wrong",
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(resp.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.b).count(), 0)
 
     def test_dgc_can_backup_their_managed_store_but_not_others(self):
@@ -182,11 +199,12 @@ class StoreBackupViewTests(TestCase):
         sub.save(update_fields=["manager"])
         self._login(User.objects.get(pk=dgc.pk))
         b_blob = store_backup.dump_store(self.b)
-        resp = self.client.post(f"/admin/stores/{self.b.pk}/restore/", {
-            "confirm_name": "B Co",
-            "backup": SimpleUploadedFile("bk.zip", b_blob, "application/zip"),
-        }, follow=True)
-        self.assertContains(resp, "Only a platform admin can restore a store")
+        chunk_resp, _ = _chunked_restore(
+            self.client, f"/admin/stores/{self.b.pk}/restore/chunk/",
+            f"/admin/stores/{self.b.pk}/restore/", b_blob, "B Co",
+        )
+        self.assertEqual(chunk_resp.status_code, 403)
+        self.assertIn("Only a platform admin can restore a store", chunk_resp.json()["error"])
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
@@ -216,11 +234,11 @@ class OwnerBackupScreenTests(TestCase):
 
         Product.objects.filter(project=self.store).delete()
         with self.captureOnCommitCallbacks(execute=True):
-            r = self.client.post("/admin/backup/restore/", {
-                "confirm_name": "OwnerCo",
-                "backup": SimpleUploadedFile("b.zip", blob, "application/zip"),
-            })
-        self.assertEqual(r.status_code, 302)
+            _, r = _chunked_restore(
+                self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", blob, "OwnerCo",
+            )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
 
     def test_manager_cannot_reach_owner_backup(self):
@@ -249,11 +267,11 @@ class OwnerBackupScreenTests(TestCase):
 
         Product.objects.filter(project=self.store).delete()
         with self.captureOnCommitCallbacks(execute=True):
-            r = self.client.post("/admin/backup/restore/", {
-                "confirm_name": "OwnerCo",
-                "backup": SimpleUploadedFile("b.zip", blob, "application/zip"),
-            })
-        self.assertEqual(r.status_code, 302)
+            _, r = _chunked_restore(
+                self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", blob, "OwnerCo",
+            )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
 
     def test_dgc_via_referral_only_has_no_access_at_all(self):
@@ -341,11 +359,12 @@ class PlatformBackupTests(TestCase):
         blob = self.client.get(f"/admin/stores/{self.s1.pk}/backup/").content
         Product.objects.filter(project=self.s1).delete()
         with self.captureOnCommitCallbacks(execute=True):
-            resp = self.client.post(f"/admin/stores/{self.s1.pk}/restore/", {
-                "confirm_name": "Store One",
-                "backup": SimpleUploadedFile("s1.zip", blob, "application/zip"),
-            })
-        self.assertEqual(resp.status_code, 302)
+            _, resp = _chunked_restore(
+                self.client, f"/admin/stores/{self.s1.pk}/restore/chunk/",
+                f"/admin/stores/{self.s1.pk}/restore/", blob, "Store One",
+            )
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.s1).count(), 3)
 
     def test_backup_centre_is_admin_only(self):

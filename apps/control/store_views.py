@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.views.generic import DetailView, FormView, ListView, View
@@ -567,39 +567,69 @@ class StoreBackupView(_StoreScope, View):
         return resp
 
 
-class StoreRestoreView(_StoreScope, View):
-    """Platform-admin: wipe this store's content and rebuild it from an uploaded
-    backup .zip. Requires the store name typed to confirm."""
+class StoreRestoreChunkView(_StoreScope, View):
+    """One slice of a chunked backup upload — see chunked_upload's module
+    docstring for why. Same platform-admin-only gate as StoreRestoreView
+    below, since this is the first place that'd let a non-admin DGC burn
+    disk space even though it can't by itself trigger a restore."""
 
     MAX_UPLOAD = 700 * 1024 * 1024
 
     def post(self, request, pk, *args, **kwargs):
-        from . import store_backup
+        from . import chunked_upload
+
+        self.get_store(pk)
+        if not is_platform_admin(request.user):
+            return JsonResponse({"ok": False, "error": "Only a platform admin can restore a store."}, status=403)
+
+        blob = request.FILES.get("chunk")
+        try:
+            chunk_index = int(request.POST.get("chunk_index", ""))
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Bad chunk index."}, status=400)
+        if blob is None:
+            return JsonResponse({"ok": False, "error": "No chunk data."}, status=400)
+        try:
+            total = chunked_upload.append_chunk(
+                request.POST.get("upload_id", ""), chunk_index, blob.read(), self.MAX_UPLOAD,
+            )
+        except chunked_upload.ChunkUploadError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+        return JsonResponse({"ok": True, "received": total})
+
+
+class StoreRestoreView(_StoreScope, View):
+    """Platform-admin: finalizes a chunked upload (see StoreRestoreChunkView
+    above), wipes this store's content and rebuilds it from the assembled
+    backup .zip. Requires the store name typed to confirm. JSON in, JSON
+    out — the page that posts the chunks navigates itself once this
+    returns ok."""
+
+    MAX_UPLOAD = 700 * 1024 * 1024
+
+    def post(self, request, pk, *args, **kwargs):
+        from . import chunked_upload, store_backup
 
         store = self.get_store(pk)
+        upload_id = request.POST.get("upload_id", "")
 
         if not is_platform_admin(request.user):
-            messages.error(request, "Only a platform admin can restore a store.")
-            return redirect("control:store_detail", pk=pk)
+            chunked_upload.abort(upload_id)
+            return JsonResponse({"ok": False, "error": "Only a platform admin can restore a store."}, status=403)
 
         if (request.POST.get("confirm_name", "") or "").strip() != store.name:
-            messages.error(request, "Type the store's exact name to confirm the restore.")
-            return redirect("control:store_detail", pk=pk)
+            chunked_upload.abort(upload_id)
+            return JsonResponse({"ok": False, "error": "Type the store's exact name to confirm the restore."}, status=400)
 
-        upload = request.FILES.get("backup")
-        if upload is None:
-            messages.error(request, "Choose a backup .zip file.")
-            return redirect("control:store_detail", pk=pk)
-        if upload.size and upload.size > self.MAX_UPLOAD:
-            messages.error(request, "That file is too large.")
-            return redirect("control:store_detail", pk=pk)
+        try:
+            archive = chunked_upload.finalize(upload_id, self.MAX_UPLOAD)
+        except chunked_upload.ChunkUploadError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
 
-        archive = upload.read()
         try:
             store_backup.precheck_archive(archive)
         except store_backup.BackupError as exc:
-            messages.error(request, str(exc))
-            return redirect("control:store_detail", pk=pk)
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
 
         from .tasks import queue_store_restore
 
@@ -609,4 +639,4 @@ class StoreRestoreView(_StoreScope, View):
             f"Restoring {store.name} in the background — this can take a few minutes "
             "for a large store. Refresh this page to check progress.",
         )
-        return redirect("control:store_detail", pk=pk)
+        return JsonResponse({"ok": True})

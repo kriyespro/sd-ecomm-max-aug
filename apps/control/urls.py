@@ -349,12 +349,14 @@ urlpatterns = [
     path("stores/<int:pk>/switch/", storev.StoreSwitchView.as_view(), name="store_switch"),
     path("stores/<int:pk>/backup/", storev.StoreBackupView.as_view(), name="store_backup"),
     path("stores/<int:pk>/restore/", storev.StoreRestoreView.as_view(), name="store_restore"),
+    path("stores/<int:pk>/restore/chunk/", storev.StoreRestoreChunkView.as_view(), name="store_restore_chunk"),
 
     # Store-owner's own backup / restore (active project)
     path("backup/", backupv.OwnerBackupView.as_view(), name="owner_backup"),
     path("backup/auto/", backupv.OwnerAutoBackupToggleView.as_view(), name="owner_backup_auto_toggle"),
     path("backup/download/", backupv.OwnerBackupDownloadView.as_view(), name="owner_backup_download"),
     path("backup/restore/", backupv.OwnerRestoreView.as_view(), name="owner_backup_restore"),
+    path("backup/restore/chunk/", backupv.OwnerRestoreChunkView.as_view(), name="owner_backup_restore_chunk"),
     path("backup/snapshots/<int:pk>/download/", backupv.OwnerBackupSnapshotDownloadView.as_view(),
          name="owner_backup_snapshot_download"),
     path("backup/snapshots/<int:pk>/restore/", backupv.OwnerBackupSnapshotRestoreView.as_view(),

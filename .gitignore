@@ -6,6 +6,9 @@
 instance/
 *.secret_key
 
+# --- runtime scratch (chunked backup-restore uploads, in-progress only) ---
+/var/restore_uploads/
+
 # --- python ---
 __pycache__/
 *.py[cod]

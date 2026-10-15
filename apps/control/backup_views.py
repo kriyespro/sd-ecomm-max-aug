@@ -3,7 +3,7 @@ content. Same engine as the platform-side store backup (apps.control.store_backu
 just scoped to the active project and gated to the OWNER role."""
 
 from django.contrib import messages
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.views import View
@@ -121,25 +121,55 @@ class OwnerBackupDownloadView(_OwnerOnly, View):
         return resp
 
 
-class OwnerRestoreView(_OwnerOnly, View):
+class OwnerRestoreChunkView(_OwnerOnly, View):
+    """One slice of a chunked backup upload — see chunked_upload's module
+    docstring for why the upload is sliced client-side at all (a single
+    giant POST can take longer to transfer than Cloudflare's own edge
+    timeout, regardless of how fast nginx/Django would respond once the
+    body actually arrives)."""
+
     def post(self, request, *args, **kwargs):
+        from . import chunked_upload
+
+        blob = request.FILES.get("chunk")
+        try:
+            chunk_index = int(request.POST.get("chunk_index", ""))
+        except ValueError:
+            return JsonResponse({"ok": False, "error": "Bad chunk index."}, status=400)
+        if blob is None:
+            return JsonResponse({"ok": False, "error": "No chunk data."}, status=400)
+        try:
+            total = chunked_upload.append_chunk(
+                request.POST.get("upload_id", ""), chunk_index, blob.read(), _MAX_UPLOAD,
+            )
+        except chunked_upload.ChunkUploadError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+        return JsonResponse({"ok": True, "received": total})
+
+
+class OwnerRestoreView(_OwnerOnly, View):
+    """Finalizes a chunked upload (see OwnerRestoreChunkView above) and
+    queues the actual restore. JSON in, JSON out — the page that posts the
+    chunks navigates itself once this returns ok."""
+
+    def post(self, request, *args, **kwargs):
+        from . import chunked_upload
+
         store = self.active_project
+        upload_id = request.POST.get("upload_id", "")
         if (request.POST.get("confirm_name", "") or "").strip() != store.name:
-            messages.error(request, "Type your store's exact name to confirm.")
-            return redirect("control:owner_backup")
-        upload = request.FILES.get("backup")
-        if upload is None:
-            messages.error(request, "Choose a backup .zip file.")
-            return redirect("control:owner_backup")
-        if upload.size and upload.size > _MAX_UPLOAD:
-            messages.error(request, "That file is too large.")
-            return redirect("control:owner_backup")
-        archive = upload.read()
+            chunked_upload.abort(upload_id)
+            return JsonResponse({"ok": False, "error": "Type your store's exact name to confirm."}, status=400)
+
+        try:
+            archive = chunked_upload.finalize(upload_id, _MAX_UPLOAD)
+        except chunked_upload.ChunkUploadError as exc:
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
+
         try:
             store_backup.precheck_archive(archive)
         except store_backup.BackupError as exc:
-            messages.error(request, str(exc))
-            return redirect("control:owner_backup")
+            return JsonResponse({"ok": False, "error": str(exc)}, status=400)
 
         from .tasks import queue_store_restore
 
@@ -152,7 +182,7 @@ class OwnerRestoreView(_OwnerOnly, View):
             "Restoring your store in the background — this can take a few minutes "
             "for a large store. Refresh this page to check progress.",
         )
-        return redirect("control:owner_backup")
+        return JsonResponse({"ok": True})
 
 
 class _OwnerSnapshotBase(_OwnerOnly):

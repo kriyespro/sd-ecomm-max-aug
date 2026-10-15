@@ -325,6 +325,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.control.tasks.purge_trashed_task",
         "schedule": 3600.0 * 24,   # daily — empties Trash older than 30 days
     },
+    "restore-uploads-purge": {
+        "task": "apps.control.tasks.purge_stale_restore_uploads_task",
+        "schedule": 3600.0 * 6,   # a closed tab mid-upload never cleans up its own .part file
+    },
     "daily-store-backup": {
         "task": "apps.control.tasks.daily_store_backup_task",
         # Every 30 min from 12:00 AM to 5:30 AM IST (CELERY_TIMEZONE above) --

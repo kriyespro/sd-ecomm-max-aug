@@ -166,6 +166,8 @@
 
     <form method="post" action="{{ url('control:store_restore', kwargs={'pk': store.pk}) }}"
           enctype="multipart/form-data" data-restore-progress
+          data-chunk-url="{{ url('control:store_restore_chunk', kwargs={'pk': store.pk}) }}"
+          data-redirect-url="{{ url('control:store_detail', kwargs={'pk': store.pk}) }}"
           class="mt-4 space-y-2 border-t border-slate-200 pt-4">
       {{ csrf_input }}
       <label class="block text-sm font-medium text-slate-700">Restore from a backup file</label>
