@@ -617,9 +617,12 @@ class StoreRestoreView(_StoreScope, View):
             chunked_upload.abort(upload_id)
             return JsonResponse({"ok": False, "error": "Only a platform admin can restore a store."}, status=403)
 
-        if (request.POST.get("confirm_name", "") or "").strip() != store.name:
+        if not chunked_upload.names_match(request.POST.get("confirm_name", ""), store.name):
             chunked_upload.abort(upload_id)
-            return JsonResponse({"ok": False, "error": "Type the store's exact name to confirm the restore."}, status=400)
+            return JsonResponse(
+                {"ok": False, "error": f'Type the store\'s exact name ("{store.name}") to confirm the restore.'},
+                status=400,
+            )
 
         try:
             archive = chunked_upload.finalize(upload_id, self.MAX_UPLOAD)

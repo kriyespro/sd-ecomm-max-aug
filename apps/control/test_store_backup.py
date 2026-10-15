@@ -241,6 +241,24 @@ class OwnerBackupScreenTests(TestCase):
         self.assertTrue(r.json()["ok"])
         self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
 
+    def test_confirm_name_tolerates_stray_whitespace_in_stored_name(self):
+        # A store name picked up unstripped from some older signup path (a
+        # trailing space a human can't see or retype) must not permanently
+        # lock the owner out of restoring their own store -- see
+        # chunked_upload.names_match's docstring.
+        Project.objects.filter(pk=self.store.pk).update(name=" OwnerCo ")
+        self.store.refresh_from_db()
+        self._login(self.owner)
+        blob = self.client.get("/admin/backup/download/").content
+        Product.objects.filter(project=self.store).delete()
+        with self.captureOnCommitCallbacks(execute=True):
+            _, r = _chunked_restore(
+                self.client, "/admin/backup/restore/chunk/", "/admin/backup/restore/", blob, "OwnerCo",
+            )
+        self.assertEqual(r.status_code, 200)
+        self.assertTrue(r.json()["ok"])
+        self.assertEqual(Product.objects.filter(project=self.store).count(), 3)
+
     def test_manager_cannot_reach_owner_backup(self):
         self._login(self.mgr)
         self.assertEqual(self.client.get("/admin/backup/").status_code, 403)
