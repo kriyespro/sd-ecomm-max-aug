@@ -130,6 +130,37 @@ class StoreBackupRoundTripTests(TestCase):
         # source unchanged
         self.assertEqual(Product.objects.filter(project=self.src).count(), 3)
 
+    def test_restore_drops_one_orphaned_row_instead_of_failing_the_whole_restore(self):
+        # A backup taken mid-edit (dump_store reads one model after another,
+        # not one atomic snapshot) could end up with e.g. a ProductImage
+        # whose product id isn't anywhere else in the same manifest --
+        # previously that NOT NULL violation rolled back the *entire*
+        # restore. It must instead just drop that one row and restore
+        # everything else normally (see store_backup._restore_store_from's
+        # skip_row handling).
+        import json
+        import zipfile
+
+        blob = store_backup.dump_store(self.src)
+        zin = zipfile.ZipFile(io.BytesIO(blob))
+        manifest = json.loads(zin.read("manifest.json").decode("utf-8"))
+        self.assertTrue(manifest["data"]["productimage"])
+        manifest["data"]["productimage"][0]["product"] = 999999   # dangling FK
+
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zout:
+            zout.writestr("manifest.json", json.dumps(manifest))
+            for name in zin.namelist():
+                if name != "manifest.json":
+                    zout.writestr(name, zin.read(name))
+
+        with self.captureOnCommitCallbacks(execute=True):
+            counts = store_backup.restore_store(self.dst, buf.getvalue(), actor=None)
+
+        self.assertEqual(counts["product"], 3)              # everything else restored
+        self.assertEqual(counts["productimage"], 0)          # the one orphaned image dropped
+        self.assertTrue(Customer.objects.filter(pk=self.customer.pk).exists())
+
     def test_restore_rejects_a_non_backup_zip(self):
         bad = io.BytesIO()
         import zipfile
