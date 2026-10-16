@@ -47,8 +47,13 @@
       {% include "shopfront/partials/_wishlist_btn.jinja" %}
     </div>
 
-    {# add to bag / sold out — pill, bottom-right, always visible #}
-    {% if _sold_out %}
+    {# add to bag / sold out / whatsapp enquiry — pill, bottom-right, always visible #}
+    {% if store_profile and store_profile.catalog_mode_enabled %}
+    <div class="absolute right-3 bottom-3 [&_a]:rounded-full">
+      {% set wa_enabled = true %}
+      {% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}
+    </div>
+    {% elif _sold_out %}
     <span class="absolute right-3 bottom-3 rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-mute shadow-sm backdrop-blur">Sold Out</span>
     {% else %}
     <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="absolute right-3 bottom-3">
@@ -66,6 +71,7 @@
        product-card titles) #}
     <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block line-clamp-2 text-[13px] font-semibold leading-snug text-ink hover:text-accent sm:text-sm">{{ p.title }}</a>
     <p class="mt-1 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) if p.rating_count else '☆☆☆☆☆' }}<span class="text-mute"> ({{ p.rating_count or 0 }})</span></p>
+    {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
     <p{{ ed_money(p) }} class="mt-1.5 flex items-baseline gap-1.5">
       {% if p.on_sale %}
       <span class="text-lg font-bold text-accent">{{ p.current_price | money }}</span>
@@ -74,5 +80,6 @@
       <span class="text-lg font-bold text-ink">{{ p.price | money }}</span>
       {% endif %}
     </p>
+    {% endif %}
   </div>
 </article>

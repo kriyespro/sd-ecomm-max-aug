@@ -80,6 +80,15 @@ def get_cart(request, project, *, create=False):
     )
 
 
+def catalog_mode_enabled(project):
+    """True when the store is enquiry-only (no Add to cart / Buy now / checkout).
+    Reads the same cached chrome dict base_context() does, so it costs nothing
+    extra on views that already call base_context, and one cheap cache hit on
+    views (CartAddView, CheckoutView) that must check it before that."""
+    profile = store_chrome(project).get("profile")
+    return bool(profile and profile.catalog_mode_enabled)
+
+
 def base_context(request, project, **extra):
     cart = get_cart(request, project)
     # Pull the cart lines once so cart.subtotal / cart.item_count and any

@@ -350,7 +350,8 @@ class WhatsAppEnquiryForm(forms.ModelForm):
     class Meta:
         model = StoreProfile
         fields = ["whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail",
-                  "whatsapp_order_enabled", "whatsapp_only"]
+                  "whatsapp_order_enabled", "whatsapp_only",
+                  "catalog_mode_enabled", "catalog_show_price"]
         labels = {
             "whatsapp_order_enabled": "Offer \"Order on WhatsApp\" at checkout",
             "whatsapp_only": "WhatsApp-only store (checkout offers only Order on WhatsApp)",
@@ -358,12 +359,15 @@ class WhatsAppEnquiryForm(forms.ModelForm):
                                         "on every product card",
             "whatsapp_enquiry_on_detail": "Also show it on the product page itself, "
                                           "next to Buy now / Add to bag",
+            "catalog_mode_enabled": "Catalogue mode — hide Add to cart / Buy now "
+                                    "everywhere, enquiry via WhatsApp only",
+            "catalog_show_price": "Show price while in catalogue mode",
         }
 
     def clean(self):
         cleaned = super().clean()
         flags = ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail",
-                 "whatsapp_order_enabled", "whatsapp_only")
+                 "whatsapp_order_enabled", "whatsapp_only", "catalog_mode_enabled")
         if any(cleaned.get(f) for f in flags):
             digits = "".join(c for c in self.instance.whatsapp if c.isdigit())
             if not digits:
@@ -402,6 +406,8 @@ class WhatsAppEnquiryView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView
                          "whatsapp_enquiry_on_detail": self.object.whatsapp_enquiry_on_detail,
                          "whatsapp_order_enabled": self.object.whatsapp_order_enabled,
                          "whatsapp_only": self.object.whatsapp_only,
+                         "catalog_mode_enabled": self.object.catalog_mode_enabled,
+                         "catalog_show_price": self.object.catalog_show_price,
                      },
                      request=self.request)
         messages.success(self.request, "WhatsApp settings saved.")
