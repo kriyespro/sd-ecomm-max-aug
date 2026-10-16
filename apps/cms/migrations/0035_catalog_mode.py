@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cms', '0033_seed_zyvira_skin'),
+        ('cms', '0034_seed_zyvira_skin'),
     ]
 
     operations = [
