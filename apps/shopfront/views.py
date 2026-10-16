@@ -44,7 +44,7 @@ from apps.reviews.models import ReviewStatus
 from apps.shipping import services as ship_svc
 from apps.wishlist import services as wishlist_svc
 
-from .context import base_context, current_project, get_cart
+from .context import base_context, catalog_mode_enabled, current_project, get_cart
 
 User = get_user_model()
 
@@ -407,6 +407,8 @@ class CartView(View):
 class CartAddView(View):
     def post(self, request):
         project = current_project(request)
+        if catalog_mode_enabled(project):
+            raise Http404
         cart = get_cart(request, project, create=True)
         product = get_object_or_404(Product, project=project, slug=request.POST.get("product"), status="active")
         variant = None
@@ -491,6 +493,8 @@ def _checkout_payment_providers(project):
 class CheckoutView(View):
     def get(self, request):
         project = current_project(request)
+        if catalog_mode_enabled(project):
+            raise Http404
         ctx = base_context(request, project)
         cart = ctx["cart"]
         if not cart.items.exists():
@@ -511,6 +515,8 @@ class CheckoutView(View):
 
     def post(self, request):
         project = current_project(request)
+        if catalog_mode_enabled(project):
+            raise Http404
         cart = get_cart(request, project, create=True)
         if not cart.items.exists():
             return redirect("shopfront:cart")

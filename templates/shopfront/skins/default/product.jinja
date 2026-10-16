@@ -121,6 +121,7 @@
       </a>
       {% endif %}
 
+      {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
       <div class="mt-5 flex flex-wrap items-baseline gap-3">
         <span class="font-display text-3xl" :class="{'text-accent': salePrice !== null}" x-text="fmt(displayPrice)"></span>
         <template x-if="salePrice !== null">
@@ -132,6 +133,7 @@
         </template>
       </div>
       <p class="mt-1 text-xs text-mute">Inclusive of all taxes</p>
+      {% endif %}
 
       <template x-if="avail !== null">
         <div>
@@ -148,6 +150,12 @@
 
       {% if product.short_description %}<p class="mt-5 break-words text-[15px] leading-relaxed text-ink/75">{{ product.short_description }}</p>{% endif %}
 
+      {% if store_profile and store_profile.catalog_mode_enabled %}
+      {% set p = product %}
+      {% set wa_enabled = true %}
+      {% set wa_style = 'block' %}
+      <div class="mt-7">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+      {% else %}
       <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-7 space-y-5" x-data="{ q: 1 }">
         <input type="hidden" name="product" value="{{ product.slug }}">
 
@@ -179,6 +187,7 @@
       {% set wa_enabled = store_profile.whatsapp_enquiry_on_detail if store_profile else False %}
       {% set wa_style = 'block' %}
       <div class="mt-3">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+      {% endif %}
 
       <div class="mt-3">{% include "shopfront/partials/_wishlist_btn.jinja" %}</div>
 
@@ -263,13 +272,21 @@
   <div class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line bg-panel/95 px-4 py-3 backdrop-blur sm:px-5 lg:hidden">
     <div class="min-w-0 flex-1 text-sm">
       <p class="truncate font-medium">{{ product.title }}</p>
+      {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
       <p class="text-accent" x-text="fmt(displayPrice)"></p>
+      {% endif %}
     </div>
+    {% if store_profile and store_profile.catalog_mode_enabled %}
+    {% set p = product %}
+    {% set wa_enabled = true %}
+    <div class="shrink-0">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+    {% else %}
     <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="flex shrink-0 gap-2">
       <input type="hidden" name="product" value="{{ product.slug }}">
       <button type="submit" name="buy_now" value="1" class="border border-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-ink">Buy now</button>
       <button type="submit" class="bg-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-paper">Add to bag</button>
     </form>
+    {% endif %}
   </div>
 </div>
 {% endblock %}

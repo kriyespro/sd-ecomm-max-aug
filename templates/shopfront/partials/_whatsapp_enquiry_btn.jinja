@@ -8,10 +8,15 @@
      page passes `whatsapp_enquiry_on_detail` instead.
    - `wa_style` — 'block' renders a full-width labelled button (product
      page, next to Buy now / Add to bag); anything else (the default) is
-     the small square icon used on product cards. #}
+     the small square icon used on product cards.
+   Catalogue mode (`store_profile.catalog_mode_enabled`) forces this on via
+   `wa_enabled=True` at the includer, independent of the two flags above;
+   price is left out of the prefilled message when catalogue mode also has
+   `catalog_show_price` off. #}
 {% set _wa_enabled = wa_enabled if wa_enabled is defined else (store_profile.whatsapp_enquiry_enabled if store_profile else False) %}
 {% if store_profile and _wa_enabled and store_profile.whatsapp_digits %}
-{% set _wa_text = "Hi, I'm interested in " ~ p.title ~ " (" ~ (p.current_price | money) ~ ") — "
+{% set _wa_price = " (" ~ (p.current_price | money) ~ ")" if (not store_profile.catalog_mode_enabled or store_profile.catalog_show_price) else "" %}
+{% set _wa_text = "Hi, I'm interested in " ~ p.title ~ _wa_price ~ " — "
                    ~ request.build_absolute_uri(url('shopfront:product', kwargs={'slug': p.slug})) %}
 {% set _wa_href = "https://wa.me/" ~ store_profile.whatsapp_digits ~ "?text=" ~ (_wa_text | urlencode) %}
 {% if wa_style == 'block' %}

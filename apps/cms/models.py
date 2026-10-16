@@ -719,6 +719,15 @@ class StoreProfile(TenantScopedModel):
         default=False,
         help_text="Also show it on the product page itself, next to Buy now / Add to bag.",
     )
+    catalog_mode_enabled = models.BooleanField(
+        default=False,
+        help_text="Turn this store into an enquiry-only catalogue: hides Add to cart / "
+                  "Buy now everywhere, replaced by a WhatsApp Enquiry button.",
+    )
+    catalog_show_price = models.BooleanField(
+        default=True,
+        help_text="Show price while in catalogue mode. Turn off for price-on-request.",
+    )
     address = models.TextField(
         blank=True, help_text="Full postal address, shown in the footer.",
     )

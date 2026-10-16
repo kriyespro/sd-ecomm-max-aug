@@ -349,21 +349,29 @@ class PlatformTrackingView(PlatformAdminRequiredMixin, UpdateView):
 class WhatsAppEnquiryForm(forms.ModelForm):
     class Meta:
         model = StoreProfile
-        fields = ["whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"]
+        fields = [
+            "whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail",
+            "catalog_mode_enabled", "catalog_show_price",
+        ]
         labels = {
             "whatsapp_enquiry_enabled": "Show a WhatsApp button next to Add to cart "
                                         "on every product card",
             "whatsapp_enquiry_on_detail": "Also show it on the product page itself, "
                                           "next to Buy now / Add to bag",
+            "catalog_mode_enabled": "Catalogue mode — hide Add to cart / Buy now "
+                                    "everywhere, enquiry via WhatsApp only",
+            "catalog_show_price": "Show price while in catalogue mode",
         }
 
     def clean(self):
         cleaned = super().clean()
-        if (
-            (cleaned.get("whatsapp_enquiry_enabled") or cleaned.get("whatsapp_enquiry_on_detail"))
-            and not self.instance.whatsapp
-        ):
-            for field in ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail"):
+        wants_whatsapp = (
+            cleaned.get("whatsapp_enquiry_enabled")
+            or cleaned.get("whatsapp_enquiry_on_detail")
+            or cleaned.get("catalog_mode_enabled")
+        )
+        if wants_whatsapp and not self.instance.whatsapp:
+            for field in ("whatsapp_enquiry_enabled", "whatsapp_enquiry_on_detail", "catalog_mode_enabled"):
                 if cleaned.get(field):
                     self.add_error(field, "Add a WhatsApp number on Store profile first.")
         return cleaned
@@ -387,6 +395,8 @@ class WhatsAppEnquiryView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView
                      changes={
                          "whatsapp_enquiry_enabled": self.object.whatsapp_enquiry_enabled,
                          "whatsapp_enquiry_on_detail": self.object.whatsapp_enquiry_on_detail,
+                         "catalog_mode_enabled": self.object.catalog_mode_enabled,
+                         "catalog_show_price": self.object.catalog_show_price,
                      },
                      request=self.request)
         messages.success(self.request, "WhatsApp enquiry button settings saved.")
