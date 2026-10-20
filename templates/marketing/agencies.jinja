@@ -1,0 +1,289 @@
+{% extends "base.jinja" %}
+{# Public B2B page: pitch to freelancers / agencies / designers who build and
+   manage stores for their OWN clients (the DGC role), not to merchants.
+   Distinct from marketing/partners.jinja, which pitches referral commission. #}
+
+{% block title %}Build online stores for your clients | {{ brand.name }} for agencies{% endblock %}
+{% block meta_description %}{{ brand.name }} for freelancers, agencies and designers: one login to build and manage a branded online store for every client. Your own wholesale rate, your client never sees it. No application, no card.{% endblock %}
+
+{% block head %}
+{% if not site_css_href() %}
+<script>
+  tailwind.config = {
+    theme: { extend: {
+      fontFamily: {
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        display: ['"Space Grotesk"', 'Inter', 'sans-serif'],
+      },
+      colors: { brand: {
+        50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',
+        500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81',
+      }},
+    }},
+  };
+</script>
+{% endif %}
+<style>
+  html { scroll-behavior: smooth; }
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  .aurora {
+    background:
+      radial-gradient(42rem 42rem at 12% -12%, #e0e7ff 0%, transparent 60%),
+      radial-gradient(34rem 34rem at 96% -4%, #ede9fe 0%, transparent 55%);
+  }
+  details > summary { list-style: none; }
+  details > summary::-webkit-details-marker { display: none; }
+  details[open] .chev { transform: rotate(180deg); }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
+</style>
+{% endblock %}
+
+{% block body %}
+<svg width="0" height="0" class="absolute" aria-hidden="true"><defs>
+  <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6366f1"/><stop offset="0.55" stop-color="#7c3aed"/><stop offset="1" stop-color="#4f46e5"/>
+  </linearGradient>
+  <pattern id="p-grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M40 0H0V40" fill="none" stroke="#e2e8f0" stroke-width="1"/>
+  </pattern>
+</defs></svg>
+
+{% macro ic(name) %}
+<svg class="h-full w-full" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  {% if name == 'layers' %}<path d="M12 3 2 8l10 5 10-5-10-5Z" fill="currentColor" fill-opacity=".14"/><path d="M12 3 2 8l10 5 10-5-10-5ZM2 13l10 5 10-5M2 18l10 5 10-5"/>
+  {% elif name == 'tag' %}<path d="m12 2 9 9-9 9-9-9z" fill="currentColor" fill-opacity=".14"/><path d="M4 11 13 2h6a2 2 0 0 1 2 2v6l-9 9z"/><circle cx="16" cy="7" r="1.6" fill="currentColor"/>
+  {% elif name == 'lock' %}<rect x="5" y="11" width="14" height="9" rx="2" fill="currentColor" fill-opacity=".14"/><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+  {% elif name == 'copy' %}<rect x="9" y="9" width="11" height="11" rx="2" fill="currentColor" fill-opacity=".14"/><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1"/>
+  {% elif name == 'users' %}<circle cx="9" cy="8" r="3.2" fill="currentColor" fill-opacity=".14"/><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.5a3 3 0 0 1 0 5.8M18 20c0-2.5-1.2-4.7-3-6"/>
+  {% elif name == 'bolt' %}<path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" fill-opacity=".14"/><path d="M13 2 4 14h6l-1 8 9-12h-6z"/>
+  {% elif name == 'shield' %}<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" fill="currentColor" fill-opacity=".14"/><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/>
+  {% elif name == 'check' %}<circle cx="12" cy="12" r="9" fill="currentColor" fill-opacity=".12"/><path d="m8 12.5 2.5 2.5L16 9"/>
+  {% elif name == 'arrow' %}<path d="M5 12h14M13 6l6 6-6 6"/>
+  {% endif %}
+</svg>
+{% endmacro %}
+
+{% macro cta(label, anchor="") %}
+<a href="{{ url('accounts:affiliate_join') }}{{ '#' + anchor if anchor }}" class="group inline-flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 font-600 text-white shadow-lg shadow-brand-600/25 transition hover:-translate-y-0.5 hover:bg-brand-500 sm:w-auto">
+  {{ label }} <span class="h-4 w-4 transition group-hover:translate-x-0.5">{{ ic('arrow') }}</span>
+</a>
+{% endmacro %}
+
+<div class="bg-white font-sans text-slate-900">
+
+  {# ===== NAV ===== #}
+  <header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/75 backdrop-blur-lg">
+    <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+      <a href="/" class="inline-flex items-center gap-2">
+        <svg class="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
+          <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="font-display text-lg font-700 tracking-tight">shop<span class="text-brand-600">inaday</span></span>
+      </a>
+      <nav class="hidden items-center gap-8 text-sm font-500 text-slate-600 md:flex">
+        <a href="/#features" class="hover:text-slate-900">Platform</a>
+        <a href="#who" class="font-600 text-brand-700">Agencies</a>
+        <a href="{{ url('partners') }}" class="hover:text-slate-900">Partners</a>
+        <a href="#faq" class="hover:text-slate-900">FAQ</a>
+      </nav>
+      <div class="flex items-center gap-3 text-sm font-500">
+        <a href="{{ url('accounts:login') }}" class="hidden text-slate-600 hover:text-slate-900 sm:block">Sign in</a>
+        {{ cta("Get your DGC login") }}
+      </div>
+    </div>
+  </header>
+
+  {# ===== HERO ===== #}
+  <section class="aurora relative overflow-hidden">
+    <svg class="pointer-events-none absolute inset-0 -z-0 h-full w-full opacity-60" aria-hidden="true"><rect width="100%" height="100%" fill="url(#p-grid)"/></svg>
+    <div class="relative mx-auto max-w-4xl px-5 pb-16 pt-20 text-center sm:pt-28">
+      <span class="mb-5 inline-flex items-center gap-2 rounded-full border border-brand-200 bg-white/70 px-3 py-1 text-xs font-600 text-brand-700 shadow-sm backdrop-blur">
+        <span class="h-1.5 w-1.5 rounded-full bg-brand-500"></span> For freelancers, agencies &amp; designers
+      </span>
+      <h1 class="mx-auto max-w-3xl font-display text-4xl font-700 leading-[1.05] tracking-tight sm:text-5xl">
+        Build stores for your clients.
+        <span class="bg-gradient-to-r from-brand-600 via-violet-600 to-brand-500 bg-clip-text text-transparent">Not for yourself.</span>
+      </h1>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-slate-600">
+        One login manages every client's store — a new one goes live with demo content in minutes.
+        You pay {{ brand.name }} your own rate; what you bill your client is between the two of you.
+        They log in with their own account. They never see your rate.
+      </p>
+      <div class="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        {{ cta("Start managing client stores") }}
+        <a href="#how" class="w-full rounded-xl border border-slate-300 bg-white px-6 py-3 font-600 text-slate-700 transition hover:bg-slate-50 sm:w-auto">How it works</a>
+      </div>
+      <p class="mt-5 text-xs text-slate-400">No application. No card. Instant DGC access.</p>
+    </div>
+  </section>
+
+  {# ===== WHO IT'S FOR ===== #}
+  <section id="who" class="mx-auto max-w-5xl px-5 py-16">
+    <div class="reveal grid gap-5 sm:grid-cols-3">
+      {% set who = [
+        (ic('bolt'), 'Freelancers', 'Taking on a client\'s online store? Launch it the same day you quote it, demo content included.'),
+        (ic('layers'), 'Agencies', 'Run every client\'s store from one Mission Control login. Add your team as scoped staff per store, not shared admin access.'),
+        (ic('tag'), 'Designers', 'Bring the brand; the storefront, payments and checkout are already built. Spend your time on the look, not the plumbing.'),
+      ] %}
+      {% for glyph, title, body in who %}
+      <div class="rounded-2xl border border-slate-200 p-6">
+        <div class="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 p-2.5 text-white">{{ glyph }}</div>
+        <h3 class="font-600">{{ title }}</h3>
+        <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===== HOW IT WORKS ===== #}
+  <section id="how" class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-5xl px-5 py-20">
+      <div class="reveal mx-auto max-w-2xl text-center">
+        <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">From client call to live store</h2>
+        <p class="mt-3 text-slate-600">No application to wait on — your login works the moment you join.</p>
+      </div>
+      <div class="mt-14 grid gap-6 md:grid-cols-4">
+        {% set steps = [
+          ('Get your DGC login', 'Sign in with Google. No application, no card — you can create your first client store right away.'),
+          ('Create the store', 'Name it, pick a plan. It goes live on its own address instantly, already filled with editable demo content to walk the client through.'),
+          ('Make it theirs', 'Swap the theme, add their products, logo and copy. Point it at their own domain whenever it\'s ready.'),
+          ('Hand over the keys', 'The client gets their own login and owns the store. You stay attached as their manager — invisible unless they need you.'),
+        ] %}
+        {% for title, body in steps %}
+        <div class="reveal rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+          <span class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 font-display text-lg font-700 text-brand-600 ring-1 ring-brand-100">{{ loop.index }}</span>
+          <h3 class="mt-3 font-600 text-slate-900">{{ title }}</h3>
+          <p class="mt-2 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="reveal mt-12 flex justify-center">{{ cta("Start managing client stores") }}</div>
+    </div>
+  </section>
+
+  {# ===== FEATURE GRID ===== #}
+  <section class="mx-auto max-w-5xl px-5 py-20">
+    <div class="reveal mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Built for running someone else's store</h2>
+      <p class="mt-3 text-slate-600">Every claim here is a feature already in Mission Control — not a roadmap item.</p>
+    </div>
+    <div class="reveal mt-12 grid gap-x-10 gap-y-8 sm:grid-cols-2 lg:grid-cols-3">
+      {% set feats = [
+        (ic('layers'), 'One login, every client\'s store', 'Switch between every store you manage from a single account and store picker — no separate logins to juggle per client.'),
+        (ic('tag'), 'Your own rate', 'You pay ' ~ brand.name ~ '\'s plan rate as a DGC; what you bill your client is yours to decide. The spread is your margin.'),
+        (ic('lock'), 'Your rate stays yours', 'The client\'s own team only ever sees the plan\'s retail price in their billing screen — never what you pay.'),
+        (ic('copy'), 'Reuse a build as a template', 'Clone a finished store\'s catalogue, pages and theme onto the next client\'s store instead of starting from zero.'),
+        (ic('users'), 'Staff, scoped per store', 'Add a designer or assistant as staff on one client\'s store only — not a shared login to every store you run.'),
+        (ic('shield'), 'Their numbers stay theirs', 'You manage the setup. Mission Control never shows you a client store\'s own revenue, orders or customer data.'),
+      ] %}
+      {% for glyph, title, body in feats %}
+      <div class="reveal flex gap-4">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 p-2.5 text-brand-600 ring-1 ring-brand-100">{{ glyph }}</div>
+        <div>
+          <h3 class="font-600 text-slate-900">{{ title }}</h3>
+          <p class="mt-1 text-sm leading-relaxed text-slate-600">{{ body }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===== COMPARISON ===== #}
+  <section class="border-y border-slate-200 bg-slate-50">
+    <div class="mx-auto max-w-4xl px-5 py-20">
+      <h2 class="reveal text-center font-display text-3xl font-700 tracking-tight sm:text-4xl">Delivering a client's store, before and after</h2>
+      <div class="reveal mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="grid grid-cols-[1.1fr_1fr_1fr] bg-slate-900 text-xs font-600 text-white sm:text-sm">
+          <div class="p-3 sm:p-4"></div>
+          <div class="p-3 sm:p-4">Freelancing it alone</div>
+          <div class="bg-brand-600 p-3 sm:p-4">With {{ brand.name }}</div>
+        </div>
+        {% set rows = [
+          ('Time to first live site', 'Days of setup before there\'s anything to show', 'Live the same call, with demo content already in'),
+          ('Who holds the login after launch', 'You, until you hand everything over by hand', 'Client gets their own login immediately; you stay on as manager'),
+          ('Pricing a new client', 'Quote blind and hope it covers your time', 'A fixed partner rate per plan — your markup is a decision, not a guess'),
+          ('The next client\'s build', 'Start again from a blank store', 'Clone your last build as a starting template'),
+          ('Payments, hosting, SSL', 'Wire up Razorpay, hosting and a certificate yourself', 'Already live on the store the moment it\'s created'),
+          ('Team on a job', 'Share your own personal login', 'A staff role scoped to that one client\'s store'),
+        ] %}
+        {% for label, them, us in rows %}
+        <div class="grid grid-cols-[1.1fr_1fr_1fr] border-t border-slate-100 text-xs sm:text-sm">
+          <div class="p-3 font-600 sm:p-4">{{ label }}</div>
+          <div class="p-3 text-slate-500 sm:p-4">{{ them }}</div>
+          <div class="flex items-start gap-1.5 bg-brand-50/60 p-3 font-500 text-slate-900 sm:p-4"><span class="mt-0.5 h-4 w-4 shrink-0 text-brand-600">{{ ic('check') }}</span>{{ us }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  {# ===== FAQ ===== #}
+  <section id="faq" class="mx-auto max-w-3xl px-5 py-20">
+    <h2 class="reveal text-center font-display text-3xl font-700 tracking-tight sm:text-4xl">Questions agencies ask</h2>
+    <div class="reveal mt-10 space-y-3">
+      {% set faq = [
+        ('Do I need to apply or get approved first?', 'No. This is instant — sign in with Google and your DGC login works right away. (The separate /partners/ programme, which pays referral commission, is the one that\'s reviewed by hand.)'),
+        ('How is this different from the Partners programme?', 'Partners earn commission for referring merchants who run their own store. This is for building and running the store yourself, for your client, as their manager — you can do either, or both, without applying for one to use the other.'),
+        ('Does my client see what I pay the platform?', 'No. Their own plan/billing screen shows the retail price. Your rate as a DGC is visible only to you.'),
+        ('Can I reuse a previous build for a new client?', 'Yes. A store\'s catalogue, pages and theme can be cloned from one store onto another, so a finished build becomes a starting template for the next client.'),
+        ('Will I see my client\'s sales and customer data?', 'No. As a DGC you manage the store\'s setup — Mission Control never shows you a client store\'s own revenue, orders or customer records.'),
+        ('What does it actually cost me?', 'You pay the plan\'s partner rate for each store you create. What you charge your client for the work is entirely between the two of you.'),
+      ] %}
+      {% for q, a in faq %}
+      <details class="rounded-xl bg-white px-5 py-4 shadow-sm ring-1 ring-slate-200" {{ 'open' if loop.first }}>
+        <summary class="flex cursor-pointer items-center justify-between gap-4 font-600">
+          {{ q }}
+          <svg class="chev h-4 w-4 shrink-0 text-slate-400 transition" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </summary>
+        <p class="mt-3 text-slate-600">{{ a }}</p>
+      </details>
+      {% endfor %}
+    </div>
+  </section>
+
+  {# ===== FINAL CTA ===== #}
+  <section class="bg-gradient-to-br from-brand-700 via-brand-600 to-violet-600">
+    <div class="mx-auto max-w-3xl px-5 py-16 text-center text-white sm:py-24">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-5xl">Your next client site starts today.</h2>
+      <p class="mx-auto mt-4 max-w-xl text-lg text-brand-100">No application. No card. Sign in and your first client store is ready to build.</p>
+      <div class="mt-9 flex justify-center">
+        <a href="{{ url('accounts:affiliate_join') }}" class="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-6 py-3 font-600 text-brand-700 shadow-lg transition hover:-translate-y-0.5 hover:bg-brand-50">
+          Get your DGC login <span class="h-4 w-4">{{ ic('arrow') }}</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  {# ===== FOOTER ===== #}
+  <footer class="border-t border-slate-200 bg-white">
+    <div class="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-5 py-8 text-sm text-slate-500 sm:flex-row">
+      <a href="/" class="inline-flex items-center gap-2">
+        <svg class="h-6 w-6" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
+          <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="font-display font-700 text-slate-700">shop<span class="text-brand-600">inaday</span></span>
+      </a>
+      <p>&copy; {{ now_year }} {{ brand.name }} · <a href="/" class="hover:text-slate-900">Home</a> · <a href="{{ url('partners') }}" class="hover:text-slate-900">Partners</a></p>
+    </div>
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var els = document.querySelectorAll('.reveal');
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      els.forEach(function (el) { el.classList.add('in'); }); return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+    }, { rootMargin: '0px 0px -8% 0px' });
+    els.forEach(function (el) { io.observe(el); });
+  })();
+</script>
+{% endblock %}

@@ -251,6 +251,19 @@ def _partner_context(form=None):
     }
 
 
+def agencies(request):
+    """Public B2B page: pitch the platform as a tool for freelancers, agencies
+    and designers who build/manage stores for their own clients (the DGC
+    role), distinct from /partners/'s referral-commission pitch."""
+    if getattr(request, "project", None):
+        return redirect("/app/")
+
+    from apps.core.brand import brand_for_request
+
+    brand = brand_for_request(request)
+    return render(request, brand.agencies_template, {"now_year": timezone.now().year})
+
+
 def partners(request):
     """Public marketing-partner (DGC) programme page + application form."""
     from apps.core.forms import PartnerApplicationForm
