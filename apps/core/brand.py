@@ -35,6 +35,7 @@ class Brand:
     landing_template: str = "marketing/landing.jinja"
     ad_template: str = "marketing/ad_landing.jinja"
     partners_template: str = "marketing/partners.jinja"
+    agencies_template: str = "marketing/agencies.jinja"
 
     @property
     def primary_host(self):
@@ -79,6 +80,7 @@ def _extra_brands():
             landing_template=raw.get("landing_template") or Brand.landing_template,
             ad_template=raw.get("ad_template") or Brand.ad_template,
             partners_template=raw.get("partners_template") or Brand.partners_template,
+            agencies_template=raw.get("agencies_template") or Brand.agencies_template,
         ))
     return out
 
