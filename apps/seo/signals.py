@@ -1,5 +1,7 @@
-"""Ping IndexNow when a storefront-visible product is saved. Connected to
-``Product`` post_save in ``SeoConfig.ready`` (avoids a load-time import cycle)."""
+"""Ping IndexNow when storefront-visible content is saved. Connected to
+``Product``/``Page``/``Category`` post_save in ``SeoConfig.ready`` (avoids a
+load-time import cycle). Was Product-only — a CMS page going live or a
+category being renamed never reached Bing/Yandex/Seznam at all."""
 
 import logging
 
@@ -24,4 +26,40 @@ def product_saved(sender, instance, **kwargs):
     try:
         indexnow_submit.delay(host, urls)
     except Exception:  # noqa: BLE001 - broker down must not break a save
+        logger.debug("indexnow enqueue failed", exc_info=True)
+
+
+def _host_for(project):
+    return getattr(project, "public_host", "") if project else ""
+
+
+def page_saved(sender, instance, **kwargs):
+    if not settings.SEO_INDEXNOW_KEY:
+        return
+    if not getattr(instance, "is_live", False) or not getattr(instance, "show_in_sitemap", True):
+        return
+    host = _host_for(getattr(instance, "project", None))
+    if not host:
+        return
+    from .tasks import indexnow_submit
+
+    try:
+        indexnow_submit.delay(host, [f"https://{host}/page/{instance.slug}/"])
+    except Exception:  # noqa: BLE001
+        logger.debug("indexnow enqueue failed", exc_info=True)
+
+
+def category_saved(sender, instance, **kwargs):
+    if not settings.SEO_INDEXNOW_KEY:
+        return
+    if not getattr(instance, "is_active", False):
+        return
+    host = _host_for(getattr(instance, "project", None))
+    if not host:
+        return
+    from .tasks import indexnow_submit
+
+    try:
+        indexnow_submit.delay(host, [f"https://{host}/c/{instance.slug}/"])
+    except Exception:  # noqa: BLE001
         logger.debug("indexnow enqueue failed", exc_info=True)

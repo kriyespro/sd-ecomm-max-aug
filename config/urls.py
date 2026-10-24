@@ -15,6 +15,7 @@ from apps.core.landing_pages import PAGES as AD_PAGES
 from apps.core.views import ad_landing, legal_page
 from apps.core.views import agencies as agencies_view
 from apps.core.views import partners as partners_view
+from apps.core.views import pricing as pricing_view
 from apps.core.views import root as root_view
 from apps.crm.capture import capture_lead
 from apps.projects.views import domain_check
@@ -37,6 +38,7 @@ urlpatterns = [
     path("shop/", include("apps.storefront.ornza_urls", namespace="ornza")),
     path("partners/", partners_view, name="partners"),
     path("agencies/", agencies_view, name="agencies"),
+    path("pricing/", pricing_view, name="pricing"),
     path("crm/capture/", capture_lead, name="crm_capture"),
     path("privacy/", legal_page, {"kind": "privacy"}, name="privacy"),
     path("terms/", legal_page, {"kind": "terms"}, name="terms"),

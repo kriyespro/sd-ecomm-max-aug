@@ -1,0 +1,40 @@
+{# Pricing section — shared by landing.jinja (as an in-page #pricing anchor)
+   and pricing.jinja (as the main content of its own indexable URL). Needs
+   ``plans`` + ``popular_code`` in context. #}
+{% from "marketing/_macros.jinja" import icon with context %}
+{% if plans %}
+<section id="pricing" class="border-t border-slate-200 bg-slate-50">
+  <div class="mx-auto max-w-6xl px-5 py-20">
+    <div class="reveal mx-auto max-w-2xl text-center">
+      <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Simple pricing</h2>
+      <p class="mt-4 text-slate-600">Prices in INR. Switch or cancel anytime from the dashboard.</p>
+    </div>
+    <div class="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {% for p in plans %}
+      {% set popular = p.code == popular_code %}
+      <div class="reveal relative flex flex-col rounded-2xl border bg-white p-6
+        {% if popular %}border-brand-500 shadow-xl shadow-brand-600/10 ring-1 ring-brand-500{% else %}border-slate-200{% endif %}">
+        {% if popular %}<span class="absolute -top-3 left-6 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-brand-600 to-violet-600 px-3 py-0.5 text-xs font-600 text-white">
+          <span class="h-3 w-3">{{ icon('sparkles') }}</span> Most popular
+        </span>{% endif %}
+        <h3 class="font-display font-700 text-slate-900">{{ p.name }}</h3>
+        {% if p.tagline %}<p class="mt-1 text-sm text-slate-500">{{ p.tagline }}</p>{% endif %}
+        <p class="mt-4 font-display text-4xl font-700 text-slate-900">
+          &#8377;{{ p.price_monthly|int }}<span class="text-sm font-400 text-slate-500">/mo</span>
+        </p>
+        {% if p.price_yearly %}<p class="mt-1 text-xs text-slate-400">or &#8377;{{ p.price_yearly|int }} billed yearly</p>{% endif %}
+        {% if p.features %}
+        <ul class="mt-5 space-y-2 text-sm text-slate-600">
+          {% for f in p.features %}<li class="flex gap-2"><span class="h-4 w-4 shrink-0 text-brand-600">{{ icon('check') }}</span> {{ f }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        <a href="{{ url('accounts:signup') }}?plan={{ p.code }}" class="mt-6 rounded-lg px-4 py-2 text-center text-sm font-600 transition
+          {% if popular %}bg-brand-600 text-white hover:bg-brand-500{% else %}bg-slate-900 text-white hover:bg-slate-800{% endif %}">
+          Start with {{ p.name }}
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}

@@ -130,16 +130,9 @@ def trusted_base_url(request, project=None) -> str:
     project = (project or getattr(request, "project", None)) or None
     host = ""
     if project is not None:
-        host = normalize_host(getattr(project, "primary_domain", "") or "")
-        if not host:
-            from apps.projects.models import Domain
+        from apps.projects.models import canonical_host
 
-            host = normalize_host(
-                Domain.objects.filter(project=project, is_verified=True)
-                .values_list("host", flat=True)
-                .first()
-                or ""
-            )
+        host = normalize_host(canonical_host(project))
     if not host and _host_is_known(req_host):
         host = req_host
     if not host:

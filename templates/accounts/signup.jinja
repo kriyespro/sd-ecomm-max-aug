@@ -1,6 +1,8 @@
 {% extends "base.jinja" %}
 
 {% block title %}Start your free trial{% endblock %}
+{% block meta_description %}Start a {{ trial_days }}-day free trial on {{ brand.name }} — no card needed, cancel anytime.{% endblock %}
+{% block robots %}noindex,follow{% endblock %}
 
 {% block body %}
 <div class="flex min-h-screen items-center justify-center px-4 py-10">

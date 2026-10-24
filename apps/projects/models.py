@@ -43,6 +43,41 @@ def _is_platform_host(host: str) -> bool:
     return any(host == b or host.endswith("." + b) for b in bases)
 
 
+def canonical_host(project) -> str:
+    """The one host search engines / generated content should treat as this
+    project's canonical identity, or ``""`` if it has none yet.
+
+    Single source of truth for "which host is this store's real one" — used
+    by :attr:`Project.public_url` (merchant-facing) and
+    ``apps.core.middleware.trusted_base_url`` (sitemap/robots/canonical
+    generation). The two used to pick independently and could disagree:
+    ``trusted_base_url`` trusted ``primary_domain`` outright without ever
+    comparing it against a *better* verified custom domain the way this
+    selection does, so a store could end up with a canonical tag pointing at
+    a different host than its own sitemap did.
+
+    Preference: a verified custom domain (oldest/most "primary" first), else
+    ``primary_domain`` (platform-staff-set, trusted without verification —
+    see the module docstring in ``apps.core.middleware``), else the first
+    verified domain of any kind. Custom domains always win over a
+    ``*.<platform>`` subdomain.
+    """
+    verified = sorted(
+        (d for d in project.domains.all() if d.is_verified),
+        key=lambda d: (not d.is_primary, d.created_at),
+    )
+    hosts = [d.host.strip().lower() for d in verified]
+    pd = (project.primary_domain or "").strip().lower()
+    if pd and pd not in hosts:
+        hosts.insert(0, pd)
+    if not hosts:
+        return ""
+    # stable sort: custom domains keep their relative order and come before
+    # any *.<platform> subdomain.
+    hosts.sort(key=_is_platform_host)
+    return hosts[0]
+
+
 class Project(TimeStampedModel):
     class Status(models.TextChoices):
         DRAFT = "draft", "Draft"
@@ -160,19 +195,8 @@ class Project(TimeStampedModel):
         store's ``<slug>.<platform>`` subdomain. Reads verified ``Domain`` rows,
         plus ``primary_domain`` in case it isn't mirrored as one.
         """
-        verified = sorted(
-            (d for d in self.domains.all() if d.is_verified),
-            key=lambda d: (not d.is_primary, d.created_at),
-        )
-        hosts = [d.host.strip().lower() for d in verified]
-        pd = (self.primary_domain or "").strip().lower()
-        if pd and pd not in hosts:
-            hosts.insert(0, pd)
-        if not hosts:
-            return None
-        # stable sort: custom domains keep their order and come before subdomains
-        hosts.sort(key=_is_platform_host)
-        return f"https://{hosts[0]}/"
+        host = canonical_host(self)
+        return f"https://{host}/" if host else None
 
     @property
     def public_host(self):

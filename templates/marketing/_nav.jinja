@@ -1,0 +1,25 @@
+{# Marketing site header — shared by landing.jinja and pricing.jinja. Needs
+   ``brand`` + ``plans`` in context. #}
+{% from "marketing/_macros.jinja" import logo with context %}
+<header class="sticky top-0 z-40 border-b border-slate-200/60 bg-white/75 backdrop-blur-lg">
+  <div class="mx-auto flex h-16 max-w-6xl items-center justify-between px-5">
+    <a href="/" class="shrink-0">{{ logo() }}</a>
+    <nav class="hidden items-center gap-8 text-sm font-500 text-slate-600 md:flex">
+      <a href="/#features" class="hover:text-slate-900">Features</a>
+      <a href="/#how" class="hover:text-slate-900">How it works</a>
+      <a href="/#domains" class="hover:text-slate-900">Domains</a>
+      <a href="/#compare" class="hover:text-slate-900">Why {{ brand.name }}</a>
+      {% if plans %}<a href="{{ url('pricing') }}" class="hover:text-slate-900">Pricing</a>{% endif %}
+      <a href="{{ url('partners') }}" class="hover:text-slate-900">Partners</a>
+      <a href="{{ url('agencies') }}" class="hover:text-slate-900">Agencies</a>
+      <a href="/#faq" class="hover:text-slate-900">FAQ</a>
+    </nav>
+    <div class="flex items-center gap-3 text-sm font-500">
+      <a href="{{ url('accounts:login') }}" class="hidden text-slate-600 hover:text-slate-900 sm:block">Sign in</a>
+      <a href="{{ url('accounts:signup') }}" class="group inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2 font-600 text-white transition hover:bg-slate-800">
+        Start free trial
+        <svg class="h-4 w-4 transition group-hover:translate-x-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </a>
+    </div>
+  </div>
+</header>

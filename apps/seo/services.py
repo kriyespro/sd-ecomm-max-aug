@@ -110,33 +110,43 @@ def organization_schema(project):
     return data
 
 
-def product_schema(product, *, available=None, base_url=""):
-    price = getattr(product, "current_price", None) or getattr(product, "price", 0)
-    in_stock = not (available is not None and available <= 0)
+def product_schema(product, *, available=None, base_url="", include_offer=True):
+    """``include_offer=False`` for a catalogue-only / enquiry-only store: with
+    no cart or checkout, publishing a schema.org ``Offer`` (which tells search
+    engines "this is purchasable here, at this price, in this stock state")
+    is misleading and can get flagged by Google Merchant / Rich Results as a
+    price/availability mismatch against the page's actual content."""
     data = {
         "@context": "https://schema.org",
         "@type": "Product",
         "name": product.title,
         "sku": product.sku or "",
         "description": _strip_tags(product.short_description or product.description or "")[:500],
-        "offers": {
+    }
+    if include_offer:
+        price = getattr(product, "current_price", None) or getattr(product, "price", 0)
+        in_stock = not (available is not None and available <= 0)
+        data["offers"] = {
             "@type": "Offer",
             "price": str(price),
             "priceCurrency": product.project.currency,
             "availability": "https://schema.org/InStock" if in_stock
             else "https://schema.org/OutOfStock",
             "url": (base_url.rstrip("/") + f"/p/{product.slug}/") if base_url else "",
-        },
-    }
+        }
     img = _primary_image_url(product)
     if img:
         data["image"] = (base_url.rstrip("/") + img) if (base_url and img.startswith("/")) else img
     if getattr(product, "brand_id", None):
         data["brand"] = {"@type": "Brand", "name": product.brand.name}
     if getattr(product, "rating_count", 0):
+        # schema.org/Google require ratingValue within [worstRating, bestRating]
+        # (default 1-5) — clamp defensively against a data quirk (e.g. an
+        # average of 0 while reviewCount > 0).
+        rating = max(1.0, min(5.0, float(product.rating_avg or 0) or 1.0))
         data["aggregateRating"] = {
             "@type": "AggregateRating",
-            "ratingValue": str(product.rating_avg),
+            "ratingValue": str(round(rating, 1)),
             "reviewCount": product.rating_count,
         }
     return data
@@ -209,6 +219,21 @@ def sitemap_entries(project):
                         "changefreq": "weekly", "priority": "0.6"})
 
     return entries
+
+
+def marketing_sitemap_entries():
+    """Sitemap rows for the platform's own marketing site (apex domain) — the
+    pages that sell the SaaS, as opposed to a tenant's storefront. These never
+    had any sitemap coverage: ``sitemap_entries`` above is project-scoped and
+    the apex host has no ``request.project``."""
+    return [
+        {"loc": "/", "changefreq": "weekly", "priority": "1.0"},
+        {"loc": "/pricing/", "changefreq": "monthly", "priority": "0.8"},
+        {"loc": "/agencies/", "changefreq": "monthly", "priority": "0.7"},
+        {"loc": "/partners/", "changefreq": "monthly", "priority": "0.6"},
+        {"loc": "/privacy/", "changefreq": "yearly", "priority": "0.3"},
+        {"loc": "/terms/", "changefreq": "yearly", "priority": "0.3"},
+    ]
 
 
 def resolve_redirect(project, path):

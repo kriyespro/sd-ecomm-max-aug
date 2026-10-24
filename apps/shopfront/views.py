@@ -209,6 +209,14 @@ class CategoryView(ShopView):
     """Canonical per-category URL — ``/c/<slug>/`` — reusing the shop listing."""
 
     def get(self, request, slug):
+        project = current_project(request)
+        # Unlike the generic ``/shop/?category=`` filter (a legitimate "no
+        # results" state), an unknown slug on the canonical ``/c/<slug>/`` URL
+        # used to fall through to the same 200 empty-grid page — a soft-404
+        # (stale link, typo, deleted category) that search engines would
+        # crawl and could index as thin content.
+        if not Category.objects.filter(project=project, slug=slug, is_active=True).exists():
+            raise Http404
         request.GET = request.GET.copy()
         request.GET["category"] = slug
         return super().get(request)
@@ -354,6 +362,7 @@ class ProductView(View):
             "type": "product", "obj": product, "crumbs": _crumbs,
             "available": ctx.get("available"),
             "image": _seo_image,
+            "catalog_mode": catalog_mode_enabled(project),
         }
         return render(request, "shopfront/product.jinja", ctx)
 

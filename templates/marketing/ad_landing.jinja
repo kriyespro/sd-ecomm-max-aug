@@ -6,13 +6,10 @@
 {% block title %}{{ page.title }}{% endblock %}
 {% block meta_description %}{{ page.description }}{% endblock %}
 
+{% block structured_data %}<script type="application/ld+json">{{ faq_jsonld|safe }}</script>{% endblock %}
+
 {% block head %}
-<link rel="canonical" href="{{ request.scheme }}://{{ request.get_host() }}/{{ slug }}/">
-<meta property="og:type" content="website">
-<meta property="og:title" content="{{ page.title }}">
-<meta property="og:description" content="{{ page.description }}">
 <meta name="theme-color" content="#4f46e5">
-<script type="application/ld+json">{{ faq_jsonld|safe }}</script>
 <script>document.documentElement.classList.add('js');</script>
 {% if not site_css_href() %}
 <script>

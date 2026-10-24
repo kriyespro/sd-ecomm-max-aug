@@ -29,9 +29,53 @@ def root(request):
     """
     if getattr(request, "project", None):
         return redirect("/app/")
+    import json
+
     from apps.core.brand import brand_for_request
 
-    return render(request, brand_for_request(request).landing_template, _landing_context())
+    brand = brand_for_request(request)
+    base = f"{request.scheme}://{request.get_host()}"
+    org = {"@context": "https://schema.org", "@type": "Organization", "name": brand.name, "url": base + "/"}
+    if brand.logo:
+        org["logo"] = brand.logo if brand.logo.startswith("http") else base + brand.logo
+    ctx = _landing_context()
+    ctx["home_jsonld"] = json.dumps([
+        {"@context": "https://schema.org", "@type": "WebSite", "name": brand.name, "url": base + "/"},
+        org,
+    ], separators=(",", ":"), ensure_ascii=False)
+    return render(request, brand.landing_template, ctx)
+
+
+def pricing(request):
+    """Standalone ``/pricing/`` page — previously only an in-page ``#pricing``
+    anchor on the landing page, so it had no title/description/canonical of
+    its own and wasn't independently indexable or shareable."""
+    if getattr(request, "project", None):
+        return redirect("/app/")
+    import json
+
+    from apps.core.brand import brand_for_request
+
+    ctx = _landing_context()
+    brand = brand_for_request(request)
+    base = f"{request.scheme}://{request.get_host()}"
+    ctx["pricing_jsonld"] = json.dumps({
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": f"{brand.name} subscription plans",
+        "provider": {"@type": "Organization", "name": brand.name, "url": base + "/"},
+        "offers": [
+            {
+                "@type": "Offer",
+                "name": p.name,
+                "price": str(p.price_monthly),
+                "priceCurrency": "INR",
+                "url": base + "/pricing/",
+            }
+            for p in ctx["plans"]
+        ],
+    }, separators=(",", ":"), ensure_ascii=False)
+    return render(request, "marketing/pricing.jinja", ctx)
 
 
 LEGAL_UPDATED = "1 October 2026"

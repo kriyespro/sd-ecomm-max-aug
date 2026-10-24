@@ -99,6 +99,7 @@ def _json_ld_blocks(project, kind, obj, meta, seo, base_url):
     if kind == "product" and obj is not None:
         blocks.append(seo_svc.product_schema(
             obj, available=seo.get("available"), base_url=base_url,
+            include_offer=not seo.get("catalog_mode"),
         ))
     elif meta.get("structured_data"):
         sd = meta["structured_data"]

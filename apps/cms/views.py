@@ -59,9 +59,20 @@ _XML = "application/xml"
 
 
 def _sitemap_state(request):
-    """``(project, entries)`` or ``None`` when there is no sitemap to serve."""
+    """``(project, entries)`` or ``None`` when there is no sitemap to serve.
+
+    ``project`` is ``None`` both for the platform's own apex/marketing host
+    (which has its own fixed set of marketing pages, see
+    ``seo.marketing_sitemap_entries``) and for a Host the server doesn't
+    recognise at all (real 404) — ``_is_platform_host`` tells those apart.
+    """
     project = _project_or_404(request)
     if project is None:
+        from apps.core.middleware import normalize_host
+        from apps.projects.models import _is_platform_host
+
+        if _is_platform_host(normalize_host(request.get_host())):
+            return None, seo.marketing_sitemap_entries()
         return None
     from apps.seo.models import SeoSettings
 
@@ -128,16 +139,30 @@ class SitemapChunkView(View):
 
 
 class RobotsView(View):
+    # Storefront-private paths. No blanket "/*?" — that non-standard wildcard
+    # blocked every query-string URL site-wide (paginated/filtered listings
+    # included); filtered/paginated pages are kept out of the index via
+    # per-page "noindex" meta instead, so crawlers can still follow links
+    # through them to discover products.
     _DISALLOW = ("/cart/", "/checkout/", "/account/", "/order/", "/orders",
-                 "/wishlist/", "/track/", "/search/", "/*?")
+                 "/wishlist/", "/track/", "/search/")
+    # Platform-internal paths, mounted on every host (tenant or apex) —
+    # staff-gated, zero SEO value, not worth crawl budget.
+    _DISALLOW_PLATFORM = ("/sd/", "/admin/", "/accounts/", "/api/", "/metrics",
+                          "/billing/", "/payments/", "/whatsapp/", "/shipping/")
 
     def get(self, request):
         project = _project_or_404(request)
         lines = ["User-agent: *"]
-        for path in self._DISALLOW:
+        for path in self._DISALLOW + self._DISALLOW_PLATFORM:
             lines.append(f"Disallow: {path}")
         lines.append("Allow: /")
-        if project is not None:
+
+        from apps.core.middleware import normalize_host
+        from apps.projects.models import _is_platform_host
+
+        has_sitemap = project is not None or _is_platform_host(normalize_host(request.get_host()))
+        if has_sitemap:
             lines.append("")
             lines.append(f"Sitemap: {trusted_base_url(request, project)}/sitemap.xml")
         return HttpResponse("\n".join(lines) + "\n", content_type="text/plain")
