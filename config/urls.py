@@ -39,6 +39,7 @@ urlpatterns = [
     path("partners/", partners_view, name="partners"),
     path("agencies/", agencies_view, name="agencies"),
     path("pricing/", pricing_view, name="pricing"),
+    path("blog/", include("apps.blog.urls", namespace="blog")),
     path("crm/capture/", capture_lead, name="crm_capture"),
     path("privacy/", legal_page, {"kind": "privacy"}, name="privacy"),
     path("terms/", legal_page, {"kind": "terms"}, name="terms"),

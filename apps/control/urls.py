@@ -4,6 +4,7 @@ from . import ai_views as aiv
 from . import b2b_views as b2bv
 from . import backup_views as backupv
 from . import billing_views as billv
+from . import blog_views as blogv
 from . import catalog_views as cat
 from . import certificate_views as certv
 from . import onboarding_views as onbv
@@ -462,6 +463,10 @@ urlpatterns = [
     path("learning/new/", learnv.LearningCreateView.as_view(), name="learning_create"),
     path("learning/<int:pk>/", learnv.LearningUpdateView.as_view(), name="learning_edit"),
     path("learning/<int:pk>/delete/", learnv.LearningDeleteView.as_view(), name="learning_delete"),
+    path("blog/", blogv.BlogPostListView.as_view(), name="blog"),
+    path("blog/new/", blogv.BlogPostCreateView.as_view(), name="blog_create"),
+    path("blog/<int:pk>/", blogv.BlogPostUpdateView.as_view(), name="blog_edit"),
+    path("blog/<int:pk>/delete/", blogv.BlogPostDeleteView.as_view(), name="blog_delete"),
     path("testimonials/", testv.TestimonialListView.as_view(), name="testimonials"),
     path("testimonials/new/", testv.TestimonialCreateView.as_view(), name="testimonial_create"),
     path("testimonials/<int:pk>/", testv.TestimonialUpdateView.as_view(), name="testimonial_edit"),

@@ -1,0 +1,84 @@
+{% extends "base.jinja" %}
+
+{% block title %}{{ post.seo_title or post.title }}{% endblock %}
+{% block meta_description %}{{ post.seo_description or post.excerpt }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block og_image %}{% if post.cover_image %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host() }}{{ post.cover_image.url }}">{% endif %}{% endblock %}
+{% block structured_data %}<script type="application/ld+json">{{ post_jsonld|safe }}</script>{% endblock %}
+
+{% block body %}
+<div class="bg-white font-sans text-slate-900">
+  {% include "marketing/_nav.jinja" %}
+
+  <article class="mx-auto max-w-3xl px-5 py-16">
+    <nav class="text-sm text-slate-500">
+      <a href="{{ url('blog:index') }}" class="hover:underline">Blog</a>
+      {% if post.category %} / <a href="{{ url('blog:category', kwargs={'slug': post.category.slug}) }}" class="hover:underline">{{ post.category.name }}</a>{% endif %}
+    </nav>
+    <h1 class="mt-3 font-display text-3xl font-700 tracking-tight sm:text-4xl">{{ post.title }}</h1>
+    <div class="mt-4 flex items-center gap-3 text-sm text-slate-500">
+      {% if post.author %}
+      {% if post.author.avatar %}<img src="{{ post.author.avatar.url }}" alt="{{ post.author.name }}" class="h-9 w-9 rounded-full object-cover">{% endif %}
+      <span>
+        <span class="font-600 text-slate-700">{{ post.author.name }}</span>
+        {% if post.author.role %}<span class="text-slate-400"> · {{ post.author.role }}</span>{% endif %}
+      </span>
+      <span>·</span>
+      {% endif %}
+      <span>{{ post.published_at.strftime('%d %b %Y') if post.published_at else "" }}</span>
+      <span>·</span>
+      <span>{{ post.reading_minutes }} min read</span>
+    </div>
+
+    {% if post.cover_image %}
+    <img src="{{ post.cover_image.url }}" alt="{{ post.title }}" class="mt-8 w-full rounded-2xl object-cover">
+    {% endif %}
+
+    <div class="prose prose-slate mt-8 max-w-none prose-headings:font-display prose-a:text-brand-600">
+      {{ post.body|safe }}
+    </div>
+
+    {% if post.tags.all() %}
+    <div class="mt-10 flex flex-wrap gap-2">
+      {% for t in post.tags.all() %}
+      <a href="{{ url('blog:tag', kwargs={'slug': t.slug}) }}" class="rounded-full border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:border-slate-500">#{{ t.name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if post.author and post.author.bio %}
+    <div class="mt-12 flex gap-4 rounded-2xl bg-slate-50 p-5">
+      {% if post.author.avatar %}<img src="{{ post.author.avatar.url }}" alt="{{ post.author.name }}" class="h-12 w-12 shrink-0 rounded-full object-cover">{% endif %}
+      <div>
+        <p class="font-600 text-slate-800">{{ post.author.name }}</p>
+        <p class="mt-1 text-sm text-slate-600">{{ post.author.bio }}</p>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-12 rounded-2xl bg-gradient-to-br from-brand-600 to-violet-700 p-8 text-center text-white">
+      <h2 class="font-display text-2xl font-700">Start your ecommerce store in a day</h2>
+      <p class="mx-auto mt-2 max-w-md text-brand-100">Quick setup, custom domain, Razorpay checkout, full admin dashboard.</p>
+      <a href="{{ url('accounts:signup') }}" class="mt-6 inline-flex items-center gap-2 rounded-xl bg-white px-6 py-3 font-600 text-brand-700 transition hover:-translate-y-0.5 hover:bg-brand-50">Start free trial</a>
+    </div>
+  </article>
+
+  {% if related %}
+  <section class="mx-auto max-w-5xl border-t border-slate-200 px-5 py-14">
+    <h2 class="font-display text-2xl font-700 tracking-tight">Related posts</h2>
+    <div class="mt-8 grid gap-6 sm:grid-cols-3">
+      {% for p in related %}
+      <a href="{{ url('blog:detail', kwargs={'slug': p.slug}) }}" class="group block">
+        <div class="aspect-[16/10] w-full overflow-hidden rounded-xl bg-slate-100">
+          {% if p.cover_image %}<img src="{{ p.cover_image.url }}" alt="{{ p.title }}" class="h-full w-full object-cover transition group-hover:scale-105">{% endif %}
+        </div>
+        <p class="mt-3 font-600 text-slate-800">{{ p.title }}</p>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% include "marketing/_footer.jinja" %}
+</div>
+{% endblock %}

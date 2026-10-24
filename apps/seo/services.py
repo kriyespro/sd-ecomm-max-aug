@@ -226,14 +226,27 @@ def marketing_sitemap_entries():
     pages that sell the SaaS, as opposed to a tenant's storefront. These never
     had any sitemap coverage: ``sitemap_entries`` above is project-scoped and
     the apex host has no ``request.project``."""
-    return [
+    entries = [
         {"loc": "/", "changefreq": "weekly", "priority": "1.0"},
         {"loc": "/pricing/", "changefreq": "monthly", "priority": "0.8"},
         {"loc": "/agencies/", "changefreq": "monthly", "priority": "0.7"},
         {"loc": "/partners/", "changefreq": "monthly", "priority": "0.6"},
         {"loc": "/privacy/", "changefreq": "yearly", "priority": "0.3"},
         {"loc": "/terms/", "changefreq": "yearly", "priority": "0.3"},
+        {"loc": "/blog/", "changefreq": "daily", "priority": "0.7"},
     ]
+    from apps.blog.models import BlogCategory, published_posts
+
+    for post in published_posts():
+        entries.append({
+            "loc": f"/blog/{post.slug}/", "lastmod": post.updated_at,
+            "changefreq": "monthly", "priority": "0.6",
+            **({"images": [post.cover_image.url]} if post.cover_image else {}),
+        })
+    for category in BlogCategory.objects.filter(posts__is_published=True).distinct():
+        entries.append({"loc": f"/blog/category/{category.slug}/",
+                        "changefreq": "weekly", "priority": "0.4"})
+    return entries
 
 
 def resolve_redirect(project, path):

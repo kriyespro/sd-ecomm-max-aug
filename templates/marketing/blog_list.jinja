@@ -1,0 +1,67 @@
+{% extends "base.jinja" %}
+{# Blog index / category / tag archive — shared template, ``heading`` +
+   ``list_description`` + ``posts`` set by apps.blog.public_views. #}
+
+{% block title %}{{ heading }}{% if page_obj.number > 1 %} — page {{ page_obj.number }}{% endif %} | {{ brand.name }} blog{% endblock %}
+{% block meta_description %}{{ list_description }}{% endblock %}
+{% block canonical %}{{ request.scheme }}://{{ request.get_host() }}{{ request.path }}{% if page_obj.number > 1 %}?page={{ page_obj.number }}{% endif %}{% endblock %}
+
+{% block body %}
+<div class="bg-white font-sans text-slate-900">
+  {% include "marketing/_nav.jinja" %}
+
+  <section class="mx-auto max-w-5xl px-5 pt-16">
+    <p class="text-sm font-600 text-brand-600"><a href="{{ url('blog:index') }}" class="hover:underline">Blog</a>{% if category %} / {{ category.name }}{% elif tag %} / #{{ tag.name }}{% endif %}</p>
+    <h1 class="mt-2 font-display text-4xl font-700 tracking-tight sm:text-5xl">{{ heading }}</h1>
+    <p class="mt-4 max-w-2xl text-slate-600">{{ list_description }}</p>
+    {% if categories %}
+    <div class="mt-6 flex flex-wrap gap-2">
+      <a href="{{ url('blog:index') }}" class="rounded-full border px-3 py-1 text-xs font-600 {{ 'border-slate-900 bg-slate-900 text-white' if not category and not tag else 'border-slate-300 text-slate-600 hover:border-slate-500' }}">All</a>
+      {% for c in categories %}
+      <a href="{{ url('blog:category', kwargs={'slug': c.slug}) }}" class="rounded-full border px-3 py-1 text-xs font-600 {{ 'border-slate-900 bg-slate-900 text-white' if category and category.slug == c.slug else 'border-slate-300 text-slate-600 hover:border-slate-500' }}">{{ c.name }}</a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+
+  <section class="mx-auto max-w-5xl px-5 py-14">
+    <div class="grid gap-8 sm:grid-cols-2 lg:grid-cols-3">
+      {% for post in posts %}
+      <a href="{{ url('blog:detail', kwargs={'slug': post.slug}) }}" class="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 transition hover:-translate-y-1 hover:shadow-lg hover:shadow-slate-200/60">
+        <div class="aspect-[16/10] w-full overflow-hidden bg-slate-100">
+          {% if post.cover_image %}
+          <img src="{{ post.cover_image.url }}" alt="{{ post.title }}" class="h-full w-full object-cover transition group-hover:scale-105">
+          {% endif %}
+        </div>
+        <div class="flex flex-1 flex-col gap-2 p-5">
+          {% if post.category %}<span class="text-xs font-600 uppercase tracking-wide text-brand-600">{{ post.category.name }}</span>{% endif %}
+          <h2 class="font-display text-lg font-700 leading-snug text-slate-900">{{ post.title }}</h2>
+          <p class="line-clamp-2 flex-1 text-sm text-slate-600">{{ post.excerpt }}</p>
+          <div class="mt-2 flex items-center gap-2 text-xs text-slate-400">
+            {% if post.author %}<span>{{ post.author.name }}</span><span>·</span>{% endif %}
+            <span>{{ post.published_at.strftime('%d %b %Y') if post.published_at else "" }}</span>
+            <span>·</span><span>{{ post.reading_minutes }} min read</span>
+          </div>
+        </div>
+      </a>
+      {% else %}
+      <p class="col-span-full text-center text-slate-400">No posts here yet.</p>
+      {% endfor %}
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="mt-12 flex items-center justify-center gap-4 text-sm">
+      {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">← Newer</a>
+      {% endif %}
+      <span class="text-slate-500">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}" class="rounded-lg border border-slate-300 px-3 py-1.5 hover:bg-slate-50">Older →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+  </section>
+
+  {% include "marketing/_footer.jinja" %}
+</div>
+{% endblock %}

@@ -96,6 +96,7 @@ LOCAL_APPS = [
     "apps.ai",
     "apps.storefront",
     "apps.shopfront",
+    "apps.blog",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
