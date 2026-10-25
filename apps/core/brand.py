@@ -36,6 +36,9 @@ class Brand:
     ad_template: str = "marketing/ad_landing.jinja"
     partners_template: str = "marketing/partners.jinja"
     agencies_template: str = "marketing/agencies.jinja"
+    # Picks a compiled Tailwind bundle built by tools/build_tailwind_site.py
+    # (static/site/<color_theme>.css) — "site" is the original indigo palette.
+    color_theme: str = "site"
 
     @property
     def primary_host(self):
@@ -81,6 +84,7 @@ def _extra_brands():
             ad_template=raw.get("ad_template") or Brand.ad_template,
             partners_template=raw.get("partners_template") or Brand.partners_template,
             agencies_template=raw.get("agencies_template") or Brand.agencies_template,
+            color_theme=raw.get("color_theme") or Brand.color_theme,
         ))
     return out
 
@@ -100,6 +104,7 @@ def default_brand():
         legal_entity=name,
         contact_email=getattr(settings, "LEGAL_CONTACT_EMAIL", "") or "",
         from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "") or "",
+        color_theme=getattr(settings, "PLATFORM_COLOR_THEME", "") or "site",
     )
 
 

@@ -1,11 +1,16 @@
 #!/usr/bin/env python
-"""Compile the site-wide Tailwind bundle (everything that is *not* a storefront skin).
+"""Compile the site-wide Tailwind bundle(s) (everything that is *not* a storefront skin).
 
-Output: ``static/site/site.css`` — collected by ``collectstatic``, served by
-WhiteNoise, linked from ``templates/base.jinja`` and ``templates/storefront/base.jinja``
-(see ``config.jinja2._site_css_href``). When the file is missing (dev, or a build
+Output: one ``static/site/<theme>.css`` per entry in ``_BRAND_COLORS`` below
+(``site.css`` is the original indigo palette; others are per-deployment color
+themes picked at runtime by a brand's ``color_theme`` — see
+``apps.core.brand.Brand.color_theme`` and ``DJANGO_PLATFORM_COLOR_THEME``).
+Collected by ``collectstatic``, served by WhiteNoise, linked from
+``templates/base.jinja`` and ``templates/storefront/base.jinja``
+(see ``config.jinja2._site_css_href``). When a bundle is missing (dev, or a build
 hiccup) those templates fall back to the Tailwind Play CDN, and the marketing
-pages re-emit their inline ``tailwind.config`` so dev still looks right.
+pages re-emit their inline ``tailwind.config`` (indigo only — the CDN fallback
+is a dev convenience, not meant to match every theme) so dev still looks right.
 
 Covers: the marketing landing + partners pages, Mission Control, the auth
 screens, and the no-store storefront. Storefront skins have their own bundles
@@ -65,57 +70,73 @@ _SAFELIST_JS = (
     "  ]"
 )
 
-THEME = {
-    "extend": {
-        "fontFamily": {
-            "sans": ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
-            "display": ['"Space Grotesk"', "Inter", "sans-serif"],
-        },
-        "colors": {
-            "brand": {
-                "50": "#eef2ff", "100": "#e0e7ff", "200": "#c7d2fe",
-                "300": "#a5b4fc", "400": "#818cf8", "500": "#6366f1",
-                "600": "#4f46e5", "700": "#4338ca", "800": "#3730a3",
-                "900": "#312e81",
-            },
-        },
-        "keyframes": {
-            "float": {"0%,100%": {"transform": "translateY(0)"},
-                      "50%": {"transform": "translateY(-10px)"}},
-            "floatslow": {"0%,100%": {"transform": "translateY(0) rotate(0deg)"},
-                          "50%": {"transform": "translateY(-16px) rotate(2deg)"}},
-        },
-        "animation": {
-            "float": "float 6s ease-in-out infinite",
-            "floatslow": "floatslow 9s ease-in-out infinite",
-        },
+# Every deployment's "brand" palette, keyed by Brand.color_theme (see
+# apps/core/brand.py). "site" is the original platform (shopinaday.com)
+# palette and must keep this exact name/output ("site/site.css") — other
+# deployments pick their own key via DJANGO_PLATFORM_COLOR_THEME and get
+# static/site/<key>.css instead. Same fontFamily/keyframes for every theme;
+# only the "brand" color ramp differs.
+_BRAND_COLORS = {
+    "site": {  # shopinaday.com — indigo/violet
+        "50": "#eef2ff", "100": "#e0e7ff", "200": "#c7d2fe",
+        "300": "#a5b4fc", "400": "#818cf8", "500": "#6366f1",
+        "600": "#4f46e5", "700": "#4338ca", "800": "#3730a3",
+        "900": "#312e81",
+    },
+    "mnxstore": {  # mnxstore.com — teal, deliberately a different hue family
+        "50": "#f0fdfa", "100": "#ccfbf1", "200": "#99f6e4",
+        "300": "#5eead4", "400": "#2dd4bf", "500": "#14b8a6",
+        "600": "#0d9488", "700": "#0f766e", "800": "#115e59",
+        "900": "#134e4a",
     },
 }
 
-_CONFIG_JS = (
-    f"module.exports = {{\n"
-    f"  content: {json.dumps(CONTENT)},\n"
-    f"  safelist: {_SAFELIST_JS},\n"
-    f"  theme: {json.dumps(THEME)},\n"
-    f"  plugins: [require('@tailwindcss/forms')],\n"
-    f"}};\n"
-)
+_SHARED_EXTEND = {
+    "fontFamily": {
+        "sans": ["Inter", "ui-sans-serif", "system-ui", "sans-serif"],
+        "display": ['"Space Grotesk"', "Inter", "sans-serif"],
+    },
+    "keyframes": {
+        "float": {"0%,100%": {"transform": "translateY(0)"},
+                  "50%": {"transform": "translateY(-10px)"}},
+        "floatslow": {"0%,100%": {"transform": "translateY(0) rotate(0deg)"},
+                      "50%": {"transform": "translateY(-16px) rotate(2deg)"}},
+    },
+    "animation": {
+        "float": "float 6s ease-in-out infinite",
+        "floatslow": "floatslow 9s ease-in-out infinite",
+    },
+}
+
 _INPUT_CSS = "@tailwind base;\n@tailwind components;\n@tailwind utilities;\n"
+
+
+def _config_js(brand_colors):
+    theme = {"extend": {**_SHARED_EXTEND, "colors": {"brand": brand_colors}}}
+    return (
+        f"module.exports = {{\n"
+        f"  content: {json.dumps(CONTENT)},\n"
+        f"  safelist: {_SAFELIST_JS},\n"
+        f"  theme: {json.dumps(theme)},\n"
+        f"  plugins: [require('@tailwindcss/forms')],\n"
+        f"}};\n"
+    )
 
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    dest = OUT / "site.css"
-    with tempfile.TemporaryDirectory() as tmp:
-        cfg = Path(tmp) / "site.config.js"
-        src = Path(tmp) / "site.css"
-        cfg.write_text(_CONFIG_JS)
-        src.write_text(_INPUT_CSS)
-        subprocess.run(
-            [BIN, "-c", str(cfg), "-i", str(src), "-o", str(dest), "--minify"],
-            check=True, cwd=ROOT,
-        )
-    print(f"  site  {dest.stat().st_size / 1024:6.1f} KiB  {dest.relative_to(ROOT)}")
+    for name, colors in _BRAND_COLORS.items():
+        dest = OUT / f"{name}.css"
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = Path(tmp) / f"{name}.config.js"
+            src = Path(tmp) / f"{name}.in.css"
+            cfg.write_text(_config_js(colors))
+            src.write_text(_INPUT_CSS)
+            subprocess.run(
+                [BIN, "-c", str(cfg), "-i", str(src), "-o", str(dest), "--minify"],
+                check=True, cwd=ROOT,
+            )
+        print(f"  {name:<10} {dest.stat().st_size / 1024:6.1f} KiB  {dest.relative_to(ROOT)}")
     return 0
 
 

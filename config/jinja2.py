@@ -121,10 +121,13 @@ def _skin_css_href(slug):
     return _compiled_css_href(f"shopfront/skins/{slug}.css")
 
 
-def _site_css_href():
+def _site_css_href(theme="site"):
     """Compiled site-wide Tailwind bundle for the non-skin surface (marketing,
-    Mission Control, auth, no-store storefront), or ``None``."""
-    return _compiled_css_href("site/site.css")
+    Mission Control, auth, no-store storefront), or ``None``. ``theme`` picks
+    a differently-themed bundle built by ``tools/build_tailwind_site.py``
+    (e.g. a brand's own ``color_theme`` — see ``apps.core.brand``); "site" is
+    the original default-platform bundle at ``site/site.css``."""
+    return _compiled_css_href(f"site/{theme or 'site'}.css")
 
 
 def _money(value, symbol="₹"):

@@ -427,6 +427,11 @@ for _b in PLATFORM_BRANDS:
 LEGAL_ENTITY_NAME = env("DJANGO_LEGAL_ENTITY_NAME", "shopinaday")
 LEGAL_CONTACT_EMAIL = env("DJANGO_LEGAL_CONTACT_EMAIL", "")
 
+# Compiled Tailwind bundle for this deployment's default brand — see
+# apps/core/brand.py Brand.color_theme and tools/build_tailwind_site.py.
+# "site" (default) = the original indigo palette, static/site/site.css.
+PLATFORM_COLOR_THEME = env("DJANGO_PLATFORM_COLOR_THEME", "site")
+
 # Shared secret for the public CRM lead-capture webhook (/crm/capture/). Blank = webhook off.
 CRM_CAPTURE_TOKEN = env("CRM_CAPTURE_TOKEN", "")
 
