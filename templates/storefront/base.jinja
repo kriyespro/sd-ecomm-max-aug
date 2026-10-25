@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ store.name }}{% endblock %}</title>
   {% if meta %}<meta name="description" content="{{ meta.description }}">{% endif %}
-  {% set _site_css = site_css_href() %}
+  {% set _site_css = site_css_href(brand.color_theme) %}
   {% if _site_css %}
   <link rel="stylesheet" href="{{ _site_css }}">
   {% else %}

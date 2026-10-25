@@ -7,7 +7,7 @@
 {% block meta_description %}{{ brand.name }} pricing: transparent monthly plans, no setup fee, cancel anytime from the dashboard. Compare features and pick the plan that fits your store.{% endblock %}
 
 {% block head %}
-{% if not site_css_href() %}
+{% if not site_css_href(brand.color_theme) %}
 <script>
   tailwind.config = { theme: { extend: {
     fontFamily: { sans: ['Inter','ui-sans-serif','system-ui','sans-serif'], display: ['"Space Grotesk"','Inter','sans-serif'] },

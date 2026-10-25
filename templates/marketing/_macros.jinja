@@ -3,10 +3,21 @@
    markup lives in exactly one place. #}
 
 {% macro logo(dark=false) %}
-{% if not brand.is_default %}
+{% if brand.logo %}
 <span class="inline-flex items-center gap-2">
-  {% if brand.logo %}<img src="{{ brand.logo }}" alt="{{ brand.name }}" class="h-7 w-auto">{% endif %}
+  <img src="{{ brand.logo }}" alt="{{ brand.name }}" class="h-7 w-auto">
   <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">{{ brand.name }}</span>
+</span>
+{% elif brand.is_default and brand.name == 'shopinaday' %}
+{# Legacy hand-tuned wordmark for the original platform brand only — any other
+   brand.name (including another deployment's own "default" brand) falls
+   through to the generic icon + plain name below. #}
+<span class="inline-flex items-center gap-2">
+  <svg class="h-7 w-7" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
+    <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">shop<span class="text-brand-{{ '300' if dark else '600' }}">inaday</span></span>
 </span>
 {% else %}
 <span class="inline-flex items-center gap-2">
@@ -14,7 +25,7 @@
     <rect x="1.5" y="1.5" width="29" height="29" rx="9" fill="url(#g-brand)"/>
     <path d="M9 22V11.5L16 17l7-5.5V22" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   </svg>
-  <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">shop<span class="text-brand-{{ '300' if dark else '600' }}">inaday</span></span>
+  <span class="font-display text-lg font-700 tracking-tight {{ 'text-white' if dark else 'text-slate-900' }}">{{ brand.name }}</span>
 </span>
 {% endif %}
 {% endmacro %}

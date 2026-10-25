@@ -9,7 +9,7 @@
 {# Fonts are self-hosted in base.jinja. The compiled site bundle carries the
    theme below; this inline config is only the dev / Play-CDN fallback and must
    stay in sync with tools/build_tailwind_site.py. #}
-{% if not site_css_href() %}
+{% if not site_css_href(brand.color_theme) %}
 <script>
   tailwind.config = {
     theme: {
@@ -75,17 +75,27 @@
 
 {% block body %}
 
-{# ========= shared SVG defs — gradients + patterns referenced across the page ========= #}
+{# ========= shared SVG defs — gradients + patterns referenced across the page =========
+   Gradient stops are plain hex (SVG has no Tailwind class access), so they're
+   picked per brand.color_theme here rather than left pinned to the indigo
+   palette — keeps the hero illustration in step with the compiled CSS theme. #}
+{% set _gc = {
+  'from': '#6366f1', 'mid': '#7c3aed', 'to': '#4f46e5',
+  'soft1': '#a5b4fc', 'soft2': '#c4b5fd', 'sky_to': '#6366f1',
+} if brand.color_theme == 'site' else {
+  'from': '#14b8a6', 'mid': '#0ea5e9', 'to': '#0d9488',
+  'soft1': '#5eead4', 'soft2': '#7dd3fc', 'sky_to': '#14b8a6',
+} %}
 <svg width="0" height="0" class="absolute" aria-hidden="true">
   <defs>
     <linearGradient id="g-brand" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#6366f1"/><stop offset="0.55" stop-color="#7c3aed"/><stop offset="1" stop-color="#4f46e5"/>
+      <stop offset="0" stop-color="{{ _gc.from }}"/><stop offset="0.55" stop-color="{{ _gc.mid }}"/><stop offset="1" stop-color="{{ _gc.to }}"/>
     </linearGradient>
     <linearGradient id="g-brand-soft" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#a5b4fc"/><stop offset="1" stop-color="#c4b5fd"/>
+      <stop offset="0" stop-color="{{ _gc.soft1 }}"/><stop offset="1" stop-color="{{ _gc.soft2 }}"/>
     </linearGradient>
     <linearGradient id="g-sky" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#6366f1"/>
+      <stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="{{ _gc.sky_to }}"/>
     </linearGradient>
     <pattern id="p-dots" width="22" height="22" patternUnits="userSpaceOnUse">
       <circle cx="1.5" cy="1.5" r="1.5" fill="#c7d2fe"/>

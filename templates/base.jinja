@@ -18,7 +18,7 @@
   <meta name="twitter:description" content="{{ self.og_description() }}">
   {% block structured_data %}{% endblock %}
 
-  {% set _site_css = site_css_href() %}
+  {% set _site_css = site_css_href(brand.color_theme) %}
   {% if _site_css %}
   <link rel="stylesheet" href="{{ _site_css }}">
   {% else %}
