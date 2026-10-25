@@ -3,6 +3,7 @@
 .env.*
 .env.prod
 !.env.example
+!.env.mnxstore.example
 instance/
 *.secret_key
 
