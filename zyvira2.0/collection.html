@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Necklaces – Zyvira</title>
+<meta name="description" content="Explore Necklaces for every neckline, outfit and occasion — chains, pendants, chokers, layered styles, hasalis and statement neckpieces at Zyvira.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Kumbh+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.16"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    fontFamily: { display: ['"DM Serif Display"','Georgia','serif'], sans: ['"Kumbh Sans"','system-ui','sans-serif'] },
+    colors: {
+      cream: '#f8f7f3', ink: '#1c1a1a', mute: '#746b6b', line: '#e8e2e2',
+      accent: '#570517', 'accent-dark': '#3d0310', 'accent-soft': '#f3e3e7',
+      gold: '#cea452', teal: '#108474',
+    },
+    letterSpacing: { luxe: '0.16em' },
+    borderRadius: { xl: '10px', '2xl': '14px' },
+  }},
+};
+</script>
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
+<style>
+  body{background:#fff;color:#1c1a1a;font-family:"Kumbh Sans",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+  h1,h2,h3,.font-display{font-family:"DM Serif Display",Georgia,serif}
+  [x-cloak]{display:none!important}
+  .card-img{transition:transform .6s cubic-bezier(.2,.6,.2,1)}
+  .group:hover .card-img{transform:scale(1.045)}
+  .zy-rule{height:2px;width:56px;background:linear-gradient(90deg,transparent,#cea452,transparent)}
+</style>
+</head>
+<body class="antialiased" x-data="{ menuOpen:false, filterOpen:false, i:0, msgs:['✨ Every Order Gets 10% OFF — Use ZYVIRA10','💖 Spend ₹799, We’ll Handle the Shipping','✨ FREE Mini Jewellery Organiser Worth ₹349 on ₹1,499+'] }" x-init="setInterval(() => i = (i+1) % msgs.length, 3000)">
+
+<div class="bg-accent px-4 py-2.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-white sm:text-[12px]">
+  <span x-text="msgs[i]" x-cloak></span>
+</div>
+
+<header class="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur-md">
+  <div class="mx-auto flex max-w-7xl items-center gap-6 px-5 py-3.5 lg:px-8">
+    <button class="shrink-0 lg:hidden" @click="menuOpen=true" aria-label="Menu">
+      <svg class="h-5 w-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+    <a href="index.html" class="shrink-0 font-display text-2xl tracking-wide text-accent">Zyvira</a>
+    <nav class="hidden flex-1 items-center gap-7 text-[12.5px] font-semibold uppercase tracking-luxe lg:flex">
+      <a href="collection.html" class="hover:text-accent">Shop</a>
+      <a href="collection.html" class="flex items-center gap-1.5 hover:text-accent">Collections <span class="rounded-full bg-accent px-1.5 py-0.5 text-[8px] text-white">HOT</span></a>
+      <a href="collection.html" class="hover:text-accent">Shop by Occasion</a>
+      <a href="collection.html" class="flex items-center gap-1.5 hover:text-accent">New &amp; Trending <span class="rounded-full bg-accent px-1.5 py-0.5 text-[8px] text-white">HOT</span></a>
+    </nav>
+    <div class="ml-auto flex items-center gap-5 text-ink">
+      <button aria-label="Search"><svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="M21 21l-4.3-4.3"/></svg></button>
+      <a href="#" aria-label="Account"><svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path stroke-linecap="round" d="M5 20c1.6-3.6 4.4-5.4 7-5.4s5.4 1.8 7 5.4"/></svg></a>
+      <a href="#" class="hidden items-center gap-1 text-[13px] sm:flex" aria-label="Wishlist"><svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-9.3-8.8C1.1 7.8 2.6 4.8 5.6 4.2c1.9-.4 3.8.5 4.9 2.2 1.1-1.7 3-2.6 4.9-2.2 3 .6 4.5 3.6 2.9 7C19 15.6 12 20 12 20z"/></svg><span class="text-mute">/0</span></a>
+      <a href="#" class="flex items-center gap-1 text-[13px]" aria-label="Cart"><svg class="h-[18px] w-[18px]" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12l-1 13H7L6 7z"/><path stroke-linecap="round" d="M9 7a3 3 0 016 0"/></svg><span class="text-mute">/0</span></a>
+    </div>
+  </div>
+</header>
+
+<div x-cloak x-show="menuOpen" class="fixed inset-0 z-50" x-transition.opacity>
+  <div class="absolute inset-0 bg-black/40" @click="menuOpen=false"></div>
+  <div class="absolute inset-y-0 left-0 w-80 max-w-[85vw] bg-white p-6">
+    <button class="mb-6" @click="menuOpen=false" aria-label="Close">✕</button>
+    <nav class="flex flex-col gap-4 text-sm font-semibold uppercase tracking-luxe">
+      <a href="collection.html">Shop All</a><a href="collection.html">Collections</a><a href="collection.html">Shop by Occasion</a><a href="collection.html">New &amp; Trending</a>
+    </nav>
+  </div>
+</div>
+
+<!-- breadcrumb -->
+<nav class="mx-auto max-w-7xl px-5 py-3 text-xs text-mute lg:px-8"><a href="index.html" class="hover:text-accent">Home</a> / <span class="text-ink">Necklaces</span></nav>
+
+<!-- necklace sub-category strip -->
+<section class="bg-cream py-8">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+    <div class="grid grid-cols-3 gap-4 sm:grid-cols-6">
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-blush-floral-collar-hasali-primary-zy-nk-tu-md-002.webp?width=300" class="aspect-square w-full object-cover card-img" alt="German Silver Necklaces"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">German Silver Necklaces</p>
+      </a>
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-silver-spiral-bloom-pendant-necklace-primary-zy-nk-kr-lw-002.webp?width=300" class="aspect-square w-full object-cover card-img" alt="Oxidised Necklaces"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">Oxidised Necklaces</p>
+      </a>
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-bow-heart-pendant-necklace-primary-zy-nk-kr-md-025.webp?width=300" class="aspect-square w-full object-cover card-img" alt="Korean Necklaces"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">Korean Necklaces</p>
+      </a>
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-green-cabochon-bead-necklace-primary-zy-nk-kr-md-012.webp?width=300" class="aspect-square w-full object-cover card-img" alt="Turkish Hasali"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">Turkish Hasali</p>
+      </a>
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-navy-evil-eye-beachwear-bracelet-primary-zy-kd-kr-lw-007.webp?width=300" class="aspect-square w-full object-cover card-img" alt="Beach Wear Necklaces"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">Beach Wear Necklaces</p>
+      </a>
+      <a href="collection.html" class="group text-center">
+        <div class="overflow-hidden rounded-xl bg-white"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-white-floral-openwork-hasali-primary-zy-nk-tu-md-001.webp?width=300" class="aspect-square w-full object-cover card-img" alt="Floral Necklaces"></div>
+        <p class="mt-2 text-[11px] font-semibold uppercase tracking-wide group-hover:text-accent">Floral Necklaces</p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="mx-auto max-w-7xl gap-10 px-5 py-10 lg:flex lg:px-8">
+
+  <!-- sidebar -->
+  <aside class="hidden w-64 shrink-0 lg:block">
+    <div class="mb-8">
+      <p class="mb-3 text-sm font-bold">Price</p>
+      <input type="range" class="w-full accent-accent" min="0" max="40900">
+      <div class="mt-2 flex items-center gap-2 text-xs text-mute">
+        <span class="rounded border border-line px-2 py-1">0</span> to <span class="rounded border border-line px-2 py-1">40,900</span>
+      </div>
+    </div>
+    <div class="mb-8">
+      <p class="mb-3 text-sm font-bold">Shop by category</p>
+      <ul class="space-y-2 text-[13px] text-mute">
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Necklaces (93)</li>
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Beach Wear Necklaces (6)</li>
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Korean Necklaces (40)</li>
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Party Wear Necklaces (4)</li>
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Office Wear Necklaces (5)</li>
+        <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> College/Casual Wear Necklaces (6)</li>
+      </ul>
+    </div>
+    <div class="overflow-hidden rounded-xl border border-line">
+      <p class="border-b border-line bg-cream px-3 py-2 text-[11px] font-semibold uppercase tracking-wide">Special product</p>
+      <a href="product.html" class="flex items-center gap-3 p-3">
+        <img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-silver-spiral-bloom-pendant-necklace-primary-zy-nk-kr-lw-002.webp?width=200" class="h-16 w-16 rounded-lg object-cover" alt="">
+        <span class="text-xs"><span class="block font-semibold">Silver Spiral Bloom Pendant Necklace</span><span class="block text-mute line-through">Rs. 499.00</span><span class="block font-bold text-accent">Rs. 269.10</span></span>
+      </a>
+    </div>
+    <a href="collection.html" class="mt-6 block overflow-hidden rounded-xl"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-hand-foot-jewellery-desktop-banner-1013x640.webp?width=500" class="w-full object-cover" alt="Beachwear jewellery"></a>
+  </aside>
+
+  <!-- main -->
+  <div class="min-w-0 flex-1">
+    <div class="overflow-hidden rounded-2xl bg-accent-soft">
+      <div class="px-6 pt-8 text-center">
+        <p class="mb-1 text-[11px] font-semibold uppercase tracking-luxe text-accent">Zyvira Collection</p>
+        <h1 class="font-display text-3xl text-accent sm:text-4xl">Necklaces</h1>
+        <div class="zy-rule mx-auto my-3"></div>
+      </div>
+      <img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-blush-floral-collar-hasali-dark-reflective-studio-zy-nk-tu-md-002.webp?width=1400" class="mt-4 h-56 w-full object-cover sm:h-72" alt="Necklaces banner">
+      <div class="p-6 text-sm text-ink/80 sm:p-8">
+        <p>Explore <strong>Necklaces</strong> for every neckline, outfit and occasion. Discover minimal chains, pendants, chokers, layered styles, hasalis and statement neckpieces across Korean-inspired, Turkish-inspired, Kashmiri-style, German Silver, Western and Monzonite options.</p>
+        <div class="mt-6 grid gap-4 sm:grid-cols-2">
+          <div class="rounded-xl bg-white/70 p-4"><p class="text-sm font-bold text-accent">Style</p><p class="mt-1 text-xs text-mute">A complete mix of delicate chains, pendants, chokers, layered looks and bold statement neckpieces.</p></div>
+          <div class="rounded-xl bg-white/70 p-4"><p class="text-sm font-bold text-accent">Perfect For</p><p class="mt-1 text-xs text-mute">Daily wear, office, college, dates, parties, weddings, festivals, travel and gifting.</p></div>
+          <div class="rounded-xl bg-white/70 p-4"><p class="text-sm font-bold text-accent">Pair It With</p><p class="mt-1 text-xs text-mute">Shirts, dresses, kurtis, sarees, gowns and square, V, scoop or open necklines.</p></div>
+          <div class="rounded-xl bg-white/70 p-4"><p class="text-sm font-bold text-accent">Why You'll Love It</p><p class="mt-1 text-xs text-mute">The variety makes it easy to choose a subtle everyday accent or a complete occasion-ready focal point.</p></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mt-8 flex items-center justify-between">
+      <button class="flex items-center gap-2 text-sm font-semibold lg:hidden" @click="filterOpen=true">Filter <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" d="M4 6h16M7 12h10M10 18h4"/></svg></button>
+      <p class="text-sm text-mute">93 products</p>
+      <select class="rounded-full border border-line px-3 py-1.5 text-xs"><option>Sort by</option><option>Price: Low to High</option><option>Price: High to Low</option><option>Newest</option></select>
+    </div>
+
+    <div class="mt-6 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 xl:grid-cols-4">
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale 30%</span><button class="absolute right-2 top-2 z-10 h-7 w-7 rounded-full bg-white/90 text-xs shadow">♡</button><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-bow-heart-pendant-necklace-primary-zy-nk-kr-md-025.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Gold-Tone Bow Heart Pendant Necklace</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 439.00</span><span class="text-xs text-mute line-through">Rs. 628.00</span></p>
+        <p class="text-[11px] text-teal">After ZYVIRA10 Rs. 395.10</p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-white">Sold out</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-silver-spiral-bloom-pendant-necklace-primary-zy-nk-kr-lw-002.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Korean Silver-Tone Spiral Bloom Pendant...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 299.00</span><span class="text-xs text-mute line-through">Rs. 499.00</span></p>
+        <p class="text-[11px] text-teal">After ZYVIRA10 Rs. 269.10</p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale 26%</span><button class="absolute right-2 top-2 z-10 h-7 w-7 rounded-full bg-white/90 text-xs shadow">♡</button><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-green-cabochon-bead-necklace-primary-zy-nk-kr-md-012.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Gold Green Oval Cabochon Bead Station...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 428.00</span><span class="text-xs text-mute line-through">Rs. 602.00</span></p>
+        <p class="text-[11px] text-teal">After ZYVIRA10 Rs. 385.20</p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale 24%</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-blue-butterfly-crystal-necklace-primary-zy-nk-kr-md-010.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Gold-Tone Lavender Butterfly Crystal-Styl...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 483.00</span><span class="text-xs text-mute line-through">Rs. 634.70</span></p>
+        <p class="text-[11px] text-teal">After ZYVIRA10 Rs. 434.70</p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale #1</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-gold-white-floral-openwork-hasali-primary-zy-nk-tu-md-001.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Korean Rose Gold Pearl-Style Leaf Pendan...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 428.00</span><span class="text-xs text-mute line-through">Rs. 385.20</span></p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale 28%</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-german-silver-green-bird-pearl-jhumka-earrings-primary-zy-er-gs-lw-016.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Korean Silver Crystal Floral Halo Pendant...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 428.00</span><span class="text-xs text-mute line-through">Rs. 385.20</span></p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-ink px-2 py-0.5 text-[10px] font-semibold text-white">Sold out</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-german-silver-kundan-bird-handwork-kada-primary-zy-kd-gs-lux-001.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Dual-Tone German Silver Floral Kundan...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 4,219.00</span><span class="text-xs text-mute line-through">Rs. 3,797.10</span></p>
+      </div>
+      <div class="group">
+        <div class="relative overflow-hidden rounded-xl bg-cream"><span class="absolute left-2 top-2 z-10 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold text-white">Sale 25%</span><a href="product.html"><img src="https://www.zyvirastyle.com/cdn/shop/files/zyvira-german-silver-maroon-pearl-chandelier-earrings-primary-zy-er-gs-md-001.webp?width=500" class="aspect-square w-full object-cover card-img" alt=""></a></div>
+        <a href="product.html" class="mt-2 block line-clamp-2 text-[13px] font-semibold">Dual-Tone Oxidised Floral Drop Choker...</a>
+        <p class="mt-1 flex items-baseline gap-2"><span class="text-[15px] font-bold">Rs. 279.00</span><span class="text-xs text-mute line-through">Rs. 251.10</span></p>
+      </div>
+    </div>
+
+    <div class="mt-10 flex items-center justify-center gap-2 text-sm">
+      <a href="#" class="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-white">1</a>
+      <a href="#" class="flex h-9 w-9 items-center justify-center rounded-full border border-line hover:border-accent">2</a>
+      <a href="#" class="flex h-9 w-9 items-center justify-center rounded-full border border-line hover:border-accent">3</a>
+      <span class="px-1 text-mute">…</span>
+      <a href="#" class="flex h-9 w-9 items-center justify-center rounded-full border border-line hover:border-accent">5</a>
+      <a href="#" class="flex h-9 w-9 items-center justify-center rounded-full border border-line hover:border-accent" aria-label="Next">→</a>
+    </div>
+  </div>
+</div>
+
+<!-- mobile filter drawer -->
+<div x-cloak x-show="filterOpen" class="fixed inset-0 z-50" x-transition.opacity>
+  <div class="absolute inset-0 bg-black/40" @click="filterOpen=false"></div>
+  <div class="absolute inset-y-0 left-0 w-80 max-w-[85vw] overflow-y-auto bg-white p-6">
+    <button class="mb-6" @click="filterOpen=false" aria-label="Close">✕</button>
+    <p class="mb-3 text-sm font-bold">Shop by category</p>
+    <ul class="space-y-2 text-[13px] text-mute">
+      <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Necklaces (93)</li>
+      <li class="flex items-center gap-2"><input type="checkbox" class="accent-accent"> Korean Necklaces (40)</li>
+    </ul>
+  </div>
+</div>
+
+<!-- read more card -->
+<section class="mx-auto max-w-5xl px-5 py-14 lg:px-8">
+  <div class="rounded-2xl border border-line bg-gradient-to-br from-accent-soft to-white p-8 text-center sm:p-12">
+    <h2 class="font-display text-3xl text-accent sm:text-4xl">Find the Piece That Stays Close to You.</h2>
+    <div class="mx-auto mt-6 max-w-2xl rounded-xl bg-white/70 p-6 text-left text-sm leading-relaxed text-ink/80">
+      <p><strong>Necklaces for Every Mood, Outfit &amp; Moment</strong> — discover necklaces for women that make every neckline feel more personal. From delicate everyday pendants and modern minimal styles to pearl-inspired, artistic and bold statement necklaces, Zyvira brings together jewellery for <strong>office wear, college, brunch, dates, weddings, parties, festive celebrations and gifting</strong>. Explore Korean, Turkish, Western, Monzonite, Kashmiri and oxidised styles — and find the piece that feels beautifully yours.</p>
+    </div>
+    <button class="mt-6 inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-[12px] font-semibold uppercase tracking-luxe text-white transition hover:bg-accent-dark">+ Read More</button>
+  </div>
+</section>
+
+<!-- shared footer block -->
+<section class="mx-auto max-w-7xl px-5 pb-14 lg:px-8">
+  <div class="grid grid-cols-2 gap-5 sm:grid-cols-4">
+    <div class="rounded-2xl border border-line p-6 text-center"><p class="mb-2 text-xl text-gold">✦</p><p class="text-[13px] font-semibold">Trend-Led Styles</p><p class="mt-1 text-xs text-mute">Fresh jewellery for every mood</p></div>
+    <div class="rounded-2xl border border-line p-6 text-center"><p class="mb-2 text-xl text-gold">🎁</p><p class="text-[13px] font-semibold">Packed With Care</p><p class="mt-1 text-xs text-mute">Made to feel special from the first unbox</p></div>
+    <div class="rounded-2xl border border-line p-6 text-center"><p class="mb-2 text-xl text-gold">♡</p><p class="text-[13px] font-semibold">Made For Your Moments</p><p class="mt-1 text-xs text-mute">From everyday glow to celebration looks</p></div>
+    <div class="rounded-2xl border border-line p-6 text-center"><p class="mb-2 text-xl text-gold">◐</p><p class="text-[13px] font-semibold">Here When You Need Us</p><p class="mt-1 text-xs text-mute">Friendly support before &amp; after your order</p></div>
+  </div>
+</section>
+
+<section class="bg-cream">
+  <div class="mx-auto grid max-w-7xl items-center gap-8 px-5 py-12 lg:grid-cols-2 lg:px-8">
+    <div class="relative h-64 overflow-hidden rounded-2xl sm:h-80">
+      <img src="https://www.zyvirastyle.com/cdn/shop/files/ChatGPT_Image_Sep_5_2026_05_30_11_PM.webp?width=900" class="h-full w-full object-cover grayscale" alt="Your Glow, Your Zyvira">
+      <div class="absolute inset-x-0 bottom-6 text-center">
+        <p class="font-display text-2xl text-white">Your Glow, Your Zyvira</p>
+        <p class="mt-1 text-[10px] uppercase tracking-luxe text-white/80">Every glow begins here</p>
+      </div>
+    </div>
+    <div>
+      <h2 class="font-display text-3xl text-accent">Join the Zyvira Circle</h2>
+      <p class="mt-2 text-sm text-mute">New drops, styling inspiration &amp; exclusive offers — straight to your inbox.</p>
+      <form class="mt-5 flex max-w-md overflow-hidden rounded-full border border-line bg-white">
+        <input type="email" placeholder="Enter your email" class="w-full border-0 px-5 py-3 text-sm focus:outline-none focus:ring-0">
+        <button class="shrink-0 bg-accent px-5 text-[12px] font-semibold uppercase tracking-luxe text-white">Join the Circle</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer class="bg-white pt-12">
+  <div class="mx-auto grid max-w-7xl grid-cols-2 gap-8 px-5 pb-10 lg:grid-cols-5 lg:px-8">
+    <div class="col-span-2 lg:col-span-1">
+      <p class="font-display text-2xl text-accent">Zyvira</p>
+      <p class="text-[9px] uppercase tracking-luxe text-mute">Shine in Every Detail</p>
+      <p class="mt-3 text-xs leading-relaxed text-mute">Jewellery made for every mood, moment &amp; glow. Discover trend-forward earrings, necklaces, bracelets, kadas and rings made to make every detail shine.</p>
+    </div>
+    <div><p class="mb-3 text-[13px] font-semibold">Contact</p><ul class="space-y-2 text-xs text-mute"><li>+91 9213557892</li><li>hello@zyvirastyle.com</li><li>Ahmedabad, Gujarat, India.</li></ul></div>
+    <div><p class="mb-3 text-[13px] font-semibold">Quick Links</p><ul class="space-y-2 text-xs text-mute"><li><a href="#" class="hover:text-accent">About Us</a></li><li><a href="#" class="hover:text-accent">Blog</a></li><li><a href="#" class="hover:text-accent">FAQs</a></li><li><a href="#" class="hover:text-accent">Contact Us</a></li></ul></div>
+    <div><p class="mb-3 text-[13px] font-semibold">Important Pages</p><ul class="space-y-2 text-xs text-mute"><li><a href="#" class="hover:text-accent">Shipping Policy</a></li><li><a href="#" class="hover:text-accent">Return &amp; Refund Policy</a></li></ul></div>
+    <div><p class="mb-3 text-[13px] font-semibold">Collections</p><ul class="space-y-2 text-xs text-mute"><li><a href="collection.html" class="hover:text-accent">Earrings</a></li><li><a href="collection.html" class="hover:text-accent">Necklaces</a></li><li><a href="collection.html" class="hover:text-accent">Bracelets &amp; Kadas</a></li><li><a href="collection.html" class="hover:text-accent">Rings</a></li></ul></div>
+  </div>
+  <div class="border-t border-line">
+    <div class="mx-auto flex max-w-7xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-5 py-4 text-[11px] text-mute lg:px-8">
+      <span>PAN India Delivery</span><span>Secure Payments</span><span>Easy Return Support</span><span>WhatsApp Support</span>
+    </div>
+  </div>
+  <div class="bg-accent-dark py-3 text-center text-[11px] text-white/80">© 2026 ZYVIRA™. All rights reserved.</div>
+</footer>
+
+<a href="https://wa.me/919213557892" target="_blank" rel="noopener" class="fixed bottom-20 right-5 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-[#25D366] text-white shadow-lg" aria-label="WhatsApp">☎</a>
+<a href="#" class="fixed bottom-5 right-5 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-accent text-white shadow-lg" aria-label="Back to top">↑</a>
+
+</body>
+</html>

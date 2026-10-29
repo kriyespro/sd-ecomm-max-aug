@@ -63,6 +63,16 @@ SKIN_SECTIONS = {
         ("newsletter", "Newsletter"),
         ("instagram", "Instagram feed"),
     ],
+    "vireej2-0": [
+        ("categories", "Shop by category"),
+        ("featured", "Featured"),
+        ("budget_bands", "Shop by budget"),
+        ("promo", "Promo banner (first one — extra banners stay near the footer)"),
+        ("benefits", "Why it works"),
+        ("new_arrivals", "New arrivals"),
+        ("testimonials", "Testimonials"),
+        ("instagram", "Instagram feed"),
+    ],
 }
 
 

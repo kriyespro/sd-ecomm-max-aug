@@ -1,0 +1,24 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Wishlist · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-7xl px-5 py-14 lg:px-8">
+  <h1 class="mb-10 text-center font-display text-3xl text-accent sm:text-4xl">Wishlist</h1>
+
+  {% if not user.is_authenticated %}
+  <div class="rounded-2xl border border-line bg-cream py-20 text-center">
+    <p class="font-display text-2xl text-accent">Sign in to view your saved pieces</p>
+    <a href="{{ url('shopfront:account') }}" class="mt-5 inline-block rounded-full bg-accent px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">Sign In</a>
+  </div>
+  {% elif wishlist_products %}
+  <div class="grid grid-cols-2 gap-x-6 gap-y-12 md:grid-cols-3 lg:grid-cols-4">
+    {% for p in wishlist_products %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+  </div>
+  {% else %}
+  <div class="rounded-2xl border border-line bg-cream py-20 text-center">
+    <p class="font-display text-2xl text-accent">Nothing saved yet</p>
+    <a href="{{ url('shopfront:shop') }}" class="mt-5 inline-block rounded-full bg-accent px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">Browse the Collection</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

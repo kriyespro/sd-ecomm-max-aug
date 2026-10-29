@@ -1,0 +1,64 @@
+{# VIREEJ2.0 product card — rounded-2xl white card, hover photo-swap, badge
+   top-left (Sale %/New/Sold out), wishlist circle bottom-left + Add to Bag
+   pill bottom-right overlaid on the photo (siblings of the <a>, never
+   nested inside it). `stock_map` (optional, set by HomeView/ShopView) drives
+   Sold-out without a per-card query — see apps/shopfront/views.py `_stock_map`. #}
+{% set imgs = p.images.all() | list %}
+{% set img = imgs[0] if imgs else none %}
+{% set img2 = imgs[1] if imgs|length > 1 else none %}
+{% set _pct = ((1 - (p.current_price / p.price)) * 100) | round | int if (p.on_sale and p.price) else 0 %}
+{% set _avail = stock_map.get(p.id) if (stock_map is defined and stock_map) else none %}
+{% set _sold_out = _avail is not none and _avail <= 0 %}
+<article{{ ed_product(p) }} class="group relative flex flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-[0_1px_2px_rgba(28,26,26,.04),0_16px_32px_-24px_rgba(87,5,23,.22)]">
+  <div class="relative aspect-square overflow-hidden bg-cream">
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}" class="absolute inset-0 block">
+      <img src="{{ (img.image if img else none) | media_src(1000, 1000, 'Product photo') }}"
+           {% if img and img.srcset %}srcset="{{ img.srcset }}" sizes="(min-width:1024px) 25vw, (min-width:640px) 33vw, 50vw"{% endif %}
+           {% if img and img.width %}width="{{ img.width }}" height="{{ img.height }}"{% endif %}
+           alt="{{ (img.alt if img else '') or p.title }}" loading="lazy" decoding="async"
+           class="card-img h-full w-full object-cover {{ 'opacity-70' if _sold_out }}">
+      {% if img2 %}
+      <img src="{{ img2.image | media_src(1000, 1000, 'Product photo') }}" alt="" loading="lazy" decoding="async"
+           class="absolute inset-0 h-full w-full object-cover opacity-0 transition-opacity duration-500 group-hover:opacity-100">
+      {% endif %}
+    </a>
+
+    {% if _sold_out %}<span class="absolute left-3 top-3 rounded-lg bg-ink px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">Sold out</span>
+    {% elif p.on_sale %}<span class="absolute left-3 top-3 rounded-lg bg-accent px-2.5 py-1.5 text-[11px] font-medium leading-none text-white">Sale{% if _pct > 0 %} {{ _pct }}%{% endif %}</span>
+    {% elif p.is_new_arrival %}<span class="absolute left-3 top-3 rounded-lg bg-gold px-2.5 py-1.5 text-[11px] font-medium leading-none text-accent-dark">New</span>{% endif %}
+
+    <div class="absolute left-3 bottom-3">
+      {% set wl_slug = p.slug %}{% set wl_active = false %}{% set wb_style = 'icon' %}
+      {% include "shopfront/partials/_wishlist_btn.jinja" %}
+    </div>
+
+    {% if store_profile and store_profile.catalog_mode_enabled %}
+    <div class="absolute right-3 bottom-3 [&_a]:rounded-full">
+      {% set wa_enabled = true %}
+      {% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}
+    </div>
+    {% elif _sold_out %}
+    <span class="absolute right-3 bottom-3 rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-mute shadow-sm backdrop-blur">Sold Out</span>
+    {% else %}
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="absolute right-3 bottom-3">
+      <input type="hidden" name="product" value="{{ p.slug }}">
+      <button class="rounded-full bg-white/95 px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent shadow-sm backdrop-blur transition-colors hover:bg-accent hover:text-white">Add to Bag</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <div class="flex flex-1 flex-col p-3.5">
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block line-clamp-2 text-[13px] font-semibold leading-snug text-ink hover:text-accent sm:text-sm">{{ p.title }}</a>
+    <p class="mt-1 text-xs text-gold">{{ '★' * (p.rating_avg | round | int) if p.rating_count else '☆☆☆☆☆' }}<span class="text-mute"> ({{ p.rating_count or 0 }})</span></p>
+    {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
+    <p{{ ed_money(p) }} class="mt-1.5 flex items-baseline gap-1.5">
+      {% if p.on_sale %}
+      <span class="text-lg font-bold text-accent">{{ p.current_price | money }}</span>
+      <span class="text-xs text-mute line-through">{{ p.price | money }}</span>
+      {% else %}
+      <span class="text-lg font-bold text-ink">{{ p.price | money }}</span>
+      {% endif %}
+    </p>
+    {% endif %}
+  </div>
+</article>
