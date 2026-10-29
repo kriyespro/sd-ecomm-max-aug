@@ -1,0 +1,97 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Checkout · {{ store.name }}{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-6xl px-5 py-12 lg:px-8">
+  <h1 class="mb-10 text-center font-display text-3xl text-accent sm:text-4xl">Checkout</h1>
+
+  <form method="post" action="{{ url('shopfront:checkout') }}" class="grid gap-12 lg:grid-cols-3">
+    {{ csrf_input }}
+
+    <div class="space-y-10 lg:col-span-2">
+      <section id="addr-fields">
+        <h2 class="mb-4 text-[11px] font-semibold uppercase tracking-luxe text-accent">Contact &amp; Delivery</h2>
+        <div class="grid gap-3 sm:grid-cols-2">
+          {% set _fld = "sm:col-span-2 rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent" %}
+          <input name="email" type="email" required placeholder="Email" value="{{ user.email if user.is_authenticated }}" class="{{ _fld }}">
+          <input name="name" required placeholder="Full name" class="{{ _fld }}">
+          <input name="line1" required placeholder="Address" class="{{ _fld }}">
+          <input name="line2" placeholder="Apartment, suite (optional)" class="{{ _fld }}">
+          <input name="city" required placeholder="City" class="rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent"
+                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields, [name=payment_method]:checked">
+          <input name="state" placeholder="State" class="rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent">
+          <input name="postal_code" required placeholder="PIN code" class="rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent"
+                 hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields, [name=payment_method]:checked">
+          <input name="country" required value="{{ store.country or 'IN' }}" class="rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent">
+          <input name="phone" placeholder="Phone" class="{{ _fld }}">
+        </div>
+      </section>
+
+      <section>
+        <h2 class="mb-4 text-[11px] font-semibold uppercase tracking-luxe text-accent">Shipping Method</h2>
+        <div id="shipping-methods" class="space-y-2 text-sm text-mute">
+          Enter your city &amp; PIN code to see options.
+        </div>
+      </section>
+
+      <section>
+        <h2 class="mb-4 text-[11px] font-semibold uppercase tracking-luxe text-accent">Payment</h2>
+        <div class="space-y-2">
+          {% for p in payment_providers %}
+          <label class="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3 text-sm {{ 'border-accent bg-accent-soft' if loop.first else 'border-line' }}">
+            <input type="radio" name="payment_method" value="{{ p.key }}" {{ 'checked' if loop.first }}
+                   hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
+            {% if p.key == 'razorpay' %}
+            <span class="flex items-center gap-1.5 font-semibold" style="color:#072654">
+              <svg viewBox="0 0 24 24" class="h-4 w-4" aria-hidden="true"><path fill="#3395FF" d="M13.6 2 5 15.7h5.3L7.4 22 19 8.4h-6.2z"/></svg>
+              Pay with Razorpay
+            </span>
+            <span class="text-xs text-mute">Card · UPI · Netbanking · Wallet</span>
+            {% elif p.key == 'upi' %}
+            <span class="font-semibold">Pay by UPI</span>
+            <span class="text-xs text-mute">Scan QR · GPay · PhonePe · Paytm</span>
+            {% elif p.key == 'cod' %}Cash on delivery
+            {% elif p.key == 'whatsapp' %}
+            <span class="font-semibold" style="color:#128C7E">Order on WhatsApp</span>
+            <span class="text-xs text-mute">We save your order, then you send it to us on WhatsApp</span>
+            {% else %}{{ p.label }}{% endif %}
+          </label>
+          {% else %}
+          <label class="flex items-center gap-3 rounded-xl border border-line px-4 py-3 text-sm">
+            <input type="radio" name="payment_method" value="cod" checked
+                   hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
+            Cash on delivery
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+
+      <textarea name="customer_note" rows="2" placeholder="Order note (optional)" class="w-full rounded-xl border border-line bg-cream px-4 py-3 text-sm outline-none focus:border-accent"></textarea>
+    </div>
+
+    <aside class="h-fit rounded-2xl border border-line bg-white p-7 shadow-[0_18px_44px_-30px_rgba(87,5,23,.25)]">
+      <p class="font-display text-xl text-accent">Order Summary</p>
+      <div class="mt-5 space-y-3 border-b border-line pb-5 text-sm">
+        {% for i in cart.items.all() %}
+        <div class="flex justify-between gap-3">
+          <span class="text-ink/80">{{ i.quantity }} × {{ i.product.title }}</span>
+          <span>{{ i.line_total | money }}</span>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-4 flex gap-2">
+        <input name="coupon_code" placeholder="Coupon code" class="w-full rounded-full border border-line bg-cream px-4 py-2 text-sm outline-none focus:border-accent">
+      </div>
+      <button type="button" class="mt-2 w-full rounded-full border border-accent py-2 text-[11px] font-semibold uppercase tracking-luxe text-accent hover:bg-accent hover:text-white"
+              hx-post="{{ url('shopfront:coupon_preview') }}" hx-target="#summary" hx-include="[name=coupon_code]">Apply Coupon</button>
+
+      <div id="summary">
+        {% include "shopfront/partials/_checkout_summary.jinja" %}
+      </div>
+
+      <button class="mt-6 w-full rounded-full bg-accent py-4 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">{% if payment_providers | length == 1 and payment_providers[0].key == 'whatsapp' %}Order on WhatsApp{% else %}Place Order{% endif %}</button>
+    </aside>
+  </form>
+</div>
+{% endblock %}

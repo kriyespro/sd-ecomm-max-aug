@@ -60,6 +60,17 @@ SKIN_TITLES = {
         ("newsletter", "Get 10% off your first order"),
         ("instagram", "From our Instagram"),
     ],
+    "vireej2-0": [
+        ("categories", "Shop Jewellery by Category"),
+        ("featured", "New Arrivals — Easy to Fall For"),
+        ("featured_sub", "Meet the newest pieces waiting to become your next favourite."),
+        ("budget_bands", "Little Luxuries Under ₹499"),
+        ("benefits", "What Makes Special"),
+        ("new_arrivals", "Trending Glow Picks"),
+        ("new_arrivals_sub", "The pieces everyone keeps adding to bag."),
+        ("testimonials", "What People Say"),
+        ("instagram", "The Edit"),
+    ],
 }
 
 
