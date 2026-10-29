@@ -1,0 +1,336 @@
+{% extends "shopfront/base.jinja" %}
+{% from "shopfront/partials/_heading.jinja" import heading_classes with context %}
+{% from "shopfront/partials/_product_slider.jinja" import product_slider with context %}
+{% from "shopfront/partials/_hero_video.jinja" import hero_video %}
+{% from "shopfront/partials/_auto_scroll.jinja" import auto_scroll_attrs %}
+{% block title %}{{ store.name }} — Premium fashion jewellery{% endblock %}
+
+{% block content %}
+
+{% macro section_heading(text, subtitle=none) %}
+<div class="mb-9 text-center">
+  <h2 class="{{ heading_classes('text-2xl sm:text-3xl', 'text-center') }} text-accent">{{ text }}</h2>
+  <span class="v2-rule mx-auto mt-2 block"></span>
+  {% if subtitle %}<p class="mt-2.5 text-sm text-mute">{{ subtitle }}</p>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro view_all_btn(label, href) %}
+<div class="mt-9 text-center">
+  <a href="{{ href }}" class="inline-block rounded-full border border-accent px-7 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent hover:text-white">{{ label }}</a>
+</div>
+{% endmacro %}
+
+{# ============ HERO — slider over live hero banners; falls back to a
+   plain brand hero when the merchant hasn't set one up yet ============ #}
+{% set slides = hero_slides %}
+{% if slides %}
+<section
+  x-data="{ i: 0, n: {{ slides | length }}, timer: null, tx: 0,
+            go(k){ this.i = (k + this.n) % this.n },
+            play(){ if (this.n > 1) this.timer = setInterval(() => this.go(this.i + 1), 6500) },
+            stop(){ clearInterval(this.timer) },
+            swipe(dx){ if (Math.abs(dx) > 40) this.go(this.i + (dx < 0 ? 1 : -1)) } }"
+  x-init="play()" @mouseenter="stop()" @mouseleave="play()"
+  @touchstart.passive="stop(); tx = $event.touches[0].clientX"
+  @touchend.passive="swipe($event.changedTouches[0].clientX - tx); play()"
+  class="relative isolate overflow-hidden bg-accent-dark">
+  {% for b in slides %}
+  <div x-show="i === {{ loop.index0 }}" x-transition:enter="transition-opacity duration-700" x-transition:enter-start="opacity-0"
+       {% if not loop.first %}style="display:none"{% endif %} class="relative">
+    {% if b.video_youtube_id %}
+      {% if b.mobile_video_youtube_id %}
+      <div class="sm:hidden">{{ hero_video(b.mobile_video_youtube_id) }}</div>
+      <div class="hidden sm:block">{{ hero_video(b.video_youtube_id) }}</div>
+      {% else %}{{ hero_video(b.video_youtube_id) }}{% endif %}
+    {% else %}
+    <picture>
+      {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
+      <img src="{{ b.image | media_src(1600, 560, 'Hero banner') }}"{{ ed('banner', b, 'image') }} alt="{{ '' if b.text_hidden else b.heading }}"
+           {{ 'fetchpriority=high' if loop.first else 'loading=lazy' }} decoding="async" class="block h-[420px] w-full object-cover opacity-90 sm:h-[520px]">
+    </picture>
+    {% endif %}
+    {% if not b.hide_overlay %}<div class="absolute inset-0 bg-gradient-to-t from-accent-dark/80 via-accent-dark/15 to-transparent"></div>{% endif %}
+    {% if not (b.text_hidden and b.hide_cta) %}
+    <div class="absolute inset-0 flex items-center">
+      <div class="mx-auto w-full max-w-7xl px-6 lg:px-8">
+        {% if not b.text_hidden %}
+        {% if b.subheading %}<p{{ ed('banner', b, 'subheading') }} class="mb-2 text-[11px] font-semibold uppercase tracking-luxe text-white/80">{{ b.subheading }}</p>{% endif %}
+        {% if b.heading %}<h1{{ ed('banner', b, 'heading') }} class="max-w-xl font-display text-4xl leading-tight text-white sm:text-6xl">{{ b.heading }}</h1>{% endif %}
+        {% endif %}
+        {% if not b.hide_cta and b.cta_label %}
+        <a href="{{ b.cta_url or url('shopfront:shop') }}"{{ ed_link('banner', b, 'cta_url') }}
+           class="mt-6 inline-block rounded-full bg-white px-7 py-3 text-[12px] font-semibold uppercase tracking-luxe text-accent transition-colors hover:bg-accent-soft">
+          <span{{ ed('banner', b, 'cta_label') }}>{{ b.cta_label }}</span>
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if slides | length > 1 %}
+  <div class="absolute inset-x-0 bottom-5 z-10 flex justify-center gap-2">
+    {% for b in slides %}
+    <button type="button" @click="go({{ loop.index0 }})" aria-label="Slide {{ loop.index }}"
+            class="h-1.5 rounded-full bg-white transition-all" :class="i === {{ loop.index0 }} ? 'w-7 opacity-100' : 'w-2 opacity-50'"></button>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+{% else %}
+<section class="relative isolate flex min-h-[46vh] items-center overflow-hidden bg-gradient-to-br from-accent to-accent-dark sm:min-h-[54vh]">
+  <div class="mx-auto w-full max-w-7xl px-6 py-16 lg:px-8">
+    <p class="text-[11px] font-semibold uppercase tracking-luxe text-white/80">{{ store.name }}</p>
+    <h1 class="mt-3 max-w-2xl font-display text-4xl leading-tight text-white sm:text-6xl">The upgrade your jewellery needed.</h1>
+    <a href="{{ url('shopfront:shop') }}" class="mt-6 inline-block rounded-full bg-white px-7 py-3 text-[12px] font-semibold uppercase tracking-luxe text-accent hover:bg-accent-soft">Shop Now</a>
+  </div>
+</section>
+{% endif %}
+
+{# ============ CATEGORY — optional row above the hero (Theme → "category above hero") ============ #}
+{% if category_above_hero and cat_tiles_top %}
+<section class="mx-auto max-w-7xl px-5 pt-10 lg:px-8">
+  <div class="grid grid-cols-3 gap-5 sm:grid-cols-6">
+    {% for t in cat_tiles_top[:6] %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"{{ ed_category(t.category) }} class="group text-center">
+      <div class="mx-auto h-24 w-24 overflow-hidden rounded-full border border-line sm:h-28 sm:w-28">
+        <img src="{{ t.image | media_src(300, 300, t.category.name) }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
+      </div>
+      <p class="mt-2 text-[12px] font-semibold uppercase tracking-wide group-hover:text-accent">{{ t.category.name }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{# ============ REORDERABLE HOMEPAGE SECTIONS ============ #}
+
+{% macro _section_categories() %}
+{% if cat_tiles %}
+{% set overflow = cat_tiles|length > 10 %}
+<section class="mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  {{ section_heading(section_titles.get('categories', 'Shop by Category')) }}
+  <div class="{% if overflow %}flex gap-5 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden{% elif category_mobile_slider %}flex gap-5 overflow-x-auto pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-6 sm:overflow-visible{% else %}grid grid-cols-3 gap-5 sm:grid-cols-6{% endif %}"
+       {%- if overflow %} {{ auto_scroll_attrs(step=140) }}{% endif %}>
+    {% for t in (cat_tiles if overflow else cat_tiles[:12]) %}
+    <a href="{{ url('shopfront:shop') }}?category={{ t.category.slug }}"{{ ed_category(t.category) }}
+       class="group text-center {% if overflow %}w-24 shrink-0 snap-start{% elif category_mobile_slider %}w-[26%] shrink-0 snap-start sm:w-auto{% endif %}">
+      <div class="mx-auto h-24 w-24 overflow-hidden rounded-full border border-line sm:h-28 sm:w-28">
+        <img src="{{ t.image | media_src(300, 300, t.category.name) }}" alt="{{ t.category.name }}" width="300" height="300" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
+      </div>
+      <p class="mt-2 text-[12px] font-semibold uppercase tracking-wide group-hover:text-accent">{{ t.category.name }}</p>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
+
+{% macro _section_featured() %}
+<section class="cv-auto mx-auto max-w-7xl px-5 pb-6 lg:px-8">
+  {{ section_heading(section_titles.get('featured', 'New Arrivals'), section_titles.get('featured_sub', 'Trending jewelry often reflects current fashion trends, cultural influences')) }}
+  {{ product_slider(featured, ref='featuredSlider', gap='gap-x-4 sm:gap-x-5') }}
+  {{ view_all_btn('View All Jewellery', url('shopfront:shop')) }}
+</section>
+{% endmacro %}
+
+{% macro _section_budget_bands() %}
+{% if budget_bands %}
+<section class="cv-auto bg-cream py-16">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+    {{ section_heading(section_titles.get('budget_bands', 'Shop By Budget')) }}
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+      {% for b in budget_bands[:5] %}
+      <a href="{{ url('shopfront:shop') }}{{ ('?' ~ b.query) if b.query }}" class="group text-center">
+        <div class="mx-auto aspect-square w-full overflow-hidden rounded-xl bg-white">
+          <img src="{{ (b.image.url if b.image else '') | media_src(300, 300, b.label) }}" alt="{{ b.label }}" width="300" height="300" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
+        </div>
+        <p class="mt-2.5 text-[12px] font-medium leading-tight text-ink group-hover:text-accent">{{ b.label }}</p>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
+
+{% macro _section_promo() %}
+{% for b in promo_banners[:1] %}
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-16 lg:px-8">
+  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[4/1] overflow-hidden rounded-2xl bg-accent">
+    <picture>
+      {% if b.mobile_image %}<source media="(max-width: 640px)" srcset="{{ b.mobile_image.url }}">{% endif %}
+      <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}"{{ ed('banner', b, 'image') }} alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
+    </picture>
+    {% if not b.hide_overlay %}<div class="absolute inset-0 bg-accent/30"></div>{% endif %}
+    {% if (not b.text_hidden and (b.heading or b.subheading)) or (not b.hide_cta and b.cta_label) %}
+    <div class="absolute inset-0 flex flex-col items-start justify-center gap-3 p-6 sm:p-8 lg:p-14">
+      {% if not b.text_hidden %}
+      {% if b.subheading %}<p{{ ed('banner', b, 'subheading') }} class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ b.subheading }}</p>{% endif %}
+      {% if b.heading %}<h2{{ ed('banner', b, 'heading') }} class="max-w-xl font-display text-2xl text-white sm:text-3xl lg:text-4xl">{{ b.heading }}</h2>{% endif %}
+      {% endif %}
+      {% if not b.hide_cta and b.cta_label %}<span{{ ed('banner', b, 'cta_label') }} class="mt-2 rounded-full bg-white px-7 py-3 text-[11px] font-semibold uppercase tracking-luxe text-accent transition-colors group-hover:bg-accent-soft">{{ b.cta_label }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+</section>
+{% endfor %}
+{% endmacro %}
+
+{% macro _section_benefits() %}
+{% set _b = benefit_items if benefit_items else [
+  {'icon': '✦', 'title': 'Trend-Led Styles', 'description': 'Fresh jewellery for every mood'},
+  {'icon': '🎁', 'title': 'Packed With Care', 'description': 'Made to feel special from the first unbox'},
+  {'icon': '♡', 'title': 'Made For Your Moments', 'description': 'From everyday glow to celebration looks'},
+  {'icon': '◐', 'title': 'Here When You Need Us', 'description': 'Friendly support before & after your order'},
+] %}
+<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8" id="why-us">
+  {{ section_heading(section_titles.get('benefits', 'Why Shop With Us')) }}
+  <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    {% for item in _b[:4] %}
+    <div class="rounded-2xl bg-cream p-6 text-center">
+      <span{{ ed('benefit', item, 'icon') }} class="mx-auto mb-2 block text-2xl text-gold">{{- item.icon or '✦' -}}</span>
+      <p{{ ed('benefit', item, 'title') }} class="text-[13px] font-semibold">{{- item.title -}}</p>
+      {% if item.description %}<p{{ ed('benefit', item, 'description') }} class="mt-1 text-xs text-mute">{{- item.description -}}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endmacro %}
+
+{% macro _section_new_arrivals() %}
+{% if new_arrivals %}
+<section class="cv-auto bg-dark py-16">
+  <div class="mx-auto max-w-7xl px-5 lg:px-8">
+    <div class="mb-9 text-center">
+      <h2 class="{{ heading_classes('text-2xl sm:text-3xl', 'text-center') }} text-white">{{ section_titles.get('new_arrivals', 'Our Bestseller') }}</h2>
+      <span class="v2-rule mx-auto mt-2 block" style="background:#e7909a"></span>
+      <p class="mt-2.5 text-sm text-white/55">{{ section_titles.get('new_arrivals_sub', 'Trending jewelry often reflects current fashion trends, cultural influences') }}</p>
+    </div>
+    {{ product_slider(new_arrivals, ref='newArrivalsSlider', gap='gap-x-4 sm:gap-x-5') }}
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
+
+{% macro _section_testimonials() %}
+{% if testimonials %}
+<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  {{ section_heading(section_titles.get('testimonials', 'Our Customers Love Us')) }}
+  <div class="grid gap-6 md:grid-cols-3">
+    {% for r in testimonials %}
+    <figure class="rounded-2xl border border-line bg-white p-8 text-center shadow-[0_18px_44px_-24px_rgba(87,5,23,.2)]">
+      <p class="text-gold">{{ '★' * r.rating }}</p>
+      <blockquote class="mt-3 font-display text-lg leading-snug text-ink/85">“{{ r.body | truncate(140) }}”</blockquote>
+      <figcaption class="mt-4 text-[11px] uppercase tracking-luxe text-mute">{{ r.author_name }} · {{ r.product.title }}</figcaption>
+    </figure>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endmacro %}
+
+{% macro _section_instagram() %}
+{% if instagram_items %}
+<section class="cv-auto mx-auto max-w-7xl px-5 py-16 lg:px-8">
+  {{ section_heading(section_titles.get('instagram', 'Follow Us On Instagram')) }}
+  <div class="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 snap-x snap-mandatory scroll-smooth [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:grid lg:grid-cols-5 lg:gap-4 lg:overflow-visible lg:px-0"
+       {{ auto_scroll_attrs(step=200, interval=2200) }}>
+    {% for it in instagram_items[:10] %}
+    <a href="{{ it.href or '#' }}" {{ 'target=_blank rel=noopener' if it.href }} class="group relative block aspect-square w-36 shrink-0 snap-start overflow-hidden rounded-xl bg-cream sm:w-44 lg:w-auto">
+      <img src="{{ (it.image.url if it.image else '') | media_src(400, 400, 'Instagram') }}" alt="{{ it.caption }}" width="400" height="400" loading="lazy" decoding="async" class="card-img h-full w-full object-cover">
+      <span class="absolute inset-0 grid place-items-center bg-accent/0 text-white opacity-0 transition group-hover:bg-accent/30 group-hover:opacity-100">
+        <svg class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>
+      </span>
+    </a>
+    {% endfor %}
+  </div>
+  {% if store_profile and store_profile.instagram_url %}{{ view_all_btn('Visit Instagram', store_profile.instagram_url) }}{% endif %}
+</section>
+{% endif %}
+{% endmacro %}
+
+{% set _sections = {
+  'categories': _section_categories, 'featured': _section_featured, 'budget_bands': _section_budget_bands,
+  'promo': _section_promo, 'benefits': _section_benefits, 'new_arrivals': _section_new_arrivals,
+  'testimonials': _section_testimonials, 'instagram': _section_instagram,
+} %}
+{% for _key in section_order %}{% if _key in _sections %}{% if is_editing() %}<div{{ ed_section(_key) }}>{{ _sections[_key]() }}</div>{% else %}{{ _sections[_key]() }}{% endif %}{% endif %}{% endfor %}
+
+{# ============ EXTRA PROMO BANNERS — 2nd and later, pinned above the FAQ ============ #}
+{% for b in promo_banners[1:] %}
+<section class="cv-auto mx-auto max-w-7xl px-5 pt-4 lg:px-8">
+  <a href="{{ b.cta_url or url('shopfront:shop') }}" class="group relative block aspect-[4/1] overflow-hidden rounded-2xl bg-accent">
+    <img src="{{ b.image | media_src(1600, 400, 'Promo banner') }}"{{ ed('banner', b, 'image') }} alt="{{ '' if b.text_hidden else b.heading }}" loading="lazy" decoding="async"
+         class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
+    {% if not b.hide_overlay %}<div class="absolute inset-0 bg-accent/30"></div>{% endif %}
+  </a>
+</section>
+{% endfor %}
+
+{# ============ FAQ — fixed, real store data (apps.cms.models.FAQ) ============ #}
+{% set faqs = store.faqs.filter(is_active=True) | list %}
+{% if faqs %}
+<section class="bg-cream py-16" x-data="{ open: 0 }">
+  <div class="mx-auto max-w-3xl px-5 lg:px-8">
+    <div class="mb-9 text-center">
+      <p class="mb-1 text-[11px] font-semibold uppercase tracking-luxe text-accent">{{ store.name }} Answers</p>
+      <h2 class="font-display text-3xl text-accent sm:text-4xl">Frequently Asked Questions</h2>
+    </div>
+    <div class="space-y-3">
+      {% for f in faqs[:8] %}
+      <div class="rounded-xl border border-line bg-white">
+        <button class="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-semibold" @click="open = open === {{ loop.index0 }} ? -1 : {{ loop.index0 }}">
+          {{ f.question }}
+          <span x-text="open === {{ loop.index0 }} ? '−' : '+'" class="shrink-0 pl-3 text-accent"></span>
+        </button>
+        <div x-show="open === {{ loop.index0 }}" x-collapse class="px-5 pb-4 text-sm leading-relaxed text-mute">{{ f.answer | safe }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% include "shopfront/partials/_ugc_shorts.jinja" %}
+
+{# ============ BRAND STORY CARD — fixed ============ #}
+<section class="mx-auto max-w-5xl px-5 py-16 lg:px-8">
+  <div class="rounded-2xl border border-line bg-gradient-to-br from-accent-soft to-white p-8 text-center sm:p-12">
+    <h2 class="font-display text-3xl text-accent sm:text-4xl">Jewellery That Feels Like You</h2>
+    <div class="v2-rule mx-auto my-4"></div>
+    {% if store_profile and store_profile.tagline %}
+    <p class="mx-auto max-w-2xl text-sm leading-relaxed text-ink/80">{{ store_profile.tagline }}</p>
+    {% else %}
+    <p class="mx-auto max-w-2xl text-sm leading-relaxed text-ink/80">At <strong>{{ store.name }}</strong>, the right jewellery does more than complete an outfit — it adds confidence, personality and a little extra glow to your moment. Explore a curated edit of everyday favourites and bold statement pieces, made for every mood and occasion.</p>
+    {% endif %}
+    <a href="{{ url('shopfront:shop') }}" class="mt-6 inline-flex items-center gap-2 rounded-full bg-accent px-6 py-2.5 text-[12px] font-semibold uppercase tracking-luxe text-white transition hover:bg-accent-dark">Shop the Collection</a>
+  </div>
+</section>
+
+{# ============ POPUP BANNER ============ #}
+{% if popup_banner %}
+<div x-data="{ open: false }"{% if is_editing() %} data-ed-popup{% endif %}
+     x-init="{% if not is_editing() %}setTimeout(() => { try { if (!localStorage.getItem('sd_popup_{{ popup_banner.id }}')) open = true } catch (e) { open = true } }, 1200){% endif %}"
+     x-show="open" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center bg-ink/60 p-4" @keydown.escape.window="open = false">
+  <div class="relative w-full max-w-md overflow-hidden rounded-2xl bg-white" @click.outside="open = false">
+    <button type="button" aria-label="Close" @click="open = false; try { localStorage.setItem('sd_popup_{{ popup_banner.id }}', '1') } catch (e) {}"
+            class="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/80 text-lg text-ink hover:bg-white">&times;</button>
+    <a href="{{ popup_banner.cta_url or url('shopfront:shop') }}">
+      {% if popup_banner.image or is_editing() %}<img src="{{ popup_banner.image | media_src(800, 500, 'Popup banner') }}"{{ ed('banner', popup_banner, 'image') }} alt="{{ '' if popup_banner.text_hidden else popup_banner.heading }}" class="w-full object-cover">{% endif %}
+      {% if not popup_banner.text_hidden and (popup_banner.heading or popup_banner.subheading) or (not popup_banner.hide_cta and popup_banner.cta_label) %}
+      <div class="p-6 text-center">
+        {% if not popup_banner.text_hidden %}
+        {% if popup_banner.heading %}<h3{{ ed('banner', popup_banner, 'heading') }} class="font-display text-2xl text-accent">{{ popup_banner.heading }}</h3>{% endif %}
+        {% if popup_banner.subheading %}<p{{ ed('banner', popup_banner, 'subheading') }} class="mt-2 text-sm text-mute">{{ popup_banner.subheading }}</p>{% endif %}
+        {% endif %}
+        {% if not popup_banner.hide_cta and popup_banner.cta_label %}<span{{ ed('banner', popup_banner, 'cta_label') }} class="mt-4 inline-block rounded-full bg-accent px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-white">{{ popup_banner.cta_label }}</span>{% endif %}
+      </div>
+      {% endif %}
+    </a>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,330 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}{{ product.seo_title or product.title }} · {{ store.name }}{% endblock %}
+{% block meta %}{{ product.seo_description or product.short_description or product.title }}{% endblock %}
+
+{% block content %}
+{% set imgs = product.images.all() | list %}
+{% set display_urls = (imgs | map(attribute='image.url') | list) if imgs else fallback_gallery %}
+
+<div class="mx-auto max-w-7xl px-5 py-8 pb-28 lg:px-8 lg:pb-8"
+     x-data='{
+       active: 0,
+       baseImages: [{% for u in display_urls %}{{ u | tojson }}{{ "," if not loop.last }}{% endfor %}],
+       lb: false,
+       hasAxes: {{ "true" if (variant_options and variant_options.axes) else "false" }},
+       trackStock: {{ "true" if product.track_variant_stock else "false" }},
+       sel: { {% if variant_options and variant_options.axes %}{% for ax in variant_options.axes %}{{ ax.name | tojson }}: {{ ax.options[0] | tojson }}{{ "," if not loop.last }}{% endfor %}{% endif %} },
+       map: {{ (variant_options.map if variant_options else {}) | tojson }},
+       get k() { return (this.sel["Size"] || "") + "|||" + (this.sel["Color"] || ""); },
+       get cur() { return this.hasAxes ? (this.map[this.k] || null) : null; },
+       get comboImages() { return (this.cur && this.cur.images && this.cur.images.length) ? this.cur.images : null; },
+       get urls() { return this.comboImages || this.baseImages; },
+       get total() { return this.urls.length; },
+       next() { this.active = (this.active + 1) % this.total },
+       prev() { this.active = (this.active - 1 + this.total) % this.total },
+       get avail() { return this.hasAxes ? (this.cur ? (this.trackStock ? this.cur.stock : null) : 0) : {{ available if available is not none else "null" }} },
+       get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
+       get salePrice() { return this.cur ? (this.cur.sale_price !== null ? Number(this.cur.sale_price) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
+       get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
+       fmt(n) { return "₹" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
+     }'
+     x-init="$watch('k', () => { active = 0 })"
+     @keydown.window="if (lb) { if ($event.key==='ArrowRight') next(); if ($event.key==='ArrowLeft') prev(); if ($event.key==='Escape') lb=false }">
+
+  <nav class="mb-6 inline-block break-words rounded-full bg-cream px-4 py-2 text-xs text-mute">
+    <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
+    <span class="mx-1">·</span>
+    <a href="{{ url('shopfront:shop') }}" class="hover:text-accent">Shop</a>
+    {% if product.category %}<span class="mx-1">·</span>
+    <a href="{{ url('shopfront:shop') }}?category={{ product.category.slug }}" class="hover:text-accent">{{ product.category.name }}</a>{% endif %}
+    <span class="mx-1">·</span><span class="text-ink">{{ product.title }}</span>
+  </nav>
+
+  {% set _pban = product_banner or (category_banners.get(product.category.slug) if product.category else none) %}
+  {% if _pban %}
+  <a href="{{ _pban.cta_url or '' }}" class="group relative mb-8 block aspect-[4/1] overflow-hidden rounded-2xl bg-accent {{ 'pointer-events-none' if not _pban.cta_url }}">
+    <picture>
+      {% if _pban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _pban.mobile_image.url }}">{% endif %}
+      <img src="{{ _pban.image | media_src(1600, 400, 'Product banner') }}"{{ ed('banner', _pban, 'image') }} alt="{{ '' if _pban.text_hidden else _pban.heading }}" loading="lazy" decoding="async" class="h-full w-full object-cover">
+    </picture>
+    {% if not _pban.hide_overlay %}<div class="absolute inset-0 bg-accent-dark/30"></div>{% endif %}
+    {% if (not _pban.text_hidden and _pban.heading) or (not _pban.hide_cta and _pban.cta_label) %}
+    <div class="absolute inset-0 flex items-center justify-between gap-3 px-4 sm:gap-4 sm:px-6">
+      {% if not _pban.text_hidden and _pban.heading %}<h2{{ ed('banner', _pban, 'heading') }} class="min-w-0 truncate font-display text-base text-white sm:text-xl">{{ _pban.heading }}</h2>{% endif %}
+      {% if not _pban.hide_cta and _pban.cta_label %}<span{{ ed('banner', _pban, 'cta_label') }} class="shrink-0 rounded-full bg-white px-4 py-2 text-[10px] font-semibold uppercase tracking-luxe text-accent group-hover:bg-gold sm:px-5 sm:text-[11px]">{{ _pban.cta_label }}</span>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  <div class="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_460px] lg:gap-16">
+    {# ---------- GALLERY ---------- #}
+    <div class="flex min-w-0 flex-col-reverse gap-4 lg:flex-row">
+      {% if display_urls | length > 1 %}
+      <div class="flex min-w-0 max-w-full gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:max-w-none lg:flex-col lg:overflow-visible lg:pb-0 [&::-webkit-scrollbar]:hidden"
+           x-show="!comboImages || comboImages.length < 2">
+        {% for u in display_urls %}
+        <button @click="active = {{ loop.index0 }}" class="h-16 w-14 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-colors lg:h-24 lg:w-20"
+                :class="active === {{ loop.index0 }} ? 'border-accent' : 'border-line hover:border-gold'">
+          <img src="{{ (imgs[loop.index0].renditions.get('512') or u) if imgs else u }}" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">
+        </button>
+        {% endfor %}
+      </div>
+      {% elif not display_urls %}
+      <div class="flex min-w-0 max-w-full gap-3 lg:max-w-none lg:flex-col">
+        {% for label in ['Front', 'Angle', 'Detail'] %}
+        <div class="h-16 w-14 flex-shrink-0 overflow-hidden rounded-lg border border-line lg:h-24 lg:w-20">
+          <img src="{{ placeholder(400, 500, label) }}" alt="" class="h-full w-full object-cover">
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+
+      {% if variant_options and variant_options.axes %}
+      <template x-if="comboImages && comboImages.length > 1">
+        <div class="flex min-w-0 max-w-full gap-3 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] lg:max-w-none lg:flex-col lg:overflow-visible lg:pb-0 [&::-webkit-scrollbar]:hidden">
+          <template x-for="(u, idx) in comboImages" :key="idx">
+            <button @click="active = idx" class="h-16 w-14 flex-shrink-0 overflow-hidden rounded-lg border-2 transition-colors lg:h-24 lg:w-20"
+                    :class="active === idx ? 'border-accent' : 'border-line hover:border-gold'">
+              <img :src="u" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">
+            </button>
+          </template>
+        </div>
+      </template>
+      {% endif %}
+
+      <div class="relative w-full min-w-0 lg:flex-1">
+        <div class="group relative aspect-square w-full overflow-hidden rounded-2xl bg-cream" :class="total > 0 ? 'cursor-zoom-in' : ''" @click="if (total > 0) lb = true">
+          <div {% if variant_options and variant_options.axes %}x-show="!comboImages"{% endif %}>
+            {% if imgs %}
+            {% for i in imgs %}
+            <img src="{{ i.image.url }}" alt="{{ product.title }}"
+                 {% if i.srcset %}srcset="{{ i.srcset }}" sizes="(min-width:1024px) 45vw, 100vw"{% endif %}
+                 {% if i.width %}width="{{ i.width }}" height="{{ i.height }}"{% endif %}
+                 {% if loop.first %}fetchpriority="high" decoding="async"{% else %}loading="lazy" decoding="async"{% endif %}
+                 class="card-img absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+                 :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
+            {% endfor %}
+            {% elif display_urls %}
+            {% for u in display_urls %}
+            <img src="{{ u }}" alt="{{ product.title }}" {% if loop.first %}fetchpriority="high" decoding="async"{% else %}loading="lazy" decoding="async"{% endif %}
+                 class="card-img absolute inset-0 h-full w-full object-cover transition-opacity duration-300"
+                 :class="active === {{ loop.index0 }} ? 'opacity-100' : 'opacity-0'">
+            {% endfor %}
+            {% else %}
+            <img src="{{ placeholder(1000, 1000, 'Main photo') }}" alt="{{ product.title }}" class="absolute inset-0 h-full w-full object-cover">
+            {% endif %}
+          </div>
+          {% if variant_options and variant_options.axes %}
+          <template x-if="comboImages">
+            <div>
+              <template x-for="(u, idx) in comboImages" :key="idx">
+                <img :src="u" alt="{{ product.title }}" class="card-img absolute inset-0 h-full w-full object-cover transition-opacity duration-300" :class="active === idx ? 'opacity-100' : 'opacity-0'">
+              </template>
+            </div>
+          </template>
+          {% endif %}
+          <span x-show="total > 0" x-cloak class="absolute bottom-3 right-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-medium tracking-wide text-accent opacity-0 transition-opacity group-hover:opacity-100">Click to zoom</span>
+        </div>
+        <template x-if="total > 1">
+          <div>
+            <button @click.stop="prev()" class="absolute left-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-accent hover:bg-accent hover:text-white">‹</button>
+            <button @click.stop="next()" class="absolute right-3 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-full bg-white/90 text-accent hover:bg-accent hover:text-white">›</button>
+            <span class="absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-medium text-accent" x-text="(active+1) + ' / ' + total"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    {# ---------- BUY COLUMN ---------- #}
+    <div class="rounded-2xl border border-line bg-white p-6 shadow-[0_1px_2px_rgba(28,26,26,.04),0_20px_44px_-28px_rgba(28,26,26,.3)] lg:sticky lg:top-28 lg:h-fit">
+      {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ product.brand.name }}</p>{% endif %}
+      <h1 class="mt-2 break-words font-display text-3xl leading-tight text-ink sm:text-4xl">{{ product.title }}</h1>
+
+      {% if product.rating_count %}
+      <a href="#reviews" class="mt-3 inline-flex items-center gap-2 text-sm">
+        <span class="text-gold">{{ '★' * (product.rating_avg | round | int) }}<span class="text-line">{{ '★' * (5 - (product.rating_avg | round | int)) }}</span></span>
+        <span class="text-mute">{{ product.rating_avg }} · {{ product.rating_count }} review{{ 's' if product.rating_count != 1 }}</span>
+      </a>
+      {% endif %}
+
+      {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
+      <div class="mt-5 flex flex-wrap items-baseline gap-3">
+        <span class="font-display text-3xl text-ink" :class="{'text-accent': salePrice !== null}" x-text="fmt(displayPrice)"></span>
+        <template x-if="salePrice !== null"><span class="text-mute line-through" x-text="fmt(regularPrice)"></span></template>
+        <template x-if="salePrice !== null">
+          <span class="rounded-full bg-accent-soft px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-accent"
+                x-text="'Save ' + fmt(regularPrice - salePrice) + ' (' + Math.round((regularPrice - salePrice) / regularPrice * 100) + '%)'"></span>
+        </template>
+      </div>
+      <p class="mt-1 text-xs text-mute">Inclusive of all taxes</p>
+      {% endif %}
+
+      <template x-if="avail !== null">
+        <div>
+          <p x-show="avail <= 0" x-cloak class="mt-4 inline-block rounded-full bg-stone-100 px-3.5 py-1.5 text-xs font-medium text-mute">Out of stock</p>
+          <div x-show="avail > 0 && avail <= 5" x-cloak class="mt-4">
+            <p class="text-xs font-medium text-rose-600">Almost gone — only <span x-text="avail"></span> left</p>
+            <div class="mt-1.5 h-1 w-40 rounded-full bg-line"><div class="h-1 rounded-full bg-rose-500" :style="'width: ' + Math.min(avail * 20, 100) + '%'"></div></div>
+          </div>
+          <p x-show="avail > 5" x-cloak class="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span> In stock, ready to ship
+          </p>
+        </div>
+      </template>
+
+      {% if product.short_description %}<p class="mt-5 break-words text-[15px] leading-relaxed text-ink/75">{{ product.short_description }}</p>{% endif %}
+
+      {% if store_profile and store_profile.catalog_mode_enabled %}
+      {% set p = product %}{% set wa_enabled = true %}{% set wa_style = 'block' %}
+      <div class="mt-7 [&_a]:rounded-full">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+      {% else %}
+      <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-7 space-y-5" x-data="{ q: 1 }">
+        <input type="hidden" name="product" value="{{ product.slug }}">
+        {% include "shopfront/partials/_variant_picker.jinja" %}
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+          <div class="flex items-center justify-center rounded-full border border-line sm:justify-start">
+            <button type="button" @click="q = Math.max(1, q-1)" class="px-3.5 text-mute hover:text-accent">−</button>
+            <input name="quantity" x-model="q" inputmode="numeric" class="w-11 border-x border-line bg-transparent py-3 text-center text-sm outline-none">
+            <button type="button" @click="q++" class="px-3.5 text-mute hover:text-accent">+</button>
+          </div>
+          <div class="flex flex-1 gap-3">
+            <button type="submit" class="htmx-hide flex-1 rounded-full py-3.5 text-[11px] font-semibold uppercase tracking-luxe transition-colors"
+                    :class="(avail !== null && avail <= 0) ? 'bg-stone-200 text-mute pointer-events-none' : 'bg-accent text-white hover:bg-gold hover:text-accent-dark'">
+              <span x-text="(avail !== null && avail <= 0) ? 'Sold out' : 'Add to bag'"></span>
+            </button>
+            <button type="submit" name="buy_now" value="1"
+                    class="htmx-hide flex-1 rounded-full bg-ink py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white transition-colors hover:bg-ink/85"
+                    :class="{'pointer-events-none opacity-40': avail !== null && avail <= 0}" x-show="!(avail !== null && avail <= 0)">
+              Buy now
+            </button>
+          </div>
+        </div>
+      </form>
+      {% set p = product %}{% set wa_enabled = store_profile.whatsapp_enquiry_on_detail if store_profile else False %}{% set wa_style = 'block' %}
+      <div class="mt-3 [&_a]:rounded-full">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+      {% endif %}
+
+      <div class="mt-3 flex gap-2.5">
+        {% set wb_style = 'pill' %}
+        {% include "shopfront/partials/_wishlist_btn.jinja" %}
+        <button type="button" onclick="navigator.share ? navigator.share({title: document.title, url: location.href}) : (navigator.clipboard.writeText(location.href), $dispatch('toast', {msg:'Link copied', kind:'success'}))"
+                class="flex flex-1 items-center justify-center gap-2 rounded-full border border-line bg-white px-4 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-ink transition-colors hover:border-accent hover:text-accent">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path stroke-linecap="round" d="m8.2 10.7 7.6-4.4M8.2 13.3l7.6 4.4"/></svg>
+          Share
+        </button>
+      </div>
+
+      {% if delivery %}
+      <div class="mt-5 rounded-xl border border-line bg-cream px-4 py-3 text-sm">
+        <p class="flex items-center gap-2 font-medium text-ink">
+          <svg class="h-4 w-4 shrink-0 text-accent" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M3 8h11v9H3zM14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17.5" cy="18" r="1.5"/></svg>
+          Arrives {{ delivery.min.strftime('%a, %d %b') }} – {{ delivery.max.strftime('%a, %d %b') }}
+        </p>
+        {% if delivery.free_over %}<p class="mt-1 text-xs text-mute">Free shipping on orders over {{ delivery.free_over | money }} · Cash on delivery available</p>{% endif %}
+      </div>
+      {% endif %}
+
+      <div class="mt-5 grid grid-cols-2 gap-2.5 rounded-xl border border-line bg-cream p-3 text-center">
+        {% for icon, t in [
+          ('<path d="M3 8h11v9H3zM14 11h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.5"/><circle cx="17.5" cy="18" r="1.5"/>', 'Free &amp; Fast Delivery'),
+          ('<circle cx="12" cy="8" r="3.4"/><path stroke-linecap="round" d="M5 20c1.6-3.6 4.4-5.4 7-5.4s5.4 1.8 7 5.4"/>', 'Cash on Delivery'),
+          ('<path stroke-linecap="round" d="M3 7h13M3 12h9M3 17h5"/><path d="M19 15l2 2-2 2M21 17H11"/>', '2 Day Easy Returns'),
+          ('<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>', 'Secure Payments'),
+        ] %}
+        <div>
+          <span class="mx-auto grid h-9 w-9 place-items-center rounded-full bg-white text-accent">
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">{{ icon | safe }}</svg>
+          </span>
+          <p class="mt-1.5 text-[10px] font-medium leading-tight text-ink">{{ t }}</p>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-8 border-t border-line" x-data="{ open: 'desc' }">
+        {% set sections = [
+          ('desc', 'Description', product.description or product.short_description or 'A considered everyday piece.'),
+          ('care', 'Care instructions', 'Avoid contact with water, perfume and sweat. Store in the pouch provided, away from direct sunlight and moisture, to keep the plating looking new.'),
+          ('ship', 'Shipping & returns', 'Dispatched within 24 hours. Free shipping over ₹999. 7-day returns on unused items with tags. Cash on delivery available across India.')
+        ] %}
+        {% for key, label, body in sections %}
+        <div class="border-b border-line">
+          <button @click="open = (open === '{{ key }}') ? '' : '{{ key }}'" class="flex w-full items-center justify-between py-4 text-left text-[12px] font-semibold uppercase tracking-luxe text-ink">
+            {{ label }}<span x-text="open === '{{ key }}' ? '−' : '+'" class="text-gold"></span>
+          </button>
+          <div x-show="open === '{{ key }}'" x-collapse>
+            <p class="whitespace-pre-line break-words pb-5 text-sm leading-relaxed text-ink/75">{{ body }}</p>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      {% set faqs = product.project.faqs.filter(is_active=True) | list %}
+      {% if faqs %}
+      <div class="mt-6 rounded-xl bg-accent-soft p-4" x-data="{ open: -1 }">
+        <p class="mb-2 text-[11px] font-semibold uppercase tracking-luxe text-accent">Quick answers</p>
+        {% for f in faqs[:4] %}
+        <div class="border-t border-accent/15 py-2 first:border-t-0 first:pt-0">
+          <button class="flex w-full items-center justify-between gap-3 text-left text-[13px] font-medium text-ink" @click="open = open === {{ loop.index0 }} ? -1 : {{ loop.index0 }}">
+            {{ f.question }}<span x-text="open === {{ loop.index0 }} ? '−' : '+'" class="shrink-0 text-accent"></span>
+          </button>
+          <div x-show="open === {{ loop.index0 }}" x-collapse class="pt-1.5 text-xs leading-relaxed text-ink/70">{{ f.answer | safe }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="mt-24 scroll-mt-24" id="reviews">
+    {% include "shopfront/partials/_reviews.jinja" %}
+  </div>
+
+  {% if related %}
+  <section class="mt-24">
+    <h2 class="mb-8 text-center font-display text-2xl text-accent">You May Also Like</h2>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 sm:gap-y-12 md:grid-cols-4 lg:grid-cols-5">
+      {% for p in related %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if recently_viewed %}
+  <section class="mt-20">
+    <h2 class="mb-8 text-center font-display text-2xl text-accent">Recently Viewed</h2>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-10 sm:gap-x-6 sm:gap-y-12 md:grid-cols-4 lg:grid-cols-6">
+      {% for p in recently_viewed %}{% include "shopfront/partials/_card.jinja" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <div x-show="lb" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center bg-ink/95" @click="lb=false">
+    <button class="absolute right-5 top-5 text-2xl text-white/70 hover:text-white" @click="lb=false">✕</button>
+    <button class="absolute left-4 text-3xl text-white/60 hover:text-white" @click.stop="prev()" x-show="total > 1">‹</button>
+    <img :src="urls[active]" class="max-h-[88vh] max-w-[92vw] object-contain" @click.stop>
+    <button class="absolute right-4 text-3xl text-white/60 hover:text-white" @click.stop="next()" x-show="total > 1">›</button>
+    <span class="absolute bottom-6 text-xs text-white/60" x-text="(active+1) + ' / ' + total" x-show="total > 1"></span>
+  </div>
+
+  <div class="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line bg-white/95 px-4 py-3 backdrop-blur sm:px-5 lg:hidden">
+    <div class="min-w-0 flex-1 text-sm">
+      <p class="truncate font-medium text-ink">{{ product.title }}</p>
+      {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}<p class="text-accent" x-text="fmt(displayPrice)"></p>{% endif %}
+    </div>
+    {% if store_profile and store_profile.catalog_mode_enabled %}
+    {% set p = product %}{% set wa_enabled = true %}
+    <div class="shrink-0 [&_a]:rounded-full">{% include "shopfront/partials/_whatsapp_enquiry_btn.jinja" %}</div>
+    {% else %}
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="flex shrink-0 gap-2">
+      <input type="hidden" name="product" value="{{ product.slug }}">
+      <button type="submit" class="rounded-full bg-accent px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white">Add to bag</button>
+      <button type="submit" name="buy_now" value="1" class="rounded-full bg-ink px-4 py-3 text-[11px] font-semibold uppercase tracking-luxe text-white">Buy now</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js" defer></script>
+{% endblock %}

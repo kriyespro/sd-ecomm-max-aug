@@ -1,0 +1,95 @@
+{% extends "shopfront/base.jinja" %}
+{% block title %}Shop · {{ store.name }}{% endblock %}
+
+{% block content %}
+{% set _active_cat = (all_categories | selectattr('slug', 'equalto', active_category) | first) if active_category else none %}
+
+<div class="mx-auto max-w-7xl px-5 pb-16 pt-10 lg:px-8">
+  <nav class="mb-6 text-xs text-mute">
+    <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
+    {% if _active_cat %}<span class="mx-1">/</span><span class="text-ink">{{ _active_cat.name }}</span>{% endif %}
+  </nav>
+
+  <header class="mb-8 text-center">
+    {% if _active_cat %}<p class="mb-2 text-[11px] font-semibold uppercase tracking-luxe text-accent">{{ store.name }} Collection</p>{% endif %}
+    <h1 class="font-display text-3xl text-accent sm:text-4xl">
+      {% if _active_cat %}{{ _active_cat.name }}
+      {% elif query %}“{{ query }}”
+      {% else %}Shop All Jewellery{% endif %}
+    </h1>
+    <span class="v2-rule mx-auto mt-3 block"></span>
+    <p class="mt-3 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
+  </header>
+
+  {% if _active_cat and (_active_cat.banner or _active_cat.image) %}
+  <div class="mb-8 overflow-hidden rounded-2xl">
+    <img src="{{ (_active_cat.banner.url if _active_cat.banner else _active_cat.image.url) | media_src(1600, 480, _active_cat.name) }}" alt="{{ _active_cat.name }}" loading="lazy" decoding="async" class="h-52 w-full object-cover sm:h-72">
+  </div>
+  {% endif %}
+  {% if _active_cat and _active_cat.description %}
+  <p class="mx-auto mb-10 max-w-3xl text-center text-sm leading-relaxed text-ink/75">{{ _active_cat.description }}</p>
+  {% endif %}
+
+  {# category pill row #}
+  {% if all_categories %}
+  <div class="-mx-5 mb-8 flex gap-2 overflow-x-auto px-5 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:flex-wrap lg:justify-center lg:px-0">
+    <a href="{{ url('shopfront:shop') }}" class="shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe transition-colors {{ 'border-accent bg-accent text-white' if not active_category else 'border-line text-ink hover:border-accent hover:text-accent' }}">All</a>
+    {% for c in all_categories %}
+    <a href="{{ url('shopfront:shop') }}?category={{ c.slug }}" class="shrink-0 rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-luxe transition-colors {{ 'border-accent bg-accent text-white' if c.slug == active_category else 'border-line text-ink hover:border-accent hover:text-accent' }}">{{ c.name }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {# CATEGORY BANNER — placement "category" bound to this category in /admin/cms/banners/ #}
+  {% set _catban = category_banners.get(active_category) if active_category else none %}
+  {% if _catban %}
+  <a href="{{ _catban.cta_url or '' }}" class="group relative mb-10 block aspect-[4/1] overflow-hidden rounded-2xl bg-accent {{ 'pointer-events-none' if not _catban.cta_url }}">
+    <picture>
+      {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
+      <img src="{{ _catban.image | media_src(1600, 400, 'Category banner') }}"{{ ed('banner', _catban, 'image') }} alt="{{ '' if _catban.text_hidden else _catban.heading }}" loading="lazy" decoding="async"
+           class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-105">
+    </picture>
+    {% if not _catban.hide_overlay %}<div class="absolute inset-0 bg-gradient-to-t from-accent-dark/75 to-transparent"></div>{% endif %}
+    {% if not _catban.text_hidden and (_catban.heading or _catban.subheading) %}
+    <div class="absolute inset-0 flex flex-col justify-end gap-1 p-6">
+      {% if _catban.heading %}<h2{{ ed('banner', _catban, 'heading') }} class="font-display text-2xl text-white">{{ _catban.heading }}</h2>{% endif %}
+      {% if _catban.subheading %}<p{{ ed('banner', _catban, 'subheading') }} class="text-sm text-white/80">{{ _catban.subheading }}</p>{% endif %}
+    </div>
+    {% endif %}
+  </a>
+  {% endif %}
+
+  {# search / sort / price #}
+  <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
+        hx-trigger="change, input changed delay:450ms" hx-indicator="#grid"
+        class="mb-10 flex flex-wrap items-center gap-2 rounded-2xl border border-line bg-cream p-3 sm:grid sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
+    {% if active_category %}<input type="hidden" name="category" value="{{ active_category }}">{% endif %}
+    {% set _fld = "w-full rounded-full border border-line bg-white px-4 py-2.5 text-sm outline-none focus:border-accent" %}
+    {% set _lbl = "mb-1 hidden pl-1 text-[11px] font-semibold uppercase tracking-luxe text-mute sm:block" %}
+
+    <label class="basis-full text-sm sm:basis-auto">
+      <span class="{{ _lbl }}">Search</span>
+      <input type="search" name="q" value="{{ query }}" placeholder="Search products…" class="{{ _fld }}">
+    </label>
+    <label class="min-w-0 flex-1 text-sm sm:flex-none">
+      <span class="{{ _lbl }}">Sort</span>
+      <select name="sort" class="{{ _fld }}">
+        {% for v, t in [('new','Newest'),('price_asc','Price: low to high'),('price_desc','Price: high to low'),('rating','Top rated'),('name','Name')] %}
+        <option value="{{ v }}" {{ 'selected' if v == sort }}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <div class="basis-full text-sm sm:basis-auto">
+      <span class="{{ _lbl }}">Price</span>
+      <div class="flex items-center gap-2">
+        <input name="min" value="{{ price_min }}" inputmode="numeric" placeholder="Min ₹" class="{{ _fld }}">
+        <span class="text-mute">–</span>
+        <input name="max" value="{{ price_max }}" inputmode="numeric" placeholder="Max ₹" class="{{ _fld }}">
+      </div>
+    </div>
+  </form>
+
+  <div id="grid">
+    {% include "shopfront/partials/_grid.jinja" %}
+  </div>
+</div>
+{% endblock %}

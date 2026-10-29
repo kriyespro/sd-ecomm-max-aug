@@ -1,0 +1,54 @@
+{% set items = cart.items.all() | list %}
+{% if items %}
+<div class="grid gap-12 lg:grid-cols-3">
+  <div class="lg:col-span-2">
+    <div class="divide-y divide-line rounded-2xl border border-line">
+      {% for i in items %}
+      <div class="flex gap-4 px-5 py-6 sm:gap-5">
+        {% set img = (i.product.images.all() | first) %}
+        <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="h-24 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-cream sm:h-28 sm:w-24">
+          {% if img %}<img src="{{ img.renditions.get('512') or img.image.url }}" alt="" loading="lazy" decoding="async" class="h-full w-full object-cover">{% endif %}
+        </a>
+        <div class="flex flex-1 flex-col">
+          <a href="{{ url('shopfront:product', kwargs={'slug': i.product.slug}) }}" class="font-display text-lg text-ink hover:text-accent">{{ i.product.title }}</a>
+          {% if i.variant %}<p class="text-xs text-mute">{{ i.variant.name or i.variant.sku }}</p>{% endif %}
+          <p class="mt-1 text-sm text-mute">{{ i.unit_price | money }} each</p>
+
+          <div class="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-3">
+            <form hx-post="{{ url('shopfront:cart_update') }}" hx-target="#cart-page" hx-swap="innerHTML" class="flex items-center rounded-full border border-line">
+              <input type="hidden" name="item" value="{{ i.pk }}">
+              <button name="quantity" value="{{ i.quantity - 1 }}" class="px-3 py-1.5 text-mute hover:text-accent">−</button>
+              <span class="w-8 border-x border-line py-1.5 text-center text-sm">{{ i.quantity }}</span>
+              <button name="quantity" value="{{ i.quantity + 1 }}" class="px-3 py-1.5 text-mute hover:text-accent">+</button>
+            </form>
+            <form hx-post="{{ url('shopfront:cart_remove') }}" hx-target="#cart-page" hx-swap="innerHTML">
+              <input type="hidden" name="item" value="{{ i.pk }}">
+              <button class="text-[11px] uppercase tracking-luxe text-mute underline underline-offset-2 hover:text-rose-600">Remove</button>
+            </form>
+          </div>
+        </div>
+        <p class="shrink-0 whitespace-nowrap font-display text-lg text-accent">{{ i.line_total | money }}</p>
+      </div>
+      {% endfor %}
+    </div>
+    <a href="{{ url('shopfront:shop') }}" class="mt-6 inline-block text-[12px] font-semibold uppercase tracking-luxe text-accent">← Continue shopping</a>
+  </div>
+
+  <aside class="h-fit rounded-2xl border border-line bg-white p-7 shadow-[0_18px_44px_-30px_rgba(87,5,23,.25)]">
+    <p class="font-display text-xl text-accent">Summary</p>
+    <div class="mt-5 space-y-2 text-sm">
+      <div class="flex justify-between"><span class="text-mute">Subtotal</span><span>{{ cart.subtotal | money }}</span></div>
+      <div class="flex justify-between"><span class="text-mute">Shipping</span><span class="text-mute">At checkout</span></div>
+    </div>
+    <div class="mt-4 flex justify-between border-t border-line pt-4 font-display text-lg text-accent">
+      <span>Total</span><span>{{ cart.subtotal | money }}</span>
+    </div>
+    <a href="{{ url('shopfront:checkout') }}" class="mt-6 block rounded-full bg-accent py-3.5 text-center text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">Proceed to Checkout</a>
+  </aside>
+</div>
+{% else %}
+<div class="rounded-2xl border border-line py-24 text-center">
+  <p class="font-display text-2xl text-accent">Your Bag is Empty</p>
+  <a href="{{ url('shopfront:shop') }}" class="mt-4 inline-block rounded-full bg-accent px-8 py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">Shop the Collection</a>
+</div>
+{% endif %}

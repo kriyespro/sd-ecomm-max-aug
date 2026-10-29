@@ -71,6 +71,17 @@ SKIN_TITLES = {
         ("testimonials", "What People Say"),
         ("instagram", "The Edit"),
     ],
+    "kaanidhi2-0": [
+        ("categories", "Shop by Category"),
+        ("featured", "New Arrivals"),
+        ("featured_sub", "Trending jewelry often reflects current fashion trends, cultural influences"),
+        ("budget_bands", "Shop By Budget"),
+        ("benefits", "Why Shop With Us"),
+        ("new_arrivals", "Our Bestseller"),
+        ("new_arrivals_sub", "Trending jewelry often reflects current fashion trends, cultural influences"),
+        ("testimonials", "Our Customers Love Us"),
+        ("instagram", "Follow Us On Instagram"),
+    ],
 }
 
 

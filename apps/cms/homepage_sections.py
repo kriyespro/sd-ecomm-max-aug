@@ -73,6 +73,16 @@ SKIN_SECTIONS = {
         ("testimonials", "Testimonials"),
         ("instagram", "Instagram feed"),
     ],
+    "kaanidhi2-0": [
+        ("categories", "Shop by category"),
+        ("budget_bands", "Shop by budget"),
+        ("promo", "Promo banner (first one — extra banners stay near the footer)"),
+        ("featured", "Featured"),
+        ("benefits", "Why it works"),
+        ("new_arrivals", "New arrivals (renders as the dark 'Our Bestseller' block)"),
+        ("testimonials", "Testimonials"),
+        ("instagram", "Instagram feed"),
+    ],
 }
 
 

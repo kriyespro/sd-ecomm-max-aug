@@ -1,0 +1,44 @@
+{% set imgs = product.images.all() | list %}
+{% set fallback_url = none if imgs else (product.variants.all() | selectattr('is_active') | selectattr('image') | map(attribute='image.url') | first) %}
+<button @click="quickOpen=false" class="absolute right-4 top-4 z-10 grid h-8 w-8 place-items-center rounded-full bg-white/90 text-mute hover:text-accent">✕</button>
+<div class="grid overflow-hidden rounded-2xl sm:grid-cols-2"
+     x-data='{
+       variants: [{% for v in variants %}{% set base = v.price if v.price is not none else product.price %}{"pk": {{ v.pk }}, "price": {{ base }}, "sale": {{ v.sale_price if (v.sale_price is not none and v.sale_price < base) else "null" }}}{{ "," if not loop.last }}{% endfor %}],
+       sel: {{ variants[0].pk if variants else "null" }},
+       get cur() { return this.variants.find(v => v.pk === this.sel) || null; },
+       get regularPrice() { return this.cur ? Number(this.cur.price) : {{ product.price }}; },
+       get salePrice() { return this.cur ? (this.cur.sale !== null ? Number(this.cur.sale) : null) : {{ product.sale_price if product.on_sale else "null" }}; },
+       get displayPrice() { return this.salePrice !== null ? this.salePrice : this.regularPrice; },
+       fmt(n) { return "₹" + Math.round(Number(n) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","); },
+     }'>
+  <div class="aspect-square bg-cream sm:aspect-auto">
+    <img src="{{ (imgs[0].renditions.get('1024') or imgs[0].image.url) if imgs else (fallback_url or placeholder(1000, 1250, 'Product photo')) }}" alt="{{ product.title }}"
+         {% if imgs and imgs[0].srcset %}srcset="{{ imgs[0].srcset }}" sizes="(min-width:640px) 40vw, 100vw"{% endif %}
+         decoding="async" class="h-full w-full object-cover">
+  </div>
+  <div class="p-6 sm:p-8">
+    {% if product.brand %}<p class="text-[11px] font-semibold uppercase tracking-luxe text-gold">{{ product.brand.name }}</p>{% endif %}
+    <h2 class="mt-1 break-words font-display text-2xl leading-tight text-ink sm:text-3xl">{{ product.title }}</h2>
+    <p class="mt-3 text-lg">
+      <template x-if="salePrice !== null"><span class="text-mute line-through" x-text="fmt(regularPrice)"></span></template>
+      <span class="ml-1 font-semibold" :class="{'text-accent': salePrice !== null}" x-text="fmt(displayPrice)"></span>
+    </p>
+    {% if product.rating_count %}<p class="mt-1 text-sm text-gold">{{ '★' * (product.rating_avg | round | int) }}<span class="text-mute"> ({{ product.rating_count }})</span></p>{% endif %}
+    {% if available is not none and available <= 5 and available > 0 %}
+    <p class="mt-2 text-xs font-medium text-rose-600">Only {{ available }} left</p>
+    {% endif %}
+
+    {% if product.short_description %}<p class="mt-4 text-sm leading-relaxed text-ink/75">{{ product.short_description }}</p>{% endif %}
+
+    <form hx-post="{{ url('shopfront:cart_add') }}" hx-swap="none" class="mt-6 space-y-3">
+      <input type="hidden" name="product" value="{{ product.slug }}">
+      {% if variants %}
+      <select name="variant" x-model.number="sel" class="w-full rounded-xl border border-line bg-cream px-3 py-2.5 text-sm outline-none focus:border-accent">
+        {% for v in variants %}<option value="{{ v.pk }}">{{ v.name or v.sku }} — {{ v.effective_price | money }}</option>{% endfor %}
+      </select>
+      {% endif %}
+      <button class="w-full rounded-full bg-accent py-3.5 text-[11px] font-semibold uppercase tracking-luxe text-white hover:bg-accent-dark">Add to Bag</button>
+    </form>
+    <a href="{{ url('shopfront:product', kwargs={'slug': product.slug}) }}" class="mt-3 block text-center text-[11px] font-semibold uppercase tracking-luxe text-accent hover:underline">Full details →</a>
+  </div>
+</div>
