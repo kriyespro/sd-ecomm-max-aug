@@ -29,7 +29,7 @@
   </div>
 
   <div class="flex flex-1 flex-col px-1 pt-3">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="font-display text-[15px] leading-tight text-ink hover:text-accent sm:text-base">{{ p.title }}</a>
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="line-clamp-2 min-h-[2.4rem] font-display text-[15px] leading-tight text-ink hover:text-accent sm:min-h-[2.6rem] sm:text-base">{{ p.title }}</a>
 
     {% if p.rating_count %}
     <p class="mt-1 text-[11px] text-gold">{{ '★' * (p.rating_avg | round | int) }}<span class="text-mute"> ({{ p.rating_count }})</span></p>

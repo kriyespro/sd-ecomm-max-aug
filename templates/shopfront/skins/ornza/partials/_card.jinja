@@ -37,7 +37,7 @@
   </div>
 
   <div class="mt-4 text-center">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block font-display text-lg leading-tight hover:text-accent">{{ p.title }}</a>
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block line-clamp-2 min-h-[2.8rem] font-display text-lg leading-tight hover:text-accent">{{ p.title }}</a>
     {% if p.rating_count %}
     <p class="mt-1 text-xs text-accent">{{ '★' * (p.rating_avg | round | int) }}<span class="text-mute"> ({{ p.rating_count }})</span></p>
     {% endif %}

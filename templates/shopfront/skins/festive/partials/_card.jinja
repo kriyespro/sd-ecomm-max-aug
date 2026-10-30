@@ -31,7 +31,7 @@
   </button>
 
   <div class="mt-3 flex-1">
-    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block text-[15px] font-medium leading-snug hover:text-accent">{{ p.title }}</a>
+    <a href="{{ url('shopfront:product', kwargs={'slug': p.slug}) }}"{{ ed('product', p, 'title') }} class="block line-clamp-2 min-h-[2.6rem] text-[15px] font-medium leading-snug hover:text-accent">{{ p.title }}</a>
     {% if not store_profile or not store_profile.catalog_mode_enabled or store_profile.catalog_show_price %}
     <p{{ ed_money(p) }} class="mt-1 text-sm">
       {% if p.on_sale %}
