@@ -1,4 +1,4 @@
-<span id="result-count" hx-swap-oob="true">{{ result_count }} product{{ 's' if result_count != 1 }}</span>
+<span id="result-count" hx-swap-oob="true" class="ml-1.5 align-middle text-sm font-sans font-normal text-mute">({{ result_count }} product{{ 's' if result_count != 1 }})</span>
 
 {% if products %}
 <div class="grid grid-cols-2 gap-4 sm:gap-5 md:grid-cols-3 {{ 'lg:grid-cols-6' if products_per_row == 6 else 'lg:grid-cols-5' if products_per_row == 5 else 'lg:grid-cols-3' if products_per_row == 3 else 'lg:grid-cols-4' }}">

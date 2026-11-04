@@ -2,14 +2,14 @@
 {% block title %}Shop · {{ store.name }}{% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-7xl px-5 py-12 lg:px-8">
-  <header class="mb-10">
-    <h1 class="font-display text-3xl sm:text-4xl">
+<div class="mx-auto max-w-7xl px-5 py-6 lg:py-10 lg:px-8">
+  <header class="mb-4 sm:mb-6">
+    <h1 class="font-display text-2xl sm:text-3xl lg:text-4xl">
       {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
       {% elif query %}“{{ query }}”
       {% else %}Shop all{% endif %}
+      <span class="ml-1.5 align-middle text-sm font-sans font-normal text-mute" id="result-count">({{ result_count }} piece{{ 's' if result_count != 1 }})</span>
     </h1>
-    <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} piece{{ 's' if result_count != 1 }}</p>
   </header>
 
   {# CATEGORY BANNER — placement "category" bound to this category in /admin/cms/banners/ #}
@@ -35,9 +35,9 @@
   <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
         hx-trigger="change, input changed delay:450ms"
         hx-indicator="#grid"
-        class="mb-8 flex flex-wrap items-center gap-2 border-y border-line py-3
-               sm:mb-10 sm:grid sm:grid-cols-2 sm:gap-4 sm:py-5 lg:grid-cols-4">
-    {% set _fld = "w-full border border-line bg-transparent px-3 py-2 text-sm outline-none focus:border-accent" %}
+        class="mb-4 flex flex-wrap items-center gap-1.5 border-y border-line py-2
+               sm:mb-6 sm:grid sm:grid-cols-2 sm:gap-4 sm:py-3 lg:grid-cols-4">
+    {% set _fld = "w-full border border-line bg-transparent px-3 py-1.5 text-sm outline-none focus:border-accent" %}
     {% set _lbl = "mb-1 hidden text-[11px] font-semibold uppercase tracking-luxe text-mute sm:block" %}
 
     <label class="basis-full text-sm sm:basis-auto">

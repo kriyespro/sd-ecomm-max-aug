@@ -6,7 +6,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-7xl px-5 py-10 lg:px-8 lg:py-14">
+<div class="mx-auto max-w-7xl px-5 py-5 lg:px-8 lg:py-10">
 
   {# breadcrumb #}
   <nav class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-luxe text-mute">
@@ -17,19 +17,19 @@
     <span class="text-ink">{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}</span>{% endif %}
   </nav>
 
-  <header class="mt-4">
-    <h1 class="font-display text-3xl sm:text-4xl">
+  <header class="mt-2">
+    <h1 class="font-display text-2xl sm:text-3xl lg:text-4xl">
       {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
       {% elif query %}“{{ query }}”
       {% else %}Shop all{% endif %}
+      <span class="ml-1.5 align-middle text-sm font-sans font-normal text-mute" id="result-count">({{ result_count }} product{{ 's' if result_count != 1 }})</span>
     </h1>
-    <p class="mt-2 text-sm text-mute" id="result-count">{{ result_count }} product{{ 's' if result_count != 1 }}</p>
   </header>
 
   {# CATEGORY BANNER — placement "category" bound to this category #}
   {% set _catban = category_banners.get(active_category) if active_category else none %}
   {% if _catban %}
-  <a href="{{ _catban.cta_url or '' }}" class="group relative mt-8 block aspect-[4/1] overflow-hidden rounded-3xl bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
+  <a href="{{ _catban.cta_url or '' }}" class="group relative mt-4 block aspect-[4/1] overflow-hidden rounded-3xl bg-ink {{ 'pointer-events-none' if not _catban.cta_url }}">
     <picture>
       {% if _catban.mobile_image %}<source media="(max-width: 640px)" srcset="{{ _catban.mobile_image.url }}">{% endif %}
       <img src="{{ _catban.image | media_src(1600, 400, 'Category banner') }}" alt="{{ '' if _catban.text_hidden else _catban.heading }}" loading="lazy" decoding="async"
@@ -46,7 +46,7 @@
   {% endif %}
 
   {# CATEGORY CHIPS — quick switch, horizontal scroll on mobile #}
-  <div class="mt-8 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+  <div class="mt-4 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
     <a href="{{ url('shopfront:shop') }}"
        class="shrink-0 rounded-full border px-4 py-1.5 text-[12px] font-medium transition-colors
               {{ 'border-accent bg-accent text-paper' if not active_category else 'border-line bg-panel text-ink hover:border-accent' }}">
@@ -64,9 +64,9 @@
   {# FILTER BAR #}
   <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
         hx-trigger="change, input changed delay:450ms" hx-indicator="#grid"
-        class="mt-6 flex flex-wrap items-center gap-2 border-y border-line py-3
-               sm:grid sm:grid-cols-2 sm:gap-4 sm:py-4 lg:grid-cols-4">
-    {% set _fld = "w-full rounded-full border border-line bg-panel px-4 py-2 text-sm outline-none focus:border-accent" %}
+        class="mt-3 flex flex-wrap items-center gap-1.5 border-y border-line py-2
+               sm:grid sm:grid-cols-2 sm:gap-4 sm:py-3 lg:grid-cols-4">
+    {% set _fld = "w-full rounded-full border border-line bg-panel px-4 py-1.5 text-sm outline-none focus:border-accent" %}
     {% set _lbl = "mb-1 hidden text-[11px] font-semibold uppercase tracking-luxe text-mute sm:block" %}
 
     <label class="basis-full text-sm sm:basis-auto">
@@ -97,7 +97,7 @@
     </div>
   </form>
 
-  <div id="grid" class="mt-8">
+  <div id="grid" class="mt-4">
     {% include "shopfront/partials/_grid.jinja" %}
   </div>
 </div>
