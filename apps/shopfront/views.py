@@ -191,7 +191,7 @@ class ShopView(View):
             stock_map=_stock_map(page.object_list),
         )
         if _htmx(request):
-            return render(request, "shopfront/partials/_grid.jinja", ctx)
+            return render(request, "shopfront/partials/_grid.jinja", {**ctx, "is_fragment": True})
 
         filtered = bool(q or f.get("min") or f.get("max") or f.get("page") or sort not in ("", "new"))
         if category_obj is not None:
