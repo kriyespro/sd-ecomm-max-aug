@@ -1,4 +1,5 @@
 {% extends "shopfront/base.jinja" %}
+{% from "shopfront/partials/_product_video.jinja" import product_video %}
 {% block title %}{{ product.seo_title or product.title }} · {{ store.name }}{% endblock %}
 {% block meta %}{{ product.seo_description or product.short_description or product.title }}{% endblock %}
 
@@ -303,6 +304,14 @@
       </div>
     </div>
   </div>
+
+  {# ---------- VIDEO ---------- #}
+  {% if product.video_youtube_id %}
+  <section class="mt-24 max-w-3xl">
+    <h2 class="mb-6 font-display text-2xl">Watch</h2>
+    {{ product_video(product.video_youtube_id) }}
+  </section>
+  {% endif %}
 
   {# ---------- REVIEWS ---------- #}
   <div class="mt-24 scroll-mt-24" id="reviews">

@@ -5,8 +5,18 @@
     <input type="checkbox" name="pks" value="{{ p.pk }}" form="bulk-status-form" aria-label="Select {{ p.title }}" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
     {% endif %}
   </td>
-  <td class="px-4 py-2">
-    <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ p.title }}</a>
+  <td class="px-4 py-2" data-title-cell>
+    <div class="title-view flex items-center gap-1.5">
+      <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="title-link font-medium text-slate-900 hover:underline">{{ p.title }}</a>
+      <button type="button" class="title-edit-btn text-slate-400 hover:text-slate-600" title="Rename inline" aria-label="Rename {{ p.title }}">✎</button>
+    </div>
+    <div class="title-edit hidden">
+      <input type="text" class="title-input w-full rounded border border-slate-300 px-1.5 py-0.5 text-sm" value="{{ p.title }}" maxlength="220"
+             hx-post="{{ url('control:product_title_update', kwargs={'pk': p.pk}) }}"
+             hx-trigger="blur" hx-swap="none"
+             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+      <p class="title-error mt-0.5 hidden text-[10px] text-red-600">Title can't be empty.</p>
+    </div>
     {% if p.brand %}<span class="text-xs text-slate-400">· {{ p.brand.name }}</span>{% endif %}
   </td>
   <td class="px-4 py-2 text-slate-500">{{ p.sku or "—" }}</td>
@@ -58,7 +68,12 @@
          class="mr-2 inline-block rounded bg-pink-500 px-2 py-0.5 text-xs font-medium text-white hover:bg-pink-600">View Product</a>
       {% endif %}
       <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="text-slate-600 hover:underline">Edit</a>
-      <form method="post" action="{{ url('control:product_duplicate', kwargs={'pk': p.pk}) }}" class="inline">{{ csrf_input }}<button class="ml-2 text-slate-600 hover:underline">Duplicate</button></form>
+      <form method="post" action="{{ url('control:product_duplicate', kwargs={'pk': p.pk}) }}" class="ml-2 inline-flex items-center gap-1">{{ csrf_input }}
+        <button class="text-slate-600 hover:underline">Duplicate</button>
+        <label class="inline-flex items-center gap-1 text-[11px] text-slate-400" title="Copy this product's images onto the duplicate too (off by default)">
+          <input type="checkbox" name="copy_images" value="on" class="h-3 w-3 rounded border-slate-300">images
+        </label>
+      </form>
       {% if can_manage_trash %}
       <a href="{{ url('control:product_delete', kwargs={'pk': p.pk}) }}" class="ml-2 text-red-600 hover:underline">Trash</a>
       {% endif %}

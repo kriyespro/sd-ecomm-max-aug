@@ -757,6 +757,13 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
         clone.tags.set(src.tags.all())
         clone.attribute_values.set(src.attribute_values.all())
 
+        # Image copying is opt-in: a duplicate is almost always a starting
+        # point for a *different* product, so the source's photos get
+        # deleted and replaced anyway — defaulting to "don't copy" saves
+        # that always-redundant cleanup step. "Copy images too" on the
+        # trigger form flips this on for the rare near-identical-variant case.
+        copy_images = request.POST.get("copy_images") == "on"
+
         for v in src.variants.all():
             new_v = Variant.objects.get(pk=v.pk)
             new_v.pk = None
@@ -767,32 +774,34 @@ class ProductDuplicateView(_ScopedQuerysetMixin, View):
             new_v.save()
             new_v.attribute_values.set(v.attribute_values.all())
 
-            for vimg in v.images.all():
-                if not vimg.image:
-                    continue
-                try:
-                    vimg.image.open("rb")
-                    data = vimg.image.read()
-                finally:
-                    vimg.image.close()
-                new_vimg = VariantImage(
-                    variant=new_v, order=vimg.order, is_primary=vimg.is_primary,
-                )
-                new_vimg.image.save(os.path.basename(vimg.image.name), ContentFile(data), save=True)
+            if copy_images:
+                for vimg in v.images.all():
+                    if not vimg.image:
+                        continue
+                    try:
+                        vimg.image.open("rb")
+                        data = vimg.image.read()
+                    finally:
+                        vimg.image.close()
+                    new_vimg = VariantImage(
+                        variant=new_v, order=vimg.order, is_primary=vimg.is_primary,
+                    )
+                    new_vimg.image.save(os.path.basename(vimg.image.name), ContentFile(data), save=True)
             sync_variant_cover(new_v)
 
-        for img in src.images.all():
-            if not img.image:
-                continue
-            try:
-                img.image.open("rb")
-                data = img.image.read()
-            finally:
-                img.image.close()
-            new_img = ProductImage(
-                product=clone, alt=img.alt, order=img.order, is_primary=img.is_primary,
-            )
-            new_img.image.save(os.path.basename(img.image.name), ContentFile(data), save=True)
+        if copy_images:
+            for img in src.images.all():
+                if not img.image:
+                    continue
+                try:
+                    img.image.open("rb")
+                    data = img.image.read()
+                finally:
+                    img.image.close()
+                new_img = ProductImage(
+                    product=clone, alt=img.alt, order=img.order, is_primary=img.is_primary,
+                )
+                new_img.image.save(os.path.basename(img.image.name), ContentFile(data), save=True)
 
         record_audit(
             actor=request.user, project=self.active_project,
@@ -822,6 +831,26 @@ class ProductFlagToggleView(_ScopedQuerysetMixin, View):
         record_audit(actor=request.user, project=self.active_project,
                      action=AuditLog.Action.UPDATE, target=product,
                      changes={flag: value}, request=request)
+        return HttpResponse(status=204)
+
+
+class ProductTitleUpdateView(_ScopedQuerysetMixin, View):
+    """Inline-rename a product straight from the products list (pencil icon
+    next to the title), autosaving on blur — same one-POST-per-field shape as
+    ProductFlagToggleView above."""
+
+    model = Product
+
+    def post(self, request, pk, *args, **kwargs):
+        product = get_object_or_404(self.get_queryset(), pk=pk)
+        title = (request.POST.get("title") or "").strip()
+        if not title or len(title) > product._meta.get_field("title").max_length:
+            return HttpResponse(status=400)
+        product.title = title
+        product.save(update_fields=["title", "updated_at"])
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=product,
+                     changes={"title": title}, request=request)
         return HttpResponse(status=204)
 
 

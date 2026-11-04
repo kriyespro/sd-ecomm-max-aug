@@ -16,11 +16,15 @@
       + Add another product
     </a>
     {% if object %}
-    <form method="post" action="{{ url('control:product_duplicate', kwargs={'pk': object.pk}) }}">
+    <form method="post" action="{{ url('control:product_duplicate', kwargs={'pk': object.pk}) }}" class="flex items-center gap-2">
       {{ csrf_input }}
       <button class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
         Duplicate
       </button>
+      <label class="inline-flex items-center gap-1 text-xs text-slate-500" title="Copy this product's images onto the duplicate too (off by default)">
+        <input type="checkbox" name="copy_images" value="on" class="h-3.5 w-3.5 rounded border-slate-300">
+        Copy images too
+      </label>
     </form>
     {% set store_url = object.project.public_url %}
     {% if store_url %}

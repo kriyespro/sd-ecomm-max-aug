@@ -7,8 +7,6 @@ list of section dicts for a block-based page builder — the frontend decides ho
 to render each ``type``.
 """
 
-import re
-
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -18,16 +16,7 @@ from django.utils.text import slugify
 
 from apps.core.html import sanitize_html
 from apps.core.models import SeoFieldsModel, TenantScopedModel, TimeStampedModel
-
-_YOUTUBE_ID_RE = re.compile(
-    r"(?:youtube(?:-nocookie)?\.com/(?:shorts/|live/|embed/|watch\?(?:\S*&)?v=)"
-    r"|youtu\.be/)([A-Za-z0-9_-]{11})"
-)
-
-
-def _extract_youtube_id(url):
-    match = _YOUTUBE_ID_RE.search(url or "")
-    return match.group(1) if match else ""
+from apps.core.youtube import extract_youtube_id as _extract_youtube_id
 
 
 class PublishStatus(models.TextChoices):

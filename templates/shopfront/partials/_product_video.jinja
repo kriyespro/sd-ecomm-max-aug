@@ -1,0 +1,15 @@
+{# A normal, playable YouTube embed for the product detail page (controls on,
+   no forced autoplay/mute/loop) — distinct from _hero_video.jinja's
+   hero_video() macro, which is a silent looping background and would be the
+   wrong UX here: a shopper watching a product video wants sound and a
+   pause/seek bar, not an uncontrollable muted loop. #}
+{% macro product_video(youtube_id) %}
+<div class="relative w-full overflow-hidden rounded-xl aspect-video bg-ink/5">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/{{ youtube_id }}?modestbranding=1&rel=0&playsinline=1"
+    class="absolute inset-0 h-full w-full"
+    title="Product video" frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+    allowfullscreen loading="lazy"></iframe>
+</div>
+{% endmacro %}

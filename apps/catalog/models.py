@@ -14,6 +14,7 @@ from django.utils.text import slugify
 
 from apps.core.html import sanitize_html
 from apps.core.models import SeoFieldsModel, TenantScopedModel, TimeStampedModel
+from apps.core.youtube import extract_youtube_id
 
 MONEY = dict(max_digits=12, decimal_places=2, validators=[MinValueValidator(Decimal("0"))])
 
@@ -228,6 +229,12 @@ class Product(TenantScopedModel, SeoFieldsModel):
     cross_sell = models.ManyToManyField("self", symmetrical=False, blank=True, related_name="cross_sold_by")
     upsell = models.ManyToManyField("self", symmetrical=False, blank=True, related_name="upsold_by")
 
+    video_url = models.URLField(
+        max_length=300, blank=True, default="",
+        help_text="YouTube link — shown as a video on the product page.",
+    )
+    video_youtube_id = models.CharField(max_length=20, blank=True, editable=False)
+
     class Meta:
         ordering = ["-created_at"]
         constraints = [
@@ -255,6 +262,7 @@ class Product(TenantScopedModel, SeoFieldsModel):
                 Product.objects.filter(project=self.project), self.title, instance_pk=self.pk
             )
         self.description = sanitize_html(self.description)
+        self.video_youtube_id = extract_youtube_id(self.video_url)
         super().save(*args, **kwargs)
 
     @property

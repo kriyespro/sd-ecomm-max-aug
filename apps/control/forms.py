@@ -134,7 +134,7 @@ class ProductForm(ProjectScopedForm):
             "title", "kind", "price", "sale_price", "cost_price", "status",
             "type", "brand", "category",
             "barcode", "hsn_sac", "tax_class",
-            "short_description", "description",
+            "short_description", "description", "video_url",
             "weight", "length", "width", "height",
             "search_indexed",
             "seo_title", "seo_description", "seo_keywords",
@@ -145,11 +145,13 @@ class ProductForm(ProjectScopedForm):
         }
         labels = {
             "search_indexed": "Show in search & storefront listings",
+            "video_url": "Product video",
         }
         help_texts = {
             "search_indexed": "Off = hidden from the storefront grid, search and "
                               "sitemap even when the status is Active. Direct link "
                               "still works.",
+            "video_url": "YouTube link — shown as a video on the product page.",
         }
 
     def __init__(self, *args, **kwargs):
