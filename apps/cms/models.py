@@ -576,6 +576,20 @@ class SkinAsset(TimeStampedModel):
         return f"{self.skin.slug}:{self.path}"
 
 
+FONT_CHOICES = [
+    ("", "Skin's own font (default)"),
+    ("Inter", "Inter"), ("Jost", "Jost"), ("Poppins", "Poppins"),
+    ("Work Sans", "Work Sans"), ("Nunito Sans", "Nunito Sans"),
+    ("Plus Jakarta Sans", "Plus Jakarta Sans"),
+    ("Playfair Display", "Playfair Display"), ("DM Serif Display", "DM Serif Display"),
+    ("Cormorant Garamond", "Cormorant Garamond"), ("Marcellus", "Marcellus"),
+    ("Lora", "Lora"), ("Fraunces", "Fraunces"),
+]
+
+_LAYOUT_CHOICES = [("", "Default (skin's own) — more layouts coming soon")]
+_BUTTON_CARD_CHOICES = [("", "Default (skin's own) — more styles coming soon")]
+
+
 class ThemeSettings(TenantScopedModel):
     """One row per project. Colours are first-class for the control form; the
     rest of the design system lives in ``tokens``.
@@ -588,12 +602,12 @@ class ThemeSettings(TenantScopedModel):
     primary_color = models.CharField(max_length=9, default="#111111")
     secondary_color = models.CharField(max_length=9, default="#ffffff")
     accent_color = models.CharField(max_length=9, default="#2563eb")
-    font_body = models.CharField(max_length=120, blank=True)
-    font_heading = models.CharField(max_length=120, blank=True)
-    header_layout = models.CharField(max_length=40, blank=True)
-    footer_layout = models.CharField(max_length=40, blank=True)
-    button_style = models.CharField(max_length=40, blank=True)
-    product_card_style = models.CharField(max_length=40, blank=True)
+    font_body = models.CharField(max_length=120, blank=True, choices=FONT_CHOICES, default="")
+    font_heading = models.CharField(max_length=120, blank=True, choices=FONT_CHOICES, default="")
+    header_layout = models.CharField(max_length=40, blank=True, choices=_LAYOUT_CHOICES, default="")
+    footer_layout = models.CharField(max_length=40, blank=True, choices=_LAYOUT_CHOICES, default="")
+    button_style = models.CharField(max_length=40, blank=True, choices=_BUTTON_CARD_CHOICES, default="")
+    product_card_style = models.CharField(max_length=40, blank=True, choices=_BUTTON_CARD_CHOICES, default="")
     homepage_sections = models.JSONField(default=list, blank=True)
     tokens = models.JSONField(default=dict, blank=True)
     custom_css = models.TextField(blank=True)

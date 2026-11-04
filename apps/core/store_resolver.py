@@ -12,7 +12,14 @@ Both are cached in the shared cache (Redis in production). ``apps.core.signals``
 busts the relevant key when a Domain, Project, ThemeSettings or Skin changes.
 """
 
+import re
+
 from django.core.cache import cache
+
+# Same sanitizer apps.shopfront.theme_context uses for the sandboxed-skin
+# custom_css contract — reused here rather than reinvented so both paths make
+# the same security call about what a merchant's custom CSS may contain.
+_CSS_STRIP = re.compile(r"[<>]")
 
 _TTL = 600
 _NEG = "\x00"  # sentinel so a "nothing here" answer is cached too
@@ -167,7 +174,8 @@ def _build_chrome(project):
 
     theme = (
         ThemeSettings.objects.filter(project=project)
-        .only("primary_color", "project_id", "category_above_hero",
+        .only("primary_color", "secondary_color", "accent_color", "custom_css",
+              "font_body", "font_heading", "project_id", "category_above_hero",
               "show_category_headings", "heading_align", "heading_size", "heading_font",
               "homepage_sections", "products_per_row", "products_shown", "section_titles",
               "hide_featured_eyebrow", "category_mobile_slider")
@@ -202,6 +210,13 @@ def _build_chrome(project):
     banners = singles
     return {
         "accent": theme.primary_color if theme else "#b08d57",
+        "secondary_color": theme.secondary_color if theme else "#ffffff",
+        "accent_color": theme.accent_color if theme else "#2563eb",
+        "custom_css": _CSS_STRIP.sub("", theme.custom_css) if (theme and theme.custom_css) else "",
+        "font_body": theme.font_body if theme else "",
+        "font_body_url": (theme.font_body if theme else "").replace(" ", "+"),
+        "font_heading": theme.font_heading if theme else "",
+        "font_heading_url": (theme.font_heading if theme else "").replace(" ", "+"),
         "profile": profile,
         "store_logo": profile.logo.url if (profile and profile.logo) else "",
         "store_favicon": (

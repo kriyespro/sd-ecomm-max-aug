@@ -68,11 +68,20 @@
     #grid.htmx-request { opacity: .45; transition: opacity .2s; }
     #suggest.htmx-request { opacity: .6; }
   </style>
+{% if font_body %}<link href="https://fonts.googleapis.com/css2?family={{ font_body_url }}:wght@400;500;600;700&display=swap" rel="stylesheet">{% endif %}
+{% if font_heading and font_heading != font_body %}<link href="https://fonts.googleapis.com/css2?family={{ font_heading_url }}:wght@400;600;700;800&display=swap" rel="stylesheet">{% endif %}
+<style>
+{% if font_body %}body{font-family:"{{ font_body }}",system-ui,sans-serif !important;}{% endif %}
+{% if font_heading %}h1,h2,h3,.font-display{font-family:"{{ font_heading }}",system-ui,sans-serif !important;}{% endif %}
+html{accent-color:{{ accent_color or '#2563eb' }};}
+</style>
+{% if custom_css %}<style>{{ custom_css | safe }}</style>{% endif %}
 </head>
 <body class="min-h-screen bg-paper font-sans text-ink antialiased"
       x-data="shop()" @keydown.escape="cartOpen=false; searchOpen=false; quickOpen=false"
       @cart-open.window="cartOpen=true; quickOpen=false" @toast.window="pushToast($event.detail)"
       @open-quick.window="quickOpen=true">
+  <div style="height:3px;background:{{ secondary_color or '#ffffff' }};width:100%;" aria-hidden="true"></div>
 
     {% set _ann = announcement.heading if announcement else '' %}
   {% set _msgs = [_ann] + ['Cash on delivery across India', 'Premium gift packaging on every order', '7-day easy returns', 'Handcrafted with care', '10,000+ happy customers'] if _ann else ['Cash on delivery across India', 'Premium gift packaging on every order', '7-day easy returns', 'Handcrafted with care', '10,000+ happy customers'] %}
