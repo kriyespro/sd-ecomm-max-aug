@@ -8,9 +8,9 @@
 {% block content %}
 <div class="mx-auto max-w-7xl px-5 py-5 lg:px-8 lg:py-10">
 
-  <div class="lg:flex lg:items-start lg:justify-between lg:gap-8">
-    {# breadcrumb + heading inline together #}
-    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 lg:shrink-0">
+  <div class="lg:flex lg:items-center lg:gap-6">
+    {# breadcrumb + heading inline together, same small size #}
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 lg:shrink-0">
       <nav class="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] uppercase tracking-luxe text-mute">
         <a href="{{ url('shopfront:home') }}" class="hover:text-accent">Home</a>
         <span>/</span>
@@ -18,47 +18,42 @@
         {% if active_category %}<span>/</span>
         <span class="text-ink">{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}</span>{% endif %}
       </nav>
-      <h1 class="font-display text-2xl sm:text-3xl lg:text-4xl">
+      <h1 class="text-[11px] font-semibold uppercase tracking-luxe text-ink">
         {% if active_category %}{% for c in all_categories %}{% if c.slug == active_category %}{{ c.name }}{% endif %}{% endfor %}
         {% elif query %}“{{ query }}”
         {% else %}Shop all{% endif %}
-        <span class="ml-1.5 align-middle text-sm font-sans font-normal text-mute" id="result-count">({{ result_count }} product{{ 's' if result_count != 1 }})</span>
+        <span class="ml-1 font-normal normal-case text-mute" id="result-count">({{ result_count }} product{{ 's' if result_count != 1 }})</span>
       </h1>
     </div>
 
-    {# FILTER BAR — sits beside the title at lg+ instead of its own stacked block #}
+    {# compact, unlabelled filter bar — sits beside the title at lg+ instead of its own stacked block #}
     <form id="filters" hx-get="{{ url('shopfront:shop') }}" hx-target="#grid" hx-push-url="true"
           hx-trigger="change, input changed delay:450ms" hx-indicator="#grid"
           class="mt-3 flex flex-wrap items-center gap-1.5 border-y border-line py-2
-                 sm:grid sm:grid-cols-2 sm:gap-4 sm:py-3
-                 lg:mt-0 lg:grid-cols-4 lg:flex-1 lg:max-w-2xl lg:border-y-0 lg:py-0">
-      {% set _fld = "w-full rounded-full border border-line bg-panel px-4 py-1.5 text-sm outline-none focus:border-accent" %}
-      {% set _lbl = "mb-1 hidden text-[11px] font-semibold uppercase tracking-luxe text-mute sm:block" %}
+                 sm:grid sm:grid-cols-2 sm:gap-3 sm:py-2.5
+                 lg:mt-0 lg:flex lg:w-auto lg:flex-nowrap lg:gap-2 lg:border-y-0 lg:py-0">
+      {% set _fld = "w-full rounded-full border border-line bg-panel px-3 py-1.5 text-sm outline-none focus:border-accent" %}
 
-      <label class="basis-full text-sm sm:basis-auto">
-        <span class="{{ _lbl }}">Search</span>
-        <input type="search" name="q" value="{{ query }}" placeholder="Search products…" class="{{ _fld }}">
-      </label>
-      <label class="min-w-0 flex-1 text-sm sm:flex-none">
-        <span class="{{ _lbl }}">Category</span>
-        <select name="category" class="{{ _fld }}">
+      <div class="basis-full sm:basis-auto lg:w-40">
+        <input type="search" name="q" value="{{ query }}" aria-label="Search" placeholder="Search products…" class="{{ _fld }}">
+      </div>
+      <div class="min-w-0 flex-1 sm:flex-none lg:w-36">
+        <select name="category" aria-label="Category" class="{{ _fld }}">
           <option value="">All categories</option>
           {% for c in all_categories %}<option value="{{ c.slug }}" {{ 'selected' if c.slug == active_category }}>{{ c.name }}</option>{% endfor %}
         </select>
-      </label>
-      <label class="min-w-0 flex-1 text-sm sm:flex-none">
-        <span class="{{ _lbl }}">Sort</span>
-        <select name="sort" class="{{ _fld }}">
+      </div>
+      <div class="min-w-0 flex-1 sm:flex-none lg:w-32">
+        <select name="sort" aria-label="Sort" class="{{ _fld }}">
           {% for v, t in [('new','Newest'),('price_asc','Price: low to high'),('price_desc','Price: high to low'),('rating','Top rated'),('name','Name')] %}
           <option value="{{ v }}" {{ 'selected' if v == sort }}>{{ t }}</option>{% endfor %}
         </select>
-      </label>
-      <div class="basis-full text-sm sm:basis-auto">
-        <span class="{{ _lbl }}">Price</span>
+      </div>
+      <div class="basis-full sm:basis-auto">
         <div class="flex items-center gap-2">
-          <input name="min" value="{{ price_min }}" inputmode="numeric" placeholder="Min ₹" class="{{ _fld }}">
+          <input name="min" value="{{ price_min }}" inputmode="numeric" aria-label="Minimum price" placeholder="Min ₹" class="{{ _fld }} lg:w-16">
           <span class="text-mute">–</span>
-          <input name="max" value="{{ price_max }}" inputmode="numeric" placeholder="Max ₹" class="{{ _fld }}">
+          <input name="max" value="{{ price_max }}" inputmode="numeric" aria-label="Maximum price" placeholder="Max ₹" class="{{ _fld }} lg:w-16">
         </div>
       </div>
     </form>
