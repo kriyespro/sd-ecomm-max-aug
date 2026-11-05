@@ -144,6 +144,8 @@ class ProductForm(ProjectScopedForm):
             "short_description": forms.Textarea(attrs={"rows": 2}),
         }
         labels = {
+            "price": "MRP",
+            "sale_price": "Offer Price",
             "search_indexed": "Show in search & storefront listings",
             "video_url": "Product video",
         }

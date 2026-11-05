@@ -39,7 +39,7 @@ CATEGORIES = [
 # title, price, sale_price, category, short description, long description,
 # is_featured, is_new_arrival
 PRODUCTS = [
-    ("Stoneware Dinner Plate", 690, None, "Kitchen & Dining",
+    ("Stoneware Dinner Plate", 690, 550, "Kitchen & Dining",
      "Reactive-glaze stoneware, 27 cm. Sold individually.",
      "<p>Each plate is dipped by hand, so no two glazes break exactly the "
      "same way. Chip-resistant stoneware, safe for the dishwasher, microwave "
@@ -50,21 +50,21 @@ PRODUCTS = [
      "<p>Pure flax linen, garment-washed for a soft, lived-in hand from the "
      "first use. Generously cut with a mitred hem. Gets better every wash.</p>",
      False, False),
-    ("Ribbed Glass Tumbler", 390, None, "Kitchen & Dining",
+    ("Ribbed Glass Tumbler", 390, 310, "Kitchen & Dining",
      "Pressed soda-lime glass, 300 ml. Stackable.",
      "<p>An everyday tumbler with a vertical rib that catches the light and "
      "hides water marks. Balanced weight, comfortable in the hand.</p>",
      False, True),
-    ("Cotton Waffle Throw", 2490, None, "Home & Living",
+    ("Cotton Waffle Throw", 2490, 1990, "Home & Living",
      "Yarn-dyed cotton waffle, 130 × 170 cm.",
      "<p>A lightweight throw for the sofa or the foot of the bed. Open waffle "
      "weave in long-staple cotton with a hand-knotted fringe.</p>", True, False),
-    ("Terracotta Plant Pot", 850, None, "Outdoor",
+    ("Terracotta Plant Pot", 850, 680, "Outdoor",
      "Unglazed terracotta with drainage hole and saucer. 16 cm.",
      "<p>Breathable unglazed clay that wicks away excess water and keeps roots "
      "healthy. Develops a natural patina outdoors. Matching saucer included.</p>",
      False, True),
-    ("Beeswax Candle — Amber & Moss", 1190, None, "Gifting",
+    ("Beeswax Candle — Amber & Moss", 1190, 950, "Gifting",
      "Blended soy-and-beeswax, ~45 hour burn.",
      "<p>Hand-poured in small batches with a cotton wick and a warm, woody "
      "scent — amber, oakmoss and a little black pepper. Reusable glass vessel.</p>",
@@ -73,7 +73,7 @@ PRODUCTS = [
      "Woven lambswool, 30 × 190 cm. Comes gift-boxed.",
      "<p>Soft, warm and light, woven on traditional looms and finished with a "
      "twisted fringe. Arrives in a recyclable gift box.</p>", False, False),
-    ("Solid Oak Serving Board", 1690, None, "Home & Living",
+    ("Solid Oak Serving Board", 1690, 1350, "Home & Living",
      "Oiled European oak, 40 × 20 cm. Each one unique.",
      "<p>Cut from a single piece of oak and finished with food-safe oil. Use "
      "it for bread and cheese, or as a trivet. Re-oil once or twice a year.</p>",
