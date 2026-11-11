@@ -654,10 +654,14 @@ class CheckoutView(View):
             from apps.payments import services as payments
 
             order.refresh_from_db()
-            order.cod_balance_due = order.grand_total - cod_advance_amount
+            # A coupon/store-credit applied after the advance was quoted can
+            # drop grand_total below the store's configured advance -- never
+            # collect more online than the order is actually worth.
+            advance = min(cod_advance_amount, order.grand_total)
+            order.cod_balance_due = order.grand_total - advance
             order.save(update_fields=["cod_balance_due", "updated_at"])
             payments.record_offline_payment(
-                order=order, provider_key="upi", amount=cod_advance_amount,
+                order=order, provider_key="upi", amount=advance,
                 actor=request.user if request.user.is_authenticated else None,
             )
             return redirect("shopfront:order", number=order.number)
@@ -667,9 +671,10 @@ class CheckoutView(View):
 
             order.refresh_from_db()
             provider_key = cod_advance_provider or method_key
-            amount = cod_advance_amount if cod_advance_provider else None
+            amount = None
             if cod_advance_provider:
-                order.cod_balance_due = order.grand_total - cod_advance_amount
+                amount = min(cod_advance_amount, order.grand_total)
+                order.cod_balance_due = order.grand_total - amount
                 order.save(update_fields=["cod_balance_due", "updated_at"])
             try:
                 payment, client_params = payments.initiate_payment(

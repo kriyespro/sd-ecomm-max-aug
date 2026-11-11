@@ -145,26 +145,45 @@ def initiate_payment(*, order, provider_key, actor=None, context=None, amount=No
 
 # --- settle ----------------------------------------------------
 
+#: An order that reached either of these will never be fulfilled -- a
+#: payment settling after the fact (a race between a customer-initiated
+#: cancel and a staff capture, or a late webhook) must not resurrect it.
+_NEVER_PAY_AFTER = frozenset({"cancelled", "failed"})
+
+
 @transaction.atomic
 def _settle(payment, *, actor=None, reference="", event_kind=PaymentEvent.Kind.CAPTURE):
+    from apps.orders.models import Order
+
+    # Lock the payment row before checking/flipping status -- without this, two
+    # concurrent callers (a replayed client callback, or a webhook racing a
+    # client verify) can both read PENDING and both run the settlement side
+    # effects (loyalty credit, COD-remainder spawn) twice.
+    payment = Payment.objects.select_for_update().get(pk=payment.pk)
+    if payment.status == PaymentStatus.PAID:
+        return payment
+    # Locked once here and reused below -- a second Payment row on the same
+    # order (e.g. an advance settling while a retry is also being verified)
+    # must not independently pass the "no COD payment yet" check further down.
+    order = Order.objects.select_for_update().get(pk=payment.order_id)
+    if order.status in _NEVER_PAY_AFTER:
+        raise PaymentError(f"Order {order.number} is {order.status} -- payment cannot be settled.")
     payment.status = PaymentStatus.PAID
     payment.captured_at = timezone.now()
     payment.save(update_fields=["status", "captured_at", "provider_payment_id",
                                 "provider_signature", "updated_at"])
-    orders.mark_paid(order=payment.order, actor=actor,
+    orders.mark_paid(order=order, actor=actor,
                      reference=reference or payment.provider_payment_id or payment.provider)
-    order_for_cod = payment.order
-    if order_for_cod.cod_balance_due and order_for_cod.cod_balance_due > 0 and not (
-        order_for_cod.payments.filter(provider=Provider.COD).exists()
+    if order.cod_balance_due and order.cod_balance_due > 0 and not (
+        order.payments.filter(provider=Provider.COD).exists()
     ):
         # Advance just settled -- spawn the COD remainder now, not at checkout
         # time, so a never-settled advance never leaves a stray COD Payment.
-        record_offline_payment(order=order_for_cod, provider_key=Provider.COD,
-                               amount=order_for_cod.cod_balance_due, actor=actor)
+        record_offline_payment(order=order, provider_key=Provider.COD,
+                               amount=order.cod_balance_due, actor=actor)
     _log(payment, kind=event_kind, project=payment.project, note=reference)
     record_audit(actor=actor, project=payment.project, action=AuditLog.Action.UPDATE,
                  target=payment, changes={"status": PaymentStatus.PAID})
-    order = payment.order
     payload = orders.order_event_payload(order, amount=str(payment.amount), provider=payment.provider)
     transaction.on_commit(
         lambda: emit(Events.PAYMENT_SUCCESS, project=payment.project, payload=payload, instance=payment)
@@ -417,14 +436,30 @@ def refund_payment(*, payment, amount=None, reason="", actor=None):
 # --- reconciliation ------------------------------------------------
 
 def reconcile(project):
-    """Return orders whose payment_status disagrees with their payments."""
-    mismatches = []
-    from apps.orders.models import Order
+    """Return orders whose payment_status disagrees with their payments.
 
+    Compares the settled total against grand_total (not just "any payment
+    settled") so a COD-advance order correctly sitting at PARTIALLY_PAID,
+    with its remainder still PENDING, is never flagged -- only a genuine
+    disagreement is.
+    """
+    from apps.orders.models import Order
+    from apps.orders.models import PaymentStatus as OrderPaymentStatus
+
+    settled_states = (
+        OrderPaymentStatus.PAID, OrderPaymentStatus.PARTIALLY_REFUNDED, OrderPaymentStatus.REFUNDED,
+    )
+    mismatches = []
     for order in Order.objects.filter(project=project).prefetch_related("payments"):
-        settled = any(p.status == PaymentStatus.PAID for p in order.payments.all())
-        if settled and order.payment_status != "paid":
+        settled_total = sum(
+            (p.amount for p in order.payments.all() if p.status == PaymentStatus.PAID), Decimal("0"),
+        )
+        if settled_total >= order.grand_total and order.payment_status not in settled_states:
             mismatches.append((order, "payment settled but order not marked paid"))
-        if not settled and order.payment_status == "paid":
+        elif Decimal("0") < settled_total < order.grand_total and order.payment_status not in (
+            OrderPaymentStatus.PARTIALLY_PAID, *settled_states,
+        ):
+            mismatches.append((order, "advance settled but order not marked partially paid"))
+        if settled_total <= 0 and order.payment_status == OrderPaymentStatus.PAID:
             mismatches.append((order, "order marked paid but no settled payment"))
     return mismatches

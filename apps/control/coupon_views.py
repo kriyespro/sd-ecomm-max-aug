@@ -10,6 +10,7 @@ from django.views.generic import (
     UpdateView,
 )
 
+from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.coupons.models import Coupon
@@ -27,10 +28,12 @@ class CouponListView(ActiveProjectMixin, ListView):
         return Coupon.objects.filter(project=self.active_project).order_by("-created_at")
 
 
-class _CouponForm(ActiveProjectMixin):
+class _CouponForm(StoreRoleRequiredMixin, ActiveProjectMixin):
     form_class = CouponForm
     template_name = "control/coupons/coupon_form.jinja"
     success_url = reverse_lazy("control:coupon_list")
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage coupons."
 
     def get_queryset(self):
         return Coupon.objects.filter(project=self.active_project)
@@ -57,9 +60,11 @@ class CouponUpdateView(_CouponForm, UpdateView):
     pass
 
 
-class CouponDeleteView(ActiveProjectMixin, DeleteView):
+class CouponDeleteView(StoreRoleRequiredMixin, ActiveProjectMixin, DeleteView):
     template_name = "control/catalog/confirm_delete.jinja"
     success_url = reverse_lazy("control:coupon_list")
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage coupons."
 
     def get_queryset(self):
         return Coupon.objects.filter(project=self.active_project)

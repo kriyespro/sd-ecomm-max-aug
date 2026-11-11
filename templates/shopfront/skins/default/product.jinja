@@ -284,7 +284,7 @@
       {# accordion #}
       <div class="mt-8 border-t border-line" x-data="{ open: 'desc' }">
         {% set sections = [
-          ('desc', 'Description', product.description or product.short_description or 'A considered everyday essential.'),
+          ('desc', 'Description', (product.description | safe) if product.description else (product.short_description or 'A considered everyday essential.')),
           ('care', 'Materials & care', 'Made from responsibly sourced materials. Follow the label; gentle wash, dry flat, store away from direct sunlight.'),
           ('ship', 'Shipping & returns', 'Dispatched within 24 hours. Free shipping over ₹999. 30-day returns on unworn items with tags. Cash on delivery available across India.')
         ] %}
