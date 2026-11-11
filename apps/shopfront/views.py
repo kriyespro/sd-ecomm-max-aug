@@ -991,9 +991,13 @@ class RegisterView(View):
         project = current_project(request)
         email = request.POST.get("email", "").strip().lower()
         password = request.POST.get("password", "")
+        if login_ratelimit.signup_is_locked(request, project):
+            messages.error(request, login_ratelimit.SIGNUP_LOCK_MESSAGE)
+            return redirect("shopfront:account")
         if login_ratelimit.is_locked(request, email):
             messages.error(request, login_ratelimit.LOCK_MESSAGE)
             return redirect("shopfront:account")
+        login_ratelimit.record_signup_attempt(request, project)
 
         try:
             validate_password(password)

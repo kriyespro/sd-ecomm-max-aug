@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.sessions.backends.db import SessionStore
+from django.core.cache import cache
 from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
 
@@ -449,3 +450,52 @@ class CheckoutRazorpayTests(TestCase):
         pmt = Payment.objects.get(order=order)
         self.assertEqual(pmt.provider, "razorpay")
         self.assertContains(resp, str(pmt.pk))
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class SignupFloodBrakeTests(TestCase):
+    """A bot cycling through fresh emails never trips the per-email brute-force
+    brake (there's no failure to count), so registration needs its own IP+store
+    counter. Scoped to the store, not the bare IP, so shoppers behind a shared
+    IP can still register at other stores while one store is under attack."""
+
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        cache.clear()
+        self.store = Project.objects.create(name="Flood Store", status="active", currency="INR")
+        Domain.objects.create(project=self.store, host="flood.iso.test", is_verified=True)
+        self.other_store = Project.objects.create(name="Other Store", status="active", currency="INR")
+        Domain.objects.create(project=self.other_store, host="other.iso.test", is_verified=True)
+
+    def _register(self, host, email):
+        return self.client.post(
+            "/account/register/", {"email": email, "password": "Str0ngPassw0rd!"}, HTTP_HOST=host,
+        )
+
+    def test_repeated_fresh_signups_at_one_store_get_locked(self):
+        from apps.accounts import ratelimit as login_ratelimit
+
+        for i in range(login_ratelimit.SIGNUP_MAX):
+            self._register("flood.iso.test", f"bot{i}@formtests.info")
+            self.client.logout()
+
+        resp = self._register("flood.iso.test", "bot-overflow@formtests.info")
+        self.assertRedirects(resp, "/account/", fetch_redirect_response=False)
+        follow = self.client.get("/account/", HTTP_HOST="flood.iso.test")
+        self.assertContains(follow, login_ratelimit.SIGNUP_LOCK_MESSAGE)
+
+        User = get_user_model()
+        self.assertFalse(User.objects.filter(email__iexact="bot-overflow@formtests.info").exists())
+
+    def test_lockout_is_scoped_to_the_attacked_store_only(self):
+        from apps.accounts import ratelimit as login_ratelimit
+
+        for i in range(login_ratelimit.SIGNUP_MAX):
+            self._register("flood.iso.test", f"bot{i}@formtests.info")
+            self.client.logout()
+
+        resp = self._register("other.iso.test", "shopper@buy.test")
+        self.assertEqual(resp.status_code, 302)
+        User = get_user_model()
+        self.assertTrue(User.objects.filter(email__iexact="shopper@buy.test").exists())
