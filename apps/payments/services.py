@@ -320,6 +320,19 @@ def _apply_refund_totals(payment):
         payment.status = PaymentStatus.PARTIALLY_REFUNDED
     payment.save(update_fields=["amount_refunded", "status", "updated_at"])
 
+    # Keep Order.payment_status in sync -- previously only Payment.status was
+    # updated here, leaving the storefront order page showing a stale "Paid"
+    # badge after any refund.
+    if total > 0:
+        order = payment.order
+        new_status = (
+            orders.PaymentStatus.REFUNDED if total >= payment.amount
+            else orders.PaymentStatus.PARTIALLY_REFUNDED
+        )
+        if order.payment_status != new_status:
+            order.payment_status = new_status
+            order.save(update_fields=["payment_status", "updated_at"])
+
 
 @transaction.atomic
 def refund_payment(*, payment, amount=None, reason="", actor=None):

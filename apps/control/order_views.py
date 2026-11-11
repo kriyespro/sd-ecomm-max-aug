@@ -224,6 +224,7 @@ class OrderDetailView(_OrderScopedMixin, DetailView):
         ctx["can_manage_orders"] = has_store_role(
             self.request.user, self.active_project, OWNER_MANAGER
         )
+        ctx["return_request"] = getattr(self.object, "return_request", None)
         return ctx
 
 
@@ -238,6 +239,57 @@ class OrderStatusView(_OrderScopedMixin, View):
             orders.transition_order(order=order, to_status=to_status, actor=request.user, note=note)
             messages.success(request, f"Order moved to {to_status}.")
         except orders.OrderError as exc:
+            messages.error(request, str(exc))
+        return redirect("control:order_detail", pk=order.pk)
+
+
+class ReturnApproveView(_OrderScopedMixin, View):
+    def post(self, request, *args, **kwargs):
+        from apps.returns import services as returns_svc
+        from apps.returns.models import RefundMethod
+
+        order = self.get_order()
+        req = getattr(order, "return_request", None)
+        if req is None:
+            raise Http404
+        refund_method = request.POST.get("refund_method", "")
+        if refund_method not in dict(RefundMethod.choices):
+            messages.error(request, "Choose a refund method.")
+            return redirect("control:order_detail", pk=order.pk)
+
+        from decimal import Decimal, InvalidOperation
+
+        raw_amount = request.POST.get("amount", "").strip()
+        amount = None
+        if raw_amount:
+            try:
+                amount = Decimal(raw_amount)
+            except InvalidOperation:
+                messages.error(request, "Enter a valid refund amount.")
+                return redirect("control:order_detail", pk=order.pk)
+
+        try:
+            returns_svc.approve_return(
+                request=req, refund_method=refund_method, amount=amount, actor=request.user,
+            )
+            messages.success(request, "Return/exchange approved.")
+        except returns_svc.ReturnError as exc:
+            messages.error(request, str(exc))
+        return redirect("control:order_detail", pk=order.pk)
+
+
+class ReturnRejectView(_OrderScopedMixin, View):
+    def post(self, request, *args, **kwargs):
+        from apps.returns import services as returns_svc
+
+        order = self.get_order()
+        req = getattr(order, "return_request", None)
+        if req is None:
+            raise Http404
+        try:
+            returns_svc.reject_return(request=req, note=request.POST.get("note", ""), actor=request.user)
+            messages.success(request, "Return/exchange rejected.")
+        except returns_svc.ReturnError as exc:
             messages.error(request, str(exc))
         return redirect("control:order_detail", pk=order.pk)
 

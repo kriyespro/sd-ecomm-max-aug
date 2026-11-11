@@ -184,6 +184,33 @@
       </div>
       {% endif %}
 
+      {% if return_request %}
+      <div class="op-card text-left">
+        <p class="op-h">Return / exchange</p>
+        {% if return_request.status == 'requested' %}
+        <p class="text-sm">Your {{ return_request.get_kind_display() | lower }} request is with the store.</p>
+        {% elif return_request.status == 'approved' %}
+        <p class="text-sm font-bold text-emerald-700">Your {{ return_request.get_kind_display() | lower }} request was approved.</p>
+        {% elif return_request.status == 'rejected' %}
+        <p class="text-sm font-bold text-rose-700">Your {{ return_request.get_kind_display() | lower }} request could not be approved.</p>
+        {% if return_request.resolved_note %}<p class="mt-1 text-xs text-mute">{{ return_request.resolved_note }}</p>{% endif %}
+        {% endif %}
+      </div>
+      {% elif can_request_return %}
+      <div class="op-card text-left">
+        <p class="op-h">Return / exchange</p>
+        <form method="post" action="{{ url('shopfront:order_return_request', kwargs={'number': order.number}) }}" class="space-y-3">
+          {{ csrf_input }}
+          <div class="flex gap-4 text-sm">
+            <label class="flex items-center gap-1.5"><input type="radio" name="kind" value="return" checked> Return</label>
+            <label class="flex items-center gap-1.5"><input type="radio" name="kind" value="exchange"> Exchange</label>
+          </div>
+          <input name="reason" required placeholder="Reason" class="w-full border border-line bg-transparent px-3 py-2.5 text-sm outline-none focus:border-accent">
+          <button class="bg-ink px-6 py-2.5 text-[11px] font-semibold uppercase tracking-luxe text-paper hover:bg-accent">Request return / exchange</button>
+        </form>
+      </div>
+      {% endif %}
+
       <div class="op-card">
         <p class="op-h">Items ({{ order.items.all() | length }})</p>
         {% for i in order.items.all() %}

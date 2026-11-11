@@ -114,6 +114,36 @@
         {% endif %}
       </div>
 
+      {% if return_request and return_request.status == 'requested' %}
+      <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 space-y-3">
+        <h3 class="text-sm font-semibold text-slate-700">Return / exchange request</h3>
+        <p class="text-sm"><b>{{ return_request.get_kind_display() }}</b> — {{ return_request.reason }}</p>
+        {% if return_request.note %}<p class="text-xs text-slate-500">{{ return_request.note }}</p>{% endif %}
+
+        <form method="post" action="{{ url('control:order_return_approve', kwargs={'pk': order.pk}) }}" class="space-y-2">
+          {{ csrf_input }}
+          <select name="refund_method" class="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+            <option value="store_credit">Refund as store credit</option>
+            <option value="gateway_refund">Refund via payment gateway</option>
+            <option value="manual">Manual (handled off-platform)</option>
+          </select>
+          <input type="text" name="amount" placeholder="Amount (blank = {{ order.grand_total }})" class="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+          <button class="w-full rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700">Approve</button>
+        </form>
+        <form method="post" action="{{ url('control:order_return_reject', kwargs={'pk': order.pk}) }}" class="space-y-2">
+          {{ csrf_input }}
+          <input type="text" name="note" placeholder="Reason for rejecting (optional)" class="w-full rounded-lg border border-slate-300 px-2 py-2 text-sm">
+          <button class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50">Reject</button>
+        </form>
+      </div>
+      {% elif return_request %}
+      <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 space-y-1">
+        <h3 class="text-sm font-semibold text-slate-700">Return / exchange request</h3>
+        <p class="text-sm">{{ return_request.get_kind_display() }} — {{ return_request.get_status_display() }}
+          {% if return_request.resolved_refund_method %}via {{ return_request.get_resolved_refund_method_display() | lower }}{% endif %}</p>
+      </div>
+      {% endif %}
+
       {# --- Payments --- #}
       <div class="rounded-xl bg-white p-5 ring-1 ring-slate-200 space-y-3">
         <h3 class="text-sm font-semibold text-slate-700">Payments</h3>

@@ -61,4 +61,19 @@ DEFAULTS = {
         "Code: {code}\n\nSign in or create an account and enter this code on your "
         "account page to add it as store credit.",
     ),
+    "return_requested": (
+        "Return/exchange requested for {order_number}",
+        "A {kind} request has come in for order {order_number}.\n\nReason: {reason}\n\n"
+        "Review and approve or reject it from Mission Control.",
+    ),
+    "return_approved": (
+        "Your {kind} request for {order_number} was approved",
+        "Hi {name},\n\nYour {kind} request for order {order_number} has been approved.\n"
+        "{resolution_note}",
+    ),
+    "return_rejected": (
+        "Your {kind} request for {order_number} was declined",
+        "Hi {name},\n\nYour {kind} request for order {order_number} could not be approved.\n"
+        "{resolution_note}",
+    ),
 }
