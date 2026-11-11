@@ -1,0 +1,62 @@
+{% extends "control/base_control.jinja" %}
+{% block page_title %}Segments{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Customer segments · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      Customers are segmented automatically from their order history (new,
+      returning, VIP, high value, inactive 180+ days). Message a segment on
+      WhatsApp — only customers who opted in to marketing and have a phone
+      number are reached.
+    </p>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Segment</th>
+          <th class="px-4 py-2">Customers</th>
+          <th class="px-4 py-2">Reachable on WhatsApp</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for s in segment_counts %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-medium">{{ s.label }}</td>
+          <td class="px-4 py-2">{{ s.total }}</td>
+          <td class="px-4 py-2">{{ s.reachable }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h3 class="mb-3 text-sm font-semibold text-slate-700">Send a WhatsApp message</h3>
+    <p class="mb-3 text-xs text-slate-500">
+      Needs a WhatsApp template configured for the "Marketing broadcast" event
+      on the Notifications settings screen, and an active WhatsApp account.
+    </p>
+    <form method="post" action="{{ url('control:segment_broadcast_send') }}" class="grid gap-3 sm:grid-cols-3">
+      {{ csrf_input }}
+      <div>
+        <label class="text-xs font-medium text-slate-500">Segment</label>
+        <select name="segment" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+          {% for s in segment_counts %}<option value="{{ s.value }}">{{ s.label }} ({{ s.reachable }})</option>{% endfor %}
+        </select>
+      </div>
+      <div class="sm:col-span-2">
+        <label class="text-xs font-medium text-slate-500">Message</label>
+        <input name="message" required placeholder="e.g. Flat 20% off this weekend — use code WEEKEND20"
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div class="sm:col-span-3">
+        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Send</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -53,6 +53,26 @@ def enabled_provider_configs(project):
     return configs
 
 
+def cod_advance_plan(project):
+    """``(gateway_provider_key, advance_amount)`` when this store requires a
+    small online advance before a COD order is confirmed, else ``(None, 0)``
+    -- either the store hasn't configured one, or no online provider is
+    enabled to collect it with."""
+    cod_config = PaymentProviderConfig.objects.filter(project=project, provider=Provider.COD).first()
+    advance = cod_config.cod_advance_amount if cod_config else Decimal("0")
+    if not advance or advance <= 0:
+        return None, Decimal("0")
+    enabled = [c for c in enabled_provider_configs(project) if c.provider not in (Provider.COD, Provider.MANUAL)]
+    if not enabled:
+        return None, Decimal("0")
+    # Prefer a provider that verifies itself instantly (Razorpay/Stripe/PayU)
+    # over direct UPI, which needs a staff member to manually confirm the
+    # money arrived -- that defeats the point of a fast online advance. UPI
+    # is picked only when it's the one online method the store has enabled.
+    gateway = next((c for c in enabled if c.provider != Provider.UPI), enabled[0])
+    return gateway.provider, advance
+
+
 def get_provider(project, provider_key):
     try:
         config = PaymentProviderConfig.objects.get(project=project, provider=provider_key)
@@ -82,7 +102,7 @@ def _log(payment, *, kind, project, provider="", signature_valid=None, payload=N
 
 # --- initiate ----------------------------------------------------
 
-def initiate_payment(*, order, provider_key, actor=None, context=None):
+def initiate_payment(*, order, provider_key, actor=None, context=None, amount=None):
     """Not wrapped in one big ``transaction.atomic()``: ``provider.start()`` is
     a live network call to the gateway (up to ~15s for Razorpay), and this is
     the highest-traffic payment entry point (every checkout attempt). Holding
@@ -99,7 +119,7 @@ def initiate_payment(*, order, provider_key, actor=None, context=None):
         project=order.project,
         order=order,
         provider=provider_key,
-        amount=order.grand_total,
+        amount=amount if amount is not None else order.grand_total,
         currency=order.currency,
         status=PaymentStatus.CREATED,
         idempotency_key=get_random_string(24),
@@ -133,6 +153,14 @@ def _settle(payment, *, actor=None, reference="", event_kind=PaymentEvent.Kind.C
                                 "provider_signature", "updated_at"])
     orders.mark_paid(order=payment.order, actor=actor,
                      reference=reference or payment.provider_payment_id or payment.provider)
+    order_for_cod = payment.order
+    if order_for_cod.cod_balance_due and order_for_cod.cod_balance_due > 0 and not (
+        order_for_cod.payments.filter(provider=Provider.COD).exists()
+    ):
+        # Advance just settled -- spawn the COD remainder now, not at checkout
+        # time, so a never-settled advance never leaves a stray COD Payment.
+        record_offline_payment(order=order_for_cod, provider_key=Provider.COD,
+                               amount=order_for_cod.cod_balance_due, actor=actor)
     _log(payment, kind=event_kind, project=payment.project, note=reference)
     record_audit(actor=actor, project=payment.project, action=AuditLog.Action.UPDATE,
                  target=payment, changes={"status": PaymentStatus.PAID})
@@ -209,7 +237,8 @@ def capture_payment(*, payment, actor=None, reference=""):
 # --- COD / manual --------------------------------------------------
 
 @transaction.atomic
-def record_offline_payment(*, order, provider_key=Provider.COD, actor=None, mark_collected=False, reference=""):
+def record_offline_payment(*, order, provider_key=Provider.COD, actor=None, mark_collected=False,
+                            reference="", amount=None):
     """Attach a COD/manual payment to an order.
 
     ``mark_collected=False`` (COD default): order is CONFIRMED now, cash captured
@@ -218,7 +247,7 @@ def record_offline_payment(*, order, provider_key=Provider.COD, actor=None, mark
     provider, config = get_provider(order.project, provider_key)
     payment = Payment.objects.create(
         project=order.project, order=order, provider=provider_key,
-        amount=order.grand_total, currency=order.currency,
+        amount=amount if amount is not None else order.grand_total, currency=order.currency,
         status=PaymentStatus.PENDING,
     )
     _log(payment, kind=PaymentEvent.Kind.INITIATE, project=order.project)

@@ -64,6 +64,7 @@ _SECTIONS = [
         ("whatsapp_enquiry", "WhatsApp enquiry button", "\U0001f4ac"),
         ("referral_program", "Referral program", "\U0001f517"),
         ("credit_settings", "Store credit", "\U0001f381"),
+        ("segment_broadcast", "Segments", "\U0001f465"),
     ]),
     ("storefront", "Storefront", "\U0001f6cd", [
         ("cms_store_profile", "Store profile", "\U0001f3ea"),

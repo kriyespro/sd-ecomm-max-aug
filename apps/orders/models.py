@@ -44,6 +44,7 @@ class PaymentStatus(models.TextChoices):
     PENDING = "pending", "Pending"
     AUTHORIZED = "authorized", "Authorized"
     PAID = "paid", "Paid"
+    PARTIALLY_PAID = "partially_paid", "Partially paid (advance received)"
     PARTIALLY_REFUNDED = "partially_refunded", "Partially refunded"
     REFUNDED = "refunded", "Refunded"
     FAILED = "failed", "Failed"
@@ -102,6 +103,10 @@ class Order(TenantScopedModel):
     # Snapshot of the chosen shipping method: {id, name, carrier, rate, cod_fee,
     # min_days, max_days}. Set by apps.shipping.services.set_order_shipping.
     shipping_method = models.JSONField(default=dict, blank=True)
+    # Set only for a COD order where the store requires a small advance up
+    # front (apps.payments.services.cod_advance_plan) -- the remainder still
+    # owed in cash on delivery, after the advance is paid online.
+    cod_balance_due = models.DecimalField(**MONEY)
 
     warehouse = models.ForeignKey(
         "inventory.Warehouse",

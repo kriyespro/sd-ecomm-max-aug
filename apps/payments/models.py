@@ -41,6 +41,9 @@ class PaymentProviderConfig(TenantScopedModel):
     config = models.JSONField(default=dict, blank=True)
     # Direct-UPI only: the owner's own payment QR, shown to shoppers at checkout.
     qr_image = models.ImageField(upload_to="stores/upi-qr/", blank=True)
+    # COD only: a small advance a shopper must pay online (via another enabled
+    # provider) before a COD order is confirmed, rest due on delivery. 0 = off.
+    cod_advance_amount = models.DecimalField(blank=True, **MONEY)
 
     class Meta:
         ordering = ["priority", "provider"]

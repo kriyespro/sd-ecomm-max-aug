@@ -452,6 +452,110 @@ class CheckoutRazorpayTests(TestCase):
         self.assertContains(resp, str(pmt.pk))
 
 
+class CheckoutCodAdvanceTests(TestCase):
+    """A COD order with a configured advance is routed through the gateway
+    response path when a verify-capable provider (Razorpay) is enabled, for
+    the advance amount only -- the rest is left as order.cod_balance_due, due
+    on delivery. The rest of this round trip lives in apps.payments.test_cod_advance."""
+
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="AdvanceShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="advance.shop.test", is_verified=True)
+        self.product = Product.objects.create(
+            project=self.project, title="Ring", price=Decimal("1000"),
+        )
+        User = get_user_model()
+        self.user = User.objects.create_user("advbuyer", "a@buy.test", "pw")
+        self.client.force_login(self.user)
+
+    def _add_to_cart(self):
+        from apps.cart.services import get_or_create_cart
+        cart = get_or_create_cart(project=self.project, user=self.user)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=1,
+                                unit_price=self.product.price)
+        return cart
+
+    def _post_cod(self):
+        return self.client.post("/checkout/", {
+            "email": "a@buy.test", "name": "Buyer", "line1": "1 St",
+            "city": "Pune", "postal_code": "411001", "country": "IN", "phone": "9990001234",
+            "payment_method": "cod",
+        }, HTTP_HOST="advance.shop.test")
+
+    def test_checkout_page_shows_the_advance_amount_on_cod(self):
+        from apps.payments.models import PaymentProviderConfig
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True,
+            credentials={"key_id": "rzp_test_k", "key_secret": "sec"},
+        )
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="cod", is_enabled=True, cod_advance_amount=Decimal("100"),
+        )
+        self._add_to_cart()
+        resp = self.client.get("/checkout/", HTTP_HOST="advance.shop.test")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "advance paid online")
+
+    def test_cod_with_razorpay_advance_configured_collects_only_the_advance_online(self):
+        from apps.orders.models import Order
+        from apps.payments.models import Payment, PaymentProviderConfig
+
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="razorpay", is_enabled=True,
+            credentials={"key_id": "rzp_test_k", "key_secret": "sec"},
+        )
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="cod", is_enabled=True, cod_advance_amount=Decimal("100"),
+        )
+        self._add_to_cart()
+        resp = self._post_cod()
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Completing your payment")
+
+        order = Order.objects.get(project=self.project)
+        self.assertEqual(order.cod_balance_due, order.grand_total - Decimal("100"))
+        pmt = Payment.objects.get(order=order)
+        self.assertEqual(pmt.provider, "razorpay")
+        self.assertEqual(pmt.amount, Decimal("100"))
+
+    def test_cod_with_only_upi_advance_falls_back_to_offline_confirm(self):
+        """UPI is never client-verified -- staff confirm it, so this takes the
+        same offline path plain UPI checkout already uses, not checkout_pay."""
+        from apps.orders.models import Order
+        from apps.payments.models import Payment, PaymentProviderConfig
+
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="upi", is_enabled=True,
+            credentials={"upi_id": "shop@bank"},
+        )
+        PaymentProviderConfig.objects.create(
+            project=self.project, provider="cod", is_enabled=True, cod_advance_amount=Decimal("100"),
+        )
+        self._add_to_cart()
+        resp = self._post_cod()
+        order = Order.objects.get(project=self.project)
+        self.assertRedirects(resp, f"/order/{order.number}/", fetch_redirect_response=False)
+        self.assertEqual(order.cod_balance_due, order.grand_total - Decimal("100"))
+        pmt = Payment.objects.get(order=order)
+        self.assertEqual(pmt.provider, "upi")
+        self.assertEqual(pmt.amount, Decimal("100"))
+
+    def test_without_advance_configured_cod_is_plain_cod(self):
+        from apps.orders.models import Order
+        from apps.payments.models import Payment, Provider
+
+        self._add_to_cart()
+        resp = self._post_cod()
+        order = Order.objects.get(project=self.project)
+        self.assertRedirects(resp, f"/order/{order.number}/", fetch_redirect_response=False)
+        self.assertEqual(order.cod_balance_due, Decimal("0"))
+        pmt = Payment.objects.get(order=order)
+        self.assertEqual(pmt.provider, Provider.COD)
+        self.assertEqual(pmt.amount, order.grand_total)
+
+
 @override_settings(ALLOWED_HOSTS=["*"])
 class SignupFloodBrakeTests(TestCase):
     """A bot cycling through fresh emails never trips the per-email brute-force
