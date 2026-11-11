@@ -1,0 +1,116 @@
+{% extends "control/base_control.jinja" %}
+{% from "control/_forms.jinja" import render_form %}
+{% block page_title %}Store credit{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-5xl space-y-4">
+  <div>
+    <h2 class="text-sm font-semibold text-slate-700">Store credit · {{ active_project.name }}</h2>
+    <p class="mt-1 text-xs text-slate-500">
+      One balance per customer, fed by gift cards you issue and (if loyalty
+      rewards are on) a percentage of every paid order. Customers apply it
+      themselves at checkout; it's reversed automatically if an order is
+      later cancelled.
+    </p>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h3 class="mb-3 text-sm font-semibold text-slate-700">Loyalty rewards</h3>
+    <form method="post" class="grid gap-4 md:grid-cols-2">
+      {{ csrf_input }}
+      {{ render_form(form) }}
+      <div class="md:col-span-2">
+        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Save</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
+    <h3 class="mb-3 text-sm font-semibold text-slate-700">Issue a gift card</h3>
+    <form method="post" action="{{ url('control:gift_card_issue') }}" class="grid gap-3 sm:grid-cols-3">
+      {{ csrf_input }}
+      <div>
+        <label class="text-xs font-medium text-slate-500">Value</label>
+        <input name="value" type="number" step="0.01" min="0.01" required
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500">Recipient email (optional — emails the code)</label>
+        <input name="issued_to_email" type="email"
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div>
+        <label class="text-xs font-medium text-slate-500">Expires (optional)</label>
+        <input name="expires_at" type="date"
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm">
+      </div>
+      <div class="sm:col-span-3">
+        <button class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Issue gift card</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Gift cards</div>
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Code</th>
+          <th class="px-4 py-2">Value</th>
+          <th class="px-4 py-2">Issued to</th>
+          <th class="px-4 py-2">Status</th>
+          <th class="px-4 py-2">Expires</th>
+          <th class="px-4 py-2">Created</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for c in gift_cards %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 font-mono text-xs">{{ c.code }}</td>
+          <td class="px-4 py-2">₹{{ '{:,.0f}'.format(c.value) }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ c.issued_to_email or "—" }}</td>
+          <td class="px-4 py-2">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase
+              {{ 'bg-emerald-100 text-emerald-700' if c.status == 'active' else 'bg-slate-100 text-slate-500' }}">{{ c.get_status_display() }}</span>
+          </td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ c.expires_at.strftime('%Y-%m-%d') if c.expires_at else '—' }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ c.created_at.strftime('%Y-%m-%d') }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="px-4 py-6 text-center text-slate-400" colspan="6">No gift cards issued yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="overflow-x-auto rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="border-b border-slate-200 p-4 text-sm font-semibold text-slate-700">Recent ledger activity</div>
+    <table class="w-full text-left text-sm">
+      <thead class="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-400">
+        <tr>
+          <th class="px-4 py-2">Customer</th>
+          <th class="px-4 py-2">Kind</th>
+          <th class="px-4 py-2">Amount</th>
+          <th class="px-4 py-2">Balance after</th>
+          <th class="px-4 py-2">Order</th>
+          <th class="px-4 py-2">When</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for e in recent_ledger %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2 text-xs">{{ e.account.customer.email }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ e.get_kind_display() }}</td>
+          <td class="px-4 py-2 {{ 'text-emerald-700' if e.amount >= 0 else 'text-rose-700' }}">₹{{ '{:,.2f}'.format(e.amount) }}</td>
+          <td class="px-4 py-2 text-xs">₹{{ '{:,.2f}'.format(e.balance_after) }}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{ e.order.number if e.order else '—' }}</td>
+          <td class="px-4 py-2 text-xs text-slate-500">{{ e.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        </tr>
+        {% else %}
+        <tr><td class="px-4 py-6 text-center text-slate-400" colspan="6">No activity yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -74,6 +74,7 @@ LOCAL_APPS = [
     "apps.shipping",
     "apps.customers",
     "apps.coupons",
+    "apps.credits",
     "apps.reviews",
     "apps.b2b",
     "apps.wishlist",

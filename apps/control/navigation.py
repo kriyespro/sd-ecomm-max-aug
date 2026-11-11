@@ -63,6 +63,7 @@ _SECTIONS = [
         ("social", "Auto-share", "\U0001f4e3"),
         ("whatsapp_enquiry", "WhatsApp enquiry button", "\U0001f4ac"),
         ("referral_program", "Referral program", "\U0001f517"),
+        ("credit_settings", "Store credit", "\U0001f381"),
     ]),
     ("storefront", "Storefront", "\U0001f6cd", [
         ("cms_store_profile", "Store profile", "\U0001f3ea"),

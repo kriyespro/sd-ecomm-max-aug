@@ -28,6 +28,7 @@ class Event(models.TextChoices):
     LOW_STOCK_ALERT = "low_stock_alert", "Low stock alert"
     CART_ABANDONED = "cart_abandoned", "Abandoned cart"
     TRIAL_ENDING = "trial_ending", "Trial ending soon"
+    GIFT_CARD_ISSUED = "gift_card_issued", "Gift card issued"
 
 
 class NotificationSettings(TenantScopedModel):

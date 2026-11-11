@@ -91,6 +91,13 @@
       <button type="button" class="mt-2 w-full border border-ink py-2 text-[11px] font-semibold uppercase tracking-luxe hover:bg-ink hover:text-paper"
               hx-post="{{ url('shopfront:coupon_preview') }}" hx-target="#summary" hx-include="[name=coupon_code]">Apply coupon</button>
 
+      {% if available_credit and available_credit > 0 %}
+      <label class="mt-4 flex items-center gap-2 text-sm text-ink/80">
+        <input type="checkbox" name="use_store_credit" value="1">
+        Use my store credit ({{ available_credit | money }} available)
+      </label>
+      {% endif %}
+
       <div id="summary">
         {% include "shopfront/partials/_checkout_summary.jinja" %}
       </div>
