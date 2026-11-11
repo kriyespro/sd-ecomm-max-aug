@@ -542,6 +542,63 @@ class GiftCardRedeemViewTests(TestCase):
 
 
 @override_settings(ALLOWED_HOSTS=["*"])
+class ReturnRequestViewTests(TestCase):
+    def setUp(self):
+        from django.utils import timezone
+
+        from apps.orders.models import Order, OrderStatusEvent
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="ReturnShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="returns.iso.test", is_verified=True)
+        User = get_user_model()
+        self.user = User.objects.create_user("retshopper", "ret@buy.test", "pw")
+        self.client.force_login(self.user)
+        self.order = Order.objects.create(
+            project=self.project, number="RET-SF-1", email="ret@buy.test",
+            status="delivered", subtotal=Decimal("500"), grand_total=Decimal("500"),
+        )
+        event = OrderStatusEvent.objects.create(
+            order=self.order, kind=OrderStatusEvent.Kind.STATUS, to_value="delivered",
+        )
+        OrderStatusEvent.objects.filter(pk=event.pk).update(created_at=timezone.now() - timezone.timedelta(days=1))
+
+    def _request(self, **data):
+        payload = {"kind": "return", "reason": "wrong size"}
+        payload.update(data)
+        return self.client.post(
+            f"/order/{self.order.number}/return/", payload, HTTP_HOST="returns.iso.test",
+        )
+
+    def test_requesting_a_return_creates_it(self):
+        from apps.returns.models import ReturnRequest
+
+        resp = self._request()
+        self.assertRedirects(
+            resp, f"/order/{self.order.number}/", fetch_redirect_response=False,
+        )
+        self.assertTrue(ReturnRequest.objects.filter(order=self.order, reason="wrong size").exists())
+
+    def test_order_page_shows_the_request_button_before_requesting(self):
+        resp = self.client.get(f"/order/{self.order.number}/", HTTP_HOST="returns.iso.test")
+        self.assertContains(resp, "Request return / exchange")
+
+    def test_order_page_shows_status_after_requesting(self):
+        self._request()
+        resp = self.client.get(f"/order/{self.order.number}/", HTTP_HOST="returns.iso.test")
+        self.assertContains(resp, "is with the store")
+
+    def test_duplicate_request_shows_an_error_not_a_crash(self):
+        self._request()
+        resp = self._request(reason="changed mind")
+        self.assertRedirects(
+            resp, f"/order/{self.order.number}/", fetch_redirect_response=False,
+        )
+        follow = self.client.get(f"/order/{self.order.number}/", HTTP_HOST="returns.iso.test")
+        self.assertContains(follow, "already exists")
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
 class AccountCreditBalanceTests(TestCase):
     def setUp(self):
         from apps.projects.models import Domain

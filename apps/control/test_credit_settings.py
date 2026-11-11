@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 
 from apps.accounts.models import Membership, StoreRole
 from apps.control.mixins import ACTIVE_PROJECT_SESSION_KEY
-from apps.credits.models import GiftCard, LoyaltyProgram
+from apps.credits.models import GiftCard, LoyaltyProgram, LoyaltyTier
 from apps.projects.models import Project
 
 User = get_user_model()
@@ -74,3 +74,27 @@ class CreditSettingsTests(TestCase):
         GiftCard.objects.create(project=self.project, code="ZZZTOP1", value=Decimal("300"))
         resp = self.client.get("/admin/marketing/credits/")
         self.assertContains(resp, "ZZZTOP1")
+
+    def test_adding_a_tier_creates_it(self):
+        resp = self.client.post("/admin/marketing/credits/tiers/", {
+            "name": "Gold", "min_spend": "25000", "earn_percent": "10",
+        })
+        self.assertRedirects(resp, "/admin/marketing/credits/")
+        tier = LoyaltyTier.objects.get(project=self.project)
+        self.assertEqual(tier.name, "Gold")
+        self.assertEqual(tier.min_spend, Decimal("25000"))
+
+    def test_removing_a_tier_deletes_it(self):
+        tier = LoyaltyTier.objects.create(
+            project=self.project, name="Silver", min_spend=Decimal("5000"), earn_percent=Decimal("3"),
+        )
+        resp = self.client.post(f"/admin/marketing/credits/tiers/{tier.pk}/delete/")
+        self.assertRedirects(resp, "/admin/marketing/credits/")
+        self.assertFalse(LoyaltyTier.objects.filter(pk=tier.pk).exists())
+
+    def test_tiers_list_on_the_screen(self):
+        LoyaltyTier.objects.create(
+            project=self.project, name="Platinum", min_spend=Decimal("50000"), earn_percent=Decimal("15"),
+        )
+        resp = self.client.get("/admin/marketing/credits/")
+        self.assertContains(resp, "Platinum")

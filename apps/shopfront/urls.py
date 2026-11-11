@@ -28,6 +28,7 @@ urlpatterns = [
     path("order/<str:number>/", views.OrderView.as_view(), name="order"),
     path("order/<str:number>/upi/", views.OrderUpiReferenceView.as_view(), name="order_upi_reference"),
     path("order/<str:number>/pay/", views.OrderPayRetryView.as_view(), name="order_pay_retry"),
+    path("order/<str:number>/return/", views.ReturnRequestView.as_view(), name="order_return_request"),
 
     path("account/", views.AccountView.as_view(), name="account"),
     path("account/login/", views.LoginView.as_view(), name="login"),

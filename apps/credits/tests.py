@@ -10,10 +10,11 @@ from apps.customers.models import Customer
 from apps.orders.models import Order, OrderItem
 from apps.projects.models import Project
 
-from .models import CreditKind, GiftCard, GiftCardStatus, LoyaltyProgram
+from .models import CreditKind, GiftCard, GiftCardStatus, LoyaltyProgram, LoyaltyTier
 from .services import (
     CreditError, apply_available_credit, apply_credit_to_order, earn_loyalty_for_payment,
-    get_or_create_account, issue_gift_card, redeem_gift_card, release_credit_for_cancelled_order,
+    get_or_create_account, issue_gift_card, next_tier_for, redeem_gift_card,
+    release_credit_for_cancelled_order, tier_for,
 )
 
 
@@ -149,6 +150,75 @@ class LoyaltyEarnTests(TestCase):
             record_offline_payment(order=order, mark_collected=True)
         account = get_or_create_account(self.project, self.customer)
         self.assertEqual(account.balance, Decimal("100.00"))
+
+
+class LoyaltyTierTests(TestCase):
+    def setUp(self):
+        self.project = Project.objects.create(name="TierCo", status="active", currency="INR")
+        self.customer = Customer.objects.create(project=self.project, email="buyer@t.test")
+
+    def _order(self, subtotal=Decimal("1000")):
+        return Order.objects.create(
+            project=self.project, email="buyer@t.test", customer=self.customer,
+            subtotal=subtotal, grand_total=subtotal,
+        )
+
+    def test_no_tiers_configured_falls_back_to_flat_rate(self):
+        self.assertIsNone(tier_for(self.project, self.customer))
+        LoyaltyProgram.objects.create(project=self.project, is_active=True, earn_percent=Decimal("5"))
+        order = self._order(Decimal("1000"))
+        from apps.payments.models import Payment
+
+        payment = Payment.objects.create(
+            project=self.project, order=order, provider="cod", amount=order.grand_total,
+        )
+        earn_loyalty_for_payment(payment)
+        account = get_or_create_account(self.project, self.customer)
+        self.assertEqual(account.balance, Decimal("50.00"))
+
+    def test_below_every_threshold_falls_back_to_flat_rate(self):
+        LoyaltyTier.objects.create(project=self.project, name="Gold", min_spend=Decimal("25000"), earn_percent=Decimal("10"))
+        self.customer.total_spent = Decimal("500")
+        self.customer.save(update_fields=["total_spent"])
+        self.assertIsNone(tier_for(self.project, self.customer))
+
+    def test_boundary_spend_equal_to_threshold_qualifies(self):
+        LoyaltyTier.objects.create(project=self.project, name="Gold", min_spend=Decimal("25000"), earn_percent=Decimal("10"))
+        self.customer.total_spent = Decimal("25000")
+        self.customer.save(update_fields=["total_spent"])
+        tier = tier_for(self.project, self.customer)
+        self.assertEqual(tier.name, "Gold")
+
+    def test_highest_qualifying_tier_wins(self):
+        LoyaltyTier.objects.create(project=self.project, name="Silver", min_spend=Decimal("5000"), earn_percent=Decimal("3"))
+        LoyaltyTier.objects.create(project=self.project, name="Gold", min_spend=Decimal("25000"), earn_percent=Decimal("10"))
+        self.customer.total_spent = Decimal("30000")
+        self.customer.save(update_fields=["total_spent"])
+        tier = tier_for(self.project, self.customer)
+        self.assertEqual(tier.name, "Gold")
+
+    def test_next_tier_for_shows_the_one_above(self):
+        LoyaltyTier.objects.create(project=self.project, name="Silver", min_spend=Decimal("5000"), earn_percent=Decimal("3"))
+        LoyaltyTier.objects.create(project=self.project, name="Gold", min_spend=Decimal("25000"), earn_percent=Decimal("10"))
+        self.customer.total_spent = Decimal("10000")
+        self.customer.save(update_fields=["total_spent"])
+        nxt = next_tier_for(self.project, self.customer)
+        self.assertEqual(nxt.name, "Gold")
+
+    def test_earn_loyalty_uses_tier_rate_not_flat_rate(self):
+        LoyaltyProgram.objects.create(project=self.project, is_active=True, earn_percent=Decimal("2"))
+        LoyaltyTier.objects.create(project=self.project, name="Gold", min_spend=Decimal("500"), earn_percent=Decimal("20"))
+        self.customer.total_spent = Decimal("5000")
+        self.customer.save(update_fields=["total_spent"])
+        order = self._order(Decimal("1000"))
+        from apps.payments.models import Payment
+
+        payment = Payment.objects.create(
+            project=self.project, order=order, provider="cod", amount=order.grand_total,
+        )
+        earn_loyalty_for_payment(payment)
+        account = get_or_create_account(self.project, self.customer)
+        self.assertEqual(account.balance, Decimal("200.00"))
 
 
 class ApplyCreditToOrderTests(TestCase):

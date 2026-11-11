@@ -16,7 +16,7 @@ from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
 from apps.credits import services as credits_svc
-from apps.credits.models import CreditLedger, GiftCard, LoyaltyProgram
+from apps.credits.models import CreditLedger, GiftCard, LoyaltyProgram, LoyaltyTier
 
 from .mixins import ActiveProjectMixin
 
@@ -61,7 +61,52 @@ class CreditSettingsView(StoreRoleRequiredMixin, ActiveProjectMixin, UpdateView)
             .select_related("account__customer", "order", "gift_card")
             .order_by("-created_at")[:50]
         )
+        ctx["loyalty_tiers"] = LoyaltyTier.objects.filter(project=project).order_by("min_spend")
         return ctx
+
+
+class LoyaltyTierCreateView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage loyalty tiers."
+
+    def post(self, request):
+        project = self.active_project
+        name = request.POST.get("name", "").strip()
+        try:
+            min_spend = Decimal(request.POST.get("min_spend", "0"))
+            earn_percent = Decimal(request.POST.get("earn_percent", "0"))
+        except InvalidOperation:
+            messages.error(request, "Enter valid numbers for spend and earn rate.")
+            return redirect("control:credit_settings")
+        if not name or min_spend < 0 or earn_percent < 0:
+            messages.error(request, "Enter a tier name, a spend threshold, and an earn rate.")
+            return redirect("control:credit_settings")
+
+        tier = LoyaltyTier.objects.create(
+            project=project, name=name, min_spend=min_spend, earn_percent=earn_percent,
+        )
+        record_audit(
+            actor=request.user, project=project, action=AuditLog.Action.CREATE,
+            target=tier, changes={"name": tier.name, "min_spend": str(tier.min_spend)}, request=request,
+        )
+        messages.success(request, f"Loyalty tier “{tier.name}” added.")
+        return redirect("control:credit_settings")
+
+
+class LoyaltyTierDeleteView(StoreRoleRequiredMixin, ActiveProjectMixin, View):
+    required_store_roles = OWNER_MANAGER
+    role_denied_message = "Only the store owner or a manager can manage loyalty tiers."
+
+    def post(self, request, pk):
+        tier = LoyaltyTier.objects.filter(project=self.active_project, pk=pk).first()
+        if tier is not None:
+            record_audit(
+                actor=request.user, project=self.active_project, action=AuditLog.Action.DELETE,
+                target=tier, changes={"name": tier.name}, request=request,
+            )
+            tier.delete()
+            messages.success(request, "Loyalty tier removed.")
+        return redirect("control:credit_settings")
 
 
 class GiftCardIssueView(StoreRoleRequiredMixin, ActiveProjectMixin, View):

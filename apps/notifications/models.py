@@ -29,6 +29,9 @@ class Event(models.TextChoices):
     CART_ABANDONED = "cart_abandoned", "Abandoned cart"
     TRIAL_ENDING = "trial_ending", "Trial ending soon"
     GIFT_CARD_ISSUED = "gift_card_issued", "Gift card issued"
+    RETURN_REQUESTED = "return_requested", "Return/exchange requested"
+    RETURN_APPROVED = "return_approved", "Return/exchange approved"
+    RETURN_REJECTED = "return_rejected", "Return/exchange rejected"
 
 
 class NotificationSettings(TenantScopedModel):

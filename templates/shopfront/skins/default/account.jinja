@@ -49,6 +49,14 @@
       <div>
         <h2 class="text-[12px] font-semibold uppercase tracking-luxe text-mute">Store credit</h2>
         <p class="mt-1 text-sm text-ink/75">{{ credit_balance | default(0) | money }} available to use at checkout.</p>
+        {% if loyalty_tier %}
+        <p class="mt-1 text-xs text-ink/60">
+          You're {{ loyalty_tier.name }} — earn {{ loyalty_tier.earn_percent }}% back.
+          {% if loyalty_next_tier %}Reach {{ loyalty_next_tier.min_spend | money }} lifetime spend for {{ loyalty_next_tier.name }}.{% endif %}
+        </p>
+        {% elif loyalty_next_tier %}
+        <p class="mt-1 text-xs text-ink/60">Reach {{ loyalty_next_tier.min_spend | money }} lifetime spend for {{ loyalty_next_tier.name }}.</p>
+        {% endif %}
       </div>
       <form method="post" action="{{ url('shopfront:gift_card_redeem') }}" class="flex shrink-0 gap-2">
         {{ csrf_input }}

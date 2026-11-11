@@ -720,6 +720,20 @@ class OrderView(View):
             order.status == "pending" and order.payment_status != "paid"
             and order.payments.exclude(provider__in=("cod", "manual", "upi")).exists()
         )
+        # Not cached onto `order` -- that name collides with the reverse
+        # OneToOneField accessor ReturnRequest.order defines on this model.
+        existing_return_request = getattr(order, "return_request", None)
+        can_request_return = False
+        if order.status == "delivered" and existing_return_request is None:
+            from django.utils import timezone
+
+            from apps.returns import services as returns_svc
+
+            delivered = returns_svc.delivered_at(order)
+            can_request_return = (
+                delivered is not None
+                and timezone.now() - delivered <= timezone.timedelta(days=returns_svc.RETURN_WINDOW_DAYS)
+            )
         upi = _upi_panel(project, order)
         upi_state = _upi_state(order)
         request._tracking = ("Purchase", {
@@ -731,6 +745,7 @@ class OrderView(View):
             "order_id": order.number,
         }, order.number)
         ctx = base_context(request, project, order=order, upi=upi, upi_state=upi_state,
+                           return_request=existing_return_request, can_request_return=can_request_return,
                            **_order_page_extras(order))
         # Offer the hand-off while the order has no payment attempt (WhatsApp
         # orders are saved payment-less); ?wa=1 means "just placed, open it".
@@ -913,6 +928,8 @@ class AccountView(View):
             ctx["credit_balance"] = account.balance if account else Decimal("0")
             if account:
                 ctx["credit_entries"] = account.entries.all()[:20]
+            ctx["loyalty_tier"] = credits_svc.tier_for(project, customer)
+            ctx["loyalty_next_tier"] = credits_svc.next_tier_for(project, customer)
         return render(request, "shopfront/account.jinja", ctx)
 
 
@@ -933,6 +950,31 @@ class GiftCardRedeemView(View):
         else:
             messages.success(request, f"{value} store credit added to your account.")
         return redirect("shopfront:account")
+
+
+class ReturnRequestView(View):
+    def post(self, request, number):
+        project = current_project(request)
+        if not _order_access_allowed(request, project, number):
+            raise Http404
+        order = get_object_or_404(Order, project=project, number=number)
+        customer = None
+        if request.user.is_authenticated:
+            customer = customers_svc.get_or_create_customer(
+                project=project, email=request.user.email, user=request.user
+            )
+        from apps.returns import services as returns_svc
+
+        try:
+            returns_svc.request_return(
+                order=order, customer=customer, kind=request.POST.get("kind", "return"),
+                reason=request.POST.get("reason", ""), note=request.POST.get("note", ""),
+            )
+        except returns_svc.ReturnError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, "Your request has been sent to the store.")
+        return redirect("shopfront:order", number=number)
 
 
 class ReferralDashboardView(View):
