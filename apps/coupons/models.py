@@ -22,6 +22,7 @@ class DiscountType(models.TextChoices):
     PERCENT = "percent", "Percentage"
     FIXED = "fixed", "Fixed amount"
     FREE_SHIPPING = "free_shipping", "Free shipping"
+    BOGO = "bogo", "Buy X get Y free/discounted"
 
 
 class AppliesTo(models.TextChoices):
@@ -39,6 +40,18 @@ class Coupon(TenantScopedModel):
     max_discount = models.DecimalField(null=True, blank=True, max_digits=12, decimal_places=2,
                                        help_text="Cap for percentage discounts.")
     min_order_amount = models.DecimalField(**MONEY)
+
+    buy_quantity = models.PositiveIntegerField(
+        default=1, help_text="BOGO only: units to buy per group."
+    )
+    get_quantity = models.PositiveIntegerField(
+        default=1, help_text="BOGO only: units discounted per group."
+    )
+    get_discount_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("100"),
+        validators=[MinValueValidator(Decimal("0"))],
+        help_text="BOGO only: discount on the 'get' units (100 = free).",
+    )
 
     applies_to = models.CharField(max_length=20, choices=AppliesTo.choices, default=AppliesTo.ALL)
     products = models.ManyToManyField("catalog.Product", blank=True, related_name="coupons")

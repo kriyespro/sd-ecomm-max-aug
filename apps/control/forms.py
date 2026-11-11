@@ -541,6 +541,7 @@ class CouponForm(ProjectScopedForm):
         fields = [
             "code", "description",
             "discount_type", "value", "max_discount", "min_order_amount",
+            "buy_quantity", "get_quantity", "get_discount_percent",
             "applies_to", "products", "categories", "customer_groups",
             "first_order_only",
             "usage_limit", "usage_limit_per_customer",

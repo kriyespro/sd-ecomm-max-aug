@@ -32,21 +32,45 @@ def _get(project, code):
         raise CouponError("That coupon code is not valid.")
 
 
-def _eligible_item_total(coupon, order_items):
-    """Subtotal of the lines a product/category coupon applies to."""
+def _is_eligible(coupon, oi):
+    """Whether a single order/cart line is within this coupon's applies_to gate."""
     if coupon.applies_to == "all":
-        return sum((oi.line_total for oi in order_items), Decimal("0"))
+        return True
     if coupon.applies_to == "products":
         ids = set(coupon.products.values_list("id", flat=True))
-        return sum((oi.line_total for oi in order_items if oi.product_id in ids), Decimal("0"))
+        return oi.product_id in ids
     if coupon.applies_to == "categories":
         cat_ids = set(coupon.categories.values_list("id", flat=True))
-        return sum(
-            (oi.line_total for oi in order_items
-             if oi.product and oi.product.category_id in cat_ids),
-            Decimal("0"),
-        )
-    return Decimal("0")
+        return bool(oi.product and oi.product.category_id in cat_ids)
+    return False
+
+
+def _eligible_item_total(coupon, order_items):
+    """Subtotal of the lines a product/category coupon applies to."""
+    return sum((oi.line_total for oi in order_items if _is_eligible(coupon, oi)), Decimal("0"))
+
+
+def _bogo_discount(coupon, order_items):
+    """Discount for 'buy N get M free/discounted', applied to the cheapest eligible units."""
+    units = []
+    for oi in order_items:
+        if _is_eligible(coupon, oi):
+            units.extend([oi.unit_price] * oi.quantity)
+    if not units:
+        return Decimal("0")
+
+    group_size = coupon.buy_quantity + coupon.get_quantity
+    if group_size <= 0:
+        return Decimal("0")
+
+    groups = len(units) // group_size
+    discounted_count = groups * coupon.get_quantity
+    if discounted_count <= 0:
+        return Decimal("0")
+
+    cheapest = sorted(units)[:discounted_count]
+    amount = sum(cheapest, Decimal("0")) * coupon.get_discount_percent / Decimal("100")
+    return amount.quantize(CENTS)
 
 
 def validate_coupon(*, project, code, subtotal, customer_email="", customer=None, is_first_order=None):
@@ -81,6 +105,9 @@ def quote_discount(coupon, *, order_items, subtotal, shipping_total=Decimal("0")
     """Discount amount for this coupon against the given order state."""
     if coupon.discount_type == DiscountType.FREE_SHIPPING:
         return Decimal(shipping_total).quantize(CENTS)
+
+    if coupon.discount_type == DiscountType.BOGO:
+        return _bogo_discount(coupon, order_items)
 
     base = _eligible_item_total(coupon, order_items)
     if base <= 0:
