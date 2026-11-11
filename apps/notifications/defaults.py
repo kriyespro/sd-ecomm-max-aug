@@ -76,4 +76,8 @@ DEFAULTS = {
         "Hi {name},\n\nYour {kind} request for order {order_number} could not be approved.\n"
         "{resolution_note}",
     ),
+    "marketing_broadcast": (
+        "A message from {store_name}",
+        "Hi {name},\n\n{message}",
+    ),
 }

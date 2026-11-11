@@ -32,6 +32,7 @@ class Event(models.TextChoices):
     RETURN_REQUESTED = "return_requested", "Return/exchange requested"
     RETURN_APPROVED = "return_approved", "Return/exchange approved"
     RETURN_REJECTED = "return_rejected", "Return/exchange rejected"
+    MARKETING_BROADCAST = "marketing_broadcast", "Marketing broadcast"
 
 
 class NotificationSettings(TenantScopedModel):

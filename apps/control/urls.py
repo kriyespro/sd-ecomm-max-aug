@@ -24,6 +24,7 @@ from . import payment_views as payv
 from . import phase11_views as p11
 from . import plan_views as planv
 from . import credit_views as creditv
+from . import segment_views as segv
 from . import referral_views as refv
 from . import review_views as revv
 from . import seo_views as seov
@@ -511,6 +512,8 @@ urlpatterns = [
     path("marketing/credits/", creditv.CreditSettingsView.as_view(), name="credit_settings"),
     path("marketing/credits/gift-card/", creditv.GiftCardIssueView.as_view(), name="gift_card_issue"),
     path("marketing/credits/tiers/", creditv.LoyaltyTierCreateView.as_view(), name="loyalty_tier_create"),
+    path("marketing/segments/", segv.SegmentBroadcastListView.as_view(), name="segment_broadcast"),
+    path("marketing/segments/send/", segv.SegmentBroadcastSendView.as_view(), name="segment_broadcast_send"),
     path("marketing/credits/tiers/<int:pk>/delete/", creditv.LoyaltyTierDeleteView.as_view(), name="loyalty_tier_delete"),
     path("marketing/social/<str:provider>/creds/", socv.SocialSaveCredsView.as_view(), name="social_creds"),
     path("marketing/social/<str:provider>/connect/", socv.SocialConnectView.as_view(), name="social_connect"),
