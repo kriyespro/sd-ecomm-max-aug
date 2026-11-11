@@ -67,3 +67,46 @@ def clear(request, username):
 LOCK_MESSAGE = (
     "Too many failed sign-in attempts. Wait a few minutes and try again."
 )
+
+
+# --- Signup flood brake -----------------------------------------------------
+# Unlike login, a signup attempt with a fresh email always "succeeds" (no
+# failure to count), so a bot cycling through random addresses never trips
+# the brute-force brake above. This counts every registration POST per
+# IP+store (not bare IP — shoppers behind a shared/CGNAT IP legitimately
+# register at several unrelated stores; a flood only has one store in common).
+
+SIGNUP_WINDOW = 60 * 60    # seconds a signup attempt is remembered
+SIGNUP_MAX = 6             # signups from one IP at one store per window before locking
+SIGNUP_LOCK_SECONDS = 60 * 60
+
+_SIGNUP_KEY = "signupflood:v1:{}"
+
+
+def _signup_ident(request, project):
+    return f"ip:{_client_ip(request)}|store:{project.pk}"
+
+
+def signup_is_locked(request, project):
+    ident = _signup_ident(request, project)
+    try:
+        return (cache.get(_SIGNUP_KEY.format(ident)) or 0) >= SIGNUP_MAX
+    except Exception:  # noqa: BLE001 - cache down: fail open
+        return False
+
+
+def record_signup_attempt(request, project):
+    key = _SIGNUP_KEY.format(_signup_ident(request, project))
+    try:
+        added = cache.add(key, 1, SIGNUP_WINDOW)
+        if not added:
+            count = cache.incr(key)
+            if count >= SIGNUP_MAX:
+                cache.touch(key, SIGNUP_LOCK_SECONDS)
+    except Exception:  # noqa: BLE001,S110 - cache hiccup must not break auth
+        pass
+
+
+SIGNUP_LOCK_MESSAGE = (
+    "Too many accounts created from this network. Wait a while and try again."
+)
