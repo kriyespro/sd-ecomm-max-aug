@@ -19,6 +19,16 @@ _BUILTIN_SKINS = [
 ]
 
 
+def _jsonld(data, **kwargs):
+    """``json.dumps`` for embedding inside a ``<script>`` tag. ``</`` closes the
+    tag early regardless of what JSON key/value it appears in (e.g. a
+    reflected ``Host`` header in a URL field) -- the standard escape is to
+    break it up so the browser's HTML parser never sees a real close tag."""
+    import json
+
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False, **kwargs).replace("</", "<\\/")
+
+
 def root(request):
     """Site root.
 
@@ -29,8 +39,6 @@ def root(request):
     """
     if getattr(request, "project", None):
         return redirect("/app/")
-    import json
-
     from apps.core.brand import brand_for_request
 
     brand = brand_for_request(request)
@@ -39,10 +47,10 @@ def root(request):
     if brand.logo:
         org["logo"] = brand.logo if brand.logo.startswith("http") else base + brand.logo
     ctx = _landing_context()
-    ctx["home_jsonld"] = json.dumps([
+    ctx["home_jsonld"] = _jsonld([
         {"@context": "https://schema.org", "@type": "WebSite", "name": brand.name, "url": base + "/"},
         org,
-    ], separators=(",", ":"), ensure_ascii=False)
+    ])
     return render(request, brand.landing_template, ctx)
 
 
@@ -52,14 +60,12 @@ def pricing(request):
     its own and wasn't independently indexable or shareable."""
     if getattr(request, "project", None):
         return redirect("/app/")
-    import json
-
     from apps.core.brand import brand_for_request
 
     ctx = _landing_context()
     brand = brand_for_request(request)
     base = f"{request.scheme}://{request.get_host()}"
-    ctx["pricing_jsonld"] = json.dumps({
+    ctx["pricing_jsonld"] = _jsonld({
         "@context": "https://schema.org",
         "@type": "Service",
         "name": f"{brand.name} subscription plans",
@@ -74,7 +80,7 @@ def pricing(request):
             }
             for p in ctx["plans"]
         ],
-    }, separators=(",", ":"), ensure_ascii=False)
+    })
     return render(request, "marketing/pricing.jinja", ctx)
 
 
@@ -117,9 +123,7 @@ def legal_page(request, kind):
 
 def _faq_jsonld(faq):
     """FAQPage structured data, safe to drop inside a <script> tag."""
-    import json
-
-    data = {
+    return _jsonld({
         "@context": "https://schema.org",
         "@type": "FAQPage",
         "mainEntity": [
@@ -127,8 +131,7 @@ def _faq_jsonld(faq):
              "acceptedAnswer": {"@type": "Answer", "text": a}}
             for q, a in faq
         ],
-    }
-    return json.dumps(data).replace("</", "<\\/")
+    })
 
 
 def ad_landing(request, slug):

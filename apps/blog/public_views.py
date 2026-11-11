@@ -103,5 +103,8 @@ def blog_detail(request, slug):
     return render(request, "marketing/blog_detail.jinja", {
         "post": post,
         "related": post.related(),
-        "post_jsonld": json.dumps(jsonld, separators=(",", ":"), ensure_ascii=False, default=str),
+        # `</` would close the <script> tag early if it ever appears inside
+        # a JSON value (e.g. a reflected Host header baked into `base`).
+        "post_jsonld": json.dumps(jsonld, separators=(",", ":"), ensure_ascii=False, default=str)
+            .replace("</", "<\\/"),
     })
