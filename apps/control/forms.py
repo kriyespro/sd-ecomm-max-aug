@@ -293,9 +293,13 @@ class PaymentProviderForm(ProjectScopedForm):
         model = PaymentProviderConfig
         fields = [
             "provider", "display_name", "is_enabled", "is_test_mode", "priority", "qr_image",
+            "cod_advance_amount",
         ]
-        labels = {"qr_image": "UPI QR image"}
-        help_texts = {"qr_image": "Direct UPI only: upload your payment QR (PNG/JPG). Optional — a QR is generated from your UPI ID if left empty."}
+        labels = {"qr_image": "UPI QR image", "cod_advance_amount": "COD advance amount"}
+        help_texts = {
+            "qr_image": "Direct UPI only: upload your payment QR (PNG/JPG). Optional — a QR is generated from your UPI ID if left empty.",
+            "cod_advance_amount": "Cash on delivery only: require this much paid online (via UPI/Razorpay) before a COD order is confirmed. Leave 0 to keep plain COD.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -358,6 +362,16 @@ class PaymentProviderForm(ProjectScopedForm):
                 self.add_error("upi_id", "Enter a valid UPI ID, like name@bank.")
         if cleaned.get("is_enabled") and provider == "upi" and not upi_id:
             self.add_error("is_enabled", "Add your UPI ID before enabling direct UPI.")
+        cod_advance = cleaned.get("cod_advance_amount")
+        if provider == "cod" and cod_advance and cod_advance > 0 and self.project is not None:
+            has_online_gateway = PaymentProviderConfig.objects.filter(
+                project=self.project, provider__in=["upi", "razorpay"], is_enabled=True,
+            ).exists()
+            if not has_online_gateway:
+                self.add_error(
+                    "cod_advance_amount",
+                    "Enable UPI or Razorpay before requiring a COD advance payment.",
+                )
         qr = cleaned.get("qr_image")
         if qr and hasattr(qr, "size") and qr.size > 2 * 1024 * 1024:
             self.add_error("qr_image", "QR image must be under 2 MB.")

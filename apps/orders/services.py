@@ -9,8 +9,10 @@ Status transitions follow the machine in project.md section 10.
 """
 
 from datetime import timedelta
+from decimal import Decimal
 
 from django.db import IntegrityError, transaction
+from django.db.models import Sum
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
@@ -260,9 +262,22 @@ def transition_order(*, order, to_status, actor=None, note=""):
 
 
 @transaction.atomic
-def mark_paid(*, order, actor=None, reference="", amount=None):
+def mark_paid(*, order, actor=None, reference=""):
+    from apps.payments.models import PaymentStatus as PayStatus
+
     prev = order.payment_status
-    order.payment_status = PaymentStatus.PAID
+    # A COD advance settles for less than grand_total -- PARTIALLY_PAID until
+    # the remainder (the COD payment spawned once the advance settles, see
+    # apps.payments.services._settle) is captured too. Every pre-advance call
+    # site settles the full amount in one payment, so this is PAID exactly as
+    # before for them -- settled_total == grand_total on the first call.
+    settled_total = order.payments.filter(
+        status__in=[PayStatus.PAID, PayStatus.PARTIALLY_REFUNDED, PayStatus.REFUNDED]
+    ).aggregate(s=Sum("amount"))["s"] or Decimal("0")
+    new_status = (
+        PaymentStatus.PAID if settled_total >= order.grand_total else PaymentStatus.PARTIALLY_PAID
+    )
+    order.payment_status = new_status
     if not order.placed_at:
         order.placed_at = timezone.now()
     updates = ["payment_status", "placed_at", "updated_at"]
@@ -274,9 +289,9 @@ def mark_paid(*, order, actor=None, reference="", amount=None):
                    from_value=OrderStatus.PENDING, to_value=OrderStatus.CONFIRMED, actor=actor)
     order.save(update_fields=updates)
     _log_event(order, kind=OrderStatusEvent.Kind.PAYMENT,
-               from_value=prev, to_value=PaymentStatus.PAID, note=reference, actor=actor)
+               from_value=prev, to_value=new_status, note=reference, actor=actor)
     record_audit(actor=actor, project=order.project, action=AuditLog.Action.UPDATE,
-                 target=order, changes={"payment_status": [prev, PaymentStatus.PAID]})
+                 target=order, changes={"payment_status": [prev, new_status]})
     return order
 
 

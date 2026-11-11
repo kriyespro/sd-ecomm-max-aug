@@ -55,6 +55,7 @@
             <span class="font-semibold">Pay by UPI</span>
             <span class="text-xs text-mute">Scan QR · GPay · PhonePe · Paytm</span>
             {% elif p.key == 'cod' %}Cash on delivery
+            {% if cod_advance_amount %}<span class="text-xs text-mute">{{ cod_advance_amount | money }} advance paid online, rest on delivery</span>{% endif %}
             {% elif p.key == 'whatsapp' %}
             <span class="font-semibold" style="color:#128C7E">Order on WhatsApp</span>
             <span class="text-xs text-mute">We save your order, then you send it to us on WhatsApp</span>
@@ -65,6 +66,7 @@
             <input type="radio" name="payment_method" value="cod" checked
                    hx-post="{{ url('shopfront:shipping_quote') }}" hx-target="#shipping-methods" hx-trigger="change" hx-include="#addr-fields">
             Cash on delivery
+            {% if cod_advance_amount %}<span class="text-xs text-mute">{{ cod_advance_amount | money }} advance paid online, rest on delivery</span>{% endif %}
           </label>
           {% endfor %}
         </div>

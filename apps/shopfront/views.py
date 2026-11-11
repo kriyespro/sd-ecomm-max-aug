@@ -547,6 +547,8 @@ class CheckoutView(View):
             return redirect("shopfront:cart")
         ctx["payment_providers"] = _checkout_payment_providers(project)
         ctx["available_credit"] = _available_credit(request, project)
+        from apps.payments import services as payments_svc
+        _, ctx["cod_advance_amount"] = payments_svc.cod_advance_plan(project)
         # "/checkout" is in _PRIVATE_PATHS (never edge-cached), so this is a
         # reliable server-side count -- no beacon needed for this step.
         analytics_svc.record_event(project, "checkout_started")
@@ -595,6 +597,22 @@ class CheckoutView(View):
         # its remote order is created, so create the order first with no payment,
         # price shipping onto it, then initiate the gateway payment.
         gateway = method_key not in ("cod", "manual", "upi") and not use_whatsapp
+        cod_advance_provider, cod_advance_amount = (None, None)
+        cod_advance_offline = False
+        if method_key == "cod" and not use_whatsapp:
+            from apps.payments import services as payments_svc
+            from apps.payments.models import Provider as PayProvider
+            cod_advance_provider, cod_advance_amount = payments_svc.cod_advance_plan(project)
+            if cod_advance_provider == PayProvider.UPI:
+                # Direct UPI is never client-verified -- a staff member
+                # confirms it arrived, same as plain UPI checkout today.
+                # No client widget, so this skips the gateway/checkout_pay path.
+                cod_advance_offline = True
+            elif cod_advance_provider:
+                # A COD advance via a real gateway is collected exactly like a
+                # normal gateway payment (small amount, online) -- reuse that
+                # whole response path below.
+                gateway = True
 
         shipping_method = None
         if method_id:
@@ -613,7 +631,7 @@ class CheckoutView(View):
                 phone=address["phone"], shipping_address=address,
                 customer_note=request.POST.get("customer_note", "").strip(),
                 coupon_code=coupon or None,
-                payment_method=None if (gateway or use_whatsapp) else method_key,
+                payment_method=None if (gateway or use_whatsapp or cod_advance_offline) else method_key,
                 user=request.user if request.user.is_authenticated else None,
                 shipping_method=shipping_method,
                 use_store_credit=use_store_credit,
@@ -632,13 +650,30 @@ class CheckoutView(View):
         request.session["shopfront_orders"] = list({*placed, order.number})
         request.session.modified = True
 
+        if cod_advance_offline:
+            from apps.payments import services as payments
+
+            order.refresh_from_db()
+            order.cod_balance_due = order.grand_total - cod_advance_amount
+            order.save(update_fields=["cod_balance_due", "updated_at"])
+            payments.record_offline_payment(
+                order=order, provider_key="upi", amount=cod_advance_amount,
+                actor=request.user if request.user.is_authenticated else None,
+            )
+            return redirect("shopfront:order", number=order.number)
+
         if gateway:
             from apps.payments import services as payments
 
             order.refresh_from_db()
+            provider_key = cod_advance_provider or method_key
+            amount = cod_advance_amount if cod_advance_provider else None
+            if cod_advance_provider:
+                order.cod_balance_due = order.grand_total - cod_advance_amount
+                order.save(update_fields=["cod_balance_due", "updated_at"])
             try:
                 payment, client_params = payments.initiate_payment(
-                    order=order, provider_key=method_key,
+                    order=order, provider_key=provider_key, amount=amount,
                     actor=request.user if request.user.is_authenticated else None,
                 )
             except payments.PaymentError as exc:

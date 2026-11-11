@@ -247,6 +247,9 @@
           {% else %}<span class="op-chip" data-tone="{{ ps_tone.get(order.payment_status, 'gray') }}">{{ order.get_payment_status_display() }}</span>{% endif %}
         </div>
         <div class="op-row"><span class="text-mute">Amount</span><b>{{ order.grand_total | money }}</b></div>
+        {% if order.cod_balance_due %}
+        <div class="op-row"><span class="text-mute">Due on delivery</span><b>{{ order.cod_balance_due | money }}</b></div>
+        {% endif %}
       </div>
 
       <div class="op-card">
