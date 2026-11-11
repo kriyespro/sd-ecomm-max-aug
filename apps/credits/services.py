@@ -12,7 +12,7 @@ from django.utils.crypto import get_random_string
 
 from .models import (
     CreditAccount, CreditKind, CreditLedger, GiftCard, GiftCardStatus,
-    LoyaltyEarning, LoyaltyProgram,
+    LoyaltyEarning, LoyaltyProgram, LoyaltyTier,
 )
 
 CENTS = Decimal("0.01")
@@ -96,6 +96,32 @@ def redeem_gift_card(*, project, customer, code):
     return card.value
 
 
+def tier_for(project, customer):
+    """Highest tier whose min_spend the customer's *current* lifetime spend
+    clears. Re-reads the customer row -- ``apps.customers.services
+    .sync_customer_stats`` already ran (registered first in the same
+    on_commit chain as PAYMENT_SUCCESS) and updated ``total_spent`` in the
+    DB by the time this is called, but the in-memory ``customer`` instance
+    callers hold was loaded earlier in the request and is stale."""
+    from apps.customers.models import Customer
+
+    fresh = Customer.objects.get(pk=customer.pk)
+    return (
+        LoyaltyTier.objects.filter(project=project, min_spend__lte=fresh.total_spent)
+        .order_by("-min_spend").first()
+    )
+
+
+def next_tier_for(project, customer):
+    from apps.customers.models import Customer
+
+    fresh = Customer.objects.get(pk=customer.pk)
+    return (
+        LoyaltyTier.objects.filter(project=project, min_spend__gt=fresh.total_spent)
+        .order_by("min_spend").first()
+    )
+
+
 def earn_loyalty_for_payment(payment):
     order = getattr(payment, "order", None)
     if order is None:
@@ -106,7 +132,9 @@ def earn_loyalty_for_payment(payment):
     program = LoyaltyProgram.objects.filter(project=order.project, is_active=True).first()
     if program is None:
         return None
-    amount = program.earn_for(order.subtotal)
+    tier = tier_for(order.project, customer)
+    rate = tier.earn_percent if tier else None
+    amount = program.earn_for(order.subtotal, rate=rate)
     if amount <= 0:
         return None
 
@@ -152,6 +180,18 @@ def apply_available_credit(*, order, customer):
     if account.balance <= 0:
         raise CreditError("You don't have any store credit available.")
     return apply_credit_to_order(order=order, customer=customer, amount=account.balance)
+
+
+def issue_return_credit(*, project, customer, amount, order, note=""):
+    """Compensate a return/exchange with *new* store credit -- distinct from
+    ``release_credit_for_cancelled_order``'s REFUND_REVERSAL, which returns
+    credit that was previously *spent* on a now-cancelled order. This issues
+    credit the customer never had before."""
+    amount = Decimal(amount).quantize(CENTS)
+    if amount <= 0:
+        raise CreditError("Enter a refund amount greater than zero.")
+    account = get_or_create_account(project, customer)
+    return _apply_ledger_entry(account, kind=CreditKind.RETURN_REFUND, amount=amount, order=order, note=note)
 
 
 def release_credit_for_cancelled_order(order):

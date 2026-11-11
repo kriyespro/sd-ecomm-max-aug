@@ -38,6 +38,7 @@ class CreditKind(models.TextChoices):
     LOYALTY_EARN = "loyalty_earn", "Loyalty reward earned"
     REDEEMED = "redeemed", "Applied to an order"
     REFUND_REVERSAL = "refund_reversal", "Returned (order cancelled)"
+    RETURN_REFUND = "return_refund", "Return/exchange refunded as credit"
     MANUAL = "manual", "Manual adjustment"
 
 
@@ -123,9 +124,30 @@ class LoyaltyProgram(TenantScopedModel):
     def __str__(self):
         return f"LoyaltyProgram<{self.project_id}>"
 
-    def earn_for(self, order_subtotal):
-        raw = (order_subtotal or Decimal("0")) * self.earn_percent / Decimal("100")
+    def earn_for(self, order_subtotal, *, rate=None):
+        rate = self.earn_percent if rate is None else rate
+        raw = (order_subtotal or Decimal("0")) * rate / Decimal("100")
         return raw.quantize(Decimal("0.01"))
+
+
+class LoyaltyTier(TenantScopedModel):
+    """Optional spend-based tiers layered on top of ``LoyaltyProgram``'s flat
+    rate -- a customer whose lifetime ``Customer.total_spent`` clears a tier's
+    ``min_spend`` earns that tier's rate instead of the flat one. No rows
+    configured means every customer just earns the flat rate, unchanged."""
+
+    name = models.CharField(max_length=60)
+    min_spend = models.DecimalField(**MONEY, help_text="Lifetime spend required to reach this tier.")
+    earn_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0"),
+        validators=[MinValueValidator(Decimal("0"))],
+    )
+
+    class Meta:
+        ordering = ["min_spend"]
+
+    def __str__(self):
+        return f"{self.name} (>= {self.min_spend})"
 
 
 class LoyaltyEarning(TenantScopedModel):
