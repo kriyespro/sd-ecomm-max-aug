@@ -91,6 +91,10 @@ class Order(TenantScopedModel):
     currency = models.CharField(max_length=3, default="INR")
     subtotal = models.DecimalField(**MONEY)
     discount_total = models.DecimalField(**MONEY)
+    # Store credit (gift card / loyalty) applied — kept separate from
+    # discount_total, which a coupon overwrites wholesale on every apply; folding
+    # credit into that field would silently erase a simultaneously-applied coupon.
+    credit_applied = models.DecimalField(**MONEY)
     tax_total = models.DecimalField(**MONEY)
     shipping_total = models.DecimalField(**MONEY)
     grand_total = models.DecimalField(**MONEY)
@@ -137,13 +141,14 @@ class Order(TenantScopedModel):
     def recalc_totals(self, *, save=True):
         self.subtotal = sum((i.line_total for i in self.items.all()), Decimal("0.00"))
         self.grand_total = (
-            self.subtotal - self.discount_total + self.tax_total + self.shipping_total
+            self.subtotal - self.discount_total - self.credit_applied
+            + self.tax_total + self.shipping_total
         )
         if self.grand_total < 0:
             self.grand_total = Decimal("0.00")
         if save:
             self.save(update_fields=[
-                "subtotal", "grand_total", "discount_total",
+                "subtotal", "grand_total", "discount_total", "credit_applied",
                 "tax_total", "shipping_total", "updated_at",
             ])
         return self.grand_total

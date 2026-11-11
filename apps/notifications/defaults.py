@@ -55,4 +55,10 @@ DEFAULTS = {
         "{days_left} day(s). Add a payment method from Mission Control to keep your "
         "store live without interruption.",
     ),
+    "gift_card_issued": (
+        "You've received a {currency} {value} gift card for {store_name}",
+        "Hi there,\n\nYou've been sent a {currency} {value} gift card for {store_name}.\n\n"
+        "Code: {code}\n\nSign in or create an account and enter this code on your "
+        "account page to add it as store credit.",
+    ),
 }

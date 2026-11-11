@@ -37,6 +37,7 @@ urlpatterns = [
     path("wishlist/toggle/", views.WishlistToggleView.as_view(), name="wishlist_toggle"),
     path("account/referrals/", views.ReferralDashboardView.as_view(), name="referrals"),
     path("account/referrals/join/", views.ReferralJoinView.as_view(), name="referral_join"),
+    path("account/gift-card/", views.GiftCardRedeemView.as_view(), name="gift_card_redeem"),
     path("track/", views.TrackOrderView.as_view(), name="track"),
 
     path("page/<slug:slug>/", views.PageView.as_view(), name="page"),

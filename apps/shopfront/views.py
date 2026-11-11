@@ -34,6 +34,7 @@ from apps.analytics import services as analytics_svc
 from apps.cms.models import Page
 from apps.core.services import safe_next
 from apps.coupons import services as coupons_svc
+from apps.credits import services as credits_svc
 from apps.customers import services as customers_svc
 from apps.orders.models import Order
 from apps.accounts import ratelimit as login_ratelimit
@@ -521,6 +522,20 @@ def _checkout_payment_providers(project):
     return out
 
 
+def _available_credit(request, project):
+    """This shopper's current store-credit balance, or 0 for a guest (no
+    account to look one up against before the order — and thus the
+    Customer row — exists)."""
+    if not request.user.is_authenticated:
+        return Decimal("0")
+    from apps.customers.models import Customer
+
+    account = Customer.objects.filter(
+        project=project, email__iexact=request.user.email,
+    ).values_list("credit_account__balance", flat=True).first()
+    return account or Decimal("0")
+
+
 class CheckoutView(View):
     def get(self, request):
         project = current_project(request)
@@ -531,6 +546,7 @@ class CheckoutView(View):
         if not cart.items.exists():
             return redirect("shopfront:cart")
         ctx["payment_providers"] = _checkout_payment_providers(project)
+        ctx["available_credit"] = _available_credit(request, project)
         # "/checkout" is in _PRIVATE_PATHS (never edge-cached), so this is a
         # reliable server-side count -- no beacon needed for this step.
         analytics_svc.record_event(project, "checkout_started")
@@ -553,6 +569,7 @@ class CheckoutView(View):
             return redirect("shopfront:cart")
         address = _address(request.POST)
         coupon = request.POST.get("coupon_code", "").strip()
+        use_store_credit = request.POST.get("use_store_credit") == "1"
         method_id = request.POST.get("shipping_method", "").strip()
 
         # validate the coupon up-front so a bad code never leaves an order behind
@@ -599,6 +616,7 @@ class CheckoutView(View):
                 payment_method=None if (gateway or use_whatsapp) else method_key,
                 user=request.user if request.user.is_authenticated else None,
                 shipping_method=shipping_method,
+                use_store_credit=use_store_credit,
             )
         except checkout_svc.CheckoutError as exc:
             messages.error(request, str(exc))
@@ -891,7 +909,30 @@ class AccountView(View):
                 .select_related("product", "product__brand", "product__category")
                 .prefetch_related("product__images")
             ]
+            account = getattr(customer, "credit_account", None)
+            ctx["credit_balance"] = account.balance if account else Decimal("0")
+            if account:
+                ctx["credit_entries"] = account.entries.all()[:20]
         return render(request, "shopfront/account.jinja", ctx)
+
+
+class GiftCardRedeemView(View):
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return redirect("shopfront:login")
+        project = current_project(request)
+        customer = customers_svc.get_or_create_customer(
+            project=project, email=request.user.email, user=request.user
+        )
+        try:
+            value = credits_svc.redeem_gift_card(
+                project=project, customer=customer, code=request.POST.get("code", ""),
+            )
+        except credits_svc.CreditError as exc:
+            messages.error(request, str(exc))
+        else:
+            messages.success(request, f"{value} store credit added to your account.")
+        return redirect("shopfront:account")
 
 
 class ReferralDashboardView(View):

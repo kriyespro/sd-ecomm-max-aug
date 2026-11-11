@@ -178,6 +178,23 @@ def recoverable_carts(*, idle_hours=3, max_age_days=14):
     )
 
 
+def cart_contact_phone(cart):
+    """(phone, marketing_opt_in) for this cart's shopper, from the store's own
+    Customer record — or (None, False) if there's no matching Customer, no
+    phone on file, or marketing is opted out."""
+    from apps.customers.models import Customer
+
+    email = (cart.user.email if cart.user_id else "") or cart.email
+    if not email:
+        return None, False
+    customer = Customer.objects.filter(
+        project=cart.project, email__iexact=email,
+    ).values_list("phone", "marketing_opt_in").first()
+    if not customer or not customer[0]:
+        return None, False
+    return customer
+
+
 def mark_recovery_sent(cart):
     from django.utils import timezone
 

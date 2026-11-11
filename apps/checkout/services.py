@@ -66,7 +66,7 @@ def validate_checkout(*, cart, email, shipping_address, billing_address=None):
 def complete_checkout(
     *, project, cart, email, shipping_address, billing_address=None,
     phone="", customer_note="", warehouse=None, actor=None, user=None,
-    payment_method=None, coupon_code=None, shipping_method=None,
+    payment_method=None, coupon_code=None, shipping_method=None, use_store_credit=False,
 ):
     """Create the order. If ``payment_method`` is given, also start payment.
 
@@ -121,6 +121,16 @@ def complete_checkout(
             coupons.apply_to_order(order=order, code=coupon_code, actor=actor)
         except coupons.CouponError as exc:
             raise CheckoutError(str(exc)) from exc
+
+    if use_store_credit:
+        from apps.credits import services as credits
+        order.refresh_from_db()
+        customer = getattr(order, "customer", None)
+        if customer is not None:
+            try:
+                credits.apply_available_credit(order=order, customer=customer)
+            except credits.CreditError:
+                pass  # nothing available — not an error worth blocking checkout over
 
     if not payment_method:
         return order, None

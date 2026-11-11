@@ -4,6 +4,7 @@ reached yet — that's a real gap, not a bug), sends once, never twice."""
 
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -101,3 +102,70 @@ class AbandonedCartRecoveryTests(TestCase):
         )
         sent = send_abandoned_cart_emails_task()  # must not raise
         self.assertEqual(sent, 0)
+
+
+class AbandonedCartWhatsAppNudgeTests(TestCase):
+    def setUp(self):
+        from apps.whatsapp.models import WhatsAppAccount
+
+        self.project = Project.objects.create(name="WaRecoverCo", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="warecover.test", is_verified=True)
+        self.product = Product.objects.create(
+            project=self.project, title="Widget", price=Decimal("499"), status="active",
+        )
+        self.account = WhatsAppAccount.objects.create(
+            project=self.project, phone_number_id="PN1", waba_id="W1",
+            access_token="tok", is_active=True,
+        )
+
+    def _idle_cart_for(self, email, *, hours_ago=4):
+        cart = Cart.objects.create(project=self.project, user=None, email=email)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=1, unit_price=Decimal("499"))
+        Cart.objects.filter(pk=cart.pk).update(
+            updated_at=timezone.now() - timedelta(hours=hours_ago)
+        )
+        return Cart.objects.get(pk=cart.pk)
+
+    def test_whatsapps_a_customer_with_phone_and_opt_in(self):
+        from apps.customers.models import Customer
+
+        Customer.objects.create(
+            project=self.project, email="wa@t.test", phone="919999999999", marketing_opt_in=True,
+        )
+        self._idle_cart_for("wa@t.test")
+        with mock.patch("apps.whatsapp.tasks.send_whatsapp_task.delay") as delay:
+            send_abandoned_cart_emails_task()
+        delay.assert_called_once()
+        args = delay.call_args.args
+        self.assertEqual(args[0], self.project.id)
+        self.assertEqual(args[1], Event.CART_ABANDONED)
+        self.assertEqual(args[2], "919999999999")
+
+    def test_skips_whatsapp_without_marketing_opt_in(self):
+        from apps.customers.models import Customer
+
+        Customer.objects.create(
+            project=self.project, email="noopt@t.test", phone="919999999999", marketing_opt_in=False,
+        )
+        self._idle_cart_for("noopt@t.test")
+        with mock.patch("apps.whatsapp.tasks.send_whatsapp_task.delay") as delay:
+            send_abandoned_cart_emails_task()
+        delay.assert_not_called()
+
+    def test_skips_whatsapp_without_a_customer_record(self):
+        self._idle_cart_for("nocust@t.test")
+        with mock.patch("apps.whatsapp.tasks.send_whatsapp_task.delay") as delay:
+            send_abandoned_cart_emails_task()
+        delay.assert_not_called()
+
+    def test_skips_whatsapp_without_an_account(self):
+        from apps.customers.models import Customer
+
+        self.account.delete()
+        Customer.objects.create(
+            project=self.project, email="noacct@t.test", phone="919999999999", marketing_opt_in=True,
+        )
+        self._idle_cart_for("noacct@t.test")
+        with mock.patch("apps.whatsapp.tasks.send_whatsapp_task.delay") as delay:
+            send_abandoned_cart_emails_task()
+        delay.assert_not_called()

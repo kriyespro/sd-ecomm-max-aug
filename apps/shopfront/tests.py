@@ -499,3 +499,100 @@ class SignupFloodBrakeTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         User = get_user_model()
         self.assertTrue(User.objects.filter(email__iexact="shopper@buy.test").exists())
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class GiftCardRedeemViewTests(TestCase):
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="CreditShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="credit.iso.test", is_verified=True)
+        User = get_user_model()
+        self.user = User.objects.create_user("gcshopper", "gc@buy.test", "pw")
+        self.client.force_login(self.user)
+
+    def _redeem(self, code):
+        return self.client.post(
+            "/account/gift-card/", {"code": code}, HTTP_HOST="credit.iso.test",
+        )
+
+    def test_redeeming_a_valid_code_credits_the_account(self):
+        from apps.credits.models import GiftCard
+        from apps.credits.services import get_or_create_account
+        from apps.customers.models import Customer
+
+        GiftCard.objects.create(project=self.project, code="WELCOME50", value=Decimal("50"))
+        resp = self._redeem("WELCOME50")
+        self.assertRedirects(resp, "/account/", fetch_redirect_response=False)
+        customer = Customer.objects.get(project=self.project, email__iexact="gc@buy.test")
+        account = get_or_create_account(self.project, customer)
+        self.assertEqual(account.balance, Decimal("50"))
+
+    def test_redeeming_an_unknown_code_shows_an_error_not_a_crash(self):
+        resp = self._redeem("NOSUCHCODE")
+        self.assertRedirects(resp, "/account/", fetch_redirect_response=False)
+        follow = self.client.get("/account/", HTTP_HOST="credit.iso.test")
+        self.assertContains(follow, "not valid")
+
+    def test_anonymous_is_redirected_to_login(self):
+        self.client.logout()
+        resp = self._redeem("WHATEVER")
+        self.assertRedirects(resp, "/account/login/", fetch_redirect_response=False)
+
+
+@override_settings(ALLOWED_HOSTS=["*"])
+class AccountCreditBalanceTests(TestCase):
+    def setUp(self):
+        from apps.projects.models import Domain
+
+        self.project = Project.objects.create(name="BalanceShop", status="active", currency="INR")
+        Domain.objects.create(project=self.project, host="balance.iso.test", is_verified=True)
+        User = get_user_model()
+        self.user = User.objects.create_user("balshopper", "bal@buy.test", "pw")
+        self.client.force_login(self.user)
+
+    def test_account_page_shows_credit_balance(self):
+        from apps.credits.models import GiftCard
+        from apps.credits.services import redeem_gift_card
+        from apps.customers import services as customers_svc
+
+        customer = customers_svc.get_or_create_customer(
+            project=self.project, email="bal@buy.test", user=self.user,
+        )
+        GiftCard.objects.create(project=self.project, code="BAL100", value=Decimal("100"))
+        redeem_gift_card(project=self.project, customer=customer, code="BAL100")
+
+        resp = self.client.get("/account/", HTTP_HOST="balance.iso.test")
+        self.assertContains(resp, "Store credit")
+
+    def test_checkout_offers_the_credit_checkbox_when_balance_available(self):
+        from apps.cart.services import get_or_create_cart
+        from apps.catalog.models import Product
+        from apps.credits.models import GiftCard
+        from apps.credits.services import redeem_gift_card
+        from apps.customers import services as customers_svc
+
+        customer = customers_svc.get_or_create_customer(
+            project=self.project, email="bal@buy.test", user=self.user,
+        )
+        GiftCard.objects.create(project=self.project, code="BAL200", value=Decimal("200"))
+        redeem_gift_card(project=self.project, customer=customer, code="BAL200")
+
+        product = Product.objects.create(project=self.project, title="Widget", price=Decimal("999"))
+        cart = get_or_create_cart(project=self.project, user=self.user)
+        CartItem.objects.create(cart=cart, product=product, quantity=1, unit_price=product.price)
+
+        resp = self.client.get("/checkout/", HTTP_HOST="balance.iso.test")
+        self.assertContains(resp, "use_store_credit")
+
+    def test_checkout_hides_the_checkbox_with_no_balance(self):
+        from apps.cart.services import get_or_create_cart
+        from apps.catalog.models import Product
+
+        product = Product.objects.create(project=self.project, title="Widget", price=Decimal("999"))
+        cart = get_or_create_cart(project=self.project, user=self.user)
+        CartItem.objects.create(cart=cart, product=product, quantity=1, unit_price=product.price)
+
+        resp = self.client.get("/checkout/", HTTP_HOST="balance.iso.test")
+        self.assertNotContains(resp, "use_store_credit")
