@@ -73,11 +73,14 @@ def record_movement(*, item, reason, quantity_delta=0, reserved_delta=0, referen
         prev_available = (locked.quantity - quantity_delta) - (locked.reserved - reserved_delta)
         if prev_available > locked.low_stock_threshold:
             wh = locked.warehouse
+            from apps.projects.services import owner_notification_phone
+
             payload = {
                 "product": locked.product.title,
                 "warehouse": wh.name,
                 "available": locked.available,
                 "threshold": locked.low_stock_threshold,
+                "phone": owner_notification_phone(wh.project),
             }
             transaction.on_commit(
                 lambda: emit(Events.INVENTORY_LOW, project=wh.project, payload=payload, instance=locked)

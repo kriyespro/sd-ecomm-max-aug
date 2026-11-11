@@ -64,3 +64,35 @@ def owner_notification_email(project):
         .first()
         or ""
     )
+
+
+def owner_notification_phone(project):
+    """Best phone number to reach this store's owner at, for a WhatsApp
+    platform-initiated notice (low stock, abandoned cart, etc). Same fallback
+    chain as :func:`owner_notification_email`: an explicit override in
+    ``Project.notification_config["owner_phone"]``, then the storefront's own
+    public support phone, then the OWNER membership's account phone."""
+    from apps.accounts.models import StoreRole
+
+    override = (project.notification_config or {}).get("owner_phone", "")
+    if override:
+        return override
+
+    try:
+        from apps.cms.models import StoreProfile
+
+        phone = StoreProfile.objects.filter(project=project).values_list(
+            "support_phone", flat=True
+        ).first()
+        if phone:
+            return phone
+    except Exception:  # noqa: BLE001 - never let a notification lookup 500 anything
+        pass
+
+    return (
+        project.memberships.filter(role=StoreRole.OWNER, is_active=True)
+        .exclude(user__profile__phone="")
+        .values_list("user__profile__phone", flat=True)
+        .first()
+        or ""
+    )
