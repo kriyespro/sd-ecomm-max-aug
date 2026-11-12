@@ -4,8 +4,11 @@ project.md sections 5 and 29: use Django auth, extend with a Profile, and add a
 project/store-level permission layer on top of Django's own permissions.
 """
 
+import secrets
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
 
@@ -180,3 +183,62 @@ class Membership(TimeStampedModel):
 
     def __str__(self):
         return f"{self.user} @ {self.project} ({self.role})"
+
+
+def _new_verification_token():
+    return secrets.token_urlsafe(32)
+
+
+class PendingVerification(TimeStampedModel):
+    """An email-click confirmation gate, shared by two flows that must never
+    create or mutate a real account/membership until the addressee proves
+    they control the email: a team invite (``provision_member``/``add_member``
+    used to attach a Membership — or create a brand-new account with a temp
+    password shown only to the inviter — instantly, with zero notice to the
+    invited address) and a password-based self-signup (which, unlike the
+    Google-OAuth path, has no other proof the signer-upper owns the email)."""
+
+    class Kind(models.TextChoices):
+        TEAM_INVITE = "team_invite", "Team invite"
+        SELF_SIGNUP = "self_signup", "Self-signup verification"
+
+    kind = models.CharField(max_length=20, choices=Kind.choices, db_index=True)
+    token = models.CharField(max_length=64, unique=True, default=_new_verification_token)
+    email = models.EmailField(db_index=True)
+
+    # TEAM_INVITE only.
+    project = models.ForeignKey(
+        "projects.Project", null=True, blank=True,
+        on_delete=models.CASCADE, related_name="pending_invites",
+    )
+    role = models.CharField(max_length=20, choices=StoreRole.choices, blank=True)
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="+",
+    )
+    invited_name = models.CharField(max_length=140, blank=True)
+
+    # SELF_SIGNUP only — a bag of not-yet-real account/store fields. The
+    # password is hashed with make_password() before it's ever assigned
+    # here; a plaintext password is never written to this row.
+    payload = models.JSONField(default=dict, blank=True)
+
+    expires_at = models.DateTimeField()
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["kind", "email"]),
+            models.Index(fields=["project", "email"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_kind_display()}<{self.email}>"
+
+    @property
+    def is_expired(self):
+        return timezone.now() >= self.expires_at
+
+    @property
+    def is_used(self):
+        return self.consumed_at is not None

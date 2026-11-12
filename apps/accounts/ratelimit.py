@@ -110,3 +110,53 @@ def record_signup_attempt(request, project):
 SIGNUP_LOCK_MESSAGE = (
     "Too many accounts created from this network. Wait a while and try again."
 )
+
+
+# --- Password-signup / team-invite verification flood brake ----------------
+# Separate from SIGNUP_* above (that one is ip+project, for shopper
+# registration on an existing store's storefront — apps.shopfront.views
+# .RegisterView). This one guards apps.accounts.views.PasswordSignupView /
+# SignupResendView, which run before any Project exists, so it's keyed by
+# ip and/or email instead.
+
+VERIFY_SIGNUP_WINDOW = 60 * 60
+VERIFY_SIGNUP_MAX = 5
+VERIFY_SIGNUP_LOCK_SECONDS = 60 * 60
+
+_VERIFY_SIGNUP_KEY = "signupverifyflood:v1:{}"
+
+
+def _verify_signup_idents(request, email):
+    idents = [f"ip:{_client_ip(request)}"]
+    email = (email or "").strip().lower()[:150]
+    if email:
+        idents.append(f"email:{email}")
+    return idents
+
+
+def verify_signup_is_locked(request, email):
+    for ident in _verify_signup_idents(request, email):
+        try:
+            if (cache.get(_VERIFY_SIGNUP_KEY.format(ident)) or 0) >= VERIFY_SIGNUP_MAX:
+                return True
+        except Exception:  # noqa: BLE001 - cache down: fail open
+            return False
+    return False
+
+
+def record_verify_signup_attempt(request, email):
+    for ident in _verify_signup_idents(request, email):
+        key = _VERIFY_SIGNUP_KEY.format(ident)
+        try:
+            added = cache.add(key, 1, VERIFY_SIGNUP_WINDOW)
+            if not added:
+                count = cache.incr(key)
+                if count >= VERIFY_SIGNUP_MAX:
+                    cache.touch(key, VERIFY_SIGNUP_LOCK_SECONDS)
+        except Exception:  # noqa: BLE001,S110 - cache hiccup must not break auth
+            pass
+
+
+VERIFY_SIGNUP_LOCK_MESSAGE = (
+    "Too many signup attempts. Wait a while and try again."
+)

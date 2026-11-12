@@ -1,0 +1,50 @@
+{% extends "base.jinja" %}
+
+{% block title %}Team invite{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen items-center justify-center px-4 py-10">
+  <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+    {% if invalid %}
+    <h1 class="text-lg font-semibold">Invite expired or already used</h1>
+    <p class="mt-2 text-sm text-slate-500">
+      {{ error or "This invite link is no longer valid." }}
+      Ask the store owner to resend it.
+    </p>
+    <a href="{{ url('accounts:login') }}"
+       class="mt-6 block w-full rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-800">
+      Sign in
+    </a>
+    {% else %}
+    <h1 class="text-lg font-semibold">You're invited</h1>
+    <p class="mt-2 text-sm text-slate-500">
+      {% if invite.invited_by %}{{ invite.invited_by.get_full_name() or invite.invited_by.email }}{% else %}A team owner{% endif %}
+      invited you to join <span class="font-medium text-slate-700">{{ invite.project.name }}</span>
+      as <span class="font-medium text-slate-700">{{ invite.get_role_display() }}</span>.
+    </p>
+
+    {% if error %}
+    <div class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" class="mt-6 space-y-4">
+      {{ csrf_input }}
+      {% if needs_password %}
+      <div>
+        <label for="id_password" class="block text-sm font-medium">Choose a password</label>
+        <input id="id_password" type="password" name="password" autocomplete="new-password" required
+               class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none">
+      </div>
+      {% else %}
+      <p class="text-xs text-slate-500">You already have an account with this email — accepting will sign you in.</p>
+      {% endif %}
+      <button type="submit"
+              class="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        Accept invite
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,10 +1,15 @@
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
-from apps.accounts.models import Membership
-from apps.accounts.signup import self_signup
+from apps.accounts.models import Membership, PendingVerification
+from apps.accounts.signup import (
+    confirm_self_signup, resend_self_signup_verification, self_signup,
+    start_self_signup,
+)
 from apps.billing.models import BillingSettings, Plan, Subscription
 from apps.projects.models import Project
 
@@ -418,3 +423,179 @@ class DgcCreatedStoreGetsLongerTrialTests(TestCase):
         days = (sub.trial_end - sub.current_period_start).days
         self.assertEqual(days, BillingSettings.load().trial_days)
         self.assertEqual(days, 14)
+
+
+@override_settings(ALLOWED_HOSTS=["*"], EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class SelfSignupVerificationTests(TestCase):
+    """The password-signup alternative to Google — unlike Google's own
+    ``email_verified`` claim, a typed-in email/password has no other proof,
+    so nothing (account/project/membership/subscription) exists until the
+    emailed link is confirmed."""
+
+    def test_start_creates_no_real_rows_yet(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            pending = start_self_signup(
+                name="Pat Owner", email="Pat@Shop.test", store_name="Pat's Shop",
+                phone="9876500000", password="a-strong-pw-123",
+            )
+        self.assertEqual(pending.kind, PendingVerification.Kind.SELF_SIGNUP)
+        self.assertEqual(pending.email, "pat@shop.test")
+        self.assertNotIn("password", str(pending.payload.get("password_hash", "")))
+        self.assertNotEqual(pending.payload["password_hash"], "a-strong-pw-123")
+        self.assertFalse(User.objects.filter(email="pat@shop.test").exists())
+        self.assertFalse(Project.objects.filter(name="Pat's Shop").exists())
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(pending.token, mail.outbox[0].body)
+
+    def test_confirm_creates_the_account_store_and_membership(self):
+        pending = start_self_signup(
+            name="Vik Owner", email="vik@shop.test", store_name="Vik's Shop",
+            phone="9876500001", password="a-strong-pw-123",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            project, user, created = confirm_self_signup(pending=pending)
+        self.assertTrue(created)
+        self.assertTrue(user.check_password("a-strong-pw-123"))
+        self.assertEqual(
+            Membership.objects.get(user=user, project=project).role, "owner"
+        )
+        pending.refresh_from_db()
+        self.assertTrue(pending.is_used)
+
+    def test_confirm_twice_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        pending = start_self_signup(
+            name="", email="once@shop.test", store_name="Once Co",
+            phone="9", password="a-strong-pw-123",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            confirm_self_signup(pending=pending)
+        with self.assertRaises(ValidationError):
+            confirm_self_signup(pending=pending)
+
+    def test_expired_confirm_is_rejected(self):
+        from django.core.exceptions import ValidationError
+
+        pending = start_self_signup(
+            name="", email="late@shop.test", store_name="Late Co",
+            phone="9", password="a-strong-pw-123",
+        )
+        pending.expires_at = timezone.now() - timezone.timedelta(hours=1)
+        pending.save(update_fields=["expires_at"])
+        with self.assertRaises(ValidationError):
+            confirm_self_signup(pending=pending)
+        self.assertFalse(User.objects.filter(email="late@shop.test").exists())
+
+    def test_existing_usable_account_rejected_at_start_not_deferred_to_confirm(self):
+        from django.core.exceptions import ValidationError
+
+        User.objects.create_user("dup2", email="dup2@shop.test", password="x")
+        with self.assertRaises(ValidationError):
+            start_self_signup(
+                name="", email="dup2@shop.test", store_name="D2",
+                phone="9", password="a-strong-pw-123",
+            )
+
+    def test_resend_rotates_token_old_one_stops_matching(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            pending = start_self_signup(
+                name="", email="resend@shop.test", store_name="Resend Co",
+                phone="9", password="a-strong-pw-123",
+            )
+        old_token = pending.token
+        with self.captureOnCommitCallbacks(execute=True):
+            resend_self_signup_verification(email="resend@shop.test")
+        pending.refresh_from_db()
+        self.assertNotEqual(pending.token, old_token)
+        self.assertEqual(len(mail.outbox), 2)
+
+    def test_resend_for_unknown_email_is_a_silent_no_op(self):
+        resend_self_signup_verification(email="nobody@shop.test")
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_new_signup_replaces_an_earlier_unconsumed_one(self):
+        first = start_self_signup(
+            name="", email="replace@shop.test", store_name="First Co",
+            phone="9", password="a-strong-pw-123",
+        )
+        second = start_self_signup(
+            name="", email="replace@shop.test", store_name="Second Co",
+            phone="9", password="a-strong-pw-123",
+        )
+        self.assertFalse(PendingVerification.objects.filter(pk=first.pk).exists())
+        self.assertEqual(second.payload["store_name"], "Second Co")
+
+
+@override_settings(ALLOWED_HOSTS=["*"], EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class PasswordSignupViewTests(TestCase):
+    def _post(self, *, remote_addr=None, **over):
+        data = {
+            "name": "Rae Owner", "email": "rae@shop.test", "store_name": "Rae's Shop",
+            "phone": "9876500002", "password": "a-strong-pw-123", "password2": "a-strong-pw-123",
+            "city": "", "state": "", "postal_code": "",
+        }
+        data.update(over)
+        extra = {"REMOTE_ADDR": remote_addr} if remote_addr else {}
+        return self.client.post("/accounts/signup/password/", data, **extra)
+
+    def test_valid_submit_queues_verification_and_creates_nothing_yet(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self._post()
+        self.assertRedirects(
+            resp, "/accounts/signup/check-email/?email=rae@shop.test",
+            fetch_redirect_response=False,
+        )
+        self.assertFalse(User.objects.filter(email="rae@shop.test").exists())
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_mismatched_passwords_rejected(self):
+        resp = self._post(password2="different-pw-456")
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "match", status_code=200)
+        self.assertFalse(User.objects.filter(email="rae@shop.test").exists())
+
+    def test_weak_password_rejected(self):
+        resp = self._post(password="short", password2="short")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(User.objects.filter(email="rae@shop.test").exists())
+
+    def test_verify_link_activates_the_store(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            self._post()
+        pending = PendingVerification.objects.get(
+            kind=PendingVerification.Kind.SELF_SIGNUP, email="rae@shop.test",
+        )
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(f"/accounts/signup/verify/{pending.token}/")
+        self.assertRedirects(resp, "/admin/start/", fetch_redirect_response=False)
+        u = User.objects.get(email="rae@shop.test")
+        self.assertTrue(u.check_password("a-strong-pw-123"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), u.pk)
+
+    def test_verify_requires_post_bare_get_does_not_activate(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            self._post()
+        pending = PendingVerification.objects.get(
+            kind=PendingVerification.Kind.SELF_SIGNUP, email="rae@shop.test",
+        )
+        resp = self.client.get(f"/accounts/signup/verify/{pending.token}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertFalse(User.objects.filter(email="rae@shop.test").exists())
+
+    def test_rate_limit_locks_after_repeated_attempts(self):
+        from apps.accounts import ratelimit
+
+        # A dedicated fake IP — the shared LocMem cache isn't reset between
+        # tests, so counting against the Django test client's default
+        # REMOTE_ADDR (127.0.0.1) would lock out every other test in the
+        # whole suite that also posts from it.
+        ip = "203.0.113.199"
+        for _ in range(ratelimit.VERIFY_SIGNUP_MAX):
+            self._post(email=f"flood{_}@shop.test", remote_addr=ip)
+        resp = self._post(email="oneflood@shop.test", remote_addr=ip)
+        self.assertContains(resp, ratelimit.VERIFY_SIGNUP_LOCK_MESSAGE)
+        self.assertFalse(User.objects.filter(email="oneflood@shop.test").exists())
+        self.assertFalse(
+            PendingVerification.objects.filter(email="oneflood@shop.test").exists()
+        )

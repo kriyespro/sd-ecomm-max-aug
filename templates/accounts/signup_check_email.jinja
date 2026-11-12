@@ -1,0 +1,30 @@
+{% extends "base.jinja" %}
+
+{% block title %}Check your email{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen items-center justify-center px-4 py-10">
+  <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+    <h1 class="text-lg font-semibold">Check your email</h1>
+    <p class="mt-2 text-sm text-slate-500">
+      We've sent a confirmation link to
+      <span class="font-medium text-slate-700">{{ email }}</span>.
+      Click it to finish setting up your store.
+    </p>
+
+    <form method="post" action="{{ url('accounts:signup_resend') }}" class="mt-6">
+      {{ csrf_input }}
+      <input type="hidden" name="email" value="{{ email }}">
+      <button type="submit"
+              class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+        Resend the link
+      </button>
+    </form>
+
+    <p class="mt-6 text-xs text-slate-500">
+      Wrong address? <a href="{{ url('accounts:signup') }}" class="font-medium text-slate-800 hover:underline">Start over</a>
+    </p>
+  </div>
+</div>
+{% endblock %}

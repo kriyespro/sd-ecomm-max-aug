@@ -1,11 +1,17 @@
-"""Owner / manager provisioning team accounts from the Team screen."""
+"""Owner / manager inviting team members from the Team screen.
+
+Nothing is attached (and no account is created) until the invited address
+confirms by email — see apps.accounts.test_team_invite for the accept-flow
+tests. Attaching instantly used to let anyone type in an email they didn't
+own and either gain visibility into that account or (for a brand-new
+address) hold credentials to it, shown only to the inviter."""
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.test import TestCase
 
 from apps.accounts import team as team_svc
-from apps.accounts.models import Membership, StoreRole
+from apps.accounts.models import Membership, PendingVerification, StoreRole
 from apps.projects.models import Project
 
 User = get_user_model()
@@ -29,54 +35,67 @@ class ProvisionMemberTests(TestCase):
         )
         return u
 
-    def test_new_person_gets_account_and_one_time_password(self):
-        m, temp = team_svc.provision_member(
-            actor=self.owner, project=self.project,
-            email="New@t.test", name="New Person", role="staff",
-        )
-        self.assertIsNotNone(temp)
-        self.assertEqual(len(temp), 12)
-        u = m.user
-        self.assertEqual(u.email, "new@t.test")
-        self.assertEqual(u.first_name, "New")
-        self.assertEqual(u.last_name, "Person")
-        self.assertTrue(u.is_staff)          # can now reach Mission Control
-        self.assertTrue(u.check_password(temp))
-        self.assertEqual(m.role, "staff")
+    def test_new_person_gets_a_pending_invite_no_account_yet(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            invite = team_svc.provision_member(
+                actor=self.owner, project=self.project,
+                email="New@t.test", name="New Person", role="staff",
+            )
+        self.assertEqual(invite.kind, PendingVerification.Kind.TEAM_INVITE)
+        self.assertEqual(invite.email, "new@t.test")
+        self.assertEqual(invite.role, "staff")
+        self.assertEqual(invite.invited_name, "New Person")
+        self.assertFalse(invite.is_used)
+        self.assertFalse(User.objects.filter(email="new@t.test").exists())
+        self.assertFalse(Membership.objects.filter(project=self.project, user__email="new@t.test").exists())
 
-    def test_existing_account_is_attached_without_touching_password(self):
+    def test_existing_account_gets_a_pending_invite_not_instant_attach(self):
         User.objects.create_user(
             username="ex@t.test", email="ex@t.test", password="original"
         )
-        m, temp = team_svc.provision_member(
+        invite = team_svc.provision_member(
             actor=self.owner, project=self.project, email="ex@t.test", role="manager",
         )
-        self.assertIsNone(temp)
-        self.assertTrue(m.user.check_password("original"))
-        self.assertEqual(m.role, "manager")
+        self.assertFalse(invite.is_used)
+        self.assertFalse(
+            Membership.objects.filter(project=self.project, user__email="ex@t.test").exists()
+        )
+        u = User.objects.get(email="ex@t.test")
+        self.assertTrue(u.check_password("original"))
 
     def test_manager_may_provision_staff_only(self):
         mgr = self._manager()
-        m, _ = team_svc.provision_member(
+        invite = team_svc.provision_member(
             actor=mgr, project=self.project, email="s@t.test", role="staff"
         )
-        self.assertEqual(m.role, "staff")
+        self.assertEqual(invite.role, "staff")
 
         with self.assertRaises(PermissionDenied):
             team_svc.provision_member(
                 actor=mgr, project=self.project, email="m2@t.test", role="manager"
             )
 
-    def test_duplicate_member_rejected(self):
-        team_svc.provision_member(
+    def test_duplicate_invite_replaces_the_old_one(self):
+        first = team_svc.provision_member(
             actor=self.owner, project=self.project, email="dup@t.test", role="staff"
+        )
+        second = team_svc.provision_member(
+            actor=self.owner, project=self.project, email="dup@t.test", role="manager"
+        )
+        self.assertFalse(PendingVerification.objects.filter(pk=first.pk).exists())
+        self.assertEqual(second.role, "manager")
+
+    def test_already_on_team_rejected(self):
+        u = User.objects.create_user(username="on@t.test", email="on@t.test", password="pw")
+        Membership.objects.create(
+            project=self.project, user=u, role=StoreRole.STAFF, is_active=True
         )
         with self.assertRaises(team_svc.TeamError):
             team_svc.provision_member(
-                actor=self.owner, project=self.project, email="dup@t.test", role="staff"
+                actor=self.owner, project=self.project, email="on@t.test", role="staff"
             )
 
-    def test_plan_seat_cap_blocks_the_add(self):
+    def test_plan_seat_cap_blocks_the_invite(self):
         sub = self.project.subscription
         sub.plan.max_staff = 1          # only the owner fits
         sub.plan.save(update_fields=["max_staff"])
@@ -119,18 +138,21 @@ class TeamScreenTests(TestCase):
         self.assertContains(resp, "Set up payment providers")   # manager cap bullet
         self.assertContains(resp, "Team seats:")
 
-    def test_add_creates_account_and_flashes_password(self):
-        resp = self.client.post(
-            "/admin/team/add/",
-            {"name": "Sam Staff", "email": "sam@t.test", "role": "staff"},
-            follow=True,
-        )
+    def test_add_sends_invite_nothing_attached_yet(self):
+        from apps.accounts.models import PendingVerification
+
+        with self.captureOnCommitCallbacks(execute=True):
+            resp = self.client.post(
+                "/admin/team/add/",
+                {"name": "Sam Staff", "email": "sam@t.test", "role": "staff"},
+                follow=True,
+            )
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "One-time password:")
-        u = User.objects.get(email="sam@t.test")
+        self.assertContains(resp, "Invite sent to sam@t.test")
+        self.assertFalse(User.objects.filter(email="sam@t.test").exists())
         self.assertTrue(
-            Membership.objects.filter(
-                project=self.project, user=u, role="staff", is_active=True
+            PendingVerification.objects.filter(
+                kind=PendingVerification.Kind.TEAM_INVITE, email="sam@t.test",
             ).exists()
         )
 

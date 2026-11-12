@@ -1,0 +1,35 @@
+{% extends "base.jinja" %}
+
+{% block title %}Confirm your email{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+
+{% block body %}
+<div class="flex min-h-screen items-center justify-center px-4 py-10">
+  <div class="w-full max-w-sm rounded-2xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+    {% if invalid %}
+    <h1 class="text-lg font-semibold">Link expired or already used</h1>
+    <p class="mt-2 text-sm text-slate-500">
+      {{ error or "This confirmation link is no longer valid." }}
+      Start again from the signup page, or request a new link.
+    </p>
+    <a href="{{ url('accounts:signup') }}"
+       class="mt-6 block w-full rounded-lg bg-slate-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-slate-800">
+      Back to signup
+    </a>
+    {% else %}
+    <h1 class="text-lg font-semibold">Confirm your email</h1>
+    <p class="mt-2 text-sm text-slate-500">
+      Finish setting up <span class="font-medium text-slate-700">{{ pending.payload.store_name }}</span>
+      for <span class="font-medium text-slate-700">{{ pending.email }}</span>.
+    </p>
+    <form method="post" class="mt-6">
+      {{ csrf_input }}
+      <button type="submit"
+              class="w-full rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
+        Activate my store
+      </button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

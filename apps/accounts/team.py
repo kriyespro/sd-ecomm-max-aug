@@ -16,18 +16,22 @@ Mission Control for their store. Rules enforced here — views stay thin:
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.urls import reverse
+from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import absolute_url, record_audit
 
-from .models import Membership, StoreRole
+from .models import Membership, PendingVerification, StoreRole
 from .permissions import (
     has_store_role,
     is_platform_admin,
     is_platform_staff,
     store_role,
 )
+
+INVITE_WINDOW = timezone.timedelta(days=7)
 
 User = get_user_model()
 
@@ -200,9 +204,53 @@ def _attach_member(*, actor, project, user, role, request=None):
     return membership
 
 
+def _already_on_team(project, email):
+    return Membership.objects.filter(
+        project=project, user__email__iexact=email, is_active=True, role__in=TEAM_ROLES
+    ).exists()
+
+
+def _create_invite(*, project, email, role, invited_by, invited_name, request):
+    """Replace any prior unconsumed invite for this (project, email) and send
+    the confirmation email on commit. Returns the new ``PendingVerification``."""
+    PendingVerification.objects.filter(
+        kind=PendingVerification.Kind.TEAM_INVITE, project=project,
+        email=email, consumed_at__isnull=True,
+    ).delete()
+    invite = PendingVerification.objects.create(
+        kind=PendingVerification.Kind.TEAM_INVITE, project=project, email=email,
+        role=role, invited_by=invited_by, invited_name=invited_name,
+        expires_at=timezone.now() + INVITE_WINDOW,
+    )
+    record_audit(
+        actor=invited_by, project=project, action=AuditLog.Action.CREATE,
+        target=invite, changes={"email": email, "role": role, "invite": "sent"},
+        request=request,
+    )
+    confirm_url = absolute_url(request, reverse("accounts:invite_accept", args=[invite.token]))
+    transaction.on_commit(lambda: _send_invite_email(invite.pk, confirm_url))
+    return invite
+
+
+def _send_invite_email(invite_id, confirm_url):
+    from .tasks import send_team_invite_email
+
+    send_team_invite_email.delay(invite_id, confirm_url)
+
+
 @transaction.atomic
 def add_member(*, actor, project, email, role, request=None):
-    """Add someone who already has an account to the team."""
+    """Attach someone who already has an account to the team, instantly — no
+    confirmation step.
+
+    Unlike ``provision_member`` (the Team screen's untrusted "type in any
+    email" surface, now invite-gated — see ``confirm_invite``), every caller
+    of this function is itself already a trusted, narrow surface: today
+    that's ``apps.control.store_services.add_member``, used only by a
+    platform admin fixing a store's ownership (``transfer_store_owner``),
+    which creates the account itself first. Adding a confirmation gate here
+    too would block that emergency admin tool from working synchronously.
+    """
     role = _clean_role(role)
     _, assignable = _actor_caps(actor, project)
     if role not in assignable:
@@ -224,15 +272,18 @@ def add_member(*, actor, project, email, role, request=None):
 
 @transaction.atomic
 def provision_member(*, actor, project, email, role, name="", request=None):
-    """Add a team member, creating their login if they don't have one yet.
+    """Invite a team member by email, creating their login only once they
+    confirm.
 
-    The owner (or a manager, for staff) enters a name, email and role. If no
-    account exists we create one with a one-time password and return it so the
-    owner can pass it on; the person changes it after first sign-in. If the
-    account already exists we just attach the membership (no password change,
-    ``temp_password`` is ``None``).
+    The owner (or a manager, for staff) enters a name, email and role.
+    Nothing is attached, and no account is created, yet — a confirmation link
+    is emailed to that address; attaching the Membership instantly (or
+    creating a brand-new account with a password only the inviter ever saw)
+    let anyone type in an email they didn't own and gain visibility into it,
+    or hold credentials to an account nominally owned by someone else. See
+    ``confirm_invite`` for what happens once they click it.
 
-    Returns ``(membership, temp_password | None)``.
+    Returns the ``PendingVerification`` invite.
     """
     role = _clean_role(role)
     _, assignable = _actor_caps(actor, project)
@@ -247,24 +298,107 @@ def provision_member(*, actor, project, email, role, name="", request=None):
         raise TeamError("Enter an email address.")
     if "@" not in email:
         raise TeamError("Enter a valid email address.")
+    if _already_on_team(project, email):
+        raise TeamError(f"{email} is already on the team.")
 
-    user = User.objects.filter(email__iexact=email).first()
-    temp_password = None
+    # Not a reservation — just avoids sending a doomed invite; the seat cap
+    # is re-checked for real inside _attach_member when the invite is confirmed.
+    if not Membership.objects.filter(project=project, user__email__iexact=email).exists():
+        try:
+            from apps.billing.limits import check_can_add_staff
+
+            check_can_add_staff(project)
+        except ImportError:
+            pass
+
+    return _create_invite(
+        project=project, email=email, role=role, invited_by=actor,
+        invited_name=(name or "").strip(), request=request,
+    )
+
+
+def get_invite(token):
+    return PendingVerification.objects.filter(
+        kind=PendingVerification.Kind.TEAM_INVITE, token=token,
+    ).select_related("project", "invited_by").first()
+
+
+@transaction.atomic
+def confirm_invite(*, invite, password=None, request=None):
+    """The invited person clicked their confirmation link. Attach the
+    Membership now (creating their account, with their own chosen password,
+    if they don't have one yet) — this is the only place a team invite
+    actually takes effect. Returns ``(membership, user)``."""
+    if invite.is_used:
+        raise TeamError("This invite has already been used.")
+    if invite.is_expired:
+        raise TeamError("This invite has expired — ask them to resend it.")
+
+    project, role, actor = invite.project, invite.role, invite.invited_by
+    try:
+        _, assignable = _actor_caps(actor, project)
+        if role not in assignable:
+            raise PermissionDenied
+    except PermissionDenied:
+        raise TeamError(
+            "This invite is no longer valid — ask the store owner to resend it."
+        ) from None
+
+    user = User.objects.filter(email__iexact=invite.email).first()
     if user is None:
-        first, last = _split_name(name)
+        if not password:
+            raise TeamError("Choose a password to finish joining.")
+        first, last = _split_name(invite.invited_name)
         user = User.objects.create_user(
-            username=email[:150], email=email,
+            username=invite.email[:150], email=invite.email,
             first_name=first, last_name=last,
         )
-        temp_password = get_random_string(12)
-        user.set_password(temp_password)
+        user.set_password(password)
         user.is_active = True
         user.save(update_fields=["password", "is_active"])
 
-    membership = _attach_member(
-        actor=actor, project=project, user=user, role=role, request=request
-    )
-    return membership, temp_password
+    try:
+        membership = _attach_member(
+            actor=actor, project=project, user=user, role=role, request=request
+        )
+    except PermissionDenied:
+        # The plan's seat cap was hit by someone else between the invite
+        # being sent and this click — not the role/caps check above, which
+        # already passed; a real, if rare, race.
+        raise TeamError(
+            "This store is at its plan's seat limit — ask the owner to "
+            "upgrade or free a seat before accepting."
+        ) from None
+    invite.consumed_at = timezone.now()
+    invite.save(update_fields=["consumed_at", "updated_at"])
+    return membership, user
+
+
+@transaction.atomic
+def resend_invite(*, actor, project, invite, request=None):
+    """Owner/manager only — rotate the token + expiry and re-send."""
+    _actor_caps(actor, project)
+    if invite.project_id != project.pk:
+        raise TeamError("That invite is not on this store.")
+    if invite.is_used:
+        raise TeamError("That invite has already been used.")
+    from .models import _new_verification_token
+
+    invite.token = _new_verification_token()
+    invite.expires_at = timezone.now() + INVITE_WINDOW
+    invite.save(update_fields=["token", "expires_at", "updated_at"])
+    confirm_url = absolute_url(request, reverse("accounts:invite_accept", args=[invite.token]))
+    transaction.on_commit(lambda: _send_invite_email(invite.pk, confirm_url))
+    return invite
+
+
+@transaction.atomic
+def revoke_invite(*, actor, project, invite):
+    """Owner/manager only — delete an unconsumed invite outright."""
+    _actor_caps(actor, project)
+    if invite.project_id != project.pk:
+        raise TeamError("That invite is not on this store.")
+    invite.delete()
 
 
 @transaction.atomic

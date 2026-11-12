@@ -1,8 +1,19 @@
 """Core services. Business logic lives here, never in views or templates."""
 
+from django.conf import settings
 from django.utils.http import url_has_allowed_host_and_scheme
 
 from .models import AuditLog
+
+
+def absolute_url(request, path):
+    """Build an absolute URL for a platform-level email link (account
+    verification, team invite) that may be sent from a Celery task with no
+    live request — falls back to ``PLATFORM_BASE_DOMAIN``."""
+    if request is not None:
+        return request.build_absolute_uri(path)
+    host = getattr(settings, "PLATFORM_BASE_DOMAIN", "") or "localhost"
+    return f"https://{host}{path}"
 
 
 def safe_next(request, next_url, fallback):
