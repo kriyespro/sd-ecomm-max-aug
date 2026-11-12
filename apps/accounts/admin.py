@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Membership, Profile
+from .models import Membership, PendingVerification, Profile
 
 
 @admin.register(Profile)
@@ -15,3 +15,18 @@ class MembershipAdmin(admin.ModelAdmin):
     list_display = ("user", "project", "role", "is_active")
     list_filter = ("role", "is_active", "project")
     search_fields = ("user__username", "user__email", "project__name")
+
+
+@admin.register(PendingVerification)
+class PendingVerificationAdmin(admin.ModelAdmin):
+    """Read-only (support debugging) — never edited through /admin/."""
+
+    list_display = ("email", "kind", "project", "expires_at", "consumed_at")
+    list_filter = ("kind",)
+    search_fields = ("email",)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False

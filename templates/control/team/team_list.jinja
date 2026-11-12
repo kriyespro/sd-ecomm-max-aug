@@ -21,8 +21,9 @@
     <h2 class="text-sm font-semibold text-slate-700">Team · {{ active_project.name }}</h2>
     <p class="mt-1 text-xs text-slate-500">
       People who can sign into Mission Control for this store. Add someone by
-      email — if they don't have a login yet, one is created and you're shown a
-      one-time password to pass on. Locked out? Use <span class="font-medium">Reset password</span>
+      email — they're sent a confirmation link and join once they accept it
+      (and, if they don't have a login yet, choose their own password).
+      Locked out? Use <span class="font-medium">Reset password</span>
       on their row to generate a new one.
       {% if not can_grant_privileged %}
       As a manager you can add and manage <span class="font-medium">staff</span> only.
@@ -67,6 +68,42 @@
     </select>
     <button class="whitespace-nowrap rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800">Add member</button>
   </form>
+
+  {% if pending_invites %}
+  <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
+    <div class="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Pending invites</div>
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[32rem]">
+      <tbody class="divide-y divide-slate-100">
+        {% for inv in pending_invites %}
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-3">
+            <div class="font-medium text-slate-800">{{ inv.email }}</div>
+            <div class="text-xs text-slate-400">Invited {{ inv.created_at.strftime('%d %b %Y') }} · expires {{ inv.expires_at.strftime('%d %b %Y') }}</div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide {{ role_badge.get(inv.role, 'bg-slate-100 text-slate-700') }}">
+              {{ inv.get_role_display() }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex flex-wrap items-center justify-end gap-2">
+              <form method="post" action="{{ url('control:team_invite_resend', kwargs={'pk': inv.pk}) }}">
+                {{ csrf_input }}
+                <button class="rounded-lg border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50">Resend</button>
+              </form>
+              <form method="post" action="{{ url('control:team_invite_revoke', kwargs={'pk': inv.pk}) }}"
+                    onsubmit="return confirm('Revoke the invite to {{ inv.email }}?')">
+                {{ csrf_input }}
+                <button class="rounded-lg px-3 py-1 text-xs text-red-600 hover:bg-red-50">Revoke</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  {% endif %}
 
   <div class="overflow-hidden rounded-xl bg-white ring-1 ring-slate-200">
     <div class="overflow-x-auto"><table class="w-full text-left text-sm min-w-[36rem]">

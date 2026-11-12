@@ -6,22 +6,29 @@ instead and get the longer ``BillingSettings.trial_days`` trial.
 """
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.urls import reverse
+from django.utils import timezone
 
-from apps.accounts.models import Membership, PlatformRole, Profile, StoreRole, UiMode
+from apps.accounts.models import (
+    Membership, PendingVerification, PlatformRole, Profile, StoreRole, UiMode,
+)
 from apps.billing import services as billing_svc
-from apps.billing.models import BillingSettings
+from apps.billing.models import BillingSettings, Plan
 from apps.core.models import AuditLog
-from apps.core.services import record_audit
+from apps.core.services import absolute_url, record_audit
 from apps.projects.models import Project
 
 User = get_user_model()
 
+SIGNUP_VERIFICATION_WINDOW = timezone.timedelta(hours=48)
+
 
 @transaction.atomic
-def self_signup(*, name, email, store_name, phone, password=None, plan=None,
-                oauth=False, request=None, ref_code="", city="", state="", postal_code=""):
+def self_signup(*, name, email, store_name, phone, password=None, password_hash=None,
+                plan=None, oauth=False, request=None, ref_code="", city="", state="", postal_code=""):
     """Create the account + store. Returns ``(project, user, user_was_created)``.
 
     Public signup is Google-only, so ``oauth=True`` (no password) is the norm;
@@ -50,7 +57,7 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
         raise ValidationError("Store name is required.")
     if not phone:
         raise ValidationError("Mobile number is required.")
-    if not oauth and not password:
+    if not oauth and not password and not password_hash:
         raise ValidationError("A password is required.")
 
     existing = User.objects.filter(email__iexact=email).first()
@@ -64,7 +71,9 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     user.first_name, user.last_name = first, last
     user.is_staff = True
     user.is_active = True
-    if oauth or not password:
+    if password_hash:
+        user.password = password_hash
+    elif oauth or not password:
         user.set_unusable_password()
     else:
         user.set_password(password)
@@ -147,6 +156,110 @@ def self_signup(*, name, email, store_name, phone, password=None, plan=None,
     )
 
     return project, user, existing is None
+
+
+@transaction.atomic
+def start_self_signup(*, name, email, store_name, phone, password, plan=None,
+                      ref_code="", city="", state="", postal_code="",
+                      signup_source=None, capi_context=None, request=None):
+    """Password-based alternative to the Google-OAuth signup — begins the
+    same flow as ``self_signup`` but doesn't create anything yet. Unlike
+    Google (whose own ``email_verified`` claim is proof enough), a typed-in
+    email/password has no other confirmation that the signer-upper owns that
+    address, so the account/store/membership/subscription are only ever
+    created by ``confirm_self_signup``, once they click the emailed link.
+
+    The plaintext password never touches the DB — only its hash, inside the
+    pending row's JSON payload. Returns the ``PendingVerification``.
+    """
+    email = (email or "").strip().lower()
+    store_name = (store_name or "").strip()
+    phone = (phone or "").strip()
+    if not email:
+        raise ValidationError("Email is required.")
+    if not store_name:
+        raise ValidationError("Store name is required.")
+    if not phone:
+        raise ValidationError("Mobile number is required.")
+    if not password:
+        raise ValidationError("A password is required.")
+
+    existing = User.objects.filter(email__iexact=email).first()
+    if existing and existing.has_usable_password():
+        raise ValidationError(
+            "An account with this email already exists — sign in instead."
+        )
+
+    PendingVerification.objects.filter(
+        kind=PendingVerification.Kind.SELF_SIGNUP, email=email, consumed_at__isnull=True,
+    ).delete()
+    pending = PendingVerification.objects.create(
+        kind=PendingVerification.Kind.SELF_SIGNUP, email=email,
+        expires_at=timezone.now() + SIGNUP_VERIFICATION_WINDOW,
+        payload={
+            "name": (name or "").strip(),
+            "store_name": store_name,
+            "phone": phone,
+            "password_hash": make_password(password),
+            "plan": plan.code if plan else "",
+            "ref_code": (ref_code or "").strip()[:16],
+            "city": city, "state": state, "postal_code": postal_code,
+            "signup_source": signup_source or {},
+            "capi": capi_context or {},
+        },
+    )
+    confirm_url = absolute_url(request, reverse("accounts:signup_verify", args=[pending.token]))
+    transaction.on_commit(lambda: _send_signup_verification(pending.pk, confirm_url))
+    return pending
+
+
+def _send_signup_verification(pending_id, confirm_url):
+    from .tasks import send_signup_verification_email
+
+    send_signup_verification_email.delay(pending_id, confirm_url)
+
+
+def resend_self_signup_verification(*, email, request=None):
+    """Always behaves the same whether or not a pending signup exists for
+    this address — avoids leaking which emails have started signing up."""
+    email = (email or "").strip().lower()
+    pending = PendingVerification.objects.filter(
+        kind=PendingVerification.Kind.SELF_SIGNUP, email=email, consumed_at__isnull=True,
+    ).order_by("-created_at").first()
+    if pending is None or pending.is_expired:
+        return
+    from .models import _new_verification_token
+
+    pending.token = _new_verification_token()
+    pending.expires_at = timezone.now() + SIGNUP_VERIFICATION_WINDOW
+    pending.save(update_fields=["token", "expires_at", "updated_at"])
+    confirm_url = absolute_url(request, reverse("accounts:signup_verify", args=[pending.token]))
+    transaction.on_commit(lambda: _send_signup_verification(pending.pk, confirm_url))
+
+
+def confirm_self_signup(*, pending, request=None):
+    """The signer-upper clicked their confirmation link — only now does
+    ``self_signup`` actually run. Returns ``(project, user, user_was_created)``."""
+    if pending.is_used:
+        raise ValidationError("This confirmation link has already been used.")
+    if pending.is_expired:
+        raise ValidationError("This confirmation link has expired — request a new one.")
+
+    payload = pending.payload
+    plan = Plan.objects.filter(
+        is_active=True, is_public=True, code=payload.get("plan") or ""
+    ).first()
+    project, user, created = self_signup(
+        name=payload.get("name", ""), email=pending.email,
+        store_name=payload.get("store_name", ""), phone=payload.get("phone", ""),
+        password_hash=payload.get("password_hash"), plan=plan, oauth=False,
+        request=request, ref_code=payload.get("ref_code", ""),
+        city=payload.get("city", ""), state=payload.get("state", ""),
+        postal_code=payload.get("postal_code", ""),
+    )
+    pending.consumed_at = timezone.now()
+    pending.save(update_fields=["consumed_at", "updated_at"])
+    return project, user, created
 
 
 def _fill_contact_info(project_id, phone, city="", state="", postal_code=""):

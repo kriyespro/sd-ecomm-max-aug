@@ -4,8 +4,9 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.core.exceptions import ValidationError
-from django.shortcuts import redirect
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.generic import FormView, TemplateView
@@ -13,8 +14,11 @@ from django.views.generic import FormView, TemplateView
 from apps.billing.models import Plan
 from apps.core.services import safe_next
 
-from . import google_oauth, ratelimit, twofactor
-from .signup import self_signup
+from . import google_oauth, ratelimit, team as team_svc, twofactor
+from .signup import (
+    confirm_self_signup, resend_self_signup_verification, self_signup,
+    start_self_signup,
+)
 
 User = get_user_model()
 
@@ -233,19 +237,244 @@ class SignupView(TemplateView):
         return super().dispatch(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
-        from apps.billing.models import BillingSettings
-
         ctx = super().get_context_data(**kwargs)
-        ctx["google_enabled"] = google_oauth.is_enabled()
-        ctx["trial_days"] = BillingSettings.load().self_signup_trial_days
-        ctx["plan"] = self._valid_plan()
+        ctx.update(_signup_page_context(self.request))
+        ctx.setdefault("password_form", SignupPasswordForm())
         return ctx
 
-    def _valid_plan(self):
-        code = self.request.GET.get("plan") or ""
-        return Plan.objects.filter(
-            is_active=True, is_public=True, code=code
-        ).values_list("code", flat=True).first() or ""
+
+def _valid_plan_code(request):
+    code = request.GET.get("plan") or ""
+    return Plan.objects.filter(
+        is_active=True, is_public=True, code=code
+    ).values_list("code", flat=True).first() or ""
+
+
+def _signup_page_context(request):
+    from apps.billing.models import BillingSettings
+
+    return {
+        "google_enabled": google_oauth.is_enabled(),
+        "trial_days": BillingSettings.load().self_signup_trial_days,
+        "plan": _valid_plan_code(request),
+    }
+
+
+class SignupPasswordForm(forms.Form):
+    """The password-signup alternative to Google — one shot, same page as
+    ``SignupView``. Unlike Google, there's no other proof this address is
+    real, so submitting this form never creates anything: see
+    ``start_self_signup``/``SignupVerifyView``."""
+
+    name = forms.CharField(
+        label="Your name", max_length=140,
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "Jane Doe"}),
+    )
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={"class": _INPUT, "autocomplete": "email"}),
+    )
+    store_name = forms.CharField(
+        label="Store name", max_length=120,
+        widget=forms.TextInput(attrs={"class": _INPUT, "placeholder": "Bright & Co."}),
+    )
+    phone = forms.CharField(
+        label="Mobile number", max_length=20,
+        widget=forms.TextInput(attrs={
+            "class": _INPUT, "placeholder": "+91 98xxxxxxxx",
+            "autocomplete": "tel", "inputmode": "tel",
+        }),
+    )
+    password = forms.CharField(
+        label="Password",
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "new-password"}),
+    )
+    password2 = forms.CharField(
+        label="Confirm password",
+        widget=forms.PasswordInput(attrs={"class": _INPUT, "autocomplete": "new-password"}),
+    )
+    city = forms.CharField(label="City", max_length=80, required=False,
+                           widget=forms.TextInput(attrs={"class": _INPUT}))
+    state = forms.CharField(label="State", max_length=80, required=False,
+                            widget=forms.TextInput(attrs={"class": _INPUT}))
+    postal_code = forms.CharField(label="Pincode", max_length=12, required=False,
+                                  widget=forms.TextInput(attrs={"class": _INPUT}))
+
+    def clean(self):
+        cleaned = super().clean()
+        p1, p2 = cleaned.get("password"), cleaned.get("password2")
+        if p1 and p2 and p1 != p2:
+            self.add_error("password2", "Passwords don't match.")
+        if p1:
+            try:
+                validate_password(p1)
+            except ValidationError as exc:
+                for msg in exc.messages:
+                    self.add_error("password", msg)
+        return cleaned
+
+
+class PasswordSignupView(View):
+    """Posts from the same ``signup.jinja`` page as the Google button."""
+
+    def post(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect("control:dashboard")
+        form = SignupPasswordForm(request.POST)
+        email = (request.POST.get("email") or "").strip().lower()
+        if ratelimit.verify_signup_is_locked(request, email):
+            form.add_error(None, ratelimit.VERIFY_SIGNUP_LOCK_MESSAGE)
+            return render(request, SignupView.template_name, {
+                **_signup_page_context(request), "password_form": form,
+            })
+        ratelimit.record_verify_signup_attempt(request, email)
+        if not form.is_valid():
+            return render(request, SignupView.template_name, {
+                **_signup_page_context(request), "password_form": form,
+            })
+
+        plan = Plan.objects.filter(
+            is_active=True, is_public=True, code=request.GET.get("plan") or ""
+        ).first()
+        try:
+            start_self_signup(
+                name=form.cleaned_data["name"], email=form.cleaned_data["email"],
+                store_name=form.cleaned_data["store_name"], phone=form.cleaned_data["phone"],
+                password=form.cleaned_data["password"], plan=plan,
+                ref_code=request.session.get("signup_ref", ""),
+                city=form.cleaned_data["city"], state=form.cleaned_data["state"],
+                postal_code=form.cleaned_data["postal_code"],
+                signup_source=request.session.get("signup_source"),
+                capi_context={
+                    "ip": request.META.get("REMOTE_ADDR", ""),
+                    "ua": request.META.get("HTTP_USER_AGENT", ""),
+                    "fbp": request.COOKIES.get("_fbp", ""),
+                    "fbc": request.COOKIES.get("_fbc", ""),
+                },
+                request=request,
+            )
+        except ValidationError as exc:
+            for msg in exc.messages:
+                form.add_error(None, msg)
+            return render(request, SignupView.template_name, {
+                **_signup_page_context(request), "password_form": form,
+            })
+        return redirect(f"{reverse('accounts:signup_check_email')}?email={form.cleaned_data['email']}")
+
+
+class SignupCheckEmailView(TemplateView):
+    template_name = "accounts/signup_check_email.jinja"
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["email"] = self.request.GET.get("email", "")
+        return ctx
+
+
+class SignupResendView(View):
+    def post(self, request, *args, **kwargs):
+        email = (request.POST.get("email") or "").strip().lower()
+        if not ratelimit.verify_signup_is_locked(request, email):
+            ratelimit.record_verify_signup_attempt(request, email)
+            resend_self_signup_verification(email=email, request=request)
+        messages.success(
+            request, "If that address has a pending signup, we've resent the confirmation link."
+        )
+        return redirect(f"{reverse('accounts:signup_check_email')}?email={email}")
+
+
+class SignupVerifyView(View):
+    """Confirms a password-based self-signup. POST (not a bare GET) actually
+    creates the account/store — a corporate mail-scanner prefetching the
+    link must never silently consume it."""
+
+    template_name = "accounts/signup_verify.jinja"
+
+    def _pending(self, token):
+        from .models import PendingVerification
+
+        return PendingVerification.objects.filter(
+            kind=PendingVerification.Kind.SELF_SIGNUP, token=token,
+        ).first()
+
+    def get(self, request, token, *args, **kwargs):
+        pending = self._pending(token)
+        return render(request, self.template_name, {
+            "pending": pending,
+            "invalid": pending is None or pending.is_used or pending.is_expired,
+        })
+
+    def post(self, request, token, *args, **kwargs):
+        pending = self._pending(token)
+        if pending is None:
+            return render(request, self.template_name, {"pending": None, "invalid": True})
+        try:
+            project, user, _created = confirm_self_signup(pending=pending, request=request)
+        except ValidationError as exc:
+            return render(request, self.template_name, {
+                "pending": pending, "invalid": True, "error": " ".join(exc.messages),
+            })
+
+        payload = pending.payload
+        ref_code = payload.get("ref_code", "")
+        source = payload.get("signup_source") or {}
+        if source:
+            project.signup_source = source
+            project.save(update_fields=["signup_source"])
+        _track_signup(
+            request, project=project, email=pending.email, plan=project.subscription.plan,
+            phone=payload.get("phone", ""), name=payload.get("name", ""),
+            city=payload.get("city", ""), state=payload.get("state", ""),
+            postal_code=payload.get("postal_code", ""),
+        )
+        _crm_lead_from_signup(
+            project, name=payload.get("name", ""), phone=payload.get("phone", ""),
+            city=payload.get("city", ""), ref_code=ref_code,
+        )
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        twofactor.grant_signup_grace(request)
+        return redirect("control:onboarding")
+
+
+class TeamInviteAcceptView(View):
+    """Public, no login required — clicking the emailed link is itself the
+    proof of identity (same reasoning as GoogleCallbackView's "known email ->
+    log in" branch). Only here does ``team.provision_member``/``add_member``
+    actually take effect."""
+
+    template_name = "accounts/invite_accept.jinja"
+
+    def _ctx(self, invite, error=""):
+        needs_password = bool(
+            invite and not User.objects.filter(email__iexact=invite.email).exists()
+        )
+        return {
+            "invite": invite,
+            "invalid": invite is None or invite.is_used or invite.is_expired,
+            "needs_password": needs_password,
+            "error": error,
+        }
+
+    def get(self, request, token, *args, **kwargs):
+        invite = team_svc.get_invite(token)
+        return render(request, self.template_name, self._ctx(invite))
+
+    def post(self, request, token, *args, **kwargs):
+        invite = team_svc.get_invite(token)
+        if invite is None:
+            return render(request, self.template_name, self._ctx(invite))
+        try:
+            membership, user = team_svc.confirm_invite(
+                invite=invite, password=request.POST.get("password") or None, request=request,
+            )
+        except team_svc.TeamError as exc:
+            return render(request, self.template_name, self._ctx(invite, error=str(exc)))
+        login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+        messages.success(
+            request,
+            f"You're now on the {membership.project.name} team as {membership.get_role_display()}.",
+        )
+        return redirect("control:dashboard")
 
 
 class AffiliateJoinView(TemplateView):

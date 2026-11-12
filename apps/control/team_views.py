@@ -13,7 +13,7 @@ from django.views.generic import TemplateView, View
 
 from apps.accounts import capabilities as caps
 from apps.accounts import team as team_svc
-from apps.accounts.models import Membership
+from apps.accounts.models import Membership, PendingVerification
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin
 from apps.billing import limits as billing_limits
 
@@ -29,6 +29,14 @@ class _TeamBase(StoreRoleRequiredMixin, ActiveProjectMixin):
         if m.project_id != self.active_project.pk:
             raise Http404
         return m
+
+    def _invite(self, pk):
+        inv = get_object_or_404(
+            PendingVerification.objects.filter(kind=PendingVerification.Kind.TEAM_INVITE), pk=pk
+        )
+        if inv.project_id != self.active_project.pk:
+            raise Http404
+        return inv
 
 
 class TeamListView(_TeamBase, TemplateView):
@@ -51,13 +59,21 @@ class TeamListView(_TeamBase, TemplateView):
         ctx["seat_cap"] = cap
         ctx["seat_full"] = cap is not None and used >= cap
         ctx["seat_near"] = billing_limits.is_near_cap(used, cap)
+        ctx["pending_invites"] = (
+            PendingVerification.objects.filter(
+                kind=PendingVerification.Kind.TEAM_INVITE, project=self.active_project,
+                consumed_at__isnull=True,
+            )
+            .select_related("invited_by")
+            .order_by("-created_at")
+        )
         return ctx
 
 
 class TeamAddView(_TeamBase, View):
     def post(self, request, *args, **kwargs):
         try:
-            m, temp_password = team_svc.provision_member(
+            invite = team_svc.provision_member(
                 actor=request.user, project=self.active_project,
                 email=request.POST.get("email", ""),
                 name=request.POST.get("name", ""),
@@ -67,17 +83,36 @@ class TeamAddView(_TeamBase, View):
             messages.error(request, str(exc))
             return redirect("control:team")
 
-        if temp_password:
-            messages.success(
-                request,
-                f"Created an account for {m.user.email} as {m.get_role_display()}. "
-                f"One-time password: {temp_password} — share it with them now; "
-                f"they should change it after signing in.",
+        messages.success(
+            request,
+            f"Invite sent to {invite.email}. They'll join as "
+            f"{invite.get_role_display()} once they confirm by email.",
+        )
+        return redirect("control:team")
+
+
+class TeamInviteResendView(_TeamBase, View):
+    def post(self, request, *args, **kwargs):
+        invite = self._invite(kwargs["pk"])
+        try:
+            team_svc.resend_invite(
+                actor=request.user, project=self.active_project, invite=invite, request=request,
             )
-        else:
-            messages.success(
-                request, f"Added {m.user.email} as {m.get_role_display()}."
-            )
+            messages.success(request, f"Resent the invite to {invite.email}.")
+        except (team_svc.TeamError, PermissionDenied) as exc:
+            messages.error(request, str(exc))
+        return redirect("control:team")
+
+
+class TeamInviteRevokeView(_TeamBase, View):
+    def post(self, request, *args, **kwargs):
+        invite = self._invite(kwargs["pk"])
+        email = invite.email
+        try:
+            team_svc.revoke_invite(actor=request.user, project=self.active_project, invite=invite)
+            messages.success(request, f"Revoked the invite to {email}.")
+        except (team_svc.TeamError, PermissionDenied) as exc:
+            messages.error(request, str(exc))
         return redirect("control:team")
 
 
