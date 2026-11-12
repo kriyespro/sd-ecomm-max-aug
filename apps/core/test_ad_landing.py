@@ -40,10 +40,15 @@ class AdLandingTests(TestCase):
         self.assertNotIn("junk=x", body)
 
     def test_store_host_does_not_serve_it(self):
+        # A verified Domain is a dedicated custom domain -- StorefrontHostMiddleware
+        # swaps to config.storefront_urls, which has no ad-landing routes at all,
+        # so this is a genuine Resolver404. apps.core.views.not_found redirects
+        # that home ("/") rather than showing a bare error; no ad-landing content
+        # is served either way, so tenant isolation is unaffected.
         project = Project.objects.create(name="Acme")
         Domain.objects.create(project=project, host="shop.acme.test", is_verified=True)
         resp = self.client.get("/fashion-store/", HTTP_HOST="shop.acme.test")
-        self.assertEqual(resp.status_code, 404)
+        self.assertRedirects(resp, "/", fetch_redirect_response=False)
 
     def test_signup_stashes_source_and_ignores_unknown_lp(self):
         self.client.get(

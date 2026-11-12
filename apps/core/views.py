@@ -55,12 +55,21 @@ def root(request):
 
 
 def not_found(request, exception=None):
-    """404 handler. Any dead/mistyped link -- on a store's storefront, on the
-    platform marketing site, on a custom domain -- bounces visitors back to
-    that host's home instead of showing a bare error page. Admin/control
-    paths fall through to Django's default 404 so staff still see a real
-    error while debugging a broken route."""
-    if not request.path.startswith(("/admin/", "/sd/")):
+    """404 handler. A dead/mistyped link that matches no URL pattern at all
+    -- on a store's storefront, on the platform marketing site, on a custom
+    domain -- bounces visitors back to that host's home instead of showing
+    a bare error page. Admin/control paths fall through to Django's default
+    404 so staff still see a real error while debugging a broken route.
+
+    Only a genuine routing miss (``Resolver404``) redirects. A view that
+    deliberately raises ``Http404`` as part of its own logic -- an unpublished
+    blog draft, an ad-landing page not served on a store host, a webhook
+    disabled by its own feature flag -- must still 404 for real; those aren't
+    dead links, they're access-control checks other tests and callers depend
+    on seeing as a real 404."""
+    from django.urls.exceptions import Resolver404
+
+    if isinstance(exception, Resolver404) and not request.path.startswith(("/admin/", "/sd/")):
         if getattr(request, "project", None):
             # Dedicated custom domains serve the storefront at "/"
             # (StorefrontHostMiddleware swaps request.urlconf); everywhere
