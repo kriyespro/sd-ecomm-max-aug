@@ -40,6 +40,10 @@ class ProductTitleUpdateTests(TestCase):
         body = self.client.get("/admin/products/").content.decode()
         self.assertIn("title-edit-btn", body)
         self.assertIn(f"/admin/products/{self.product.pk}/title/", body)
+        # htmx only serializes a bare (formless) input into the POST body
+        # when it has a name attribute — without it the request always
+        # arrives with no "title" key, so the server always 400s.
+        self.assertIn('name="title"', body)
 
     def test_posting_a_new_title_updates_the_product(self):
         resp = self._rename("Gold Ring")

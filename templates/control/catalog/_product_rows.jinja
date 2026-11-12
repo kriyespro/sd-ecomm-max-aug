@@ -11,7 +11,7 @@
       <button type="button" class="title-edit-btn text-slate-400 hover:text-slate-600" title="Rename inline" aria-label="Rename {{ p.title }}">✎</button>
     </div>
     <div class="title-edit hidden">
-      <input type="text" class="title-input w-full rounded border border-slate-300 px-1.5 py-0.5 text-sm" value="{{ p.title }}" maxlength="220"
+      <input type="text" name="title" class="title-input w-full rounded border border-slate-300 px-1.5 py-0.5 text-sm" value="{{ p.title }}" maxlength="220"
              hx-post="{{ url('control:product_title_update', kwargs={'pk': p.pk}) }}"
              hx-trigger="blur" hx-swap="none"
              hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
