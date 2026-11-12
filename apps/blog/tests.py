@@ -63,16 +63,17 @@ class BlogPublicViewTests(TestCase):
     def test_tenant_host_serves_storefront_not_blog(self):
         # A host bound to a store (primary_domain or verified Domain) is
         # swapped by StorefrontHostMiddleware to config.storefront_urls before
-        # routing even reaches apps.blog.urls — a real 404, not a redirect
-        # (the view's own "if request.project: redirect('/app/')" guard, same
-        # as apps.core.views.pricing/legal_page, covers a different case: an
-        # apex-host request where request.project still resolves via the
-        # logged-in user's own store membership).
+        # routing even reaches apps.blog.urls -- config.storefront_urls has no
+        # /blog/ route at all, so this is a genuine Resolver404. That's
+        # apps.core.views.not_found's dead-link case: it redirects home
+        # ("/" on a dedicated domain) rather than showing a bare error. No
+        # blog content leaks either way -- this only changes the response
+        # shape, not tenant isolation.
         from apps.projects.models import Project
 
         Project.objects.create(name="Acme", primary_domain="acme.test")
         resp = self.client.get("/blog/", HTTP_HOST="acme.test")
-        self.assertEqual(resp.status_code, 404)
+        self.assertRedirects(resp, "/", fetch_redirect_response=False)
 
 
 class BlogControlAccessTests(TestCase):
