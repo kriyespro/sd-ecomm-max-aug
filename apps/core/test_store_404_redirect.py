@@ -1,8 +1,9 @@
-"""404 handler: a dead link on a store bounces to the store home instead of
-showing a bare error page -- on a dedicated custom domain that's "/" (the
-storefront is served at the root there, config.storefront_urls); everywhere
-else it's "/app/". Admin/backend paths keep Django's plain 404 since staff
-need to actually see a broken route while debugging."""
+"""404 handler: any dead link bounces to that host's home instead of showing
+a bare error page -- on a dedicated custom domain that's "/" (the storefront
+is served at the root there, config.storefront_urls); on a store resolved
+without a dedicated domain it's "/app/"; on the plain marketing host it's
+"/" too. Admin/backend paths keep Django's plain 404 since staff need to
+actually see a broken route while debugging."""
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
@@ -39,6 +40,6 @@ class StoreNotFoundRedirectTests(TestCase):
         resp = self.client.get("/admin/no-such-screen/", HTTP_HOST="fourohfour.shop.test")
         self.assertEqual(resp.status_code, 404)
 
-    def test_marketing_host_dead_link_keeps_plain_404(self):
+    def test_marketing_host_dead_link_redirects_to_landing_page(self):
         resp = self.client.get("/no-such-marketing-page/", HTTP_HOST="shopinaday.com")
-        self.assertEqual(resp.status_code, 404)
+        self.assertRedirects(resp, "/", fetch_redirect_response=False)
