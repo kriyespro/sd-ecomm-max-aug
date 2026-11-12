@@ -98,6 +98,45 @@ class ShippingBeforeCouponAndPaymentTests(TestCase):
         self.assertEqual(payment.amount, order.grand_total)
         self.assertEqual(payment.amount, order.subtotal + Decimal("100"))
 
+    def test_cod_order_is_charged_the_methods_cod_fee(self):
+        # Bug: complete_checkout's only call to set_order_shipping passed no
+        # cod= at all, so ShippingMethod.quote()'s cod_fee was silently
+        # dropped for every order -- the shipper-picker showed it (it quotes
+        # with cod=True separately for display) but the order never charged it.
+        self.method.cod_fee = Decimal("50")
+        self.method.save(update_fields=["cod_fee"])
+        order, _ = complete_checkout(
+            project=self.project, cart=self._cart(), email="j@t.test",
+            shipping_address=self.address, phone=self.address["phone"],
+            payment_method=Provider.COD, shipping_method=self.method,
+        )
+        self.assertEqual(order.shipping_total, Decimal("150"))
+
+    def test_non_cod_order_is_not_charged_the_cod_fee(self):
+        self.method.cod_fee = Decimal("50")
+        self.method.save(update_fields=["cod_fee"])
+        order, _ = complete_checkout(
+            project=self.project, cart=self._cart(), email="j@t.test",
+            shipping_address=self.address, phone=self.address["phone"],
+            shipping_method=self.method,
+        )
+        self.assertEqual(order.shipping_total, Decimal("100"))
+
+    def test_explicit_cod_flag_overrides_payment_method_for_cod_advance_routing(self):
+        # apps.shopfront.views.CheckoutView nulls payment_method for the
+        # COD-advance gateway/offline-UPI paths (it needs to dispatch as if
+        # it were a real gateway payment), but the order is still
+        # cash-on-delivery for the remainder -- the cod kwarg carries that
+        # intent through independently of payment_method.
+        self.method.cod_fee = Decimal("50")
+        self.method.save(update_fields=["cod_fee"])
+        order, _ = complete_checkout(
+            project=self.project, cart=self._cart(), email="j@t.test",
+            shipping_address=self.address, phone=self.address["phone"],
+            payment_method=None, cod=True, shipping_method=self.method,
+        )
+        self.assertEqual(order.shipping_total, Decimal("150"))
+
 
 class StoreCreditCheckoutTests(TestCase):
     """Store credit applies after the coupon, in its own field — both must

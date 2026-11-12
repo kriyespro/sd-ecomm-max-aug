@@ -67,6 +67,7 @@ def complete_checkout(
     *, project, cart, email, shipping_address, billing_address=None,
     phone="", customer_note="", warehouse=None, actor=None, user=None,
     payment_method=None, coupon_code=None, shipping_method=None, use_store_credit=False,
+    cod=None,
 ):
     """Create the order. If ``payment_method`` is given, also start payment.
 
@@ -108,9 +109,15 @@ def complete_checkout(
     if shipping_method is not None:
         from apps.shipping import services as shipping
 
+        # ``cod`` defaults to inferring from ``payment_method``, but a caller
+        # that dispatches COD-with-online-advance through the gateway path
+        # (payment_method=None there -- see apps.shopfront.views.CheckoutView)
+        # must say so explicitly: the order is still cash-on-delivery for the
+        # remainder, so the courier's COD handling fee still applies.
+        is_cod = cod if cod is not None else (payment_method == "cod")
         order.refresh_from_db()
         try:
-            shipping.set_order_shipping(order=order, method=shipping_method, actor=actor)
+            shipping.set_order_shipping(order=order, method=shipping_method, cod=is_cod, actor=actor)
         except shipping.ShippingError:
             pass
 

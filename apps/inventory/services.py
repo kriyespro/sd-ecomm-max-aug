@@ -134,6 +134,19 @@ def release(*, item, quantity, reference="", actor=None):
     )
 
 
+def restock_return(*, item, quantity, reference="", actor=None):
+    """A returned item physically comes back on-hand. Not a reservation --
+    nobody is buying it again yet -- just the inverse of ``consume_sale``'s
+    on-hand decrement."""
+    return record_movement(
+        item=item,
+        reason=StockMovement.Reason.RETURN,
+        quantity_delta=abs(quantity),
+        reference=reference,
+        actor=actor,
+    )
+
+
 def consume_sale(*, item, quantity, reference="", actor=None):
     """Fulfilment: ship reserved stock. Drops on-hand and the reservation."""
     return record_movement(

@@ -7,10 +7,12 @@ from decimal import Decimal
 from django.test import TestCase
 from django.utils import timezone
 
+from apps.catalog.models import Product
 from apps.credits.models import CreditKind
 from apps.credits.services import get_or_create_account
 from apps.customers.models import Customer
-from apps.orders.models import Order, OrderStatusEvent
+from apps.inventory.models import InventoryItem, Warehouse
+from apps.orders.models import Order, OrderItem, OrderStatusEvent
 from apps.payments.models import Payment, PaymentStatus as PayPaymentStatus, Provider
 from apps.projects.models import Project
 
@@ -125,6 +127,46 @@ class ApproveReturnTests(ReturnTestBase):
         approve_return(request=self.req, refund_method=RefundMethod.MANUAL)
         with self.assertRaises(ReturnError):
             approve_return(request=self.req, refund_method=RefundMethod.MANUAL)
+
+    def test_approving_a_return_restocks_the_fulfilled_units(self):
+        # Bug: a RETURN was approved and refunded correctly, but nothing ever
+        # put the physically-returned unit back on-hand -- fulfill_order's
+        # consume_sale drops stock_reserved to False at ship time, so
+        # transition_order's own _release_stock has nothing left to release.
+        warehouse = Warehouse.objects.create(project=self.project, name="Main", is_default=True)
+        product = Product.objects.create(project=self.project, title="Ring", price=Decimal("1000"))
+        item = InventoryItem.objects.create(warehouse=warehouse, product=product, quantity=4)
+        OrderItem.objects.create(
+            order=self.order, product=product, product_title="Ring",
+            unit_price=Decimal("1000"), quantity=1, line_total=Decimal("1000"), fulfilled_quantity=1,
+        )
+
+        approve_return(request=self.req, refund_method=RefundMethod.MANUAL)
+
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 5)
+        self.assertEqual(item.movements.filter(reason="return").count(), 1)
+
+    def test_exchange_approval_does_not_restock(self):
+        # Out of scope per this module's docstring -- a replacement ships
+        # separately, so the original unit isn't back on-hand yet.
+        warehouse = Warehouse.objects.create(project=self.project, name="Main", is_default=True)
+        product = Product.objects.create(project=self.project, title="Ring", price=Decimal("1000"))
+        item = InventoryItem.objects.create(warehouse=warehouse, product=product, quantity=4)
+        OrderItem.objects.create(
+            order=self.order, product=product, product_title="Ring",
+            unit_price=Decimal("1000"), quantity=1, line_total=Decimal("1000"), fulfilled_quantity=1,
+        )
+        self.req.delete()
+        req = ReturnRequest.objects.create(
+            project=self.project, order=self.order, customer=self.customer,
+            kind=RequestKind.EXCHANGE, reason="wrong color",
+        )
+
+        approve_return(request=req, refund_method=RefundMethod.MANUAL)
+
+        item.refresh_from_db()
+        self.assertEqual(item.quantity, 4)
 
 
 class RejectReturnTests(ReturnTestBase):

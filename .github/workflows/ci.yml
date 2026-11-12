@@ -111,6 +111,21 @@ jobs:
           print("\n".join(tasks))
           PY
 
+      # import_default_modules() above only registers task modules -- it never
+      # opens a transport. A missing transitive dep inside kombu's redis driver
+      # (e.g. ModuleNotFoundError: packaging, 2026-11) only surfaces once a real
+      # broker connection is made, which .delay()/apply_async() do on every
+      # task enqueue in production. Actually connecting here is the only way
+      # CI catches that class of bug before it ships.
+      - name: Celery broker connection (catches missing transport deps)
+        run: |
+          python - <<'PY'
+          from config.celery import app
+          with app.connection_for_write() as conn:
+              conn.ensure_connection(max_retries=3)
+          print("broker connection OK:", conn.as_uri())
+          PY
+
   # ---- the deployable image actually builds ------------------------------
   docker:
     runs-on: ubuntu-latest
