@@ -322,6 +322,22 @@ def fulfill_order(*, order, actor=None, note=""):
 
 
 @transaction.atomic
+def restock_returned_order(*, order, actor=None):
+    """Customer return approved on a fulfilled order: the physically-shipped
+    units (``fulfilled_quantity`` -- an order can be partially fulfilled)
+    come back on-hand. ``fulfill_order`` already dropped ``stock_reserved``
+    to False at ship time, so ``_release_stock`` has nothing left to release
+    -- this is the actual inverse of its ``consume_sale`` call."""
+    for oi in order.items.select_related("product", "variant"):
+        if oi.fulfilled_quantity <= 0:
+            continue
+        item = _item_inventory(order, oi)
+        if item is not None:
+            inv.restock_return(item=item, quantity=oi.fulfilled_quantity,
+                                reference=f"order#{order.number}", actor=actor)
+
+
+@transaction.atomic
 def cancel_order(*, order, actor=None, note=""):
     return transition_order(order=order, to_status=OrderStatus.CANCELLED, actor=actor, note=note)
 

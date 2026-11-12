@@ -79,6 +79,23 @@ class ZyviraSkinTests(TestCase):
         self.assertContains(resp, "Add to bag")
         self.assertContains(resp, "Care instructions")
 
+    def test_product_description_renders_as_html_not_escaped(self):
+        # zyvira has its own product.jinja (unlike most skins, which fall
+        # back to default) -- its accordion rendered the nh3-sanitized
+        # description field with no |safe at all, so a seller's formatted
+        # HTML showed up as literal escaped tags instead of rich text.
+        from apps.catalog.models import Product
+        from apps.categories.models import Category
+
+        cat = Category.objects.create(project=self.project, name="Rings", slug="rings")
+        p = Product.objects.create(
+            project=self.project, category=cat, title="Gold Ring", slug="gold-ring",
+            price=Decimal("1000"), status="active",
+            description="<p>Hand <b>crafted</b></p>",
+        )
+        resp = self._get(f"/p/{p.slug}/")
+        self.assertContains(resp, "<p>Hand <b>crafted</b></p>", html=False)
+
     def test_header_is_transparent_overlay_only_on_home(self):
         resp = self._get("/")
         self.assertContains(resp, "home: true")

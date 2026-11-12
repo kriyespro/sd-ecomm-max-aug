@@ -224,7 +224,7 @@
       {# accordion #}
       <div class="mt-8 border-t border-line" x-data="{ open: 'desc' }">
         {% set sections = [
-          ('desc', 'Description', product.description or product.short_description or 'A considered everyday piece.'),
+          ('desc', 'Description', (product.description | safe) if product.description else (product.short_description or 'A considered everyday piece.')),
           ('care', 'Care instructions', 'Avoid contact with water, perfume and sweat. Store in the pouch provided, away from direct sunlight and moisture, to keep the plating looking new.'),
           ('ship', 'Shipping & returns', 'Dispatched within 24 hours. Free shipping over ₹999. 7-day returns on unused items with tags. Cash on delivery available across India.')
         ] %}

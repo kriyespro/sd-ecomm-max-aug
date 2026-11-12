@@ -150,6 +150,7 @@ def approve_return(*, request, refund_method, amount=None, actor=None):
                                         note="Return request approved")
         except orders_svc.OrderError:
             pass  # already in a terminal state -- not fatal
+        orders_svc.restock_returned_order(order=order, actor=actor)
 
     from apps.notifications.models import Event
 

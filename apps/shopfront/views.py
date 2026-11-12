@@ -632,6 +632,7 @@ class CheckoutView(View):
                 customer_note=request.POST.get("customer_note", "").strip(),
                 coupon_code=coupon or None,
                 payment_method=None if (gateway or use_whatsapp or cod_advance_offline) else method_key,
+                cod=(method_key == "cod" and not use_whatsapp),
                 user=request.user if request.user.is_authenticated else None,
                 shipping_method=shipping_method,
                 use_store_credit=use_store_credit,

@@ -7,7 +7,8 @@ rendered with the default URLconf) 301 to the root equivalent.
 
 The shared routes below mirror :mod:`config.urls` so payments webhooks, the API,
 login, sitemap/robots and the domain-check probe keep working on the custom
-domain. Platform-only routes (``/sd/``, ``/admin/`` Mission Control, ``/metrics``)
+domain -- Mission Control (``/admin/``) too, so the owner lands straight in
+their store with no store picker. Platform-only routes (``/sd/``, ``/metrics``)
 are intentionally left off.
 """
 

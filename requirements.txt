@@ -2,6 +2,9 @@
 Django>=5.2,<5.3  # LTS
 djangorestframework==3.18.0
 Jinja2==3.1.6
+markupsafe>=2,<4  # imported directly in apps/shopfront/sandbox.py, apps/marketing/context_processors.py,
+                  # config/jinja2.py -- was only present as Jinja2's own transitive dep (same risk shape as
+                  # the missing-`packaging` incident, 2026-11)
 python-dotenv==1.2.3
 Pillow==12.3.0
 nh3==0.3.7  # HTML sanitiser (Ammonia bindings) for staff-authored rich text
