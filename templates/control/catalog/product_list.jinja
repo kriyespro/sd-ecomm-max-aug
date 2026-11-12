@@ -126,6 +126,49 @@
     });
     document.body.addEventListener("htmx:afterSwap", updateCount);
     updateCount();
+
+    container.addEventListener("click", function (e) {
+      var btn = e.target.closest(".title-edit-btn");
+      if (!btn) return;
+      var cell = btn.closest("[data-title-cell]");
+      cell.querySelector(".title-view").classList.add("hidden");
+      cell.querySelector(".title-edit").classList.remove("hidden");
+      var input = cell.querySelector(".title-input");
+      input.focus();
+      input.select();
+    });
+
+    container.addEventListener("keydown", function (e) {
+      if (e.target.classList && e.target.classList.contains("title-input") && e.key === "Enter") {
+        e.preventDefault();
+        e.target.blur();
+      }
+    });
+
+    container.addEventListener("focusout", function (e) {
+      if (!(e.target.classList && e.target.classList.contains("title-input"))) return;
+      var input = e.target;
+      var cell = input.closest("[data-title-cell]");
+      var value = input.value.trim();
+      if (!value) {
+        cell.querySelector(".title-error").classList.remove("hidden");
+        return;
+      }
+      cell.querySelector(".title-error").classList.add("hidden");
+      cell.querySelector(".title-link").textContent = value;
+      cell.querySelector(".title-view").classList.remove("hidden");
+      cell.querySelector(".title-edit").classList.add("hidden");
+    });
+
+    document.body.addEventListener("htmx:responseError", function (e) {
+      var input = e.target;
+      if (!(input.classList && input.classList.contains("title-input"))) return;
+      var cell = input.closest("[data-title-cell]");
+      cell.querySelector(".title-view").classList.add("hidden");
+      cell.querySelector(".title-edit").classList.remove("hidden");
+      cell.querySelector(".title-error").classList.remove("hidden");
+      input.focus();
+    });
   });
 </script>
 {% endblock %}

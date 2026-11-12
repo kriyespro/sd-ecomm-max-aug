@@ -5,8 +5,18 @@
     <input type="checkbox" name="pks" value="{{ p.pk }}" form="bulk-status-form" aria-label="Select {{ p.title }}" class="bulk-row-check h-3.5 w-3.5 rounded border-slate-300">
     {% endif %}
   </td>
-  <td class="px-4 py-2">
-    <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="font-medium text-slate-900 hover:underline">{{ p.title }}</a>
+  <td class="px-4 py-2" data-title-cell>
+    <div class="title-view flex items-center gap-1.5">
+      <a href="{{ url('control:product_edit', kwargs={'pk': p.pk}) }}" class="title-link font-medium text-slate-900 hover:underline">{{ p.title }}</a>
+      <button type="button" class="title-edit-btn text-slate-400 hover:text-slate-600" title="Rename inline" aria-label="Rename {{ p.title }}">✎</button>
+    </div>
+    <div class="title-edit hidden">
+      <input type="text" class="title-input w-full rounded border border-slate-300 px-1.5 py-0.5 text-sm" value="{{ p.title }}" maxlength="220"
+             hx-post="{{ url('control:product_title_update', kwargs={'pk': p.pk}) }}"
+             hx-trigger="blur" hx-swap="none"
+             hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+      <p class="title-error mt-0.5 hidden text-[10px] text-red-600">Title can't be empty.</p>
+    </div>
     {% if p.brand %}<span class="text-xs text-slate-400">· {{ p.brand.name }}</span>{% endif %}
   </td>
   <td class="px-4 py-2 text-slate-500">{{ p.sku or "—" }}</td>

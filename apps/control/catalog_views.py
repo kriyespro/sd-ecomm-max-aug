@@ -825,6 +825,26 @@ class ProductFlagToggleView(_ScopedQuerysetMixin, View):
         return HttpResponse(status=204)
 
 
+class ProductTitleUpdateView(_ScopedQuerysetMixin, View):
+    """Inline-rename a product straight from the products list (pencil icon
+    next to the title), autosaving on blur — same one-POST-per-field shape as
+    ProductFlagToggleView above."""
+
+    model = Product
+
+    def post(self, request, pk, *args, **kwargs):
+        product = get_object_or_404(self.get_queryset(), pk=pk)
+        title = (request.POST.get("title") or "").strip()
+        if not title or len(title) > product._meta.get_field("title").max_length:
+            return HttpResponse(status=400)
+        product.title = title
+        product.save(update_fields=["title", "updated_at"])
+        record_audit(actor=request.user, project=self.active_project,
+                     action=AuditLog.Action.UPDATE, target=product,
+                     changes={"title": title}, request=request)
+        return HttpResponse(status=204)
+
+
 class ProductAiGenerateView(ActiveProjectMixin, View):
     """"Write it for me" on the product form — one-line brief in, suggested
     title/description/SEO/tags out, using the store's own rotated OpenRouter
