@@ -16,6 +16,7 @@ from apps.core.views import ad_landing, legal_page
 from apps.core.views import agencies as agencies_view
 from apps.core.views import partners as partners_view
 from apps.core.views import pricing as pricing_view
+from apps.core.views import not_found as not_found_view
 from apps.core.views import root as root_view
 from apps.crm.capture import capture_lead
 from apps.projects.views import domain_check
@@ -50,6 +51,8 @@ urlpatterns = [
     path("", root_view, name="root"),
     path("", include("apps.cms.urls", namespace="cms")),
 ]
+
+handler404 = not_found_view
 
 # Django serves /media/ only for local dev or when SERVE_MEDIA is set (direct
 # app access with no nginx/CDN in front). django.conf.urls.static.static() is

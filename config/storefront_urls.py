@@ -17,6 +17,7 @@ from django.views.generic import RedirectView
 from django.views.static import serve as _serve_media
 
 from apps.core import health
+from apps.core.views import not_found as not_found_view
 from apps.projects.views import domain_check
 
 urlpatterns = [
@@ -41,6 +42,8 @@ urlpatterns = [
     path("", include("apps.cms.urls", namespace="cms")),
     path("", include("apps.shopfront.urls", namespace="shopfront")),
 ]
+
+handler404 = not_found_view
 
 if settings.DEBUG or settings.SERVE_MEDIA:
     urlpatterns += [
