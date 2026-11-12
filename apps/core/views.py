@@ -54,6 +54,22 @@ def root(request):
     return render(request, brand.landing_template, ctx)
 
 
+def not_found(request, exception=None):
+    """404 handler. A storefront visitor (``request.project`` resolved by the
+    skin middleware off the Host header) hitting a dead/old product or
+    category link gets bounced to the store home instead of a bare error
+    page. Admin/control paths fall through to Django's default 404 so staff
+    still see a real error while debugging a broken link."""
+    if getattr(request, "project", None) and not request.path.startswith(("/admin/", "/sd/")):
+        # Dedicated custom domains serve the storefront at "/" (StorefrontHostMiddleware
+        # swaps request.urlconf); everywhere else it's under "/app/".
+        home = "/" if getattr(request, "storefront_host", False) else "/app/"
+        return redirect(home)
+    from django.views.defaults import page_not_found
+
+    return page_not_found(request, exception)
+
+
 def pricing(request):
     """Standalone ``/pricing/`` page — previously only an in-page ``#pricing``
     anchor on the landing page, so it had no title/description/canonical of
