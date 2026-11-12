@@ -55,15 +55,20 @@ def root(request):
 
 
 def not_found(request, exception=None):
-    """404 handler. A storefront visitor (``request.project`` resolved by the
-    skin middleware off the Host header) hitting a dead/old product or
-    category link gets bounced to the store home instead of a bare error
-    page. Admin/control paths fall through to Django's default 404 so staff
-    still see a real error while debugging a broken link."""
-    if getattr(request, "project", None) and not request.path.startswith(("/admin/", "/sd/")):
-        # Dedicated custom domains serve the storefront at "/" (StorefrontHostMiddleware
-        # swaps request.urlconf); everywhere else it's under "/app/".
-        home = "/" if getattr(request, "storefront_host", False) else "/app/"
+    """404 handler. Any dead/mistyped link -- on a store's storefront, on the
+    platform marketing site, on a custom domain -- bounces visitors back to
+    that host's home instead of showing a bare error page. Admin/control
+    paths fall through to Django's default 404 so staff still see a real
+    error while debugging a broken route."""
+    if not request.path.startswith(("/admin/", "/sd/")):
+        if getattr(request, "project", None):
+            # Dedicated custom domains serve the storefront at "/"
+            # (StorefrontHostMiddleware swaps request.urlconf); everywhere
+            # else -- including an owner previewing on the platform host --
+            # it's under "/app/".
+            home = "/" if getattr(request, "storefront_host", False) else "/app/"
+        else:
+            home = "/"
         return redirect(home)
     from django.views.defaults import page_not_found
 
