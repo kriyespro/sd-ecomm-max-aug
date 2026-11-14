@@ -470,6 +470,8 @@ class StoreCreateSubdomainTests(TestCase):
         p = Project.objects.get(name="Fresh Store")
         self.assertEqual(p.primary_domain, "shop.brand.com")
         self.assertFalse(Domain.objects.filter(project=p, host__endswith=".mnxstore.com").exists())
+        domain = Domain.objects.get(project=p, host="shop.brand.com")
+        self.assertTrue(domain.is_verified)
 
 
 class UserSetPasswordTests(TestCase):

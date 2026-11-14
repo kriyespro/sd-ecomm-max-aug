@@ -15,6 +15,7 @@ from apps.billing import services as billing_svc
 from apps.billing.models import BillingPeriod
 from apps.core.models import AuditLog
 from apps.core.services import record_audit
+from apps.projects.domains import DomainError, add_domain
 from apps.projects.models import Project
 
 User = get_user_model()
@@ -72,6 +73,20 @@ def create_store(*, name, owner_email, plan, actor, request=None,
         status=Project.Status.ACTIVE,
         brand="" if brand_key == DEFAULT_KEY else brand_key,
     )
+
+    # Mirror the custom domain into Domain so it's visible / manageable from
+    # /admin/domains/, not just a routing fallback via Project.primary_domain.
+    # Staff typed it on the create form, so trust it the same way
+    # primary_domain already is (see Project.canonical_host) instead of
+    # leaving it stuck "unverified" for a domain that's already live.
+    if domain:
+        try:
+            dom = add_domain(project=project, host=domain)
+        except DomainError as exc:
+            raise ValidationError(str(exc)) from exc
+        dom.is_verified = True
+        dom.is_primary = True
+        dom.save(update_fields=["is_verified", "verified_at", "is_primary", "updated_at"])
 
     # The post_save signal already tried to give the new store a trial
     # subscription, but it swallows its own errors (e.g. no public plan), so the
