@@ -72,13 +72,7 @@
 
   {# plan picker #}
   <div class="rounded-xl bg-white p-6 ring-1 ring-slate-200">
-    <div class="flex items-center justify-between">
-      <h2 class="text-sm font-semibold text-slate-700">Change plan</h2>
-      <div class="flex rounded-lg bg-slate-100 p-0.5 text-xs">
-        <button @click="period='monthly'" :class="period==='monthly' ? 'bg-white shadow' : ''" class="rounded-md px-3 py-1 font-medium">Monthly</button>
-        <button @click="period='yearly'" :class="period==='yearly' ? 'bg-white shadow' : ''" class="rounded-md px-3 py-1 font-medium">Yearly <span class="text-emerald-600">save</span></button>
-      </div>
-    </div>
+    <h2 class="text-sm font-semibold text-slate-700">Change plan</h2>
 
     <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
       {% for p in plans %}
@@ -116,7 +110,20 @@
       </form>
       {% endfor %}
     </div>
-    <p class="mt-3 text-xs text-slate-400">
+
+    <div class="mt-5 flex items-center justify-center gap-3 border-t border-slate-100 pt-4">
+      <span class="text-sm font-medium" :class="period==='yearly' ? 'text-slate-900' : 'text-slate-400'">Yearly <span class="text-emerald-600">save</span></span>
+      <button type="button" role="switch" :aria-checked="period==='monthly'"
+              @click="period = period === 'yearly' ? 'monthly' : 'yearly'"
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition"
+              :class="period==='monthly' ? 'bg-slate-300' : 'bg-slate-900'">
+        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+              :class="period==='monthly' ? 'translate-x-1' : 'translate-x-6'"></span>
+      </button>
+      <span class="text-sm font-medium" :class="period==='monthly' ? 'text-slate-900' : 'text-slate-400'">Monthly</span>
+    </div>
+
+    <p class="mt-3 text-xs text-slate-400 text-center">
       Paying takes effect immediately — during a trial it activates the store
       right away; on an active plan the new price applies to your next invoice.
     </p>
@@ -127,8 +134,16 @@
 <script>
 function planBilling() {
   return {
-    period: '{{ subscription.period }}',
+    period: 'yearly',
     busy: false,
+    init() {
+      const params = new URLSearchParams(window.location.search);
+      const autopay = params.get('autopay');
+      if (autopay) {
+        history.replaceState(null, '', window.location.pathname);
+        this.pay(parseInt(autopay, 10));
+      }
+    },
     async pay(invoiceId) {
       this.busy = true;
       try {

@@ -4,6 +4,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.generic import TemplateView, View
 
 from apps.accounts.permissions import OWNER_MANAGER, StoreRoleRequiredMixin, is_platform_admin, is_platform_staff
@@ -107,11 +108,11 @@ class PlanChangeView(_PlanBase, View):
         if open_invoice is not None:
             messages.success(
                 request,
-                f"Plan set to {plan.name} ({period}) — pay ₹{open_invoice.amount:,.0f} "
-                "below to activate it.",
+                f"Plan set to {plan.name} ({period}) — complete payment of "
+                f"₹{open_invoice.amount:,.0f} to activate it.",
             )
-        else:
-            messages.success(request, f"Plan changed to {plan.name} ({period}).")
+            return redirect(f"{reverse('control:store_plan')}?autopay={open_invoice.pk}")
+        messages.success(request, f"Plan changed to {plan.name} ({period}).")
         return redirect("control:store_plan")
 
 
