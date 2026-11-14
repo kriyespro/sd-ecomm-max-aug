@@ -31,8 +31,8 @@
         <h3 class="font-display font-700 text-slate-900">{{ p.name }}</h3>
         {% if p.tagline %}<p class="mt-1 text-sm text-slate-500">{{ p.tagline }}</p>{% endif %}
         <p class="mt-4 font-display text-4xl font-700 text-slate-900">
-          <template x-if="yearly">&#8377;{{ (p.price_yearly / 12)|round|int if p.price_yearly else p.price_monthly|int }}</template>
-          <template x-if="!yearly">&#8377;{{ p.price_monthly|int }}</template>
+          <template x-if="yearly"><span>&#8377;{{ (p.price_yearly / 12)|round|int if p.price_yearly else p.price_monthly|int }}</span></template>
+          <template x-if="!yearly"><span>&#8377;{{ p.price_monthly|int }}</span></template>
           <span class="text-sm font-400 text-slate-500">/mo</span>
         </p>
         {% if p.price_yearly %}
