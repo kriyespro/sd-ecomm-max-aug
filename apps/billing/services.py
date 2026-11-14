@@ -135,7 +135,15 @@ def change_plan(subscription, *, plan, period, actor=None, billed_to_dgc=None):
         subscription.override_price = plan.dgc_price_for(period)
         update_fields.append("override_price")
     subscription.save(update_fields=update_fields)
-    if not _open_invoice(subscription):
+    stale = _open_invoice(subscription)
+    if stale is not None and stale.amount != subscription.current_price():
+        # The open invoice was issued for whatever plan/period was selected
+        # before this change (e.g. the trial's first invoice) -- paying it
+        # as-is would charge the old amount under the new plan's name.
+        stale.status = InvoiceStatus.VOID
+        stale.save(update_fields=["status", "updated_at"])
+        stale = None
+    if stale is None:
         issue_invoice(subscription, period_start=timezone.now() if immediate else None)
     return subscription
 
