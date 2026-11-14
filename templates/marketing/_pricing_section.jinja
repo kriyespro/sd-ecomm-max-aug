@@ -3,13 +3,24 @@
    ``plans`` + ``popular_code`` in context. #}
 {% from "marketing/_macros.jinja" import icon with context %}
 {% if plans %}
-<section id="pricing" class="border-t border-slate-200 bg-slate-50">
+<section id="pricing" class="border-t border-slate-200 bg-slate-50" x-data="{ yearly: true }">
   <div class="mx-auto max-w-6xl px-5 py-20">
     <div class="reveal mx-auto max-w-2xl text-center">
       <h2 class="font-display text-3xl font-700 tracking-tight sm:text-4xl">Simple pricing</h2>
       <p class="mt-4 text-slate-600">Prices in INR. Switch or cancel anytime from the dashboard.</p>
     </div>
-    <div class="mt-14 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+    <div class="reveal mt-8 flex items-center justify-center gap-3">
+      <span class="text-sm font-600" :class="!yearly ? 'text-slate-900' : 'text-slate-400'">Monthly</span>
+      <button type="button" role="switch" :aria-checked="yearly" @click="yearly = !yearly"
+        class="relative inline-flex h-6 w-11 items-center rounded-full transition"
+        :class="yearly ? 'bg-brand-600' : 'bg-slate-300'">
+        <span class="inline-block h-4 w-4 transform rounded-full bg-white transition"
+          :class="yearly ? 'translate-x-6' : 'translate-x-1'"></span>
+      </button>
+      <span class="text-sm font-600" :class="yearly ? 'text-slate-900' : 'text-slate-400'">Yearly</span>
+      <span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-600 text-emerald-700">Save more</span>
+    </div>
+    <div class="mt-10 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {% for p in plans %}
       {% set popular = p.code == popular_code %}
       <div class="reveal relative flex flex-col rounded-2xl border bg-white p-6
@@ -20,9 +31,16 @@
         <h3 class="font-display font-700 text-slate-900">{{ p.name }}</h3>
         {% if p.tagline %}<p class="mt-1 text-sm text-slate-500">{{ p.tagline }}</p>{% endif %}
         <p class="mt-4 font-display text-4xl font-700 text-slate-900">
-          &#8377;{{ p.price_monthly|int }}<span class="text-sm font-400 text-slate-500">/mo</span>
+          <template x-if="yearly">&#8377;{{ (p.price_yearly / 12)|round|int if p.price_yearly else p.price_monthly|int }}</template>
+          <template x-if="!yearly">&#8377;{{ p.price_monthly|int }}</template>
+          <span class="text-sm font-400 text-slate-500">/mo</span>
         </p>
-        {% if p.price_yearly %}<p class="mt-1 text-xs text-slate-400">or &#8377;{{ p.price_yearly|int }} billed yearly</p>{% endif %}
+        {% if p.price_yearly %}
+        <p class="mt-1 text-xs text-slate-400">
+          <span x-show="yearly">&#8377;{{ p.price_yearly|int }} billed yearly</span>
+          <span x-show="!yearly">or &#8377;{{ p.price_yearly|int }} billed yearly</span>
+        </p>
+        {% endif %}
         {% if p.features %}
         <ul class="mt-5 space-y-2 text-sm text-slate-600">
           {% for f in p.features %}<li class="flex gap-2"><span class="h-4 w-4 shrink-0 text-brand-600">{{ icon('check') }}</span> {{ f }}</li>{% endfor %}
