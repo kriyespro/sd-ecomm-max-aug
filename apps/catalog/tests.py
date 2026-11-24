@@ -181,3 +181,37 @@ class ProductImageOptimizeTaskTests(TestCase):
         img.refresh_from_db()
         self.assertIsNone(img.optimized_at)
         self.assertTrue(img.image.name.endswith(".png"))
+
+    def test_sweep_reenqueues_images_the_worker_dropped(self):
+        """Regression: before acks_late, a worker killed mid-task (every
+        deploy does this) silently lost the optimize task forever --
+        optimized_at stayed null with nothing to ever retry it. The sweep
+        must pick those back up, but leave a just-uploaded image (still
+        legitimately queued/rate-limited) alone."""
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from apps.catalog.tasks import sweep_unoptimized_product_images
+
+        stuck = ProductImage.objects.create(
+            product=self.product,
+            image=SimpleUploadedFile("stuck.png", _png(), content_type="image/png"),
+        )
+        ProductImage.objects.filter(pk=stuck.pk).update(
+            created_at=timezone.now() - timedelta(hours=2)
+        )
+        fresh = ProductImage.objects.create(
+            product=self.product,
+            image=SimpleUploadedFile("fresh.png", _png(), content_type="image/png"),
+        )
+        self.assertIsNone(stuck.optimized_at)
+        self.assertIsNone(fresh.optimized_at)
+
+        swept = sweep_unoptimized_product_images()
+
+        self.assertEqual(swept, 1)
+        stuck.refresh_from_db()
+        fresh.refresh_from_db()
+        self.assertIsNotNone(stuck.optimized_at)
+        self.assertIsNone(fresh.optimized_at)
