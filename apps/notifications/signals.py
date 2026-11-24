@@ -4,7 +4,7 @@ from django.dispatch import receiver
 
 from apps.core.events import Events, domain_event
 
-from .models import Event
+from .models import Event, SendStatus
 
 # domain event -> (notification event, recipient-key, context builder)
 _MAP = {
@@ -28,6 +28,7 @@ def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
     notif_event = _MAP.get(event)
     if notif_event is None or project is None:
         return
+    from .services import create_log
     from .tasks import send_notification_task
 
     if event in _OWNER_FACING:
@@ -51,10 +52,14 @@ def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
         "threshold": str(payload.get("threshold", "")),
         "event": event,
     }
+    # Create the log row synchronously, here, before handing off -- a lost
+    # task message then leaves it PENDING for the sweep, not gone.
+    log = create_log(project=project, event=notif_event, to=to, context=context, related=instance)
+    if log.status == SendStatus.PENDING:
+        send_notification_task.delay(log.pk)
+
     label = instance._meta.label if instance is not None else ""
     pk = str(instance.pk) if instance is not None else ""
-    send_notification_task.delay(project.id, notif_event, to, context, label, pk)
-
     _maybe_whatsapp(project, notif_event, payload, context, label, pk)
 
 

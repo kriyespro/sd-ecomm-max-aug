@@ -11,8 +11,13 @@ from apps.core.events import domain_event
 def _on_domain_event(sender, event, project, payload, instance=None, **kwargs):
     if project is None:
         return
+    from .services import create_deliveries
     from .tasks import deliver_event_task
 
     # coerce payload to JSON-safe primitives before it crosses the broker
     safe = json.loads(json.dumps(payload or {}, default=str))
-    deliver_event_task.delay(project.id, event, safe)
+    # Create the rows synchronously, here, before handing off -- a lost
+    # task message then leaves them PENDING for the sweep, not gone.
+    deliveries = create_deliveries(project=project, event=event, data=safe)
+    if deliveries:
+        deliver_event_task.delay([d.pk for d in deliveries])

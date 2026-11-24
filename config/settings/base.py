@@ -292,6 +292,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.webhooks.tasks.retry_due_task",
         "schedule": 300.0,   # every 5 min
     },
+    "sweep-stuck-webhook-deliveries": {
+        "task": "apps.webhooks.tasks.sweep_stuck_webhook_deliveries",
+        "schedule": 600.0,   # every 10 min — redeliver anything the worker dropped
+    },
+    "sweep-stuck-notifications": {
+        "task": "apps.notifications.tasks.sweep_stuck_notifications_task",
+        "schedule": 600.0,   # every 10 min — resend anything the worker dropped
+    },
     "verify-pending-domains": {
         "task": "apps.projects.tasks.verify_pending_domains_task",
         "schedule": 300.0,   # every 5 min — auto-verify shortly after DNS is set

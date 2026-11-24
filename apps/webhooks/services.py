@@ -92,8 +92,13 @@ def sign(secret: str, body: bytes) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, sha256).hexdigest()
 
 
-def trigger(*, project, event, data):
-    """Create + attempt a delivery for every subscribed endpoint."""
+def create_deliveries(*, project, event, data):
+    """Persist a ``WebhookDelivery`` row per subscribed endpoint -- call this
+    synchronously, before handing off to Celery. A delivery row existing is
+    what lets ``retry_due``/the sweep ever find and resend it; creating it
+    only inside the async task meant a lost broker message (worker killed
+    mid-task, broker briefly unreachable) made the event vanish with nothing
+    left to retry, unlike a row that's merely stuck PENDING."""
     deliveries = []
     for endpoint in WebhookEndpoint.objects.filter(project=project, is_active=True):
         if not endpoint.wants(event):
@@ -102,8 +107,38 @@ def trigger(*, project, event, data):
             project=project, endpoint=endpoint, event=event,
             payload={"event": event, "created_at": timezone.now().isoformat(), "data": data},
         )
-        _attempt(delivery)
         deliveries.append(delivery)
+    return deliveries
+
+
+def attempt_deliveries(delivery_ids):
+    """Attempt specific, already-created deliveries -- the async task's entry
+    point. Never creates rows itself, so a lost task message just leaves them
+    PENDING for ``sweep_stuck_pending`` to pick back up."""
+    deliveries = WebhookDelivery.objects.filter(pk__in=delivery_ids).select_related("endpoint")
+    return [_attempt(d) for d in deliveries]
+
+
+def sweep_stuck_pending(older_than_minutes=10, limit=200):
+    """Self-heal: a PENDING delivery (row created, never attempted) older
+    than this is one whose ``deliver_event_task`` message got lost --
+    redeliver it now."""
+    cutoff = timezone.now() - timedelta(minutes=older_than_minutes)
+    stuck = list(
+        WebhookDelivery.objects.filter(status=DeliveryStatus.PENDING, created_at__lt=cutoff)
+        .select_related("endpoint")[:limit]
+    )
+    return [_attempt(d) for d in stuck]
+
+
+def trigger(*, project, event, data):
+    """Create + attempt a delivery for every subscribed endpoint, in one
+    synchronous step. Kept for direct/manual callers (tests, an admin
+    "resend"); the signal path uses ``create_deliveries`` + the async task
+    instead so creation survives a lost task message."""
+    deliveries = create_deliveries(project=project, event=event, data=data)
+    for delivery in deliveries:
+        _attempt(delivery)
     return deliveries
 
 
