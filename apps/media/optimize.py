@@ -110,7 +110,14 @@ def _fit_budget(im, target_bytes):
         if len(data) <= target_bytes:
             break
 
-    if small or len(best[0]) > target_bytes:
+    # Lossless WebP only tends to beat lossy for small/flat-colour images
+    # (icons, logos) -- for downscaled photo content it is reliably *bigger*.
+    # Renditions get quadratically tiny budgets (see `process()`) that the
+    # lossy ladder routinely misses, so gating this on "missed budget" instead
+    # of just `small` meant almost every rendition paid for a 5th encode that
+    # (for photo content) could never win -- the main cost behind slow
+    # post-upload optimisation.
+    if small:
         lossless = _encode(im, 100, lossless=True)
         if len(lossless) < len(best[0]):
             best = (lossless, 100)
