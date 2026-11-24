@@ -7,6 +7,7 @@ recorded as-is — no re-encode, no CPU.
 
 import os
 import posixpath
+from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings
@@ -35,6 +36,13 @@ def _stem(name):
     # normal 2 retries before giving up -- it only caps each attempt.
     soft_time_limit=180,
     time_limit=240,
+    # By default Celery acks a task before it runs. A worker killed or
+    # restarted mid-task (every deploy does this) silently loses it forever --
+    # optimized_at stays null and nothing ever retries, so the image is stuck
+    # "optimizing" in the admin panel indefinitely. The task re-checks
+    # optimized_at up front, so redelivery is a safe no-op, not double work.
+    acks_late=True,
+    reject_on_worker_lost=True,
 )
 def optimize_product_image(self, image_id):
     from apps.media.optimize import process
@@ -105,3 +113,25 @@ def optimize_product_image(self, image_id):
             "renditions", "optimized_at",
         ]
     )
+
+
+@shared_task(name="apps.catalog.tasks.sweep_unoptimized_product_images", queue="images")
+def sweep_unoptimized_product_images():
+    """Self-heal for images that fell through: a lost broker publish (now
+    guarded, see apps.catalog.signals), a worker killed mid-task before
+    ``acks_late`` was added here, or any other way optimized_at never got
+    set. 30 min old gives any just-uploaded, still-queued image plenty of
+    room before being swept up again. Capped per run -- this re-enters the
+    same rate-limited queue, it isn't meant to drain a big backlog instantly."""
+    from .models import ProductImage
+
+    cutoff = timezone.now() - timedelta(minutes=30)
+    stale_ids = list(
+        ProductImage.objects.filter(optimized_at__isnull=True, created_at__lt=cutoff)
+        .exclude(image="")
+        .order_by("created_at")
+        .values_list("pk", flat=True)[:200]
+    )
+    for pk in stale_ids:
+        optimize_product_image.delay(pk)
+    return len(stale_ids)

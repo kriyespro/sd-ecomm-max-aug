@@ -296,6 +296,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.projects.tasks.verify_pending_domains_task",
         "schedule": 300.0,   # every 5 min — auto-verify shortly after DNS is set
     },
+    "sweep-unoptimized-product-images": {
+        "task": "apps.catalog.tasks.sweep_unoptimized_product_images",
+        "schedule": 1800.0,   # every 30 min — re-enqueue any image the worker dropped
+    },
     "billing-issue-due-invoices": {
         "task": "apps.billing.tasks.issue_due_invoices_task",
         "schedule": 3600.0 * 6,   # every 6 h
