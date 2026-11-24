@@ -2,12 +2,25 @@
 (un-optimised) file. The task itself is idempotent — it bails if ``optimized_at``
 is already set — so the re-save it triggers does not loop."""
 
+import logging
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
 from .models import ProductImage
+
+logger = logging.getLogger(__name__)
+
+
+def _enqueue(pk):
+    from .tasks import optimize_product_image
+
+    try:
+        optimize_product_image.delay(pk)
+    except Exception:  # noqa: BLE001 — broker hiccup must not 500 the upload
+        logger.exception("optimize_product_image.delay(%s) failed to enqueue", pk)
 
 
 @receiver(post_save, sender=ProductImage, dispatch_uid="catalog_optimize_product_image")
@@ -17,6 +30,4 @@ def _enqueue_optimize(sender, instance, **kwargs):
     if instance.optimized_at is not None or not instance.image:
         return
     pk = instance.pk
-    from .tasks import optimize_product_image
-
-    transaction.on_commit(lambda: optimize_product_image.delay(pk))
+    transaction.on_commit(lambda: _enqueue(pk))

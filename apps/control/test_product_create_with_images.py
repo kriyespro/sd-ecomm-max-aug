@@ -4,6 +4,7 @@ create form is already multipart — a file field there lets a merchant
 attach photos in the same Save, one screen instead of two."""
 
 import io
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -70,6 +71,26 @@ class ProductCreateWithImagesTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         product = Product.objects.get(title="No Photo Yet")
         self.assertEqual(product.images.count(), 0)
+
+    def test_creating_with_an_image_survives_a_broker_outage(self):
+        """Regression: ProductImage's post_save signal called
+        optimize_product_image.delay() straight inside transaction.on_commit
+        with no guard. A broker hiccup (Redis down, bad connection) raised
+        there and 500'd the whole product-create request even though the
+        product and image had already saved. The signal must now swallow
+        that and let the request succeed."""
+        upload = SimpleUploadedFile("photo.jpg", _jpeg(), content_type="image/jpeg")
+        with patch(
+            "apps.catalog.tasks.optimize_product_image.delay",
+            side_effect=ConnectionError("broker unreachable"),
+        ):
+            resp = self.client.post("/admin/products/new/", {
+                "title": "Broker Down", "price": "499", "status": "draft", "kind": "simple",
+                "images": [upload],
+            }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        product = Product.objects.get(title="Broker Down")
+        self.assertEqual(product.images.count(), 1)
 
     def test_edit_screen_uploader_still_works_after_the_shared_helper_refactor(self):
         product = Product.objects.create(
