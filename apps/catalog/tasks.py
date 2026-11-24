@@ -27,6 +27,14 @@ def _stem(name):
     rate_limit=_RATE_LIMIT,
     max_retries=2,
     default_retry_delay=60,
+    # Nothing used to bound how long one image could occupy a worker slot.
+    # With concurrency=2 and prefetch-multiplier=1 (docker-compose.yml), one
+    # pathological upload (huge resolution, slow disk) stalled the whole
+    # `images` queue behind it. SoftTimeLimitExceeded during `process()` is
+    # just another Exception to the retry below, so this still gets the
+    # normal 2 retries before giving up -- it only caps each attempt.
+    soft_time_limit=180,
+    time_limit=240,
 )
 def optimize_product_image(self, image_id):
     from apps.media.optimize import process

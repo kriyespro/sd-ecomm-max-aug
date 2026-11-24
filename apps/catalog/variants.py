@@ -70,16 +70,25 @@ def attach_variant_images(variant, files):
     """Append uploaded files to a variant's gallery, then keep
     ``Variant.image`` — the denormalised cover everything else (storefront
     swap, prefill thumbnail) reads — pointed at the primary shot.
-    Returns the created ``VariantImage`` rows."""
+    Returns the created ``VariantImage`` rows.
+
+    ``VariantImage.save()`` runs ``shrink_image_field`` synchronously, in
+    this same request — there was no size cap, so a single huge upload
+    could make a gunicorn worker grind on one Pillow decode/encode for the
+    whole request. Reject it the same way the Media Library already does."""
+    from apps.media.services import MAX_SIZE
+
     if not files:
         return []
     start = variant.images.order_by("-order").values_list("order", flat=True).first() or 0
     has_primary = variant.images.filter(is_primary=True).exists()
     created = []
-    for i, f in enumerate(files):
+    for f in files:
+        if f.size and f.size > MAX_SIZE:
+            continue
         created.append(VariantImage.objects.create(
             variant=variant, image=f,
-            order=start + i + 1, is_primary=(not has_primary and i == 0),
+            order=start + len(created) + 1, is_primary=(not has_primary and not created),
         ))
     sync_variant_cover(variant)
     return created
