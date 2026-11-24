@@ -64,6 +64,31 @@ class OptimizeTests(SimpleTestCase):
             out = process(raw, target_bytes=200 * 1024, max_edge=2048)
         self.assertTrue(out["skipped"])
 
+    def test_renditions_of_a_real_photo_skip_the_wasted_lossless_pass(self):
+        """Regression: _fit_budget tried a 5th, lossless encode whenever the
+        lossy quality ladder missed budget -- not just for small/icon images.
+        Rendition budgets are quadratically tiny (see process()), so a real
+        downscaled photo missed budget on nearly every rendition and paid for
+        a lossless encode that, for photo content, can never win. That 5th
+        encode per rendition was the main cost behind slow post-upload
+        optimisation. A large photo's renditions must stick to the 4-probe
+        lossy ladder only."""
+        # Noise, not the gradient helper -- incompressible, so every quality
+        # probe misses the tiny rendition budget and the ladder never breaks
+        # early. That's what forces the (otherwise rare) old lossless
+        # fallback on every real photo's small renditions. 512x512 is well
+        # above _SMALL_PIXELS, so this mirrors a real rendition-sized crop.
+        from PIL import Image
+
+        im = Image.effect_noise((512, 512), 60).convert("RGB")
+        with patch.object(
+            optimize_module, "_encode", wraps=optimize_module._encode
+        ) as spy:
+            optimize_module._fit_budget(im, 24 * 1024)  # tight rendition budget
+        # 4 quality probes, no trailing lossless=True call.
+        self.assertEqual(spy.call_count, 4)
+        self.assertTrue(all(not c.kwargs.get("lossless") for c in spy.call_args_list))
+
     def test_skip_path_reports_exif_rotated_dimensions(self):
         """Regression: the skip path now reads width/height from the file
         header instead of the exif-transposed decode, so a portrait phone
