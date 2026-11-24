@@ -130,3 +130,23 @@ class ImageOptimizeCoverageTests(TestCase):
         self.assertTrue(cat.icon.name)
         self.assertFalse(cat.icon.name.endswith(".sd.webp"))  # skip path taken
         self.assertEqual(cat.icon.size, len(raw))  # stored untouched
+
+    def test_media_asset_thumbnail_respects_exif_orientation(self):
+        """Regression: _process_image never applied EXIF orientation, so a
+        phone photo stored with a landscape pixel grid + a rotate-90 EXIF tag
+        got sideways width/height and a sideways WEBP thumbnail (the re-encode
+        drops the EXIF tag, so nothing else rotates the pixels)."""
+        from PIL import Image
+
+        from apps.media.services import store_upload
+
+        im = Image.new("RGB", (2000, 1000), (10, 20, 30))
+        exif = im.getexif()
+        exif[0x0112] = 6  # rotate 90 CW -> should display as portrait 1000x2000
+        buf = io.BytesIO()
+        im.save(buf, format="JPEG", exif=exif, quality=90)
+
+        upload = SimpleUploadedFile("rotated.jpg", buf.getvalue(), content_type="image/jpeg")
+        asset = store_upload(project=self.project, upload=upload)
+
+        self.assertEqual((asset.width, asset.height), (1000, 2000))

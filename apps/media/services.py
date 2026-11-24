@@ -155,13 +155,21 @@ def store_upload(*, project, upload: UploadedFile, uploaded_by=None, folder="", 
 
 def _process_image(asset, raw):
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
     except ImportError:  # pragma: no cover
         return
     try:
         with Image.open(io.BytesIO(raw)) as im:
+            # Without this, a phone photo shot in portrait but stored with a
+            # landscape pixel grid + EXIF rotation tag gets sideways/upside-down
+            # thumbnails: WEBP re-encode below drops the EXIF tag, and nothing
+            # else here rotates the actual pixels.
+            im = ImageOps.exif_transpose(im) or im
             asset.width, asset.height = im.size
-            im = im.convert("RGB") if im.mode in ("P", "RGBA") else im
+            has_alpha = im.mode in ("RGBA", "LA") or (
+                im.mode == "P" and "transparency" in im.info
+            )
+            im = im.convert("RGBA" if has_alpha else "RGB")
             thumbs = {}
             base = asset.file.name.rsplit(".", 1)[0]
             for key, box in THUMBNAIL_SIZES.items():
