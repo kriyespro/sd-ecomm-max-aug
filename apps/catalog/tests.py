@@ -1,10 +1,12 @@
 import io
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import SimpleTestCase, TestCase, override_settings
 
 from apps.catalog.models import Product, ProductImage, Variant
-from apps.media.optimize import optimize, renditions
+from apps.media import optimize as optimize_module
+from apps.media.optimize import optimize, process, renditions
 from apps.projects.models import Project
 
 
@@ -48,6 +50,38 @@ class OptimizeTests(SimpleTestCase):
         self.assertNotIn(2048, rends)  # source is 1200 wide
         for data in rends.values():
             self.assertTrue(data.startswith(b"RIFF"))
+
+    def test_skip_path_never_decodes_pixels(self):
+        """Regression: process() decoded + exif-transposed + converted every
+        upload before checking whether to skip, so the documented 'already
+        small and web-friendly costs no CPU' path still paid a full Pillow
+        decode every time. _load (the real decode) must not run when the
+        header check alone says skip."""
+        raw = _jpeg(width=200, height=150)
+        with patch.object(optimize_module, "_load", side_effect=AssertionError(
+            "full decode ran on the skip path"
+        )):
+            out = process(raw, target_bytes=200 * 1024, max_edge=2048)
+        self.assertTrue(out["skipped"])
+
+    def test_skip_path_reports_exif_rotated_dimensions(self):
+        """Regression: the skip path now reads width/height from the file
+        header instead of the exif-transposed decode, so a portrait phone
+        photo stored sideways (EXIF orientation 6) with landscape raw pixel
+        dimensions must still report portrait width/height, matching what
+        _load's exif_transpose would have produced."""
+        from PIL import Image
+
+        buf = io.BytesIO()
+        im = _gradient(600, 400)  # raw pixels: landscape
+        exif = Image.Exif()
+        exif[0x0112] = 6  # "rotate 90 CW to display" -> portrait on screen
+        im.save(buf, format="JPEG", quality=80, exif=exif)
+        raw = buf.getvalue()
+
+        out = process(raw, target_bytes=200 * 1024, max_edge=2048)
+        self.assertTrue(out["skipped"])
+        self.assertEqual((out["width"], out["height"]), (400, 600))
 
 
 class AutoSlugSkuTests(TestCase):

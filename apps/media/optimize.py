@@ -44,15 +44,32 @@ def _register_extra_formats():
 _register_extra_formats()
 
 
+_SWAPS_WH = {5, 6, 7, 8}  # EXIF orientation tags that rotate 90/270 degrees
+
+
 def _probe(raw):
-    """(FORMAT, (w, h)) from the header only — no full decode."""
+    """(FORMAT, (w, h), has_alpha) from the header only — no full decode.
+    Mode/size/info are populated by ``Image.open`` itself; only pixel access
+    (``.load()``/``.convert()``/``exif_transpose``) forces a real decode, so
+    this is cheap even for a large image. (w, h) is adjusted for EXIF
+    orientation — read from the header's Exif tag, not a real transpose — so
+    it matches what ``_load``'s ``exif_transpose`` would report."""
     from PIL import Image
 
     try:
         with Image.open(io.BytesIO(raw)) as im:
-            return (im.format or "").upper(), im.size
+            has_alpha = im.mode in ("RGBA", "LA") or (
+                im.mode == "P" and "transparency" in im.info
+            )
+            w, h = im.size
+            try:
+                if im.getexif().get(0x0112) in _SWAPS_WH:
+                    w, h = h, w
+            except Exception:  # noqa: BLE001
+                pass
+            return (im.format or "").upper(), (w, h), has_alpha
     except Exception:  # noqa: BLE001
-        return "", (0, 0)
+        return "", (0, 0), False
 
 
 def _load(raw):
@@ -111,20 +128,24 @@ def process(raw, *, target_bytes=DEFAULT_TARGET_BYTES, max_edge=MAX_EDGE,
     if skip_under_bytes is None:
         skip_under_bytes = target_bytes
 
-    fmt, _size = _probe(raw)
-    im, has_alpha = _load(raw)
+    fmt, size, has_alpha = _probe(raw)
 
     if (
         len(raw) <= skip_under_bytes
-        and max(im.width, im.height) <= max_edge
+        and max(size) <= max_edge
         and fmt in _WEB_FORMATS
         and not has_alpha
     ):
+        # Header-only check cleared — skip without ever decoding pixels, so
+        # the overwhelmingly common "already small and web-friendly" upload
+        # really does cost "no CPU", matching this module's own promise.
         return {
             "skipped": True,
-            "width": im.width, "height": im.height, "bytes": len(raw),
+            "width": size[0], "height": size[1], "bytes": len(raw),
             "main": None, "renditions": {},
         }
+
+    im, has_alpha = _load(raw)
 
     if max(im.size) > max_edge:
         im.thumbnail((max_edge, max_edge))
