@@ -4,6 +4,7 @@ auto-optimized on save the same way product images / store logos / banners
 already are."""
 
 import io
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -56,6 +57,22 @@ class ImageOptimizeCoverageTests(TestCase):
         brand.save()
         self.assertTrue(brand.logo.name.endswith(".sd.webp"))
         self.assertLess(brand.logo.size, len(raw))
+
+    def test_shrink_image_field_skips_rendition_generation(self):
+        """Regression: shrink_image_field only ever reads result["main"] but
+        called process() with the default widths=(512, 1024, 2048), so every
+        synchronous save (Brand.logo, Variant.image, VariantImage.image) burned
+        CPU re-encoding 3 responsive renditions it immediately threw away —
+        the reported cause of slow image uploads on a shared-CPU box."""
+        from apps.media import optimize, services
+
+        raw = _png()
+        with patch.object(optimize, "process", wraps=optimize.process) as spy:
+            brand = Brand(project=self.project, name="Acme2")
+            brand.logo.save("logo2.png", SimpleUploadedFile("logo2.png", raw), save=False)
+            brand.save()
+        spy.assert_called_once()
+        self.assertEqual(spy.call_args.kwargs.get("widths"), ())
 
     def test_category_images_are_reencoded(self):
         raw = _png(2000, 1000)

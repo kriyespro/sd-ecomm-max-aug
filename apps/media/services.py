@@ -52,7 +52,7 @@ def shrink_image_field(field_file, *, target_kb, max_edge, marker=".sd"):
 
         result = process(
             raw, target_bytes=target_kb * 1024, max_edge=max_edge,
-            skip_under_bytes=target_kb * 1024,
+            skip_under_bytes=target_kb * 1024, widths=(),
         )
     except Exception as exc:  # noqa: BLE001 - a bad image must not block the save
         logger.warning("shrink_image_field: optimise failed for %s: %s", name, exc)
