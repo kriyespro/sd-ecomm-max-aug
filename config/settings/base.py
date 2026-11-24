@@ -456,7 +456,7 @@ PRODUCT_IMAGE_OPTIMIZE = env_bool("PRODUCT_IMAGE_OPTIMIZE", True)
 PRODUCT_IMAGE_SKIP_UNDER_KB = int(env("PRODUCT_IMAGE_SKIP_UNDER_KB", "300"))
 # Celery rate cap for apps.catalog.tasks.optimize_product_image (read on the
 # decorator). Keep low so a backfill batch stays a background trickle.
-PRODUCT_IMAGE_RATE_LIMIT = env("PRODUCT_IMAGE_RATE_LIMIT", "6/m")
+PRODUCT_IMAGE_RATE_LIMIT = env("PRODUCT_IMAGE_RATE_LIMIT", "12/m")
 
 
 # --- Platform billing gateway (Razorpay) -----------------------------

@@ -14,7 +14,7 @@ from django.conf import settings
 from django.core.files.base import ContentFile
 from django.utils import timezone
 
-_RATE_LIMIT = os.environ.get("PRODUCT_IMAGE_RATE_LIMIT", "6/m")
+_RATE_LIMIT = os.environ.get("PRODUCT_IMAGE_RATE_LIMIT", "12/m")
 
 
 def _stem(name):
