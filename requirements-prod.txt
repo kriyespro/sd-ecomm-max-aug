@@ -2,7 +2,7 @@
 -r requirements.txt
 
 psycopg[binary]>=3.2,<4      # PostgreSQL driver
-redis>=5.0,<6                # cache backend + DRF throttle + Celery broker
+redis>=6.1,<9                # cache backend + DRF throttle + Celery broker (kombu's redis transport requires >=6.1)
 gunicorn>=23.0,<27           # WSGI server
 whitenoise[brotli]>=6.6,<7   # static file serving from the app process
 pillow-heif>=1.1,<2          # HEIC/HEIF decode (iPhone uploads); ships bundled libheif wheels. Optional — apps.media.optimize no-ops without it
