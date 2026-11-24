@@ -64,6 +64,36 @@ class ProductCreateWithImagesTests(TestCase):
         self.assertEqual(product.images.count(), 1)
         self.assertTrue(product.images.first().is_primary)
 
+    def test_oversized_image_is_skipped_not_silently_optimized_for_hours(self):
+        """Regression: _attach_product_images had no size cap at all (unlike
+        the Media Library's store_upload, which enforces MAX_SIZE) -- a huge
+        upload went straight to Pillow via the async optimize task with no
+        time limit either, able to occupy a worker slot (and the queue
+        behind it) indefinitely. Must be rejected up front instead."""
+        upload = SimpleUploadedFile("huge.jpg", _jpeg(), content_type="image/jpeg")
+        with patch("apps.media.services.MAX_SIZE", 10):
+            resp = self.client.post("/admin/products/new/", {
+                "title": "Huge Photo", "price": "499", "status": "draft", "kind": "simple",
+                "images": [upload],
+            }, follow=True)
+        self.assertEqual(resp.status_code, 200)
+        product = Product.objects.get(title="Huge Photo")
+        self.assertEqual(product.images.count(), 0)
+
+    def test_oversized_ajax_upload_reports_the_limit_not_a_bare_failure(self):
+        product = Product.objects.create(
+            project=self.project, title="EditUpload2", slug="edit-upload-2", status="draft", price="10",
+        )
+        upload = SimpleUploadedFile("huge2.jpg", _jpeg(), content_type="image/jpeg")
+        with patch("apps.media.services.MAX_SIZE", 10):
+            resp = self.client.post(
+                f"/admin/products/{product.pk}/images/upload/", {"images": [upload]},
+                HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+            )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("MB limit", resp.json()["error"])
+        self.assertEqual(ProductImage.objects.filter(product=product).count(), 0)
+
     def test_creating_without_an_image_still_works(self):
         resp = self.client.post("/admin/products/new/", {
             "title": "No Photo Yet", "price": "100", "status": "draft", "kind": "simple",

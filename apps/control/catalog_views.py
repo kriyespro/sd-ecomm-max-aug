@@ -527,15 +527,30 @@ def _attach_product_images(product, files, *, alt=""):
     """Shared by the create form's own file input and the AJAX uploader on
     the edit screen — same ProductImage.objects.create() either way, so
     the post_save optimize-to-WebP signal (apps.catalog.signals) fires
-    the same for both."""
+    the same for both.
+
+    Returns (attached_count, oversized_names). Unlike the Media Library's
+    ``store_upload`` there was no size cap here at all — a single huge
+    upload reached Pillow with nothing to stop it, and the async optimize
+    task has no time limit either, so one such image could occupy a worker
+    slot (and the queue behind it, concurrency=2) far longer than any
+    legitimate photo ever needs to."""
+    from apps.media.services import MAX_SIZE
+
     start = product.images.order_by("-order").values_list("order", flat=True).first() or 0
     has_primary = product.images.filter(is_primary=True).exists()
-    for i, f in enumerate(files):
+    oversized = []
+    attached = 0
+    for f in files:
+        if f.size and f.size > MAX_SIZE:
+            oversized.append(f.name)
+            continue
         ProductImage.objects.create(
             product=product, image=f, alt=alt,
-            order=start + i + 1, is_primary=(not has_primary and i == 0),
+            order=start + attached + 1, is_primary=(not has_primary and attached == 0),
         )
-    return len(files)
+        attached += 1
+    return attached, oversized
 
 
 class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
@@ -555,8 +570,15 @@ class ProductCreateView(_ProductSizeColorMixin, _ScopedFormMixin, CreateView):
         response = super().form_valid(form)
         files = self.request.FILES.getlist("images")
         if files:
-            count = _attach_product_images(self.object, files)
-            messages.success(self.request, f"Added {count} image(s).")
+            count, oversized = _attach_product_images(self.object, files)
+            if count:
+                messages.success(self.request, f"Added {count} image(s).")
+            if oversized:
+                from apps.media.services import MAX_SIZE
+                messages.warning(
+                    self.request,
+                    f"Skipped (over {MAX_SIZE // (1024 * 1024)}MB): " + ", ".join(oversized),
+                )
         return response
 
     def get_success_url(self):
@@ -607,21 +629,30 @@ class ProductImageUploadView(_ProductImageBase):
     def post(self, request, *args, **kwargs):
         product = self.get_product()
         files = request.FILES.getlist("images")
-        _attach_product_images(product, files, alt=request.POST.get("alt", "").strip())
-        if files:
+        count, oversized = _attach_product_images(product, files, alt=request.POST.get("alt", "").strip())
+        if count:
             record_audit(actor=request.user, project=self.active_project,
                          action=AuditLog.Action.UPDATE, target=product,
-                         changes={"images_added": len(files)}, request=request)
+                         changes={"images_added": count}, request=request)
 
         # AJAX uploader (one request per file): reply small JSON, it refreshes
         # the panel itself once every file is in.
         if request.headers.get("x-requested-with") == "XMLHttpRequest":
             if not files:
                 return JsonResponse({"ok": False, "error": "No file received."}, status=400)
-            return JsonResponse({"ok": True, "added": len(files)})
+            if oversized:
+                from apps.media.services import MAX_SIZE
+                return JsonResponse(
+                    {"ok": False, "error": f"Over {MAX_SIZE // (1024 * 1024)}MB limit."},
+                    status=400,
+                )
+            return JsonResponse({"ok": True, "added": count})
 
-        if files:
-            messages.success(request, f"Added {len(files)} image(s).")
+        if count:
+            messages.success(request, f"Added {count} image(s).")
+        elif oversized:
+            from apps.media.services import MAX_SIZE
+            messages.error(request, f"Over the {MAX_SIZE // (1024 * 1024)}MB limit — not added.")
         else:
             messages.error(request, "Choose at least one image file.")
         return self._render_panel(product)
@@ -699,6 +730,12 @@ class VariantImageUploadView(_VariantImageBase):
                 "ok": True,
                 "images": [{"pk": im.pk, "url": im.image.url} for im in created],
             })
+        if files:
+            from apps.media.services import MAX_SIZE
+            return JsonResponse(
+                {"ok": False, "error": f"Over {MAX_SIZE // (1024 * 1024)}MB limit."},
+                status=400,
+            )
         return JsonResponse({"ok": False, "error": "No file received."}, status=400)
 
 
