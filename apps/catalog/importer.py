@@ -199,10 +199,27 @@ def _int(value, fieldname):
 
 # --- import ----------------------------------------------------
 
+MAX_IMPORT_ROWS = 2000
+
+
 def run_import(project, rows: list[dict], *, actor=None, default_status="draft") -> ImportResult:
+    """Runs synchronously in the request handler (``ProductImportView``) --
+    each row does several queries (product lookup, category/brand/type/tag
+    get-or-create, inventory, image-by-name attach) inside its own atomic
+    block. With no row cap, a plausible 10MB CSV of simple rows can be tens
+    of thousands of rows -- comfortably past gunicorn's request timeout,
+    which kills the worker mid-import leaving only the rows processed so far
+    committed, with the merchant having no idea how far it got. Reject
+    oversized files up front instead."""
     result = ImportResult()
     if not rows:
         raise ProductImportError("No data rows found under the header.")
+    if len(rows) > MAX_IMPORT_ROWS:
+        raise ProductImportError(
+            f"That file has {len(rows)} rows — the limit per import is "
+            f"{MAX_IMPORT_ROWS}. Split it into smaller files and import "
+            "them one at a time."
+        )
 
     media_index = _media_index(project)
     caches = {"category": {}, "brand": {}, "type": {}}

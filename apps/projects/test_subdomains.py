@@ -22,7 +22,7 @@ class SubdomainHelperTests(TestCase):
         other = Project.objects.create(name="N2", status="active")
         self.assertEqual(subdomains.unique_slug("nova", project=other), "nova-2")
 
-    def test_assign_creates_verified_primary_and_replaces_old(self):
+    def test_assign_creates_verified_primary_and_demotes_old(self):
         d1 = subdomains.assign(self.project, "rack")
         self.assertTrue(d1.is_verified)
         self.assertTrue(d1.is_primary)
@@ -30,7 +30,14 @@ class SubdomainHelperTests(TestCase):
         self.assertEqual(self.project.primary_domain, f"rack.{BASE}")
 
         d2 = subdomains.assign(self.project, "rackhouse")
-        self.assertFalse(Domain.objects.filter(host=f"rack.{BASE}").exists())
+        # Old subdomain is demoted, not deleted: it keeps resolving/serving
+        # (its canonical tag already points at the new host) instead of a
+        # search-indexed URL going dead with no redirect, and the slug stays
+        # unavailable to a different store.
+        old = Domain.objects.get(host=f"rack.{BASE}")
+        self.assertTrue(old.is_verified)
+        self.assertFalse(old.is_primary)
+        self.assertFalse(subdomains.is_available("rack"))
         self.assertEqual(subdomains.current_slug(self.project), "rackhouse")
         self.project.refresh_from_db()
         self.assertEqual(self.project.primary_domain, f"rackhouse.{BASE}")

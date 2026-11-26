@@ -117,7 +117,10 @@ class OnboardingGateTests(TestCase):
             project=self.project, host="fresh-market.shopinaday.test",
             is_verified=True, is_primary=True,
         ).exists())
-        self.assertFalse(Domain.objects.filter(host="freshco.shopinaday.test").exists())
+        # Old slug is demoted (still resolvable, canonical tag points at the
+        # new host), not deleted — see apps.projects.subdomains.assign().
+        old = Domain.objects.get(host="freshco.shopinaday.test")
+        self.assertFalse(old.is_primary)
 
     def test_skip(self):
         resp = self.client.post("/admin/start/skip/")

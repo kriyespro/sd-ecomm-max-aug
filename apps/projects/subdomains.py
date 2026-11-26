@@ -37,13 +37,6 @@ def base_domain(project=None, brand=None):
     return (brand.base_domain or "").strip().lower()
 
 
-def all_base_domains():
-    """Every brand's subdomain apex — for "is this a platform subdomain" checks."""
-    from apps.core import brand as brands
-
-    return {b.base_domain for b in brands.all_brands() if b.base_domain}
-
-
 def slugify(value):
     s = _SLUG_RE.sub("-", (value or "").strip().lower())
     s = re.sub(r"-{2,}", "-", s).strip("-")[:MAX_LEN].strip("-")
@@ -83,19 +76,24 @@ def unique_slug(preferred, *, project=None, base=None):
 
 
 def assign(project, slug, *, make_primary=True):
-    """Point ``<slug>.<base>`` at ``project`` as a verified Domain, dropping any
-    previous platform subdomain for the project. Returns the Domain or ``None``
-    when no base domain is configured."""
+    """Point ``<slug>.<base>`` at ``project`` as a verified Domain, demoting
+    (not deleting) any previous platform subdomain for the project. Returns
+    the Domain or ``None`` when no base domain is configured.
+
+    The old subdomain row is kept, verified, resolvable -- only demoted to
+    non-primary below. Deleting it outright used to mean any search engine or
+    backlink still pointing at the renamed-away host hit a dead URL (no
+    project bound -> generic marketing-site fallback, no redirect, no
+    continuity). Keeping it means the old host keeps serving the real store
+    (whose own canonical tag already points at the new host, so ranking
+    signal consolidates there), and ``is_available()`` keeps treating that
+    slug as taken so a different store can't immediately reuse a URL that
+    may still have inbound links.
+    """
     base = base_domain(project)
     if not base:
         return None
     host = host_for(slug, base)
-
-    # Drop the store's previous platform subdomain (on any brand's apex).
-    for b in all_base_domains():
-        Domain.objects.filter(
-            project=project, host__endswith=f".{b}"
-        ).exclude(host=host).delete()
 
     domain, _ = Domain.objects.get_or_create(project=project, host=host)
     if not domain.is_verified:

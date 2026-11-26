@@ -61,6 +61,16 @@ class ImporterCoreTests(TestCase):
         self.assertEqual(p.brand.name, "Acme")
         self.assertEqual(set(p.tags.values_list("name", flat=True)), {"cotton", "blue"})
 
+    def test_over_row_cap_rejected_before_processing_any_row(self):
+        """Regression: an unbounded import had no guard against a huge sheet
+        -- each row does several queries inside its own atomic block, so a
+        big file could run past the request timeout mid-import with no clean
+        failure. Must reject up front, before touching the database."""
+        rows = [{"title": f"P{i}", "price": "10"} for i in range(importer.MAX_IMPORT_ROWS + 1)]
+        with self.assertRaises(importer.ProductImportError):
+            importer.run_import(self.project, rows)
+        self.assertEqual(Product.objects.filter(project=self.project).count(), 0)
+
     def test_reimport_by_sku_updates_in_place(self):
         importer.run_import(self.project, importer.read_table(
             _csv({"title": "Mug", "sku": "M-1", "price": "100"}), "a.csv"))
