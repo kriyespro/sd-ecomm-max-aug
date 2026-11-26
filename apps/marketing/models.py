@@ -11,6 +11,7 @@ pixels only; no server-side / PII path.
 from django.core.cache import cache
 from django.db import models
 
+from apps.core.crypto import EncryptedTextField
 from apps.core.models import TenantScopedModel, TimeStampedModel
 
 
@@ -31,7 +32,7 @@ class TrackingIntegration(TenantScopedModel):
     # Meta: the Pixel ID.  GA4: the Measurement ID.
     pixel_id = models.CharField(max_length=64)
     # Server-side conversions token (Meta CAPI access token / GA4 API secret).
-    server_token = models.CharField(max_length=512, blank=True)
+    server_token = EncryptedTextField(blank=True, default="")
     # Meta "Test events" code — events tagged with it show in the Test tab only.
     test_event_code = models.CharField(max_length=64, blank=True)
 
@@ -103,8 +104,8 @@ class PlatformTrackingSettings(TimeStampedModel):
     # when a visitor finishes public self-signup (a new trial store). Browser
     # pixel above stays PageView-only; this is the one funnel event worth
     # sending server-side (ad-blockers hide the browser one most often).
-    meta_capi_token = models.CharField(
-        "Meta Conversions API access token", max_length=512, blank=True,
+    meta_capi_token = EncryptedTextField(
+        "Meta Conversions API access token", blank=True, default="",
         help_text="Events Manager → your pixel → Settings → Conversions API "
                   "→ Generate access token.",
     )

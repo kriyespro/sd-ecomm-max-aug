@@ -36,6 +36,17 @@ def env_list(key, default=None):
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", "django-insecure-dev-only-change-me")
 
+# Field-level encryption for secrets at rest (apps.core.crypto) -- payment
+# provider credentials, WhatsApp/social OAuth tokens, AI API keys. Ordered
+# list, newest first; see apps/core/crypto.py for key-rotation notes. This
+# dev-only placeholder key is not a secret -- generate a real one for
+# production with: python -c "from cryptography.fernet import Fernet;
+# print(Fernet.generate_key().decode())"
+FIELD_ENCRYPTION_KEYS = env_list(
+    "DJANGO_FIELD_ENCRYPTION_KEY",
+    ["zbyOySTAIbdwn47NHHXIUx__ebkwwihweo_h1LMphYk="],
+)
+
 DEBUG = env_bool("DJANGO_DEBUG", False)
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", ["localhost", "127.0.0.1"])

@@ -7,6 +7,10 @@ DEBUG = False
 
 SECRET_KEY = env("DJANGO_SECRET_KEY")  # must be set
 
+# Must be set for real in production -- the base.py default is a published,
+# non-secret placeholder. See apps/core/crypto.py.
+FIELD_ENCRYPTION_KEYS = env_list("DJANGO_FIELD_ENCRYPTION_KEY", [])
+
 # Multi-tenant: stores connect their own verified custom domains, so a static
 # host allowlist can't cover them. Default to "*" and rely on the edge proxy
 # (Caddy / nginx / Traefik) to only forward known hosts. Lock down with

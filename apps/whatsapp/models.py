@@ -13,6 +13,7 @@ from django.core.cache import cache
 from django.db import models
 from django.db.models import Q
 
+from apps.core.crypto import EncryptedTextField
 from apps.core.models import TenantScopedModel, TimeStampedModel
 
 _CACHE_KEY = "whatsapp:account:{project_id}"
@@ -27,9 +28,9 @@ def _new_verify_token():
 class WhatsAppAccount(TenantScopedModel):
     phone_number_id = models.CharField(max_length=64, blank=True, db_index=True)
     waba_id = models.CharField("WhatsApp Business Account ID", max_length=64, blank=True)
-    access_token = models.CharField(max_length=512, blank=True)
+    access_token = EncryptedTextField(blank=True, default="")
     # Optional: the Meta app secret. When set, inbound webhooks are HMAC-verified.
-    app_secret = models.CharField(max_length=128, blank=True)
+    app_secret = EncryptedTextField(blank=True, default="")
     # We generate this; the seller pastes it into their Meta app's webhook config.
     verify_token = models.CharField(max_length=64, default=_new_verify_token)
     graph_version = models.CharField(max_length=8, default="v21.0")

@@ -12,6 +12,7 @@ from django.conf import settings
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from apps.core.crypto import EncryptedJSONField
 from apps.core.models import TenantScopedModel, TimeStampedModel
 
 MONEY = dict(
@@ -36,8 +37,8 @@ class PaymentProviderConfig(TenantScopedModel):
     is_test_mode = models.BooleanField(default=True)
     priority = models.PositiveIntegerField(default=100)
     # Gateway keys / secrets. Kept in a JSON blob so each provider defines its own
-    # shape; encrypt at rest in production (see project.md security notes).
-    credentials = models.JSONField(default=dict, blank=True)
+    # shape; encrypted at rest (apps.core.crypto.EncryptedJSONField).
+    credentials = EncryptedJSONField(default=dict, blank=True)
     config = models.JSONField(default=dict, blank=True)
     # Direct-UPI only: the owner's own payment QR, shown to shoppers at checkout.
     qr_image = models.ImageField(upload_to="stores/upi-qr/", blank=True)

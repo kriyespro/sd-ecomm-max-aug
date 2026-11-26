@@ -13,6 +13,7 @@ clicks Connect. We hold the tokens and refresh them.
 from django.core.cache import cache
 from django.db import models
 
+from apps.core.crypto import EncryptedTextField
 from apps.core.models import TenantScopedModel
 
 
@@ -31,10 +32,10 @@ class SocialAccount(TenantScopedModel):
     provider = models.CharField(max_length=16, choices=SocialProvider.choices)
 
     client_id = models.CharField(max_length=255, blank=True)
-    client_secret = models.CharField(max_length=255, blank=True)
+    client_secret = EncryptedTextField(blank=True, default="")
 
-    access_token = models.TextField(blank=True)
-    refresh_token = models.TextField(blank=True)
+    access_token = EncryptedTextField(blank=True, default="")
+    refresh_token = EncryptedTextField(blank=True, default="")
     token_expires_at = models.DateTimeField(null=True, blank=True)
     scope = models.CharField(max_length=255, blank=True)
 

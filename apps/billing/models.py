@@ -12,6 +12,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
+from apps.core.crypto import EncryptedTextField
 from apps.core.models import TimeStampedModel
 
 _MONEY = dict(max_digits=12, decimal_places=2)
@@ -47,8 +48,8 @@ class BillingSettings(TimeStampedModel):
     """Singleton — the platform's own Razorpay account + billing policy."""
 
     razorpay_key_id = models.CharField(max_length=120, blank=True)
-    razorpay_key_secret = models.CharField(max_length=200, blank=True)
-    razorpay_webhook_secret = models.CharField(max_length=200, blank=True)
+    razorpay_key_secret = EncryptedTextField(blank=True, default="")
+    razorpay_webhook_secret = EncryptedTextField(blank=True, default="")
     is_test_mode = models.BooleanField(default=True)
 
     trial_days = models.PositiveIntegerField(

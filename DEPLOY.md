@@ -17,8 +17,9 @@
 ## First deploy
 
 ```sh
-cp .env.example .env         # then fill DJANGO_SECRET_KEY + POSTGRES_PASSWORD
+cp .env.example .env         # then fill DJANGO_SECRET_KEY + POSTGRES_PASSWORD + DJANGO_FIELD_ENCRYPTION_KEY
 #  DJANGO_SECRET_KEY: python -c "import secrets; print(secrets.token_urlsafe(64))"
+#  DJANGO_FIELD_ENCRYPTION_KEY: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 docker compose up -d --build
 docker compose exec web python manage.py createsuperuser
 ```
@@ -153,6 +154,20 @@ gunzip -c dump.sql.gz | docker compose exec -T db psql -U "$POSTGRES_USER" -d "$
 
 Ship the `pgbackups` volume off-box (rclone / S3 sync / managed-Postgres
 snapshots) — a backup on the same host is not a backup.
+
+## Secrets encryption (`DJANGO_FIELD_ENCRYPTION_KEY`)
+
+Payment/courier provider credentials, WhatsApp tokens, social OAuth tokens,
+AI API keys, and the platform's own Razorpay/Meta secrets are encrypted at
+rest (`apps/core/crypto.py`, Fernet). **Back up this key with the same care
+as the Postgres backups above, somewhere separate from the database backup
+itself** — lose it and every one of those credentials becomes permanently
+unreadable (every store's payment gateway, WhatsApp, AI copy, and connected
+socials stop working at once; they'd all need to be re-entered by hand).
+Rotating it: prepend a new key rather than replacing the value (comma-
+separated, newest first) — `MultiFernet` tries every key on decrypt, so
+existing data stays readable until it's naturally re-saved under the new
+one, then the old key can be dropped.
 
 ## Performance setup
 

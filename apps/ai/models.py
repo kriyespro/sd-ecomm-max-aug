@@ -8,6 +8,7 @@ flagged for hammering the free tier.
 
 from django.db import models
 
+from apps.core.crypto import EncryptedTextField
 from apps.core.models import TenantScopedModel
 
 MAX_KEYS_PER_STORE = 10
@@ -15,7 +16,7 @@ MAX_KEYS_PER_STORE = 10
 
 class AiProviderKey(TenantScopedModel):
     label = models.CharField(max_length=60, blank=True)
-    api_key = models.CharField(max_length=255)
+    api_key = EncryptedTextField()
     is_active = models.BooleanField(default=True)
 
     last_used_at = models.DateTimeField(null=True, blank=True)

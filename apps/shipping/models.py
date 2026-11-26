@@ -16,6 +16,7 @@ from decimal import Decimal
 from django.core.validators import MinValueValidator
 from django.db import models
 
+from apps.core.crypto import EncryptedJSONField
 from apps.core.models import TenantScopedModel, TimeStampedModel
 
 MONEY = dict(
@@ -48,7 +49,7 @@ class CourierConfig(TenantScopedModel):
                   "call, nothing gets booked at the courier. Turn off once "
                   "your credentials are live and verified.",
     )
-    credentials = models.JSONField(default=dict, blank=True)
+    credentials = EncryptedJSONField(default=dict, blank=True)
 
     class Meta:
         ordering = ["courier"]
