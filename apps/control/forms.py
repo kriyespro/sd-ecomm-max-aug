@@ -964,6 +964,22 @@ class SeoSettingsForm(ProjectScopedForm):
         widgets = {"default_description": forms.Textarea(attrs={"rows": 2, "class": TEXT})}
 
 
+def _normalize_storefront_path(value):
+    """``request.path`` is always "/leading/and/trailing/" (Django's
+    ``APPEND_SLASH``) -- a path override or redirect a merchant types in free
+    text has to match that exactly to ever be looked up, or it's a silent
+    no-op. Leaves an absolute URL (a redirect's ``to_path`` pointing off-site)
+    alone."""
+    value = (value or "").strip()
+    if not value or value.startswith(("http://", "https://")):
+        return value
+    if not value.startswith("/"):
+        value = "/" + value
+    if "?" not in value and not value.endswith("/"):
+        value += "/"
+    return value
+
+
 class SeoMetaForm(ProjectScopedForm):
     class Meta:
         model = SeoMeta
@@ -973,11 +989,27 @@ class SeoMetaForm(ProjectScopedForm):
         ]
         widgets = {"description": forms.Textarea(attrs={"rows": 2, "class": TEXT})}
 
+    def clean_path(self):
+        return _normalize_storefront_path(self.cleaned_data["path"])
+
 
 class RedirectForm(ProjectScopedForm):
     class Meta:
         model = Redirect
         fields = ["from_path", "to_path", "is_permanent", "is_active"]
+
+    def clean_from_path(self):
+        return _normalize_storefront_path(self.cleaned_data["from_path"])
+
+    def clean_to_path(self):
+        return _normalize_storefront_path(self.cleaned_data["to_path"])
+
+    def clean(self):
+        cleaned = super().clean()
+        frm, to = cleaned.get("from_path"), cleaned.get("to_path")
+        if frm and to and frm == to:
+            raise forms.ValidationError("A redirect can't point at itself.")
+        return cleaned
 
 
 # --- Phase 11 ----------------------------------------------------

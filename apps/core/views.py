@@ -67,8 +67,26 @@ def not_found(request, exception=None):
     blog draft, an ad-landing page not served on a store host, a webhook
     disabled by its own feature flag -- must still 404 for real; those aren't
     dead links, they're access-control checks other tests and callers depend
-    on seeing as a real 404."""
+    on seeing as a real 404.
+
+    Before either of those: a store's own ``Redirect`` rows (``/admin/seo/
+    redirects/``) take priority over both. A merchant creating one there is
+    explicitly saying "this path should go there now" -- that covers a
+    renamed product/category slug raising its own Http404, not just a
+    routing miss, so it's checked ahead of the ``Resolver404`` branch too."""
     from django.urls.exceptions import Resolver404
+
+    project = getattr(request, "project", None)
+    if project and not request.path.startswith(("/admin/", "/sd/")):
+        from django.db.models import F
+
+        from apps.seo.models import Redirect
+        from apps.seo.services import resolve_redirect
+
+        redirect_row = resolve_redirect(project, request.path)
+        if redirect_row is not None:
+            Redirect.objects.filter(pk=redirect_row.pk).update(hits=F("hits") + 1)
+            return redirect(redirect_row.to_path, permanent=redirect_row.is_permanent)
 
     if isinstance(exception, Resolver404) and not request.path.startswith(("/admin/", "/sd/")):
         if getattr(request, "project", None):
