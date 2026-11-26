@@ -115,6 +115,57 @@ def optimize_product_image(self, image_id):
     )
 
 
+@shared_task(
+    name="apps.catalog.tasks.optimize_variant_image",
+    bind=True,
+    queue="images",
+    rate_limit=_RATE_LIMIT,
+    soft_time_limit=180,
+    time_limit=240,
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def optimize_variant_image(self, image_id):
+    from apps.catalog.variants import sync_variant_cover
+    from apps.media.services import shrink_image_field
+
+    from .models import VariantImage
+
+    vi = VariantImage.objects.filter(pk=image_id).select_related("variant").first()
+    if vi is None or not vi.image or vi.optimized_at is not None:
+        return
+
+    # shrink_image_field already treats a bad/unreadable image as a no-op
+    # (logs and leaves the file alone) rather than raising -- nothing here
+    # needs its own retry.
+    shrink_image_field(vi.image, target_kb=60, max_edge=800)
+    vi.optimized_at = timezone.now()
+    vi.save(update_fields=["image", "optimized_at"])
+    # The renamed .webp file may be the gallery's primary shot -- Variant.image
+    # is a denormalised copy of that filename, read by the storefront swap
+    # picker and prefill thumbnail; keep it in sync.
+    sync_variant_cover(vi.variant)
+
+
+@shared_task(name="apps.catalog.tasks.sweep_unoptimized_variant_images", queue="images")
+def sweep_unoptimized_variant_images():
+    """Self-heal counterpart to ``sweep_unoptimized_product_images`` -- same
+    lost-broker-message / worker-killed-mid-task gap, for the Size/Colour
+    gallery instead of the main product gallery."""
+    from .models import VariantImage
+
+    cutoff = timezone.now() - timedelta(minutes=30)
+    stale_ids = list(
+        VariantImage.objects.filter(optimized_at__isnull=True, created_at__lt=cutoff)
+        .exclude(image="")
+        .order_by("created_at")
+        .values_list("pk", flat=True)[:200]
+    )
+    for pk in stale_ids:
+        optimize_variant_image.delay(pk)
+    return len(stale_ids)
+
+
 @shared_task(name="apps.catalog.tasks.sweep_unoptimized_product_images", queue="images")
 def sweep_unoptimized_product_images():
     """Self-heal for images that fell through: a lost broker publish (now

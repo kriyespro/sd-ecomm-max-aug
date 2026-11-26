@@ -72,10 +72,11 @@ def attach_variant_images(variant, files):
     swap, prefill thumbnail) reads — pointed at the primary shot.
     Returns the created ``VariantImage`` rows.
 
-    ``VariantImage.save()`` runs ``shrink_image_field`` synchronously, in
-    this same request — there was no size cap, so a single huge upload
-    could make a gunicorn worker grind on one Pillow decode/encode for the
-    whole request. Reject it the same way the Media Library already does."""
+    There was no size cap -- a single huge upload could make a gunicorn
+    worker grind on one Pillow decode/encode for the whole request (the
+    re-encode itself now runs in apps.catalog.tasks.optimize_variant_image,
+    off the request thread, but reading/validating a huge upload here still
+    isn't free). Reject it the same way the Media Library already does."""
     from apps.media.services import MAX_SIZE
 
     if not files:

@@ -383,18 +383,17 @@ class VariantImage(TimeStampedModel):
     existing reader of that field keep working unchanged."""
 
     variant = models.ForeignKey(Variant, on_delete=models.CASCADE, related_name="images")
+    # Re-encoded to a compact WebP by a background task (apps.catalog.tasks),
+    # same pattern as ProductImage -- was a synchronous shrink_image_field()
+    # call in save() that ran a full Pillow decode/encode in the upload
+    # request itself.
     image = models.ImageField(upload_to="variants/gallery/")
     order = models.PositiveIntegerField(default=0)
     is_primary = models.BooleanField(default=False)
+    optimized_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-is_primary", "order", "id"]
 
     def __str__(self):
         return f"VariantImage<{self.variant_id}>"
-
-    def save(self, *args, **kwargs):
-        from apps.media.services import shrink_image_field
-
-        shrink_image_field(self.image, target_kb=60, max_edge=800)
-        super().save(*args, **kwargs)
