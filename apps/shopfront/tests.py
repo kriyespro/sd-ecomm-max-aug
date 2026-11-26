@@ -8,7 +8,7 @@ from django.http import HttpResponse
 from django.test import RequestFactory, TestCase, override_settings
 
 from apps.cart.models import Cart, CartItem
-from apps.catalog.models import Product
+from apps.catalog.models import Product, ProductImage
 from apps.projects.models import Project
 from apps.shopfront.context import base_context, get_cart
 from apps.shopfront.middleware import NoStoreStorefrontMiddleware
@@ -63,6 +63,17 @@ class BaseContextCartTests(TestCase):
             list(cart.items.all())
             cart.items.exists()
             cart.items.count()
+
+    def test_product_images_also_primed(self):
+        """Regression: cart templates do `(i.product.images.all() | first)`
+        per line item (the cart page/drawer, every skin) -- without this
+        prefetch that's one extra query per line, on every add/update/remove
+        click and every drawer open, the hottest path in the app."""
+        ProductImage.objects.create(product=self.product, image="p/x.jpg")
+        cart = base_context(self._request_with_cart(), self.project)["cart"]
+        with self.assertNumQueries(0):
+            for item in cart.items.all():
+                list(item.product.images.all())
 
 
 class DeferredSessionCartTests(TestCase):

@@ -109,6 +109,25 @@ class SitemapEntriesTests(TestCase):
         self.assertIn("/c/c/", locs)
         self.assertNotIn("/product/t/", locs)
 
+    def test_page_level_noindex_override_excluded_from_sitemap(self):
+        """Regression: a merchant's per-path SeoMeta robots override (or a
+        store-wide noindex) was previously ignored by the sitemap -- it kept
+        submitting URLs search engines then reject with 'Submitted URL marked
+        noindex', wasting crawl budget."""
+        from apps.seo.models import SeoMeta
+
+        SeoMeta.objects.create(project=self.project, path="/p/t/", robots="noindex,follow")
+        locs = [e["loc"] for e in seo_svc.sitemap_entries(self.project)]
+        self.assertNotIn("/p/t/", locs)
+        self.assertIn("/c/c/", locs)  # unrelated entries unaffected
+
+    def test_store_wide_noindex_excludes_everything(self):
+        from apps.seo.models import SeoSettings
+
+        SeoSettings.objects.create(project=self.project, default_robots="noindex,nofollow")
+        locs = [e["loc"] for e in seo_svc.sitemap_entries(self.project)]
+        self.assertEqual(locs, [])
+
 
 @override_settings(ALLOWED_HOSTS=["*"])
 class MiddlewareTests(TestCase):

@@ -110,4 +110,4 @@ def record_inbound(account, *, from_number, wamid, text):
         (Customer.objects
          .filter(project=account.project, phone__endswith=tail)
          .update(marketing_opt_in=False))
-        logger.info("whatsapp opt-out from %s (project %s)", from_number, account.project_id)
+        logger.info("whatsapp opt-out from ***%s (project %s)", tail[-4:], account.project_id)

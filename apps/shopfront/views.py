@@ -70,7 +70,7 @@ class HomeView(View):
             Product.objects.filter(project=project, status="active", search_indexed=True)
             .only("id", "project", "slug", "title", "price", "sale_price",
                   "is_new_arrival", "rating_avg", "rating_count")
-            .prefetch_related("images")
+            .prefetch_related("images", "variants")
             .order_by("-created_at")
         )
 
@@ -152,7 +152,7 @@ class ShopView(View):
             Product.objects.filter(project=project, status="active", search_indexed=True)
             .only("id", "project", "slug", "title", "price", "sale_price",
                   "is_new_arrival", "rating_avg", "rating_count")
-            .prefetch_related("images")
+            .prefetch_related("images", "variants")
         )
         f = request.GET
         cat = f.get("category", "").strip()
@@ -280,7 +280,7 @@ class ProductView(View):
         related = list(
             Product.objects.filter(project=project, status="active", category=product.category)
             .exclude(pk=product.pk)
-            .select_related("brand", "category").prefetch_related("images")[:5]
+            .select_related("brand", "category").prefetch_related("images", "variants")[:5]
         )
 
         # recently viewed (session) — only maintained once the visitor already
@@ -295,7 +295,7 @@ class ProductView(View):
         rv_map = {
             p.slug: p for p in Product.objects.filter(
                 project=project, slug__in=rv_slugs, status="active"
-            ).select_related("brand", "category").prefetch_related("images")
+            ).select_related("brand", "category").prefetch_related("images", "variants")
         }
         recently_viewed = [rv_map[s] for s in rv_slugs if s in rv_map]
 

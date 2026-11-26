@@ -99,7 +99,8 @@ def base_context(request, project, **extra):
     # _prefetched_objects_cache. A bare list there breaks .exists() (checkout)
     # and .select_related() (the ornza cart context).
     if not getattr(cart, "_is_empty", False):
-        cart_items = cart.items.select_related("product", "variant")
+        cart_items = cart.items.select_related("product", "variant") \
+            .prefetch_related("product__images")
         len(cart_items)  # force evaluation -> fills cart_items._result_cache
         cart._prefetched_objects_cache = {"items": cart_items}
     chrome = store_chrome(project)

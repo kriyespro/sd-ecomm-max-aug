@@ -188,19 +188,37 @@ def breadcrumb_schema(crumbs):
 def sitemap_entries(project):
     """``[{loc, lastmod, changefreq, priority, images?}]`` — storefront-relative
     ``loc`` matching the real shopfront routes (``/p/…``, ``/c/…``, ``/page/…``).
+
+    Respects the same robots precedence ``meta_for()`` uses (a per-path
+    ``SeoMeta.robots`` override, else the store's ``SeoSettings.default_robots``)
+    so a page/product a merchant explicitly noindexed, or a store-wide
+    noindex during a rebuild, isn't still submitted to search engines --
+    which otherwise just earns a "Submitted URL marked 'noindex'" Search
+    Console warning and wastes crawl budget.
     """
     from apps.catalog.models import Product
     from apps.categories.models import Category
     from apps.cms.models import Page
 
-    entries = [
+    settings_obj = _settings(project)
+    default_robots = (settings_obj.default_robots if settings_obj else "") or "index,follow"
+    overrides = dict(
+        SeoMeta.objects.filter(project=project).exclude(robots="").values_list("path", "robots")
+    )
+
+    def _indexable(loc):
+        robots = overrides.get(loc) or default_robots
+        return "noindex" not in robots.lower()
+
+    entries = [e for e in (
         {"loc": "/", "changefreq": "daily", "priority": "1.0"},
         {"loc": "/shop/", "changefreq": "daily", "priority": "0.9"},
-    ]
+    ) if _indexable(e["loc"])]
 
     for page in Page.objects.filter(project=project, show_in_sitemap=True):
-        if page.is_live:
-            entries.append({"loc": f"/page/{page.slug}/", "lastmod": page.updated_at,
+        loc = f"/page/{page.slug}/"
+        if page.is_live and _indexable(loc):
+            entries.append({"loc": loc, "lastmod": page.updated_at,
                             "changefreq": "monthly", "priority": "0.5"})
 
     products = (
@@ -208,15 +226,20 @@ def sitemap_entries(project):
         .prefetch_related("images")
     )
     for product in products:
+        loc = f"/p/{product.slug}/"
+        if not _indexable(loc):
+            continue
         images = [im.image.url for im in product.images.all() if im.image][:5]
         entries.append({
-            "loc": f"/p/{product.slug}/", "lastmod": product.updated_at,
+            "loc": loc, "lastmod": product.updated_at,
             "changefreq": "weekly", "priority": "0.8", "images": images,
         })
 
     for category in Category.objects.filter(project=project, is_active=True):
-        entries.append({"loc": f"/c/{category.slug}/", "lastmod": category.updated_at,
-                        "changefreq": "weekly", "priority": "0.6"})
+        loc = f"/c/{category.slug}/"
+        if _indexable(loc):
+            entries.append({"loc": loc, "lastmod": category.updated_at,
+                            "changefreq": "weekly", "priority": "0.6"})
 
     return entries
 
