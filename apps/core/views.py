@@ -40,9 +40,10 @@ def root(request):
     if getattr(request, "project", None):
         return redirect("/app/")
     from apps.core.brand import brand_for_request
+    from apps.core.middleware import trusted_base_url
 
     brand = brand_for_request(request)
-    base = f"{request.scheme}://{request.get_host()}"
+    base = trusted_base_url(request)
     org = {"@context": "https://schema.org", "@type": "Organization", "name": brand.name, "url": base + "/"}
     if brand.logo:
         org["logo"] = brand.logo if brand.logo.startswith("http") else base + brand.logo
@@ -91,10 +92,11 @@ def pricing(request):
     if getattr(request, "project", None):
         return redirect("/app/")
     from apps.core.brand import brand_for_request
+    from apps.core.middleware import trusted_base_url
 
     ctx = _landing_context()
     brand = brand_for_request(request)
-    base = f"{request.scheme}://{request.get_host()}"
+    base = trusted_base_url(request)
     ctx["pricing_jsonld"] = _jsonld({
         "@context": "https://schema.org",
         "@type": "Service",

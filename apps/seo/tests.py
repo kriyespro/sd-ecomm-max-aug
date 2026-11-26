@@ -64,6 +64,19 @@ class HeadBuildTests(TestCase):
         out = self._build({"type": "shop"}, path="/shop/")
         self.assertIn('content="Aurora storefront"', out)
 
+    def test_jsonld_escapes_script_breakout(self):
+        """Regression: a product title (or anything else that ends up in a
+        JSON-LD block -- breadcrumb names, the store name) containing a
+        literal ``</script>`` must never let the browser's HTML parser close
+        the real script tag early and start executing injected markup."""
+        evil = Product.objects.create(
+            project=self.project, title='</script><script>alert(1)</script>',
+            slug="evil", price=Decimal("10"), status="active",
+        )
+        out = self._build({"type": "product", "obj": evil}, path="/p/evil/")
+        self.assertNotIn("</script><script>alert(1)</script>", out)
+        self.assertIn('<\\/script><script>alert(1)<\\/script>', out)
+
 
 class MetaForPathTests(TestCase):
     def setUp(self):

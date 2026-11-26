@@ -19,6 +19,17 @@ def _esc(value):
     return html.escape(str(value or ""), quote=True)
 
 
+def _jsonld_dumps(data):
+    """``json.dumps`` for embedding inside a ``<script>`` tag. ``</`` closes
+    the tag early regardless of what JSON key/value it appears in (e.g. a
+    product title, a breadcrumb name, a store name) -- the standard escape is
+    to break it up so the browser's HTML parser never sees a real close tag.
+    Same pattern as ``apps.core.views._jsonld``, duplicated here rather than
+    imported since that one serves the platform marketing site, this one the
+    tenant storefront -- different callers, same fix."""
+    return json.dumps(data, separators=(",", ":"), ensure_ascii=False).replace("</", "<\\/")
+
+
 def _abs(base, path):
     if not path:
         return ""
@@ -85,7 +96,7 @@ def build(*, project, path, seo, base_url):
     for block in _json_ld_blocks(project, kind, obj, meta, seo, base_url):
         out.append(
             '<script type="application/ld+json">'
-            + json.dumps(block, separators=(",", ":"), ensure_ascii=False)
+            + _jsonld_dumps(block)
             + "</script>"
         )
     return "\n".join(out)
